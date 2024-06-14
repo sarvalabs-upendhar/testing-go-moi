@@ -66,7 +66,7 @@ func (suite *GuardianSetupTestSuite) SetupSuite() {
 	// Initialise the test suite
 	consumed, err := suite.Initialise(manifest, AdminAddr1)
 	suite.Require().NoErrorf(err, "could not read initialise test")
-	suite.Require().Equal(uint64(0xa18b), consumed)
+	suite.Require().Equal(uint64(0xaeba), consumed)
 
 	inputs := struct {
 		Master      Master     `polo:"master"`
@@ -125,7 +125,7 @@ func (suite *GuardianImportTestSuite) SetupSuite() {
 	// Initialise the test suite
 	consumed, err := suite.Initialise(manifest, AdminAddr1)
 	suite.Require().NoErrorf(err, "could not read initialise test")
-	suite.Require().Equal(uint64(0xa18b), consumed)
+	suite.Require().Equal(uint64(0xaeba), consumed)
 
 	inputs := struct {
 		Master          Master     `polo:"master"`
@@ -201,7 +201,7 @@ func (suite *GuardianImportTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Deploy the logic to initialise its initial state
-	suite.Deploy("Import", calldata, nil, 4394, nil)
+	suite.Deploy("Import", calldata, nil, 4694, nil)
 
 	// Check the setup consistency
 	suite.T().Run("CheckSetup", suite.testSetup)
@@ -509,14 +509,14 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 				"incentiveIDs":     []string{GuardianKramaID6},
 				"incentiveAmounts": []uint64{100},
 			}),
-			nil, 711,
+			nil, 791,
 			&exception.Exception{
 				Class:  "string",
 				Error:  "guardian does not exist",
 				Revert: true,
 				Trace: []string{
 					"runtime.root()",
-					"routine.AddIncentives() [0x29] ... [0x25: REVERT 0x7]",
+					"routine.AddIncentives() [0x29] ... [0x27: REVERT 0x9]",
 				},
 			},
 		)
@@ -528,7 +528,7 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 				"incentiveIDs":     []string{GuardianKramaID1},
 				"incentiveAmounts": []uint64{100},
 			}),
-			nil, 1251, nil,
+			nil, 1486, nil,
 		)
 
 		// Check the incentive for the krama ID
@@ -569,7 +569,7 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 				"incentiveIDs":     []string{GuardianKramaID3},
 				"incentiveAmounts": []uint64{100},
 			}),
-			nil, 1596, nil,
+			nil, 1920, nil,
 		)
 
 		// Check the incentive for the krama ID

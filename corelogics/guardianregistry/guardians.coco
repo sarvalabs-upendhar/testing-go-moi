@@ -35,6 +35,9 @@ state persistent:
     // new Guardians, register new Operators, change limit rules and add incentives
     Administrators Map[Address]Bool
 
+    // TotalIncentives is the sum of rewards distributed to operators
+    TotalIncentives U64
+
 class Master:
     field MOIID String
     field Wallet Address
@@ -83,9 +86,11 @@ endpoint deployer Import(
         for _, admin in admins:
             Admins[admin] = true
 
-    mutate Guardians <- GuardianRegistry.State.Guardians:
-        for _, guardian in guardians:
-            disperse guardian -> Guardians[guardian.KramaID]
+    mutate TotalIncentives <- GuardianRegistry.State.TotalIncentives:
+        mutate Guardians <- GuardianRegistry.State.Guardians:
+            for _, guardian in guardians:
+                disperse guardian -> Guardians[guardian.KramaID]
+                TotalIncentives += guardian.Incentive.Amount
 
     mutate Operators <- GuardianRegistry.State.Operators:
         for _, operator in operators:
@@ -319,34 +324,40 @@ endpoint invokable persistent AddIncentives(incentiveIDs []String, incentiveAmou
     if len(incentiveIDs) != len(incentiveAmounts):
         throw "invalid incentive inputs: mismatched size"
 
-    mutate guardians <- GuardianRegistry.State.Guardians:
-        for idx, kramaID in incentiveIDs:
-            // Check that guardian exists
-            if !guardians[kramaID]?: revert "guardian does not exist"
+    mutate totalIncentives <- GuardianRegistry.State.TotalIncentives:
+        mutate guardians <- GuardianRegistry.State.Guardians:
+            for idx, kramaID in incentiveIDs:
+                // Check that guardian exists
+                if !guardians[kramaID]?: revert "guardian does not exist"
 
-            // Retrieve the guardian
-            storage guardian = guardians[kramaID]
-            memory incentive = incentiveAmounts[idx]
+                // Retrieve the guardian
+                storage guardian = guardians[kramaID]
+                memory incentive = incentiveAmounts[idx]
 
-            memory refCut U64
-            memory refPercent = guardian.Incentive.ReferralPercent
+                memory refCut U64
+                memory refPercent = guardian.Incentive.ReferralPercent
 
-            // If the referral percentage is non-zero, calculate referral reward
-            if refPercent != 0:
-                refCut = (incentive * refPercent) / 100
+                // If the referral percentage is non-zero, calculate referral reward
+                if refPercent != 0:
+                    refCut = (incentive * refPercent) / 100
 
-            // Subtract the referral reward from the incentive for the guardian
-            incentive = incentive - refCut
-            // Add the incentive to the guardian object
-            guardian.Incentive.Amount += incentive
+                // Subtract the referral reward from the incentive for the guardian
+                incentive = incentive - refCut
+                // Add the incentive to the guardian object
+                guardian.Incentive.Amount += incentive
 
-            if refPercent != 0:
-                // Add the referral reward to the registry
-                mutate referrals <- GuardianRegistry.State.ReferralRewards:
-                    referrals[guardian.Incentive.ReferralWallet] += refCut
+                totalIncentives += incentive
 
-            // Update the guardian object
-            guardians[kramaID] = guardian
+                if refPercent != 0:
+                    // Add the referral reward to the registry
+                    mutate referrals <- GuardianRegistry.State.ReferralRewards:
+                         if referrals[guardian.Incentive.ReferralWallet]?:
+                            referrals[guardian.Incentive.ReferralWallet] += refCut
+                         else:
+                            referrals[guardian.Incentive.ReferralWallet] = refCut
+
+                // Update the guardian object
+                guardians[kramaID] = guardian
 
 // ChangeNodeLimit changes the node limit for a verification kind ("KYC" or "KYB").
 // The sender must be an admin for this operation.

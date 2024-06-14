@@ -3,1313 +3,2744 @@ engine:
   kind: PISA
   flags: []
 elements:
-- ptr: 0
-  kind: constant
-  data:
-    type: string
-    value: 0x06696e76616c696420726566657272616c7320696e707574733a206d69736d6174636865642073697a65
-- ptr: 1
-  kind: constant
-  data:
-    type: string
-    value: 0x06696e76616c696420677561726469616e20696e707574733a206d69736d6174636865642073697a65
-- ptr: 2
-  kind: constant
-  data:
-    type: string
-    value: 0x066f70657261746f7220616c726561647920657869737473
-- ptr: 3
-  kind: constant
-  data:
-    type: u64
-    value: '0x0302'
-- ptr: 4
-  kind: constant
-  data:
-    type: string
-    value: 0x0673656e646572206973206e6f7420746865206f70657261746f72206f662074686520677561726469616e
-- ptr: 5
-  kind: constant
-  data:
-    type: string
-    value: 0x0673656e646572206973206e6f742061207665726966696564206f70657261746f723a20
-- ptr: 6
-  kind: constant
-  data:
-    type: string
-    value: 0x06677561726469616e20616c726561647920657869737473
-- ptr: 7
-  kind: constant
-  data:
-    type: string
-    value: 0x06677561726469616e206b72616d61206964206973206e6f7420617070726f766564
-- ptr: 8
-  kind: constant
-  data:
-    type: string
-    value: '0x066b7963'
-- ptr: 9
-  kind: constant
-  data:
-    type: string
-    value: '0x066b7962'
-- ptr: 10
-  kind: constant
-  data:
-    type: string
-    value: 0x06756e657870656374656420766572696669636174696f6e206b696e6420656e636f756e7465726564
-- ptr: 11
-  kind: constant
-  data:
-    type: string
-    value: 0x066e6f6465206c696d6974207265616368656420666f72206f70657261746f72
-- ptr: 12
-  kind: constant
-  data:
-    type: u64
-    value: '0x0364'
-- ptr: 13
-  kind: constant
-  data:
-    type: string
-    value: 0x06696e76616c696420726566657272616c2070657263656e74616765
-- ptr: 14
-  kind: constant
-  data:
-    type: string
-    value: 0x06696e76616c696420696e63656e7469766520696e707574733a206d69736d6174636865642073697a65
-- ptr: 15
-  kind: constant
-  data:
-    type: string
-    value: 0x06677561726469616e20646f6573206e6f74206578697374
-- ptr: 16
-  kind: constant
-  data:
-    type: string
-    value: 0x0675706461746564206c696d69742063616e6e6f74206265206265206c657373207468616e206578697374696e67
-- ptr: 17
-  kind: constant
-  data:
-    type: string
-    value: 0x06696e76616c6964206c696d6974206b696e64
-- ptr: 18
-  kind: constant
-  data:
-    type: string
-    value: 0x066163636573732064656e69656421206e6f7420616e2061646d696e
-- ptr: 19
-  deps:
-  - 28
-  kind: typedef
-  data: map[string]Guardian
-- ptr: 20
-  kind: typedef
-  data: '[]string'
-- ptr: 21
-  deps:
-  - 26
-  kind: typedef
-  data: map[string]Operator
-- ptr: 22
-  kind: typedef
-  data: map[string]bool
-- ptr: 23
-  kind: typedef
-  data: map[address]u64
-- ptr: 24
-  kind: typedef
-  data: map[address]bool
-- ptr: 25
-  kind: class
-  data:
-    name: Master
-    fields:
-    - slot: 0
-      label: MOIID
+  - ptr: 0
+    kind: constant
+    data:
       type: string
-    - slot: 1
-      label: Wallet
-      type: address
-    - slot: 2
-      label: PubKey
-      type: bytes
-    methods: []
-- ptr: 26
-  deps:
-  - 27
-  kind: class
-  data:
-    name: Operator
-    fields:
-    - slot: 0
-      label: Identifier
+      value: 0x06696e76616c696420726566657272616c7320696e707574733a206d69736d6174636865642073697a65
+  - ptr: 1
+    kind: constant
+    data:
       type: string
-    - slot: 1
-      label: Verification
-      type: VerifyProof
-    - slot: 2
-      label: Guardians
-      type: '[]string'
-    methods: []
-- ptr: 27
-  kind: class
-  data:
-    name: VerifyProof
-    fields:
-    - slot: 0
-      label: Kind
+      value: 0x06696e76616c696420677561726469616e20696e707574733a206d69736d6174636865642073697a65
+  - ptr: 2
+    kind: constant
+    data:
       type: string
-    - slot: 1
-      label: Proof
-      type: bytes
-    methods: []
-- ptr: 28
-  deps:
-  - 29
-  kind: class
-  data:
-    name: Guardian
-    fields:
-    - slot: 0
-      label: KramaID
+      value: 0x066f70657261746f7220616c726561647920657869737473
+  - ptr: 3
+    kind: constant
+    data:
+      type: u64
+      value: '0x0302'
+  - ptr: 4
+    kind: constant
+    data:
       type: string
-    - slot: 1
-      label: OperatorID
+      value: 0x0673656e646572206973206e6f7420746865206f70657261746f72206f662074686520677561726469616e
+  - ptr: 5
+    kind: constant
+    data:
       type: string
-    - slot: 2
-      label: Incentive
-      type: Incentive
-    - slot: 3
-      label: PublicKey
-      type: bytes
-    - slot: 4
-      label: ExtraData
-      type: bytes
-    methods: []
-- ptr: 29
-  kind: class
-  data:
-    name: Incentive
-    fields:
-    - slot: 0
-      label: Amount
-      type: u64
-    - slot: 1
-      label: Wallet
-      type: address
-    - slot: 2
-      label: ReferralPercent
-      type: u64
-    - slot: 3
-      label: ReferralWallet
-      type: address
-    methods: []
-- ptr: 30
-  deps:
-  - 28
-  - 26
-  - 25
-  kind: state
-  data:
-    mode: persistent
-    fields:
-    - slot: 0
-      label: Guardians
-      type: map[string]Guardian
-    - slot: 1
-      label: KnownGuardians
-      type: '[]string'
-    - slot: 2
-      label: Operators
-      type: map[string]Operator
-    - slot: 3
-      label: KnownOperators
-      type: '[]string'
-    - slot: 4
-      label: Approved
-      type: map[string]bool
-    - slot: 5
-      label: ReferralRewards
-      type: map[address]u64
-    - slot: 6
-      label: NodeLimitKYC
-      type: u64
-    - slot: 7
-      label: NodeLimitKYB
-      type: u64
-    - slot: 8
-      label: MasterOperator
-      type: Master
-    - slot: 9
-      label: Administrators
-      type: map[address]bool
-- ptr: 31
-  deps:
-  - 0
-  - 25
-  - 28
-  - 26
-  - 30
-  kind: routine
-  data:
-    name: Import
-    mode: persistent
-    kind: deployer
-    accepts:
-    - slot: 0
-      label: master
-      type: Master
-    - slot: 1
-      label: admins
-      type: '[]address'
-    - slot: 2
-      label: guardians
-      type: '[]Guardian'
-    - slot: 3
-      label: operators
-      type: '[]Operator'
-    - slot: 4
-      label: approved
-      type: '[]string'
-    - slot: 5
-      label: referralAddrs
-      type: '[]address'
-    - slot: 6
-      label: referralAmounts
-      type: '[]u64'
-    - slot: 7
-      label: knownGs
-      type: '[]string'
-    - slot: 8
-      label: knownOs
-      type: '[]string'
-    - slot: 9
-      label: nodeLimitKYC
-      type: u64
-    - slot: 10
-      label: nodeLimitKYB
-      type: u64
-    returns: []
-    executes:
-      asm:
-      - PLOAD $0 &8
-      - OBTAIN $1 &0
-      - DISPERSE $0 $1
-      - PSAVE $0
-      - PLOAD $0 &9
-      - OBTAIN $1 &1
-      - PMAKE $2 &5
-      - SIZEOF $3 $1
-      - DEST
-      - LT $4 $2 $3
-      - NOT $4 $4
-      - LDPTR1 $5 0x15
-      - JUMPI $5 $4
-      - GETIDX $4 $1 $2
-      - PMAKE $6 &1
-      - NOT $6 $6
-      - SETKEY $0 $4 $6
-      - DEST
-      - INCR $2
-      - LDPTR1 $5 0x8
-      - JUMP $5
-      - DEST
-      - PSAVE $0
-      - PLOAD $0 &0
-      - OBTAIN $1 &2
-      - PMAKE $2 &5
-      - SIZEOF $3 $1
-      - DEST
-      - LT $4 $2 $3
-      - NOT $4 $4
-      - LDPTR1 $5 0x29
-      - JUMPI $5 $4
-      - GETIDX $4 $1 $2
-      - GETFLD $6 $4 &0
-      - GENKEY $7 $0 $6
-      - DISPERSE $7 $4
-      - SETKEY $0 $6 $7
-      - DEST
-      - INCR $2
-      - LDPTR1 $5 0x1b
-      - JUMP $5
-      - DEST
-      - PSAVE $0
-      - PLOAD $0 &2
-      - OBTAIN $1 &3
-      - PMAKE $2 &5
-      - SIZEOF $3 $1
-      - DEST
-      - LT $4 $2 $3
-      - NOT $4 $4
-      - LDPTR1 $5 0x3d
-      - JUMPI $5 $4
-      - GETIDX $4 $1 $2
-      - GETFLD $6 $4 &0
-      - GENKEY $7 $0 $6
-      - DISPERSE $7 $4
-      - SETKEY $0 $6 $7
-      - DEST
-      - INCR $2
-      - LDPTR1 $5 0x2f
-      - JUMP $5
-      - DEST
-      - PSAVE $0
-      - PLOAD $0 &4
-      - OBTAIN $1 &4
-      - PMAKE $2 &5
-      - SIZEOF $3 $1
-      - DEST
-      - LT $4 $2 $3
-      - NOT $4 $4
-      - LDPTR1 $5 0x50
-      - JUMPI $5 $4
-      - GETIDX $4 $1 $2
-      - PMAKE $6 &1
-      - NOT $6 $6
-      - SETKEY $0 $4 $6
-      - DEST
-      - INCR $2
-      - LDPTR1 $5 0x43
-      - JUMP $5
-      - DEST
-      - PSAVE $0
-      - OBTAIN $0 &5
-      - SIZEOF $1 $0
-      - OBTAIN $2 &6
-      - SIZEOF $3 $2
-      - EQ $1 $1 $3
-      - LDPTR1 $3 0x5c
-      - JUMPI $3 $1
-      - LDPTR1 $1 0x0
-      - CONST $1 $1
-      - THROW $1
-      - DEST
-      - PLOAD $1 &5
-      - PMAKE $3 &5
-      - SIZEOF $4 $0
-      - DEST
-      - LT $5 $3 $4
-      - NOT $5 $5
-      - LDPTR1 $6 0x6c
-      - JUMPI $6 $5
-      - GETIDX $5 $0 $3
-      - GETIDX $7 $2 $3
-      - SETKEY $1 $5 $7
-      - DEST
-      - INCR $3
-      - LDPTR1 $6 0x60
-      - JUMP $6
-      - DEST
-      - PSAVE $1
-      - PLOAD $1 &1
-      - OBTAIN $3 &7
-      - PMAKE $4 &5
-      - SIZEOF $5 $3
-      - DEST
-      - LT $6 $4 $5
-      - NOT $6 $6
-      - LDPTR1 $7 0x7d
-      - JUMPI $7 $6
-      - GETIDX $6 $3 $4
-      - APPEND $1 $6
-      - DEST
-      - INCR $4
-      - LDPTR1 $7 0x72
-      - JUMP $7
-      - DEST
-      - PSAVE $1
-      - PLOAD $1 &3
-      - OBTAIN $3 &8
-      - PMAKE $4 &5
-      - SIZEOF $5 $3
-      - DEST
-      - LT $6 $4 $5
-      - NOT $6 $6
-      - LDPTR1 $7 0x8e
-      - JUMPI $7 $6
-      - GETIDX $6 $3 $4
-      - APPEND $1 $6
-      - DEST
-      - INCR $4
-      - LDPTR1 $7 0x83
-      - JUMP $7
-      - DEST
-      - PSAVE $1
-      - PLOAD $0 &6
-      - OBTAIN $1 &9
-      - DISPERSE $0 $1
-      - PSAVE $0
-      - PLOAD $0 &7
-      - OBTAIN $1 &a
-      - DISPERSE $0 $1
-      - PSAVE $0
-    catches: []
-- ptr: 32
-  deps:
-  - 1
-  - 20
-  - 25
-  - 26
-  - 28
-  - 29
-  - 43
-  - 30
-  kind: routine
-  data:
-    name: Setup
-    mode: persistent
-    kind: deployer
-    accepts:
-    - slot: 0
-      label: master
-      type: Master
-    - slot: 1
-      label: guardians
-      type: '[]string'
-    - slot: 2
-      label: pubkeys
-      type: '[]bytes'
-    - slot: 3
-      label: admins
-      type: '[]address'
-    - slot: 4
-      label: preApproved
-      type: '[]string'
-    - slot: 5
-      label: limitKYC
-      type: u64
-    - slot: 6
-      label: limitKYB
-      type: u64
-    returns: []
-    executes:
-      asm:
-      - OBTAIN $0 &1
-      - SIZEOF $1 $0
-      - OBTAIN $2 &2
-      - SIZEOF $3 $2
-      - EQ $1 $1 $3
-      - LDPTR1 $3 0xa
-      - JUMPI $3 $1
-      - LDPTR1 $1 0x1
-      - CONST $1 $1
-      - THROW $1
-      - DEST
-      - PLOAD $1 &8
-      - OBTAIN $3 &0
-      - DISPERSE $1 $3
-      - PSAVE $1
-      - PLOAD $1 &3
-      - OBTAIN $3 &0
-      - GETFLD $3 $3 &0
-      - APPEND $1 $3
-      - PSAVE $1
-      - PLOAD $1 &2
-      - LDPTR1 $3 0x1a
-      - MAKE $3 $3
-      - OBTAIN $4 &0
-      - GETFLD $5 $4 &0
-      - SETFLD $3 &0 $5
-      - LDPTR1 $5 0x1b
-      - MAKE $5 $5
-      - SETFLD $3 &1 $5
-      - LDPTR1 $5 0x14
-      - MAKE $5 $5
-      - SETFLD $3 &2 $5
-      - GETFLD $4 $4 &0
-      - GENKEY $5 $1 $4
-      - DISPERSE $5 $3
-      - SETKEY $1 $4 $5
-      - PSAVE $1
-      - PLOAD $1 &6
-      - OBTAIN $3 &5
-      - DISPERSE $1 $3
-      - PSAVE $1
-      - PLOAD $1 &7
-      - OBTAIN $4 &6
-      - DISPERSE $1 $4
-      - PSAVE $1
-      - PLOAD $1 &9
-      - OBTAIN $5 &3
-      - PMAKE $6 &5
-      - SIZEOF $7 $5
-      - DEST
-      - LT $8 $6 $7
-      - NOT $8 $8
-      - LDPTR1 $9 0x3e
-      - JUMPI $9 $8
-      - GETIDX $8 $5 $6
-      - PMAKE $a &1
-      - NOT $a $a
-      - SETKEY $1 $8 $a
-      - DEST
-      - INCR $6
-      - LDPTR1 $9 0x31
-      - JUMP $9
-      - DEST
-      - PSAVE $1
-      - CARGS $1
-      - OBTAIN $5 &4
-      - SETFLD $1 &0 $5
-      - LDPTR1 $6 0x2b
-      - CALLR $1 $6 $1
-      - PMAKE $1 &5
-      - SIZEOF $6 $0
-      - DEST
-      - LT $7 $1 $6
-      - NOT $7 $7
-      - LDPTR1 $8 0x76
-      - JUMPI $8 $7
-      - GETIDX $7 $0 $1
-      - PLOAD $9 &4
-      - PMAKE $a &1
-      - NOT $a $a
-      - SETKEY $9 $7 $a
-      - PSAVE $9
-      - PLOAD $9 &2
-      - OBTAIN $a &0
-      - GETFLD $a $a &0
-      - GENKEY $b $9 $a
-      - GETFLD $c $b &2
-      - APPEND $c $7
-      - SETFLD $b &2 $c
-      - SETKEY $9 $a $b
-      - PSAVE $9
-      - PLOAD $9 &0
-      - LDPTR1 $a 0x1c
-      - MAKE $a $a
-      - SETFLD $a &0 $7
-      - OBTAIN $b &0
-      - GETFLD $c $b &0
-      - SETFLD $a &1 $c
-      - LDPTR1 $c 0x1d
-      - MAKE $c $c
-      - PMAKE $d &5
-      - SETFLD $c &0 $d
-      - GETFLD $b $b &1
-      - SETFLD $c &1 $b
-      - SETFLD $a &2 $c
-      - GETIDX $b $2 $1
-      - SETFLD $a &3 $b
-      - GENKEY $b $9 $7
-      - DISPERSE $b $a
-      - SETKEY $9 $7 $b
-      - PSAVE $9
-      - PLOAD $9 &1
-      - APPEND $9 $7
-      - PSAVE $9
-      - DEST
-      - INCR $1
-      - LDPTR1 $8 0x47
-      - JUMP $8
-      - DEST
-    catches: []
-- ptr: 33
-  deps:
-  - 45
-  - 43
-  - 30
-  kind: routine
-  data:
-    name: Approve
-    mode: persistent
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: kramaIDs
-      type: '[]string'
-    returns: []
-    executes:
-      asm:
-      - CARGS $0
-      - LDPTR1 $1 0x2d
-      - CALLR $0 $1 $0
-      - CARGS $0
-      - OBTAIN $1 &0
-      - SETFLD $0 &0 $1
-      - LDPTR1 $1 0x2b
-      - CALLR $0 $1 $0
-    catches: []
-- ptr: 34
-  deps:
-  - 30
-  kind: routine
-  data:
-    name: IsApproved
-    mode: readonly
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: kramaID
+      value: 0x0673656e646572206973206e6f742061207665726966696564206f70657261746f723a20
+  - ptr: 6
+    kind: constant
+    data:
       type: string
-    returns:
-    - slot: 0
-      label: ok
-      type: bool
-    executes:
-      asm:
-      - PLOAD $0 &4
-      - OBTAIN $1 &0
-      - HASKEY $1 $0 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0x9
-      - JUMPI $2 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0xb
-      - JUMP $2
-      - DEST
-      - NOT $1 $1
-      - DEST
-      - YIELD $1 &0
-      - PFREE $0
-    catches: []
-- ptr: 35
-  deps:
-  - 30
-  kind: routine
-  data:
-    name: IsVerified
-    mode: readonly
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: moiID
+      value: 0x06677561726469616e20616c726561647920657869737473
+  - ptr: 7
+    kind: constant
+    data:
       type: string
-    returns:
-    - slot: 0
-      label: ok
-      type: bool
-    executes:
-      asm:
-      - PLOAD $0 &2
-      - OBTAIN $1 &0
-      - HASKEY $1 $0 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0x9
-      - JUMPI $2 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0xb
-      - JUMP $2
-      - DEST
-      - NOT $1 $1
-      - DEST
-      - YIELD $1 &0
-      - PFREE $0
-    catches: []
-- ptr: 36
-  deps:
-  - 2
-  - 20
-  - 27
-  - 26
-  - 45
-  - 30
-  kind: routine
-  data:
-    name: RegisterOperator
-    mode: persistent
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: moiID
+      value: 0x06677561726469616e206b72616d61206964206973206e6f7420617070726f766564
+  - ptr: 8
+    kind: constant
+    data:
       type: string
-    - slot: 1
-      label: verification
-      type: VerifyProof
-    returns: []
-    executes:
-      asm:
-      - CARGS $0
-      - LDPTR1 $1 0x2d
-      - CALLR $0 $1 $0
-      - PLOAD $0 &2
-      - OBTAIN $1 &0
-      - HASKEY $2 $0 $1
-      - NOT $2 $2
-      - LDPTR1 $3 0xc
-      - JUMPI $3 $2
-      - NOT $2 $2
-      - LDPTR1 $3 0xe
-      - JUMP $3
-      - DEST
-      - NOT $2 $2
-      - DEST
-      - NOT $2 $2
-      - LDPTR1 $3 0x15
-      - JUMPI $3 $2
-      - LDPTR1 $2 0x2
-      - CONST $2 $2
-      - REVERT $2
-      - DEST
-      - LDPTR1 $2 0x1a
-      - MAKE $2 $2
-      - SETFLD $2 &0 $1
-      - OBTAIN $3 &1
-      - SETFLD $2 &1 $3
-      - PMAKE $3 &5
-      - LDPTR1 $4 0x14
-      - VMAKE $3 $4 $3
-      - SETFLD $2 &2 $3
-      - GENKEY $3 $0 $1
-      - DISPERSE $3 $2
-      - SETKEY $0 $1 $3
-      - PSAVE $0
-      - PLOAD $0 &3
-      - OBTAIN $1 &0
-      - APPEND $0 $1
-      - PSAVE $0
-    catches: []
-- ptr: 37
-  deps:
-  - 3
-  - 4
-  - 5
-  - 6
-  - 28
-  - 44
-  - 38
-  - 30
-  kind: routine
-  data:
-    name: RegisterGuardian
-    mode: persistent
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: guardian
-      type: Guardian
-    returns: []
-    executes:
-      asm:
-      - OBTAIN $0 &0
-      - GETFLD $1 $0 &1
-      - SENDER $2
-      - ADDR $2 $2
-      - STR $2 $2
-      - LDPTR1 $3 0x3
-      - CONST $3 $3
-      - LEN $4 $1
-      - CARGS $5
-      - SETFLD $5 &0 $1
-      - SETFLD $5 &1 $3
-      - SETFLD $5 &2 $4
-      - CALLM $3 &1a $5
-      - GETFLD $3 $3 &0
-      - EQ $2 $2 $3
-      - LDPTR1 $3 0x14
-      - JUMPI $3 $2
-      - LDPTR1 $2 0x4
-      - CONST $2 $2
-      - THROW $2
-      - DEST
-      - LDPTR1 $2 0x1a
-      - MAKE $2 $2
-      - PLOAD $3 &2
-      - HASKEY $4 $3 $1
-      - NOT $4 $4
-      - LDPTR1 $5 0x1f
-      - JUMPI $5 $4
-      - NOT $4 $4
-      - LDPTR1 $5 0x21
-      - JUMP $5
-      - DEST
-      - NOT $4 $4
-      - DEST
-      - LDPTR1 $5 0x28
-      - JUMPI $5 $4
-      - LDPTR1 $4 0x5
-      - CONST $4 $4
-      - JOIN $4 $4 $1
-      - THROW $4
-      - DEST
-      - GENKEY $4 $3 $1
-      - SWAP $2 $4
-      - PFREE $3
-      - GETFLD $3 $0 &0
-      - PLOAD $4 &0
-      - HASKEY $5 $4 $3
-      - NOT $5 $5
-      - LDPTR1 $6 0x35
-      - JUMPI $6 $5
-      - NOT $5 $5
-      - LDPTR1 $6 0x37
-      - JUMP $6
-      - DEST
-      - NOT $5 $5
-      - DEST
-      - NOT $5 $5
-      - LDPTR1 $6 0x3e
-      - JUMPI $6 $5
-      - LDPTR1 $5 0x6
-      - CONST $5 $5
-      - THROW $5
-      - DEST
-      - PFREE $4
-      - CARGS $4
-      - SETFLD $4 &0 $1
-      - LDPTR1 $5 0x2c
-      - CALLR $4 $5 $4
-      - GETFLD $4 $4 &0
-      - LDPTR1 $5 0x4c
-      - JUMPI $5 $4
-      - CARGS $4
-      - SETFLD $4 &0 $2
-      - SETFLD $4 &1 $0
-      - LDPTR1 $5 0x26
-      - CALLR $4 $5 $4
-      - DEST
-      - PLOAD $4 &2
-      - GETFLD $5 $2 &2
-      - APPEND $5 $3
-      - SETFLD $2 &2 $5
-      - SETKEY $4 $1 $2
-      - PSAVE $4
-      - PLOAD $1 &0
-      - GENKEY $2 $1 $3
-      - DISPERSE $2 $0
-      - SETKEY $1 $3 $2
-      - PSAVE $1
-      - PLOAD $0 &1
-      - APPEND $0 $3
-      - PSAVE $0
-    catches: []
-- ptr: 38
-  deps:
-  - 7
-  - 8
-  - 9
-  - 10
-  - 11
-  - 12
-  - 13
-  - 26
-  - 28
-  - 30
-  kind: routine
-  data:
-    name: CanRegisterGuardian
-    mode: readonly
-    kind: internal
-    accepts:
-    - slot: 0
-      label: operator
-      type: Operator
-    - slot: 1
-      label: guardian
-      type: Guardian
-    returns: []
-    executes:
-      asm:
-      - PLOAD $0 &4
-      - OBTAIN $1 &1
-      - GETFLD $1 $1 &0
-      - HASKEY $1 $0 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0xa
-      - JUMPI $2 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0xc
-      - JUMP $2
-      - DEST
-      - NOT $1 $1
-      - DEST
-      - LDPTR1 $2 0x12
-      - JUMPI $2 $1
-      - LDPTR1 $1 0x7
-      - CONST $1 $1
-      - THROW $1
-      - DEST
-      - PFREE $0
-      - OBTAIN $0 &0
-      - GETFLD $1 $0 &1
-      - GETFLD $1 $1 &0
-      - PMAKE $2 &5
-      - LDPTR1 $3 0x8
-      - CONST $3 $3
-      - EQ $3 $1 $3
-      - NOT $3 $3
-      - LDPTR1 $4 0x23
-      - JUMPI $4 $3
-      - PLOAD $3 &6
-      - GATHER $2 $3
-      - PFREE $3
-      - LDPTR1 $4 0x34
-      - JUMP $4
-      - DEST
-      - LDPTR1 $3 0x9
-      - CONST $3 $3
-      - EQ $1 $1 $3
-      - NOT $1 $1
-      - LDPTR1 $3 0x2f
-      - JUMPI $3 $1
-      - PLOAD $1 &7
-      - GATHER $2 $1
-      - PFREE $1
-      - LDPTR1 $3 0x33
-      - JUMP $3
-      - DEST
-      - LDPTR1 $1 0xa
-      - CONST $1 $1
-      - THROW $1
-      - DEST
-      - DEST
-      - PMAKE $1 &5
-      - EQ $1 $2 $1
-      - LDPTR1 $3 0x42
-      - JUMPI $3 $1
-      - GETFLD $0 $0 &2
-      - SIZEOF $0 $0
-      - LT $0 $0 $2
-      - LDPTR1 $1 0x41
-      - JUMPI $1 $0
-      - LDPTR1 $0 0xb
-      - CONST $0 $0
-      - THROW $0
-      - DEST
-      - DEST
-      - OBTAIN $0 &1
-      - GETFLD $0 $0 &2
-      - GETFLD $0 $0 &2
-      - LDPTR1 $1 0xc
-      - CONST $1 $1
-      - GT $0 $0 $1
-      - NOT $0 $0
-      - LDPTR1 $1 0x4f
-      - JUMPI $1 $0
-      - LDPTR1 $0 0xd
-      - CONST $0 $0
-      - THROW $0
-      - DEST
-    catches: []
-- ptr: 39
-  deps:
-  - 30
-  kind: routine
-  data:
-    name: GetIncentives
-    mode: readonly
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: kramaID
+      value: '0x066b7963'
+  - ptr: 9
+    kind: constant
+    data:
       type: string
-    returns:
-    - slot: 0
-      label: incentive
+      value: '0x066b7962'
+  - ptr: 10
+    kind: constant
+    data:
+      type: string
+      value: 0x06756e657870656374656420766572696669636174696f6e206b696e6420656e636f756e7465726564
+  - ptr: 11
+    kind: constant
+    data:
+      type: string
+      value: 0x066e6f6465206c696d6974207265616368656420666f72206f70657261746f72
+  - ptr: 12
+    kind: constant
+    data:
       type: u64
-    executes:
-      asm:
-      - PLOAD $0 &0
-      - OBTAIN $1 &0
-      - GENKEY $1 $0 $1
-      - GETFLD $1 $1 &2
-      - GETFLD $1 $1 &0
-      - YIELD $1 &0
-      - PFREE $0
-    catches: []
-- ptr: 40
-  deps:
-  - 30
-  kind: routine
-  data:
-    name: GetReferralRewards
-    mode: readonly
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: addr
-      type: address
-    returns:
-    - slot: 0
-      label: incentive
-      type: u64
-    executes:
-      asm:
-      - PLOAD $0 &5
-      - OBTAIN $1 &0
-      - GENKEY $1 $0 $1
-      - YIELD $1 &0
-      - PFREE $0
-    catches: []
-- ptr: 41
-  deps:
-  - 14
-  - 15
-  - 12
-  - 45
-  - 30
-  kind: routine
-  data:
-    name: AddIncentives
-    mode: persistent
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: incentiveIDs
-      type: '[]string'
-    - slot: 1
-      label: incentiveAmounts
-      type: '[]u64'
-    returns: []
-    executes:
-      asm:
-      - CARGS $0
-      - LDPTR1 $1 0x2d
-      - CALLR $0 $1 $0
-      - OBTAIN $0 &0
-      - SIZEOF $1 $0
-      - OBTAIN $2 &1
-      - SIZEOF $3 $2
-      - EQ $1 $1 $3
-      - LDPTR1 $3 0xd
-      - JUMPI $3 $1
-      - LDPTR1 $1 0xe
-      - CONST $1 $1
-      - THROW $1
-      - DEST
-      - PLOAD $1 &0
-      - PMAKE $3 &5
-      - SIZEOF $4 $0
-      - DEST
-      - LT $5 $3 $4
-      - NOT $5 $5
-      - LDPTR1 $6 0x52
-      - JUMPI $6 $5
-      - GETIDX $5 $0 $3
-      - HASKEY $7 $1 $5
-      - NOT $7 $7
-      - LDPTR1 $8 0x1e
-      - JUMPI $8 $7
-      - NOT $7 $7
-      - LDPTR1 $8 0x20
-      - JUMP $8
-      - DEST
-      - NOT $7 $7
-      - DEST
-      - LDPTR1 $8 0x26
-      - JUMPI $8 $7
-      - LDPTR1 $7 0xf
-      - CONST $7 $7
-      - REVERT $7
-      - DEST
-      - GENKEY $7 $1 $5
-      - GETIDX $8 $2 $3
-      - PMAKE $9 &5
-      - GETFLD $a $7 &2
-      - GETFLD $a $a &2
-      - GATHER $a $a
-      - PMAKE $b &5
-      - EQ $b $a $b
-      - LDPTR1 $c 0x36
-      - JUMPI $c $b
-      - MUL $b $8 $a
-      - LDPTR1 $c 0xc
-      - CONST $c $c
-      - DIV $b $b $c
-      - COPY $9 $b
-      - DEST
-      - SUB $b $8 $9
-      - COPY $8 $b
-      - GETFLD $b $7 &2
-      - GETFLD $c $b &0
-      - ADD $8 $c $8
-      - DISPERSE $c $8
-      - SETFLD $b &0 $c
-      - SETFLD $7 &2 $b
-      - PMAKE $8 &5
-      - EQ $8 $a $8
-      - LDPTR1 $a 0x4c
-      - JUMPI $a $8
-      - PLOAD $8 &5
-      - GETFLD $a $7 &2
-      - GETFLD $a $a &3
-      - GENKEY $a $8 $a
-      - ADD $9 $a $9
-      - GETFLD $a $7 &2
-      - GETFLD $a $a &3
-      - SETKEY $8 $a $9
-      - PSAVE $8
-      - DEST
-      - SETKEY $1 $5 $7
-      - DEST
-      - INCR $3
-      - LDPTR1 $6 0x11
-      - JUMP $6
-      - DEST
-      - PSAVE $1
-    catches: []
-- ptr: 42
-  deps:
-  - 8
-  - 16
-  - 9
-  - 17
-  - 45
-  - 30
-  kind: routine
-  data:
-    name: ChangeNodeLimit
-    mode: persistent
-    kind: invokable
-    accepts:
-    - slot: 0
-      label: kind
+      value: '0x0364'
+  - ptr: 13
+    kind: constant
+    data:
       type: string
-    - slot: 1
-      label: updated
-      type: u64
-    returns: []
-    executes:
-      asm:
-      - CARGS $0
-      - LDPTR1 $1 0x2d
-      - CALLR $0 $1 $0
-      - OBTAIN $0 &0
-      - LDPTR1 $1 0x8
-      - CONST $1 $1
-      - EQ $1 $0 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0x1a
-      - JUMPI $2 $1
-      - PLOAD $1 &6
-      - GATHER $3 $1
-      - OBTAIN $4 &1
-      - LT $5 $4 $3
-      - NOT $5 $5
-      - LDPTR1 $6 0x14
-      - JUMPI $6 $5
-      - LDPTR1 $5 0x10
-      - CONST $5 $5
-      - REVERT $5
-      - DEST
-      - COPY $3 $4
-      - DISPERSE $1 $3
-      - PSAVE $1
-      - LDPTR1 $2 0x36
-      - JUMP $2
-      - DEST
-      - LDPTR1 $1 0x9
-      - CONST $1 $1
-      - EQ $0 $0 $1
-      - NOT $0 $0
-      - LDPTR1 $1 0x31
-      - JUMPI $1 $0
-      - PLOAD $0 &7
-      - GATHER $2 $0
-      - OBTAIN $3 &1
-      - LT $4 $3 $2
-      - NOT $4 $4
-      - LDPTR1 $5 0x2b
-      - JUMPI $5 $4
-      - LDPTR1 $4 0x10
-      - CONST $4 $4
-      - REVERT $4
-      - DEST
-      - COPY $2 $3
-      - DISPERSE $0 $2
-      - PSAVE $0
-      - LDPTR1 $1 0x35
-      - JUMP $1
-      - DEST
-      - LDPTR1 $0 0x11
-      - CONST $0 $0
-      - REVERT $0
-      - DEST
-      - DEST
-    catches: []
-- ptr: 43
-  deps:
-  - 30
-  kind: routine
-  data:
-    name: ApproveKramaIDs
-    mode: persistent
-    kind: internal
-    accepts:
-    - slot: 0
-      label: kramaIDs
-      type: '[]string'
-    returns: []
-    executes:
-      asm:
-      - PLOAD $0 &4
-      - OBTAIN $1 &0
-      - PMAKE $2 &5
-      - SIZEOF $3 $1
-      - DEST
-      - LT $4 $2 $3
-      - NOT $4 $4
-      - LDPTR1 $5 0x11
-      - JUMPI $5 $4
-      - GETIDX $4 $1 $2
-      - PMAKE $6 &1
-      - NOT $6 $6
-      - SETKEY $0 $4 $6
-      - DEST
-      - INCR $2
-      - LDPTR1 $5 0x4
-      - JUMP $5
-      - DEST
-      - PSAVE $0
-    catches: []
-- ptr: 44
-  deps:
-  - 30
-  kind: routine
-  data:
-    name: IsMaster
-    mode: readonly
-    kind: internal
-    accepts:
-    - slot: 0
-      label: moiID
+      value: 0x06696e76616c696420726566657272616c2070657263656e74616765
+  - ptr: 14
+    kind: constant
+    data:
       type: string
-    returns:
-    - slot: 0
-      label: ok
-      type: bool
-    executes:
-      asm:
-      - PLOAD $0 &8
-      - GETFLD $1 $0 &0
-      - OBTAIN $2 &0
-      - EQ $1 $1 $2
-      - YIELD $1 &0
-      - PFREE $0
-    catches: []
-- ptr: 45
-  deps:
-  - 18
-  - 30
-  kind: routine
-  data:
-    name: AuthenticateAdmin
-    mode: readonly
-    kind: internal
-    accepts: []
-    returns: []
-    executes:
-      asm:
-      - PLOAD $0 &9
-      - SENDER $1
-      - ADDR $1 $1
-      - HASKEY $1 $0 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0xa
-      - JUMPI $2 $1
-      - NOT $1 $1
-      - LDPTR1 $2 0xc
-      - JUMP $2
-      - DEST
-      - NOT $1 $1
-      - DEST
-      - LDPTR1 $2 0x12
-      - JUMPI $2 $1
-      - LDPTR1 $1 0x12
-      - CONST $1 $1
-      - THROW $1
-      - DEST
-      - PFREE $0
-    catches: []
+      value: 0x06696e76616c696420696e63656e7469766520696e707574733a206d69736d6174636865642073697a65
+  - ptr: 15
+    kind: constant
+    data:
+      type: string
+      value: 0x06677561726469616e20646f6573206e6f74206578697374
+  - ptr: 16
+    kind: constant
+    data:
+      type: string
+      value: 0x0675706461746564206c696d69742063616e6e6f74206265206265206c657373207468616e206578697374696e67
+  - ptr: 17
+    kind: constant
+    data:
+      type: string
+      value: 0x06696e76616c6964206c696d6974206b696e64
+  - ptr: 18
+    kind: constant
+    data:
+      type: string
+      value: 0x066163636573732064656e69656421206e6f7420616e2061646d696e
+  - ptr: 19
+    deps:
+      - 28
+    kind: typedef
+    data: map[string]Guardian
+  - ptr: 20
+    kind: typedef
+    data: '[]string'
+  - ptr: 21
+    deps:
+      - 26
+    kind: typedef
+    data: map[string]Operator
+  - ptr: 22
+    kind: typedef
+    data: map[string]bool
+  - ptr: 23
+    kind: typedef
+    data: map[address]u64
+  - ptr: 24
+    kind: typedef
+    data: map[address]bool
+  - ptr: 25
+    kind: class
+    data:
+      name: Master
+      fields:
+        - slot: 0
+          label: MOIID
+          type: string
+        - slot: 1
+          label: Wallet
+          type: address
+        - slot: 2
+          label: PubKey
+          type: bytes
+      methods: []
+  - ptr: 26
+    deps:
+      - 27
+    kind: class
+    data:
+      name: Operator
+      fields:
+        - slot: 0
+          label: Identifier
+          type: string
+        - slot: 1
+          label: Verification
+          type: VerifyProof
+        - slot: 2
+          label: Guardians
+          type: '[]string'
+      methods: []
+  - ptr: 27
+    kind: class
+    data:
+      name: VerifyProof
+      fields:
+        - slot: 0
+          label: Kind
+          type: string
+        - slot: 1
+          label: Proof
+          type: bytes
+      methods: []
+  - ptr: 28
+    deps:
+      - 29
+    kind: class
+    data:
+      name: Guardian
+      fields:
+        - slot: 0
+          label: KramaID
+          type: string
+        - slot: 1
+          label: OperatorID
+          type: string
+        - slot: 2
+          label: Incentive
+          type: Incentive
+        - slot: 3
+          label: PublicKey
+          type: bytes
+        - slot: 4
+          label: ExtraData
+          type: bytes
+      methods: []
+  - ptr: 29
+    kind: class
+    data:
+      name: Incentive
+      fields:
+        - slot: 0
+          label: Amount
+          type: u64
+        - slot: 1
+          label: Wallet
+          type: address
+        - slot: 2
+          label: ReferralPercent
+          type: u64
+        - slot: 3
+          label: ReferralWallet
+          type: address
+      methods: []
+  - ptr: 30
+    deps:
+      - 28
+      - 26
+      - 25
+    kind: state
+    data:
+      mode: persistent
+      fields:
+        - slot: 0
+          label: Guardians
+          type: map[string]Guardian
+        - slot: 1
+          label: KnownGuardians
+          type: '[]string'
+        - slot: 2
+          label: Operators
+          type: map[string]Operator
+        - slot: 3
+          label: KnownOperators
+          type: '[]string'
+        - slot: 4
+          label: Approved
+          type: map[string]bool
+        - slot: 5
+          label: ReferralRewards
+          type: map[address]u64
+        - slot: 6
+          label: NodeLimitKYC
+          type: u64
+        - slot: 7
+          label: NodeLimitKYB
+          type: u64
+        - slot: 8
+          label: MasterOperator
+          type: Master
+        - slot: 9
+          label: Administrators
+          type: map[address]bool
+        - slot: 10
+          label: TotalIncentives
+          type: u64
+  - ptr: 31
+    deps:
+      - 0
+      - 25
+      - 28
+      - 26
+      - 30
+    kind: routine
+    data:
+      name: Import
+      mode: persistent
+      kind: deployer
+      accepts:
+        - slot: 0
+          label: master
+          type: Master
+        - slot: 1
+          label: admins
+          type: '[]address'
+        - slot: 2
+          label: guardians
+          type: '[]Guardian'
+        - slot: 3
+          label: operators
+          type: '[]Operator'
+        - slot: 4
+          label: approved
+          type: '[]string'
+        - slot: 5
+          label: referralAddrs
+          type: '[]address'
+        - slot: 6
+          label: referralAmounts
+          type: '[]u64'
+        - slot: 7
+          label: knownGs
+          type: '[]string'
+        - slot: 8
+          label: knownOs
+          type: '[]string'
+        - slot: 9
+          label: nodeLimitKYC
+          type: u64
+        - slot: 10
+          label: nodeLimitKYB
+          type: u64
+      returns: []
+      executes:
+        bin:
+          - 128
+          - 0
+          - 8
+          - 4
+          - 1
+          - 0
+          - 48
+          - 0
+          - 1
+          - 129
+          - 0
+          - 128
+          - 0
+          - 9
+          - 4
+          - 1
+          - 1
+          - 41
+          - 2
+          - 5
+          - 80
+          - 3
+          - 1
+          - 1
+          - 68
+          - 4
+          - 2
+          - 3
+          - 98
+          - 4
+          - 4
+          - 17
+          - 5
+          - 21
+          - 3
+          - 5
+          - 4
+          - 83
+          - 4
+          - 1
+          - 2
+          - 41
+          - 6
+          - 1
+          - 98
+          - 6
+          - 6
+          - 92
+          - 0
+          - 4
+          - 6
+          - 1
+          - 99
+          - 2
+          - 17
+          - 5
+          - 8
+          - 2
+          - 5
+          - 1
+          - 129
+          - 0
+          - 128
+          - 0
+          - 10
+          - 49
+          - 1
+          - 0
+          - 128
+          - 2
+          - 0
+          - 4
+          - 3
+          - 2
+          - 41
+          - 4
+          - 5
+          - 80
+          - 5
+          - 3
+          - 1
+          - 68
+          - 6
+          - 4
+          - 5
+          - 98
+          - 6
+          - 6
+          - 17
+          - 7
+          - 47
+          - 3
+          - 7
+          - 6
+          - 83
+          - 6
+          - 3
+          - 4
+          - 81
+          - 8
+          - 6
+          - 0
+          - 94
+          - 9
+          - 2
+          - 8
+          - 48
+          - 9
+          - 6
+          - 92
+          - 2
+          - 8
+          - 9
+          - 81
+          - 8
+          - 6
+          - 2
+          - 81
+          - 8
+          - 8
+          - 0
+          - 101
+          - 8
+          - 1
+          - 8
+          - 36
+          - 1
+          - 8
+          - 1
+          - 99
+          - 4
+          - 17
+          - 7
+          - 29
+          - 2
+          - 7
+          - 1
+          - 129
+          - 2
+          - 48
+          - 0
+          - 1
+          - 129
+          - 0
+          - 128
+          - 0
+          - 2
+          - 4
+          - 1
+          - 3
+          - 41
+          - 2
+          - 5
+          - 80
+          - 3
+          - 1
+          - 1
+          - 68
+          - 4
+          - 2
+          - 3
+          - 98
+          - 4
+          - 4
+          - 17
+          - 5
+          - 69
+          - 3
+          - 5
+          - 4
+          - 83
+          - 4
+          - 1
+          - 2
+          - 81
+          - 6
+          - 4
+          - 0
+          - 94
+          - 7
+          - 0
+          - 6
+          - 48
+          - 7
+          - 4
+          - 92
+          - 0
+          - 6
+          - 7
+          - 1
+          - 99
+          - 2
+          - 17
+          - 5
+          - 55
+          - 2
+          - 5
+          - 1
+          - 129
+          - 0
+          - 128
+          - 0
+          - 4
+          - 4
+          - 1
+          - 4
+          - 41
+          - 2
+          - 5
+          - 80
+          - 3
+          - 1
+          - 1
+          - 68
+          - 4
+          - 2
+          - 3
+          - 98
+          - 4
+          - 4
+          - 17
+          - 5
+          - 88
+          - 3
+          - 5
+          - 4
+          - 83
+          - 4
+          - 1
+          - 2
+          - 41
+          - 6
+          - 1
+          - 98
+          - 6
+          - 6
+          - 92
+          - 0
+          - 4
+          - 6
+          - 1
+          - 99
+          - 2
+          - 17
+          - 5
+          - 75
+          - 2
+          - 5
+          - 1
+          - 129
+          - 0
+          - 4
+          - 0
+          - 5
+          - 80
+          - 1
+          - 0
+          - 4
+          - 2
+          - 6
+          - 80
+          - 3
+          - 2
+          - 70
+          - 1
+          - 1
+          - 3
+          - 17
+          - 3
+          - 100
+          - 3
+          - 3
+          - 1
+          - 17
+          - 1
+          - 0
+          - 16
+          - 1
+          - 1
+          - 65
+          - 1
+          - 1
+          - 128
+          - 1
+          - 5
+          - 41
+          - 3
+          - 5
+          - 80
+          - 4
+          - 0
+          - 1
+          - 68
+          - 5
+          - 3
+          - 4
+          - 98
+          - 5
+          - 5
+          - 17
+          - 6
+          - 116
+          - 3
+          - 6
+          - 5
+          - 83
+          - 5
+          - 0
+          - 3
+          - 83
+          - 7
+          - 2
+          - 3
+          - 92
+          - 1
+          - 5
+          - 7
+          - 1
+          - 99
+          - 3
+          - 17
+          - 6
+          - 104
+          - 2
+          - 6
+          - 1
+          - 129
+          - 1
+          - 128
+          - 1
+          - 1
+          - 4
+          - 3
+          - 7
+          - 41
+          - 4
+          - 5
+          - 80
+          - 5
+          - 3
+          - 1
+          - 68
+          - 6
+          - 4
+          - 5
+          - 98
+          - 6
+          - 6
+          - 17
+          - 7
+          - 133
+          - 3
+          - 7
+          - 6
+          - 83
+          - 6
+          - 3
+          - 4
+          - 88
+          - 1
+          - 6
+          - 1
+          - 99
+          - 4
+          - 17
+          - 7
+          - 122
+          - 2
+          - 7
+          - 1
+          - 129
+          - 1
+          - 128
+          - 1
+          - 3
+          - 4
+          - 3
+          - 8
+          - 41
+          - 4
+          - 5
+          - 80
+          - 5
+          - 3
+          - 1
+          - 68
+          - 6
+          - 4
+          - 5
+          - 98
+          - 6
+          - 6
+          - 17
+          - 7
+          - 150
+          - 3
+          - 7
+          - 6
+          - 83
+          - 6
+          - 3
+          - 4
+          - 88
+          - 1
+          - 6
+          - 1
+          - 99
+          - 4
+          - 17
+          - 7
+          - 139
+          - 2
+          - 7
+          - 1
+          - 129
+          - 1
+          - 128
+          - 0
+          - 6
+          - 4
+          - 1
+          - 9
+          - 48
+          - 0
+          - 1
+          - 129
+          - 0
+          - 128
+          - 0
+          - 7
+          - 4
+          - 1
+          - 10
+          - 48
+          - 0
+          - 1
+          - 129
+          - 0
+      catches: []
+  - ptr: 32
+    deps:
+      - 1
+      - 20
+      - 25
+      - 26
+      - 28
+      - 29
+      - 43
+      - 30
+    kind: routine
+    data:
+      name: Setup
+      mode: persistent
+      kind: deployer
+      accepts:
+        - slot: 0
+          label: master
+          type: Master
+        - slot: 1
+          label: guardians
+          type: '[]string'
+        - slot: 2
+          label: pubkeys
+          type: '[]bytes'
+        - slot: 3
+          label: admins
+          type: '[]address'
+        - slot: 4
+          label: preApproved
+          type: '[]string'
+        - slot: 5
+          label: limitKYC
+          type: u64
+        - slot: 6
+          label: limitKYB
+          type: u64
+      returns: []
+      executes:
+        bin:
+          - 4
+          - 0
+          - 1
+          - 80
+          - 1
+          - 0
+          - 4
+          - 2
+          - 2
+          - 80
+          - 3
+          - 2
+          - 70
+          - 1
+          - 1
+          - 3
+          - 17
+          - 3
+          - 10
+          - 3
+          - 3
+          - 1
+          - 17
+          - 1
+          - 1
+          - 16
+          - 1
+          - 1
+          - 65
+          - 1
+          - 1
+          - 128
+          - 1
+          - 8
+          - 4
+          - 3
+          - 0
+          - 48
+          - 1
+          - 3
+          - 129
+          - 1
+          - 128
+          - 1
+          - 3
+          - 4
+          - 3
+          - 0
+          - 81
+          - 3
+          - 3
+          - 0
+          - 88
+          - 1
+          - 3
+          - 129
+          - 1
+          - 128
+          - 1
+          - 2
+          - 17
+          - 3
+          - 26
+          - 40
+          - 3
+          - 3
+          - 4
+          - 4
+          - 0
+          - 81
+          - 5
+          - 4
+          - 0
+          - 82
+          - 3
+          - 0
+          - 5
+          - 17
+          - 5
+          - 27
+          - 40
+          - 5
+          - 5
+          - 82
+          - 3
+          - 1
+          - 5
+          - 17
+          - 5
+          - 20
+          - 40
+          - 5
+          - 5
+          - 82
+          - 3
+          - 2
+          - 5
+          - 81
+          - 4
+          - 4
+          - 0
+          - 94
+          - 5
+          - 1
+          - 4
+          - 48
+          - 5
+          - 3
+          - 92
+          - 1
+          - 4
+          - 5
+          - 129
+          - 1
+          - 128
+          - 1
+          - 6
+          - 4
+          - 3
+          - 5
+          - 48
+          - 1
+          - 3
+          - 129
+          - 1
+          - 128
+          - 1
+          - 7
+          - 4
+          - 4
+          - 6
+          - 48
+          - 1
+          - 4
+          - 129
+          - 1
+          - 128
+          - 1
+          - 9
+          - 4
+          - 5
+          - 3
+          - 41
+          - 6
+          - 5
+          - 80
+          - 7
+          - 5
+          - 1
+          - 68
+          - 8
+          - 6
+          - 7
+          - 98
+          - 8
+          - 8
+          - 17
+          - 9
+          - 62
+          - 3
+          - 9
+          - 8
+          - 83
+          - 8
+          - 5
+          - 6
+          - 41
+          - 10
+          - 1
+          - 98
+          - 10
+          - 10
+          - 92
+          - 1
+          - 8
+          - 10
+          - 1
+          - 99
+          - 6
+          - 17
+          - 9
+          - 49
+          - 2
+          - 9
+          - 1
+          - 129
+          - 1
+          - 10
+          - 1
+          - 4
+          - 5
+          - 4
+          - 82
+          - 1
+          - 0
+          - 5
+          - 17
+          - 6
+          - 43
+          - 12
+          - 1
+          - 6
+          - 1
+          - 41
+          - 1
+          - 5
+          - 80
+          - 6
+          - 0
+          - 1
+          - 68
+          - 7
+          - 1
+          - 6
+          - 98
+          - 7
+          - 7
+          - 17
+          - 8
+          - 118
+          - 3
+          - 8
+          - 7
+          - 83
+          - 7
+          - 0
+          - 1
+          - 128
+          - 9
+          - 4
+          - 41
+          - 10
+          - 1
+          - 98
+          - 10
+          - 10
+          - 92
+          - 9
+          - 7
+          - 10
+          - 129
+          - 9
+          - 128
+          - 9
+          - 2
+          - 4
+          - 10
+          - 0
+          - 81
+          - 10
+          - 10
+          - 0
+          - 91
+          - 11
+          - 9
+          - 10
+          - 81
+          - 12
+          - 11
+          - 2
+          - 88
+          - 12
+          - 7
+          - 82
+          - 11
+          - 2
+          - 12
+          - 92
+          - 9
+          - 10
+          - 11
+          - 129
+          - 9
+          - 128
+          - 9
+          - 0
+          - 17
+          - 10
+          - 28
+          - 40
+          - 10
+          - 10
+          - 82
+          - 10
+          - 0
+          - 7
+          - 4
+          - 11
+          - 0
+          - 81
+          - 12
+          - 11
+          - 0
+          - 82
+          - 10
+          - 1
+          - 12
+          - 17
+          - 12
+          - 29
+          - 40
+          - 12
+          - 12
+          - 41
+          - 13
+          - 5
+          - 82
+          - 12
+          - 0
+          - 13
+          - 81
+          - 11
+          - 11
+          - 1
+          - 82
+          - 12
+          - 1
+          - 11
+          - 82
+          - 10
+          - 2
+          - 12
+          - 83
+          - 11
+          - 2
+          - 1
+          - 82
+          - 10
+          - 3
+          - 11
+          - 94
+          - 11
+          - 9
+          - 7
+          - 48
+          - 11
+          - 10
+          - 92
+          - 9
+          - 7
+          - 11
+          - 129
+          - 9
+          - 128
+          - 9
+          - 1
+          - 88
+          - 9
+          - 7
+          - 129
+          - 9
+          - 1
+          - 99
+          - 1
+          - 17
+          - 8
+          - 71
+          - 2
+          - 8
+          - 1
+      catches: []
+  - ptr: 33
+    deps:
+      - 45
+      - 43
+      - 30
+    kind: routine
+    data:
+      name: Approve
+      mode: persistent
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kramaIDs
+          type: '[]string'
+      returns: []
+      executes:
+        bin:
+          - 10
+          - 0
+          - 17
+          - 1
+          - 45
+          - 12
+          - 0
+          - 1
+          - 0
+          - 10
+          - 0
+          - 4
+          - 1
+          - 0
+          - 82
+          - 0
+          - 0
+          - 1
+          - 17
+          - 1
+          - 43
+          - 12
+          - 0
+          - 1
+          - 0
+      catches: []
+  - ptr: 34
+    deps:
+      - 30
+    kind: routine
+    data:
+      name: IsApproved
+      mode: readonly
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kramaID
+          type: string
+      returns:
+        - slot: 0
+          label: ok
+          type: bool
+      executes:
+        bin:
+          - 128
+          - 0
+          - 4
+          - 4
+          - 1
+          - 0
+          - 90
+          - 1
+          - 0
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 9
+          - 3
+          - 2
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 11
+          - 2
+          - 2
+          - 1
+          - 98
+          - 1
+          - 1
+          - 1
+          - 5
+          - 1
+          - 0
+          - 130
+          - 0
+      catches: []
+  - ptr: 35
+    deps:
+      - 30
+    kind: routine
+    data:
+      name: IsVerified
+      mode: readonly
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: moiID
+          type: string
+      returns:
+        - slot: 0
+          label: ok
+          type: bool
+      executes:
+        bin:
+          - 128
+          - 0
+          - 2
+          - 4
+          - 1
+          - 0
+          - 90
+          - 1
+          - 0
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 9
+          - 3
+          - 2
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 11
+          - 2
+          - 2
+          - 1
+          - 98
+          - 1
+          - 1
+          - 1
+          - 5
+          - 1
+          - 0
+          - 130
+          - 0
+      catches: []
+  - ptr: 36
+    deps:
+      - 2
+      - 20
+      - 27
+      - 26
+      - 45
+      - 30
+    kind: routine
+    data:
+      name: RegisterOperator
+      mode: persistent
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: moiID
+          type: string
+        - slot: 1
+          label: verification
+          type: VerifyProof
+      returns: []
+      executes:
+        bin:
+          - 10
+          - 0
+          - 17
+          - 1
+          - 45
+          - 12
+          - 0
+          - 1
+          - 0
+          - 128
+          - 0
+          - 2
+          - 4
+          - 1
+          - 0
+          - 90
+          - 2
+          - 0
+          - 1
+          - 98
+          - 2
+          - 2
+          - 17
+          - 3
+          - 12
+          - 3
+          - 3
+          - 2
+          - 98
+          - 2
+          - 2
+          - 17
+          - 3
+          - 14
+          - 2
+          - 3
+          - 1
+          - 98
+          - 2
+          - 2
+          - 1
+          - 98
+          - 2
+          - 2
+          - 17
+          - 3
+          - 21
+          - 3
+          - 3
+          - 2
+          - 17
+          - 2
+          - 2
+          - 16
+          - 2
+          - 2
+          - 6
+          - 2
+          - 1
+          - 17
+          - 2
+          - 26
+          - 40
+          - 2
+          - 2
+          - 82
+          - 2
+          - 0
+          - 1
+          - 4
+          - 3
+          - 1
+          - 82
+          - 2
+          - 1
+          - 3
+          - 41
+          - 3
+          - 5
+          - 17
+          - 4
+          - 20
+          - 42
+          - 3
+          - 4
+          - 3
+          - 82
+          - 2
+          - 2
+          - 3
+          - 94
+          - 3
+          - 0
+          - 1
+          - 48
+          - 3
+          - 2
+          - 92
+          - 0
+          - 1
+          - 3
+          - 129
+          - 0
+          - 128
+          - 0
+          - 3
+          - 4
+          - 1
+          - 0
+          - 88
+          - 0
+          - 1
+          - 129
+          - 0
+      catches: []
+  - ptr: 37
+    deps:
+      - 3
+      - 4
+      - 5
+      - 6
+      - 28
+      - 44
+      - 38
+      - 30
+    kind: routine
+    data:
+      name: RegisterGuardian
+      mode: persistent
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: guardian
+          type: Guardian
+      returns: []
+      executes:
+        bin:
+          - 4
+          - 0
+          - 0
+          - 81
+          - 1
+          - 0
+          - 1
+          - 115
+          - 2
+          - 73
+          - 2
+          - 2
+          - 72
+          - 2
+          - 2
+          - 17
+          - 3
+          - 3
+          - 16
+          - 3
+          - 3
+          - 74
+          - 4
+          - 1
+          - 10
+          - 5
+          - 82
+          - 5
+          - 0
+          - 1
+          - 82
+          - 5
+          - 1
+          - 3
+          - 82
+          - 5
+          - 2
+          - 4
+          - 13
+          - 3
+          - 26
+          - 5
+          - 81
+          - 3
+          - 3
+          - 0
+          - 70
+          - 2
+          - 2
+          - 3
+          - 17
+          - 3
+          - 20
+          - 3
+          - 3
+          - 2
+          - 17
+          - 2
+          - 4
+          - 16
+          - 2
+          - 2
+          - 65
+          - 2
+          - 1
+          - 17
+          - 2
+          - 26
+          - 40
+          - 2
+          - 2
+          - 128
+          - 3
+          - 2
+          - 90
+          - 4
+          - 3
+          - 1
+          - 98
+          - 4
+          - 4
+          - 17
+          - 5
+          - 31
+          - 3
+          - 5
+          - 4
+          - 98
+          - 4
+          - 4
+          - 17
+          - 5
+          - 33
+          - 2
+          - 5
+          - 1
+          - 98
+          - 4
+          - 4
+          - 1
+          - 17
+          - 5
+          - 40
+          - 3
+          - 5
+          - 4
+          - 17
+          - 4
+          - 5
+          - 16
+          - 4
+          - 4
+          - 67
+          - 4
+          - 4
+          - 1
+          - 65
+          - 4
+          - 1
+          - 91
+          - 4
+          - 3
+          - 1
+          - 37
+          - 2
+          - 4
+          - 130
+          - 3
+          - 81
+          - 3
+          - 0
+          - 0
+          - 128
+          - 4
+          - 0
+          - 90
+          - 5
+          - 4
+          - 3
+          - 98
+          - 5
+          - 5
+          - 17
+          - 6
+          - 53
+          - 3
+          - 6
+          - 5
+          - 98
+          - 5
+          - 5
+          - 17
+          - 6
+          - 55
+          - 2
+          - 6
+          - 1
+          - 98
+          - 5
+          - 5
+          - 1
+          - 98
+          - 5
+          - 5
+          - 17
+          - 6
+          - 62
+          - 3
+          - 6
+          - 5
+          - 17
+          - 5
+          - 6
+          - 16
+          - 5
+          - 5
+          - 65
+          - 5
+          - 1
+          - 130
+          - 4
+          - 10
+          - 4
+          - 82
+          - 4
+          - 0
+          - 1
+          - 17
+          - 5
+          - 44
+          - 12
+          - 4
+          - 5
+          - 4
+          - 81
+          - 4
+          - 4
+          - 0
+          - 17
+          - 5
+          - 76
+          - 3
+          - 5
+          - 4
+          - 10
+          - 4
+          - 82
+          - 4
+          - 0
+          - 2
+          - 82
+          - 4
+          - 1
+          - 0
+          - 17
+          - 5
+          - 38
+          - 12
+          - 4
+          - 5
+          - 4
+          - 1
+          - 128
+          - 4
+          - 2
+          - 81
+          - 5
+          - 2
+          - 2
+          - 88
+          - 5
+          - 3
+          - 82
+          - 2
+          - 2
+          - 5
+          - 92
+          - 4
+          - 1
+          - 2
+          - 129
+          - 4
+          - 128
+          - 1
+          - 0
+          - 94
+          - 2
+          - 1
+          - 3
+          - 48
+          - 2
+          - 0
+          - 92
+          - 1
+          - 3
+          - 2
+          - 129
+          - 1
+          - 128
+          - 0
+          - 1
+          - 88
+          - 0
+          - 3
+          - 129
+          - 0
+      catches: []
+  - ptr: 38
+    deps:
+      - 7
+      - 8
+      - 9
+      - 10
+      - 11
+      - 12
+      - 13
+      - 26
+      - 28
+      - 30
+    kind: routine
+    data:
+      name: CanRegisterGuardian
+      mode: readonly
+      kind: internal
+      accepts:
+        - slot: 0
+          label: operator
+          type: Operator
+        - slot: 1
+          label: guardian
+          type: Guardian
+      returns: []
+      executes:
+        bin:
+          - 128
+          - 0
+          - 4
+          - 4
+          - 1
+          - 1
+          - 81
+          - 1
+          - 1
+          - 0
+          - 90
+          - 1
+          - 0
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 10
+          - 3
+          - 2
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 12
+          - 2
+          - 2
+          - 1
+          - 98
+          - 1
+          - 1
+          - 1
+          - 17
+          - 2
+          - 18
+          - 3
+          - 2
+          - 1
+          - 17
+          - 1
+          - 7
+          - 16
+          - 1
+          - 1
+          - 65
+          - 1
+          - 1
+          - 130
+          - 0
+          - 4
+          - 0
+          - 0
+          - 81
+          - 1
+          - 0
+          - 1
+          - 81
+          - 1
+          - 1
+          - 0
+          - 41
+          - 2
+          - 5
+          - 17
+          - 3
+          - 8
+          - 16
+          - 3
+          - 3
+          - 70
+          - 3
+          - 1
+          - 3
+          - 98
+          - 3
+          - 3
+          - 17
+          - 4
+          - 35
+          - 3
+          - 4
+          - 3
+          - 128
+          - 3
+          - 6
+          - 49
+          - 2
+          - 3
+          - 130
+          - 3
+          - 17
+          - 4
+          - 52
+          - 2
+          - 4
+          - 1
+          - 17
+          - 3
+          - 9
+          - 16
+          - 3
+          - 3
+          - 70
+          - 1
+          - 1
+          - 3
+          - 98
+          - 1
+          - 1
+          - 17
+          - 3
+          - 47
+          - 3
+          - 3
+          - 1
+          - 128
+          - 1
+          - 7
+          - 49
+          - 2
+          - 1
+          - 130
+          - 1
+          - 17
+          - 3
+          - 51
+          - 2
+          - 3
+          - 1
+          - 17
+          - 1
+          - 10
+          - 16
+          - 1
+          - 1
+          - 65
+          - 1
+          - 1
+          - 1
+          - 41
+          - 1
+          - 5
+          - 70
+          - 1
+          - 2
+          - 1
+          - 17
+          - 3
+          - 66
+          - 3
+          - 3
+          - 1
+          - 81
+          - 0
+          - 0
+          - 2
+          - 80
+          - 0
+          - 0
+          - 68
+          - 0
+          - 0
+          - 2
+          - 17
+          - 1
+          - 65
+          - 3
+          - 1
+          - 0
+          - 17
+          - 0
+          - 11
+          - 16
+          - 0
+          - 0
+          - 65
+          - 0
+          - 1
+          - 1
+          - 4
+          - 0
+          - 1
+          - 81
+          - 0
+          - 0
+          - 2
+          - 81
+          - 0
+          - 0
+          - 2
+          - 17
+          - 1
+          - 12
+          - 16
+          - 1
+          - 1
+          - 69
+          - 0
+          - 0
+          - 1
+          - 98
+          - 0
+          - 0
+          - 17
+          - 1
+          - 79
+          - 3
+          - 1
+          - 0
+          - 17
+          - 0
+          - 13
+          - 16
+          - 0
+          - 0
+          - 65
+          - 0
+          - 1
+      catches: []
+  - ptr: 39
+    deps:
+      - 30
+    kind: routine
+    data:
+      name: GetIncentives
+      mode: readonly
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kramaID
+          type: string
+      returns:
+        - slot: 0
+          label: incentive
+          type: u64
+      executes:
+        bin:
+          - 128
+          - 0
+          - 0
+          - 4
+          - 1
+          - 0
+          - 91
+          - 1
+          - 0
+          - 1
+          - 81
+          - 1
+          - 1
+          - 2
+          - 81
+          - 1
+          - 1
+          - 0
+          - 5
+          - 1
+          - 0
+          - 130
+          - 0
+      catches: []
+  - ptr: 40
+    deps:
+      - 30
+    kind: routine
+    data:
+      name: GetReferralRewards
+      mode: readonly
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: addr
+          type: address
+      returns:
+        - slot: 0
+          label: incentive
+          type: u64
+      executes:
+        bin:
+          - 128
+          - 0
+          - 5
+          - 4
+          - 1
+          - 0
+          - 91
+          - 1
+          - 0
+          - 1
+          - 5
+          - 1
+          - 0
+          - 130
+          - 0
+      catches: []
+  - ptr: 41
+    deps:
+      - 14
+      - 15
+      - 12
+      - 45
+      - 30
+    kind: routine
+    data:
+      name: AddIncentives
+      mode: persistent
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: incentiveIDs
+          type: '[]string'
+        - slot: 1
+          label: incentiveAmounts
+          type: '[]u64'
+      returns: []
+      executes:
+        bin:
+          - 10
+          - 0
+          - 17
+          - 1
+          - 45
+          - 12
+          - 0
+          - 1
+          - 0
+          - 4
+          - 0
+          - 0
+          - 80
+          - 1
+          - 0
+          - 4
+          - 2
+          - 1
+          - 80
+          - 3
+          - 2
+          - 70
+          - 1
+          - 1
+          - 3
+          - 17
+          - 3
+          - 13
+          - 3
+          - 3
+          - 1
+          - 17
+          - 1
+          - 14
+          - 16
+          - 1
+          - 1
+          - 65
+          - 1
+          - 1
+          - 128
+          - 1
+          - 10
+          - 49
+          - 3
+          - 1
+          - 128
+          - 4
+          - 0
+          - 41
+          - 5
+          - 5
+          - 80
+          - 6
+          - 0
+          - 1
+          - 68
+          - 7
+          - 5
+          - 6
+          - 98
+          - 7
+          - 7
+          - 17
+          - 8
+          - 108
+          - 3
+          - 8
+          - 7
+          - 83
+          - 7
+          - 0
+          - 5
+          - 90
+          - 9
+          - 4
+          - 7
+          - 98
+          - 9
+          - 9
+          - 17
+          - 10
+          - 32
+          - 3
+          - 10
+          - 9
+          - 98
+          - 9
+          - 9
+          - 17
+          - 10
+          - 34
+          - 2
+          - 10
+          - 1
+          - 98
+          - 9
+          - 9
+          - 1
+          - 17
+          - 10
+          - 40
+          - 3
+          - 10
+          - 9
+          - 17
+          - 9
+          - 15
+          - 16
+          - 9
+          - 9
+          - 6
+          - 9
+          - 1
+          - 91
+          - 9
+          - 4
+          - 7
+          - 83
+          - 10
+          - 2
+          - 5
+          - 41
+          - 11
+          - 5
+          - 81
+          - 12
+          - 9
+          - 2
+          - 81
+          - 12
+          - 12
+          - 2
+          - 49
+          - 12
+          - 12
+          - 41
+          - 13
+          - 5
+          - 70
+          - 13
+          - 12
+          - 13
+          - 17
+          - 14
+          - 56
+          - 3
+          - 14
+          - 13
+          - 103
+          - 13
+          - 10
+          - 12
+          - 17
+          - 14
+          - 12
+          - 16
+          - 14
+          - 14
+          - 104
+          - 13
+          - 13
+          - 14
+          - 36
+          - 11
+          - 13
+          - 1
+          - 102
+          - 13
+          - 10
+          - 11
+          - 36
+          - 10
+          - 13
+          - 81
+          - 13
+          - 9
+          - 2
+          - 81
+          - 14
+          - 13
+          - 0
+          - 101
+          - 15
+          - 14
+          - 10
+          - 48
+          - 14
+          - 15
+          - 82
+          - 13
+          - 0
+          - 14
+          - 82
+          - 9
+          - 2
+          - 13
+          - 101
+          - 10
+          - 3
+          - 10
+          - 36
+          - 3
+          - 10
+          - 41
+          - 10
+          - 5
+          - 70
+          - 10
+          - 12
+          - 10
+          - 17
+          - 12
+          - 102
+          - 3
+          - 12
+          - 10
+          - 128
+          - 10
+          - 5
+          - 81
+          - 12
+          - 9
+          - 2
+          - 81
+          - 12
+          - 12
+          - 3
+          - 90
+          - 12
+          - 10
+          - 12
+          - 98
+          - 12
+          - 12
+          - 17
+          - 13
+          - 81
+          - 3
+          - 13
+          - 12
+          - 98
+          - 12
+          - 12
+          - 17
+          - 13
+          - 83
+          - 2
+          - 13
+          - 1
+          - 98
+          - 12
+          - 12
+          - 1
+          - 98
+          - 12
+          - 12
+          - 17
+          - 13
+          - 96
+          - 3
+          - 13
+          - 12
+          - 81
+          - 12
+          - 9
+          - 2
+          - 81
+          - 12
+          - 12
+          - 3
+          - 91
+          - 12
+          - 10
+          - 12
+          - 101
+          - 12
+          - 12
+          - 11
+          - 81
+          - 14
+          - 9
+          - 2
+          - 81
+          - 14
+          - 14
+          - 3
+          - 92
+          - 10
+          - 14
+          - 12
+          - 17
+          - 13
+          - 100
+          - 2
+          - 13
+          - 1
+          - 81
+          - 12
+          - 9
+          - 2
+          - 81
+          - 12
+          - 12
+          - 3
+          - 92
+          - 10
+          - 12
+          - 11
+          - 1
+          - 129
+          - 10
+          - 1
+          - 92
+          - 4
+          - 7
+          - 9
+          - 1
+          - 99
+          - 5
+          - 17
+          - 8
+          - 19
+          - 2
+          - 8
+          - 1
+          - 129
+          - 4
+          - 48
+          - 1
+          - 3
+          - 129
+          - 1
+      catches: []
+  - ptr: 42
+    deps:
+      - 8
+      - 16
+      - 9
+      - 17
+      - 45
+      - 30
+    kind: routine
+    data:
+      name: ChangeNodeLimit
+      mode: persistent
+      kind: invokable
+      accepts:
+        - slot: 0
+          label: kind
+          type: string
+        - slot: 1
+          label: updated
+          type: u64
+      returns: []
+      executes:
+        bin:
+          - 10
+          - 0
+          - 17
+          - 1
+          - 45
+          - 12
+          - 0
+          - 1
+          - 0
+          - 4
+          - 0
+          - 0
+          - 17
+          - 1
+          - 8
+          - 16
+          - 1
+          - 1
+          - 70
+          - 1
+          - 0
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 26
+          - 3
+          - 2
+          - 1
+          - 128
+          - 1
+          - 6
+          - 49
+          - 3
+          - 1
+          - 4
+          - 4
+          - 1
+          - 68
+          - 5
+          - 4
+          - 3
+          - 98
+          - 5
+          - 5
+          - 17
+          - 6
+          - 20
+          - 3
+          - 6
+          - 5
+          - 17
+          - 5
+          - 16
+          - 16
+          - 5
+          - 5
+          - 6
+          - 5
+          - 1
+          - 36
+          - 3
+          - 4
+          - 48
+          - 1
+          - 3
+          - 129
+          - 1
+          - 17
+          - 2
+          - 54
+          - 2
+          - 2
+          - 1
+          - 17
+          - 1
+          - 9
+          - 16
+          - 1
+          - 1
+          - 70
+          - 0
+          - 0
+          - 1
+          - 98
+          - 0
+          - 0
+          - 17
+          - 1
+          - 49
+          - 3
+          - 1
+          - 0
+          - 128
+          - 0
+          - 7
+          - 49
+          - 2
+          - 0
+          - 4
+          - 3
+          - 1
+          - 68
+          - 4
+          - 3
+          - 2
+          - 98
+          - 4
+          - 4
+          - 17
+          - 5
+          - 43
+          - 3
+          - 5
+          - 4
+          - 17
+          - 4
+          - 16
+          - 16
+          - 4
+          - 4
+          - 6
+          - 4
+          - 1
+          - 36
+          - 2
+          - 3
+          - 48
+          - 0
+          - 2
+          - 129
+          - 0
+          - 17
+          - 1
+          - 53
+          - 2
+          - 1
+          - 1
+          - 17
+          - 0
+          - 17
+          - 16
+          - 0
+          - 0
+          - 6
+          - 0
+          - 1
+          - 1
+      catches: []
+  - ptr: 43
+    deps:
+      - 30
+    kind: routine
+    data:
+      name: ApproveKramaIDs
+      mode: persistent
+      kind: internal
+      accepts:
+        - slot: 0
+          label: kramaIDs
+          type: '[]string'
+      returns: []
+      executes:
+        bin:
+          - 128
+          - 0
+          - 4
+          - 4
+          - 1
+          - 0
+          - 41
+          - 2
+          - 5
+          - 80
+          - 3
+          - 1
+          - 1
+          - 68
+          - 4
+          - 2
+          - 3
+          - 98
+          - 4
+          - 4
+          - 17
+          - 5
+          - 17
+          - 3
+          - 5
+          - 4
+          - 83
+          - 4
+          - 1
+          - 2
+          - 41
+          - 6
+          - 1
+          - 98
+          - 6
+          - 6
+          - 92
+          - 0
+          - 4
+          - 6
+          - 1
+          - 99
+          - 2
+          - 17
+          - 5
+          - 4
+          - 2
+          - 5
+          - 1
+          - 129
+          - 0
+      catches: []
+  - ptr: 44
+    deps:
+      - 30
+    kind: routine
+    data:
+      name: IsMaster
+      mode: readonly
+      kind: internal
+      accepts:
+        - slot: 0
+          label: moiID
+          type: string
+      returns:
+        - slot: 0
+          label: ok
+          type: bool
+      executes:
+        bin:
+          - 128
+          - 0
+          - 8
+          - 81
+          - 1
+          - 0
+          - 0
+          - 4
+          - 2
+          - 0
+          - 70
+          - 1
+          - 1
+          - 2
+          - 5
+          - 1
+          - 0
+          - 130
+          - 0
+      catches: []
+  - ptr: 45
+    deps:
+      - 18
+      - 30
+    kind: routine
+    data:
+      name: AuthenticateAdmin
+      mode: readonly
+      kind: internal
+      accepts: []
+      returns: []
+      executes:
+        bin:
+          - 128
+          - 0
+          - 9
+          - 115
+          - 1
+          - 73
+          - 1
+          - 1
+          - 90
+          - 1
+          - 0
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 10
+          - 3
+          - 2
+          - 1
+          - 98
+          - 1
+          - 1
+          - 17
+          - 2
+          - 12
+          - 2
+          - 2
+          - 1
+          - 98
+          - 1
+          - 1
+          - 1
+          - 17
+          - 2
+          - 18
+          - 3
+          - 2
+          - 1
+          - 17
+          - 1
+          - 18
+          - 16
+          - 1
+          - 1
+          - 65
+          - 1
+          - 1
+          - 130
+          - 0
+      catches: []
