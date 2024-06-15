@@ -128,12 +128,13 @@ endpoint deployer Setup(
     master Master,
     guardians []String,
     pubkeys []Bytes,
+    incentives []U64,
     admins []Address,
     preApproved []String,
     limitKYC, limitKYB U64,
 ):
     // Check that the guardians and pubkeys lists are equal sized
-    if len(guardians) != len(pubkeys):
+    if (len(guardians) != len(pubkeys)) || (len(guardians) != len(incentives)):
         throw "invalid guardian inputs: mismatched size"
 
     // Set the master operator
@@ -175,16 +176,19 @@ endpoint deployer Setup(
             append(operators[master.MOIID].Guardians, kramaID)
 
         // Create and add the Guardian object to the Guardians registry
-        mutate Guardians <- GuardianRegistry.State.Guardians:
-            disperse Guardians[kramaID] <- Guardian{
-                KramaID: kramaID,
-                OperatorID: master.MOIID,
-                Incentive: Incentive{
-                    Amount: 0,
-                    Wallet: master.Wallet,
-                },
-                PublicKey: pubkeys[idx],
-            }
+        mutate TotalIncentives <- GuardianRegistry.State.TotalIncentives:
+            mutate Guardians <- GuardianRegistry.State.Guardians:
+                disperse Guardians[kramaID] <- Guardian{
+                    KramaID: kramaID,
+                    OperatorID: master.MOIID,
+                    Incentive: Incentive{
+                        Amount: incentives[idx],
+                        Wallet: master.Wallet,
+                    },
+                    PublicKey: pubkeys[idx],
+                }
+
+                TotalIncentives += incentives[idx]
 
         // Add the krama ID to the known guardians set
         mutate knownGs <- GuardianRegistry.State.KnownGuardians:

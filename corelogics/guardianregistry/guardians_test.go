@@ -66,7 +66,7 @@ func (suite *GuardianSetupTestSuite) SetupSuite() {
 	// Initialise the test suite
 	consumed, err := suite.Initialise(manifest, AdminAddr1)
 	suite.Require().NoErrorf(err, "could not read initialise test")
-	suite.Require().Equal(uint64(0xaeba), consumed)
+	suite.Require().Equal(uint64(0xae42), consumed)
 
 	inputs := struct {
 		Master      Master     `polo:"master"`
@@ -76,6 +76,7 @@ func (suite *GuardianSetupTestSuite) SetupSuite() {
 		PreApproved []string   `polo:"preApproved"`
 		LimitKYC    uint64     `polo:"limitKYC"`
 		LimitKYB    uint64     `polo:"limitKYB"`
+		Incentives  []uint64   `polo:"incentives"`
 	}{
 		Master: Master{
 			PubKey: MasterAddr.Bytes(),
@@ -98,8 +99,9 @@ func (suite *GuardianSetupTestSuite) SetupSuite() {
 			GuardianKramaID3,
 			GuardianKramaID4,
 		},
-		LimitKYC: 1,
-		LimitKYB: 3,
+		LimitKYC:   1,
+		LimitKYB:   3,
+		Incentives: []uint64{100, 200},
 	}
 
 	// Serialize the input args into calldata
@@ -107,7 +109,7 @@ func (suite *GuardianSetupTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Deploy the logic to initialise its initial state
-	suite.Deploy("Setup", calldata, nil, 5014, nil)
+	suite.Deploy("Setup", calldata, nil, 5740, nil)
 
 	// Check the setup consistency
 	suite.T().Run("CheckSetup", suite.testSetup)
@@ -125,7 +127,7 @@ func (suite *GuardianImportTestSuite) SetupSuite() {
 	// Initialise the test suite
 	consumed, err := suite.Initialise(manifest, AdminAddr1)
 	suite.Require().NoErrorf(err, "could not read initialise test")
-	suite.Require().Equal(uint64(0xaeba), consumed)
+	suite.Require().Equal(uint64(0xae42), consumed)
 
 	inputs := struct {
 		Master          Master     `polo:"master"`
@@ -154,7 +156,7 @@ func (suite *GuardianImportTestSuite) SetupSuite() {
 				KramaID:    GuardianKramaID1,
 				OperatorID: MasterMOIID,
 				Incentive: Incentive{
-					Amount: 0,
+					Amount: 100,
 					Wallet: MasterAddr,
 				},
 				PublicKey: GuardianPubKey1,
@@ -163,7 +165,7 @@ func (suite *GuardianImportTestSuite) SetupSuite() {
 				KramaID:    GuardianKramaID2,
 				OperatorID: MasterMOIID,
 				Incentive: Incentive{
-					Amount: 0,
+					Amount: 200,
 					Wallet: MasterAddr,
 				},
 				PublicKey: GuardianPubKey2,
@@ -478,7 +480,7 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 		suite.Invoke(
 			"GetIncentives",
 			suite.DocGen(map[string]any{"kramaID": GuardianKramaID1}),
-			suite.DocGen(map[string]any{"incentive": uint64(0)}),
+			suite.DocGen(map[string]any{"incentive": uint64(100)}),
 			120, nil,
 		)
 
@@ -537,7 +539,7 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 			mapKey(GuardianKramaID1),
 			pisa.ClsFld(2), pisa.ClsFld(0),
 		)
-		suite.CheckStorage(keyGuardian1Incentive, 100)
+		suite.CheckStorage(keyGuardian1Incentive, 200)
 	})
 
 	suite.T().Run("WithReferral", func(t *testing.T) {

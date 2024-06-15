@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 
@@ -170,11 +172,15 @@ func (c *Cluster) generateArtifact() error {
 		return err
 	}
 
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	guardians := make([]string, 0)
 	pubKeys := make([][]byte, 0)
+	incentives := make([]uint64, 0)
 
 	for _, instance := range instances {
 		guardians = append(guardians, instance.KramaID)
+		incentives = append(incentives, uint64(r.Intn(1000)))
 		pubKeys = append(pubKeys, must(hex.DecodeString(instance.ConsensusKey)))
 	}
 
@@ -190,6 +196,7 @@ func (c *Cluster) generateArtifact() error {
 		Master      guardianregistry.Master `polo:"master"`
 		Guardians   []string                `polo:"guardians"`
 		PubKeys     [][]byte                `polo:"pubkeys"`
+		Incentives  []uint64                `polo:"incentives"`
 		Admins      [][32]byte              `polo:"admins"`
 		PreApproved []string                `polo:"preApproved"`
 		LimitKYC    uint64                  `polo:"limitKYC"`
@@ -200,8 +207,9 @@ func (c *Cluster) generateArtifact() error {
 			MOIID:  masterMoiID,
 			Wallet: masterAddress,
 		},
-		Guardians: guardians,
-		PubKeys:   pubKeys,
+		Guardians:  guardians,
+		PubKeys:    pubKeys,
+		Incentives: incentives,
 		Admins: [][32]byte{
 			must(identifiers.NewAddressFromHex("0x53e9ec9f78f0397cd611bf0a0793c07673cbbf51cb172ae7d6ccf0efa5803f94")),
 			must(identifiers.NewAddressFromHex("0x898ca25ac7a51a36894b9c9f55ec6212500dd8e0c01f6591f0eb9f5b0bc84655")),
