@@ -286,20 +286,3 @@ func generateSignatures(manifest engineio.Manifest, callsite engineio.Callsite) 
 
 	return signature
 }
-
-func EndpointFromString(endpoint string) engineio.CallsiteKind {
-	switch endpoint {
-	case "DEPLOY":
-		return engineio.CallsiteDeployer
-	case "INVOKE":
-		return engineio.CallsiteInvokable
-	case "ENLISTER":
-		return engineio.CallsiteEnlister
-	case "INTERACTABLE":
-		return engineio.CallsiteInteractable
-	case "LOCAL":
-		return engineio.CallsiteInternal
-	default:
-		panic("unhandled logic call case")
-	}
-}

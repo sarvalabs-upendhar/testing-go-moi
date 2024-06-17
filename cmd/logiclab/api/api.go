@@ -66,8 +66,9 @@ func (api *API) Start(port int) error {
 	api.router.GET("/logics/:name/manifest/:encoding", api.getEncodedLogicManifest)
 
 	// Logic APIs
-	api.router.GET("/logics/:name/storage/:storekey", api.getLogicStorage)
-	api.router.POST("/logics/:name/call/:endpoint", api.callLogicEndpoint)
+	api.router.GET("/logics/:name/state/:storekey", api.getLogicStorage)
+	api.router.POST("/interact/logic/deploy", api.InteractLogicDeploy)
+	api.router.POST("/interact/logic/invoke", api.InteractLogicInvoke)
 
 	// Account APIs
 	api.router.GET("accounts/:addr", api.getAccount)
