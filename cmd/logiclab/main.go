@@ -184,7 +184,11 @@ being used to start it. New environment can be initialized with 'logiclab init'
 		case "API":
 			// Create a new API instance and start it
 			api := api.NewAPI(lab)
-			_ = api.Start(port)
+			err := api.Start(port)
+			if err != nil {
+				fmt.Printf("Cannot start Logiclab API, can't listen to port %d: %v\n", port, err)
+				os.Exit(1)
+			}
 
 		case "REPL":
 			// Get the environment to use in the REPL

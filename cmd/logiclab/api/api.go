@@ -65,11 +65,6 @@ func (api *API) Start(port int) error {
 	api.router.GET("/logics/:name/manifest", api.getLogicManifest)
 	api.router.GET("/logics/:name/manifest/:encoding", api.getEncodedLogicManifest)
 
-	// Logic & Engine Utilities APIs
-	api.router.POST("/storagekey/:engine", api.generateStorageKey)
-	api.router.POST("/convert/codeform/:format", api.convertManifestCodeform)
-	api.router.POST("/convert/fileform/:encoding", api.convertManifestFileform)
-
 	// Logic APIs
 	api.router.GET("/logics/:name/storage/:storekey", api.getLogicStorage)
 	api.router.POST("/logics/:name/call/:endpoint", api.callLogicEndpoint)
