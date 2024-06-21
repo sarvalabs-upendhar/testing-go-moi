@@ -41,6 +41,13 @@ func parseFlags(initcmd *cobra.Command) {
 		0,
 		"Provide the starting lib-p2p port number",
 	)
+
+	initcmd.PersistentFlags().BoolVar(
+		&enableSortition,
+		"enable-sortition",
+		true,
+		"Enables sortition for operator selection",
+	)
 	initcmd.PersistentFlags().IntVar(
 		&jsonrpcPort,
 		"jsonrpcPort",
@@ -169,12 +176,15 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			Precision:             1000,
 			MessageDelay:          5500,
 			AccountWaitTime:       1500,
-			OperatorSlots:         -1,
+			OperatorSlots:         1,
 			ValidatorSlots:        3,
 			MaxGossipPeers:        5,
 			MinGossipPeers:        3,
+			EnableSortition:       enableSortition,
 			GenesisTime:           0,
 			GenesisPath:           "genesis.json",
+			GenesisSeed:           config.DefaultGenesisSeed,
+			GenesisProof:          config.DefaultGenesisProof,
 		},
 		DB: cmdCommon.DBConfig{
 			CleanDB:     false,

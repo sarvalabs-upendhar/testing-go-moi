@@ -23,30 +23,41 @@ func (k *Engine) minter() {
 			go func(ix *common.Interaction) {
 				k.logger.Debug("Forwarding interaction to krama engine", "ix-hash", ix.Hash())
 
-				respChan := make(chan error)
+				respChan := make(chan ktypes.Response)
 				ixs := common.Interactions{ix}
-				k.requests <- ktypes.Request{
+
+				select {
+				case <-k.ctx.Done():
+				case k.requests <- ktypes.Request{
+					Ctx:          k.ctx,
 					SlotType:     ktypes.OperatorSlot,
 					Operator:     k.selfID,
 					Ixs:          ixs,
 					Msg:          nil,
 					ResponseChan: respChan,
+				}:
 				}
-				// Wait for response from krama engine handler
-				if err := <-respChan; err != nil {
-					switch err.Error() {
+
+				select {
+				case <-k.ctx.Done():
+				case resp := <-respChan:
+					if resp.Err == nil {
+						return
+					}
+
+					switch resp.Err.Error() {
 					case common.ErrInvalidInteractions.Error():
 						k.pool.Drop(ix)
 					default:
-						if !errors.Is(err, common.ErrSlotsFull) {
+						if !errors.Is(resp.Err, common.ErrSlotsFull) {
 							if err := k.pool.IncrementWaitTime(ix.Sender(), k.avgICSTime); err != nil {
 								k.logger.Error("Error incrementing wait time", "err", err)
 							}
 
+							k.logger.Error("ICS creation failed", "error", resp.Err)
+
 							return
 						}
-
-						k.logger.Error("ICS creation failed", "err", err)
 					}
 				}
 			}(ixn)

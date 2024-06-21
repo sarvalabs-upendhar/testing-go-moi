@@ -118,6 +118,7 @@ type stateManager interface {
 		err error,
 	)
 	GetPublicKeys(context context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error)
+	GetICSSeed(addr identifiers.Address) ([32]byte, error)
 	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(addr identifiers.Address) (bool, error)
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
@@ -125,6 +126,9 @@ type stateManager interface {
 	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
 	RemoveCachedObject(addr identifiers.Address)
+	GetRegisteredGuardiansCount() (int, error)
+	GetGuardianIncentives(id kramaid.KramaID) (uint64, error)
+	GetTotalIncentives() (uint64, error)
 }
 
 type ixPool interface {
@@ -143,6 +147,12 @@ type store interface {
 
 type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
 
+type vault interface {
+	KramaID() kramaid.KramaID
+	GetConsensusPrivateKey() crypto.PrivateKey
+	Sign(data []byte, sigType mudraCommon.SigType, signOptions ...crypto.SignOption) ([]byte, error)
+}
+
 type Engine struct {
 	ctx               context.Context
 	ctxCancel         context.CancelFunc
@@ -153,19 +163,20 @@ type Engine struct {
 	slots             *ktypes.Slots
 	requests          chan ktypes.Request
 	randomizer        *flux.Randomizer
-	db                store
 	transport         kramaTransport
 	exec              execution
 	pool              ixPool
+	db                store
 	state             stateManager
 	executionReq      chan common.ClusterID
 	lattice           lattice
 	wal               kbft.WAL
-	vault             *crypto.KramaVault
+	vault             vault
 	clusterLocks      *locker.Locker
 	metrics           *Metrics
 	avgICSTime        time.Duration
 	slotCloseCh       chan common.ClusterID
+	lottery           *OperatorSelection
 	signatureVerifier AggregatedSignatureVerifier
 }
 
@@ -178,7 +189,7 @@ func NewKramaEngine(
 	state stateManager,
 	exec execution,
 	ixPool ixPool,
-	val *crypto.KramaVault,
+	val vault,
 	lattice lattice,
 	randomizer *flux.Randomizer,
 	transport kramaTransport,
@@ -189,6 +200,11 @@ func NewKramaEngine(
 	wal, err := kbft.NewWAL(logger, cfg.DirectoryPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "WAL failed")
+	}
+
+	operatorSortition, err := NewOperatorSelection(selfID, val, state)
+	if err != nil {
+		return nil, err
 	}
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
@@ -203,9 +219,9 @@ func NewKramaEngine(
 		slots:             slots,
 		requests:          make(chan ktypes.Request),
 		randomizer:        randomizer,
-		db:                db,
 		transport:         transport,
 		exec:              exec,
+		db:                db,
 		pool:              ixPool,
 		lattice:           lattice,
 		executionReq:      make(chan common.ClusterID),
@@ -216,6 +232,7 @@ func NewKramaEngine(
 		avgICSTime:        cfg.AccountWaitTime,
 		slotCloseCh:       make(chan common.ClusterID),
 		signatureVerifier: verifier,
+		lottery:           operatorSortition,
 	}
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
@@ -240,6 +257,13 @@ func (k *Engine) loadIxnClusterState(
 		return nil, err
 	}
 
+	seed, err := k.lottery.computeICSSeed(participants)
+	if err != nil {
+		return nil, err
+	}
+
+	lk := common.NewLotteryKey(req.Ixs[0].Hash(), seed)
+
 	clusterState := ktypes.NewICS(
 		req.Msg,
 		req.Ixs,
@@ -249,6 +273,7 @@ func (k *Engine) loadIxnClusterState(
 		k.selfID,
 		participants,
 		nodeSet,
+		lk,
 	)
 
 	return clusterState, nil
@@ -258,7 +283,7 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "acquireContextLock")
 	defer span.End()
 	// Create cluster id using operatorID and IxHash
-	k.logger.Debug("Creating cluster", "cluster-ID", slot.ClusterID())
+	k.logger.Debug("Creating cluster", "cluster-id", slot.ClusterID())
 
 	var (
 		operatorRandomNodes []kramaid.KramaID
@@ -347,6 +372,8 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 		return err
 	}
 
+	slot.ClusterState().RequestMsg = &reqMsg
+
 	failedReqCount, err := k.sendICSRequest(ctx, reqMsg, slot.ClusterState().NodeSet)
 	if err != nil {
 		return err
@@ -365,7 +392,17 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 		return nil
 	})
 
-	k.logger.Info("::::::::Res Count:::::::", slot.ClusterState().GetICSRespCount(), len(nodes))
+	k.logger.Info(
+		"::::::::Res Count:::::::",
+		"responded", slot.ClusterState().GetICSRespCount(),
+		"actual", len(nodes)-1,
+		"cluster-id", slot.ClusterID(),
+		"ixHash", slot.ClusterState().IxnHash(),
+	)
+
+	k.logger.Debug("Non responded nodes", "nodes", slot.ClusterState().NodeSet.GetInactiveNodes(),
+		"cluster-id", slot.ClusterID(),
+		"ixHash", slot.ClusterState().IxnHash())
 
 	if !slot.ClusterState().IsContextQuorum() {
 		return errors.New("context quorum failed")
@@ -426,6 +463,98 @@ func (k *Engine) verifyICSRequest(
 	return nil
 }
 
+// runLottery performs lottery to select an operator based on the given participants info and
+// returns the computed ICS output and proof.
+func (k *Engine) runLottery(key common.LotteryKey) ([32]byte, []byte, error) {
+	if info, ok := k.lottery.cache.Get(key); ok {
+		if sortitionResult, ok := info.(*LotteryResult); ok {
+			if sortitionResult.isSelected {
+				return sortitionResult.vrfOutput, sortitionResult.vrfProof, nil
+			}
+
+			return [32]byte{}, []byte{}, ErrOperatorNotEligible
+		}
+	}
+
+	icsOutput, icsProof, err := k.lottery.computeVRFOutput(key.Seed())
+	if err != nil {
+		return [32]byte{}, nil, err
+	}
+
+	operatorIncentive, err := k.state.GetGuardianIncentives(k.selfID)
+	if err != nil {
+		return [32]byte{}, nil, err
+	}
+
+	priority, err := k.lottery.Select(operatorIncentive, icsOutput)
+	if err != nil {
+		k.lottery.cache.Add(key, NewLotteryResult(false, [32]byte{}, []byte{}))
+
+		return [32]byte{}, nil, err
+	}
+
+	peerID, err := k.selfID.PeerID()
+	if err != nil {
+		return [32]byte{}, nil, err
+	}
+
+	k.metrics.captureOperatorSelectionCount(key.IxHash(), peerID, 1)
+	k.lottery.cache.Add(key, NewLotteryResult(true, icsOutput, icsProof))
+
+	k.lottery.AddICSOperatorInfo(key, k.selfID, priority)
+
+	if ok := k.lottery.IsEligible(key, k.selfID); !ok {
+		return [32]byte{}, nil, common.ErrOperatorNotEligible
+	}
+
+	return icsOutput, icsProof, nil
+}
+
+// verifyOperatorLottery validates the ICS proof provided by an operator with the computed ICS seed.
+func (k *Engine) verifyOperatorLottery(
+	operator kramaid.KramaID,
+	lk common.LotteryKey,
+	vrfOutput [32]byte,
+	vrfProof []byte,
+) error {
+	priority, err := k.lottery.VerifySelection(operator, lk.Seed(), vrfOutput, vrfProof)
+	if err != nil {
+		return err
+	}
+
+	k.lottery.AddICSOperatorInfo(lk, operator, priority)
+
+	if ok := k.lottery.IsEligible(lk, operator); !ok {
+		for _, v := range k.lottery.GetEligibleOperators(lk) {
+			k.logger.Debug("Eligible Operator", "lottery-key", lk, "krama-id", v.KramaID)
+		}
+
+		return common.ErrOperatorNotEligible
+	}
+
+	return nil
+}
+
+func (k *Engine) checkOperatorEligibility(cs *ktypes.ClusterState, req ktypes.Request) error {
+	if !k.cfg.EnableSortition {
+		return nil
+	}
+
+	if k.selfID == cs.Operator {
+		vrfOutput, vrfProof, err := k.runLottery(cs.LotteryKey)
+		if err != nil {
+			return err
+		}
+
+		cs.VRFProof = vrfProof
+		cs.VRFOutput = vrfOutput
+
+		return nil
+	}
+
+	return k.verifyOperatorLottery(cs.Operator, cs.LotteryKey, req.Msg.VrfOutput, req.Msg.VrfProof)
+}
+
 func (k *Engine) randomNodeDelta(setSize int) int {
 	return int(math.Ceil(RandomNodesDelta * float64(setSize)))
 }
@@ -476,8 +605,8 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 		"Received an ICS join request",
 		"from", slot.ClusterState().Operator,
 		"timestamp", slot.ClusterState().RequestMsg.Timestamp,
-		"cluster-ID", slot.ClusterID(),
-		"ix-hash", slot.ClusterState().Ixs[0].Hash(),
+		"cluster-id", slot.ClusterID(),
+		"ix-hash", slot.ClusterState().IxnHash(),
 	)
 
 	reqMsg := slot.ClusterState().RequestMsg
@@ -511,12 +640,12 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 		}
 	}
 
-	observerPublicKeys, err := k.state.GetPublicKeys(context.Background(), reqMsg.ObserverSet...)
+	observerPublicKeys, err := k.state.GetPublicKeys(ctx, reqMsg.ObserverSet...)
 	if err != nil {
 		return errors.New("failed to retrieve public keys")
 	}
 
-	randomPublicKeys, err := k.state.GetPublicKeys(context.Background(), reqMsg.RandomSet...)
+	randomPublicKeys, err := k.state.GetPublicKeys(ctx, reqMsg.RandomSet...)
 	if err != nil {
 		return errors.New("failed to retrieve public keys")
 	}
@@ -537,13 +666,13 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 func (k *Engine) handleReq(req ktypes.Request) {
 	clusterID, err := req.GetClusterID()
 	if err != nil {
-		sendResponse(req, errors.New("failed to decode clusterID"))
+		sendResponse(req, nil, errors.New("failed to decode clusterID"))
 
 		return
 	}
 
 	ctx, span := tracing.Span(
-		k.ctx,
+		req.Ctx,
 		"Krama.KramaEngine",
 		"handleReq",
 		trace.WithAttributes(
@@ -552,6 +681,17 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		),
 	)
 	defer span.End()
+
+	if k.cfg.EnableSortition && req.SlotType == ktypes.ValidatorSlot {
+		peerID, err := req.Operator.PeerID()
+		if err != nil {
+			sendResponse(req, nil, errors.New("failed to decode peer id"))
+
+			return
+		}
+
+		k.metrics.captureICSRequestCount(req.Ixs[0].Hash(), peerID, 1)
+	}
 
 	/*
 		1: Check slot availability
@@ -563,19 +703,20 @@ func (k *Engine) handleReq(req ktypes.Request) {
 	*/
 
 	if slot := k.slots.GetSlot(clusterID); slot != nil {
-		sendResponse(req, nil)
+		sendResponse(req, nil, nil)
 
 		return
 	}
 
 	ps, err := k.state.GetICSParticipants(req.Ixs)
 	if err != nil {
-		sendResponse(req, err)
+		sendResponse(req, nil, err)
 	}
 
-	slot := k.slots.CreateSlot(clusterID, req, ps)
+	slot, activeClusterID := k.slots.CreateSlot(clusterID, req, ps)
 	if slot == nil {
-		sendResponse(req, common.ErrSlotsFull)
+		otherEligibleOperators := k.checkOperatorEligibilityForActiveCluster(req, activeClusterID)
+		sendResponse(req, otherEligibleOperators, common.ErrSlotsFull)
 
 		return
 	}
@@ -606,17 +747,24 @@ func (k *Engine) handleReq(req ktypes.Request) {
 
 	cs, err := k.loadIxnClusterState(ctx, req, clusterID, ps)
 	if err != nil {
-		sendResponse(req, err)
+		sendResponse(req, nil, err)
 
 		return
 	}
 
 	slot.UpdateClusterState(cs)
 
+	err = k.checkOperatorEligibility(cs, req)
+	if err != nil {
+		sendResponse(req, k.lottery.GetEligibleOperators(cs.LotteryKey), common.ErrOperatorNotEligible)
+
+		return
+	}
+
 	if err = k.validateInteractions(req.Ixs); err != nil {
 		k.logger.Error("Invalid interaction", "err", err)
 
-		sendResponse(req, common.ErrInvalidInteractions)
+		sendResponse(req, nil, common.ErrInvalidInteractions)
 
 		return
 	}
@@ -625,7 +773,7 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		make([]string, 0),
 		cs.NewHeights(),
 		cs,
-		k.logger.With("cluster-ID", clusterID),
+		k.logger.With("cluster-id", clusterID),
 	)
 
 	k.transport.RegisterContextRouter(ctx, cs.Operator, clusterID, cs.NodeSet, voteset)
@@ -636,12 +784,12 @@ func (k *Engine) handleReq(req ktypes.Request) {
 	case ktypes.OperatorSlot:
 		err = k.acquireContextLock(ctx, slot)
 
-		sendResponse(req, err)
+		sendResponse(req, nil, err)
 
 		k.metrics.captureICSCreationTime(k.slots.GetSlot(clusterID).ClusterState().ICSReqTime)
 
 		if err != nil {
-			k.logger.Error("Error acquiring context lock", "err", err, "cluster-ID", clusterID)
+			k.logger.Error("Error acquiring context lock", "err", err, "cluster-id", clusterID)
 			k.metrics.captureICSCreationFailureCount(1)
 
 			if err = k.sendICSFailure(ctx, clusterID); err != nil {
@@ -659,17 +807,17 @@ func (k *Engine) handleReq(req ktypes.Request) {
 			return
 		}
 
-		k.logger.Info("Cluster creation successful", "cluster-ID", clusterID)
+		k.logger.Info("Cluster creation successful", "cluster-id", clusterID)
 
 	case ktypes.ValidatorSlot:
 		requestTime := time.Now()
 
 		err = k.joinCluster(ctx, slot)
 
-		sendResponse(req, err)
+		sendResponse(req, k.lottery.GetEligibleOperators(slot.ClusterState().LotteryKey), err)
 
 		if err != nil {
-			k.logger.Info("Error joining cluster", "err", err, "cluster-ID", clusterID)
+			k.logger.Info("Error joining cluster", "err", err, "cluster-id", clusterID)
 			k.metrics.captureICSParticipationFailureCount(1)
 
 			return
@@ -694,7 +842,7 @@ func (k *Engine) handleReq(req ktypes.Request) {
 
 			k.metrics.captureICSJoiningTime(requestTime)
 		case <-time.After(ICSTimeOutDuration):
-			k.logger.Info("ICS success timeout", "cluster-ID", req.Msg.ClusterID)
+			k.logger.Info("ICS success timeout", "cluster-id", req.Msg.ClusterID)
 			k.metrics.captureICSParticipationFailureCount(1)
 
 			return
@@ -731,10 +879,11 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		// Wait for execution response
 		execResp := <-slot.ExecutionResp
 		if execResp.Err != nil {
-			k.logger.Error("Error executing interactions", "err", execResp.Err, "cluster-ID", clusterID)
+			k.logger.Error("Error executing interactions", "err", execResp.Err, "cluster-id", clusterID)
 			k.metrics.captureAgreementFailureCount(1)
 
-			for _, interaction := range cs.Ixs {
+			// TODO: We should not drop all interactions.
+			for _, interaction := range cs.Ixns() {
 				k.pool.Drop(interaction)
 			}
 
@@ -748,12 +897,7 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		consensusInitTS := time.Now()
 		k.metrics.captureClusterSize(float64(cs.Size()))
 
-		ixHash, err := cs.Ixs.Hash()
-		if err != nil {
-			return
-		}
-
-		icsEvidence := kbft.NewEvidence(ixHash, cs.Operator, cs.Size())
+		icsEvidence := kbft.NewEvidence(cs.IxnHash(), cs.Operator, cs.Size())
 
 		voteset.Reset(cs.NewHeights(), cs)
 
@@ -770,13 +914,13 @@ func (k *Engine) handleReq(req ktypes.Request) {
 			cs,
 			voteset,
 			k.finalizedTesseractHandler,
-			kbft.WithLogger(k.logger.With("cluster-ID", clusterID)),
-			kbft.WithWal(k.wal),
+			kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
+			kbft.WithWal(kbft.NullWal{}),
 			kbft.WithEvidence(icsEvidence),
 		)
 
 		if err = bft.Start(); err != nil {
-			k.logger.Error("Consensus failed", "err", err, "cluster-ID", cs.ClusterID)
+			k.logger.Error("Consensus failed", "err", err, "cluster-id", cs.ClusterID)
 			k.metrics.captureAgreementFailureCount(1)
 
 			return
@@ -785,7 +929,7 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		k.metrics.captureAgreementTime(consensusInitTS)
 	}
 
-	k.logger.Info("Interaction finalized", "cluster-ID", cs.ClusterID)
+	k.logger.Info("Interaction finalized", "cluster-id", cs.ClusterID)
 }
 
 func (k *Engine) fetchParticipantsAndNodeSet(
@@ -873,7 +1017,7 @@ func (k *Engine) getCanonicalICSReqMsg(
 ) (ktypes.CanonicalICSRequest, error) {
 	msg := new(ktypes.CanonicalICSRequest)
 
-	rawData, err := cs.Ixs.Bytes()
+	rawData, err := cs.Ixns().Bytes()
 	if err != nil {
 		return *msg, err
 	}
@@ -887,6 +1031,9 @@ func (k *Engine) getCanonicalICSReqMsg(
 	msg.ObserverSet = cs.NodeSet.ObserverSet().Ids
 	msg.RequiredRandomSetSize = cs.NodeSet.RandomSet().SetSizeWithOutDelta
 	msg.RequiredObserverSetSize = cs.NodeSet.ObserverSet().SetSizeWithOutDelta
+	msg.VrfOutput = cs.VRFOutput
+	msg.VrfProof = cs.VRFProof
+	msg.ICSSeed = cs.LotteryKey.Seed()
 
 	return *msg, nil
 }
@@ -952,7 +1099,7 @@ func (k *Engine) createProposalTesseract(slot *ktypes.Slot) (*common.Tesseract, 
 
 	stateHashes, err := k.exec.ExecuteInteractions(
 		transition,
-		clusterState.Ixs,
+		clusterState.Ixns(),
 		clusterState.ExecutionContext(),
 	)
 	if err != nil {
@@ -961,7 +1108,7 @@ func (k *Engine) createProposalTesseract(slot *ktypes.Slot) (*common.Tesseract, 
 
 	// store the transition
 	clusterState.SetStateTransition(transition)
-	k.logger.Debug("Generating tesseracts", "cluster-ID", slot.ClusterID())
+	k.logger.Debug("Generating tesseracts", "cluster-id", slot.ClusterID())
 
 	return generateTesseract(clusterState, stateHashes)
 }
@@ -1137,7 +1284,7 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 	}
 
 	if err = k.transport.BroadcastTesseract(msg); err != nil {
-		k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-ID", clusterID)
+		k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-id", clusterID)
 	}
 
 	for _, addr := range tesseract.Addresses() {
@@ -1153,6 +1300,8 @@ func generatePoXtData(state *ktypes.ClusterState) common.PoXtData {
 		BinaryHash:   state.BinaryHash,
 		IdentityHash: state.IdentityHash,
 		ICSHash:      state.ICSHash,
+		ICSSeed:      state.RequestMsg.VrfOutput,
+		ICSProof:     state.RequestMsg.VrfProof,
 		ClusterID:    state.ClusterID,
 		ICSSignature: nil, // TODO calculate and fill this properly
 		ICSVoteset:   state.GetICSVoteset(),
@@ -1190,7 +1339,7 @@ func generateTesseract(
 	fuelUsed := cs.Transition.Receipts().FuelUsed()
 	fuelLimit := uint64(1000)
 
-	ixnsHash, err := cs.Ixs.Hash()
+	ixnsHash, err := cs.Ixns().Hash()
 	if err != nil {
 		return nil, err
 	}
@@ -1212,7 +1361,7 @@ func generateTesseract(
 		generatePoXtData(cs),
 		nil,
 		cs.SelfKramaID(),
-		cs.Ixs,
+		cs.Ixns(),
 		cs.Transition.Receipts(),
 	)
 
@@ -1631,7 +1780,14 @@ func (k *Engine) addGenesisTesseract(
 	stateHashes, contextHashes []common.Hash,
 	transition state.ObjectMap,
 ) error {
-	tesseract := createGenesisTesseract(addresses, stateHashes, contextHashes, k.cfg.GenesisTimestamp)
+	tesseract := createGenesisTesseract(
+		addresses,
+		stateHashes,
+		contextHashes,
+		k.cfg.GenesisTimestamp,
+		k.cfg.GenesisSeed,
+		k.cfg.GenesisProof,
+	)
 
 	if err := k.lattice.AddTesseract(
 		true,
@@ -1831,6 +1987,59 @@ func (k *Engine) ValidateTesseract(
 	return nil
 }
 
+func (k *Engine) checkOperatorEligibilityForActiveCluster(
+	req ktypes.Request,
+	activeClusterID common.ClusterID,
+) []ktypes.ICSOperatorInfo {
+	if !k.cfg.EnableSortition || activeClusterID == "" || k.selfID == req.Operator {
+		return nil
+	}
+
+	slot := k.slots.GetSlot(activeClusterID)
+	if slot == nil {
+		k.logger.Error("Failed to load slot", "cluster-id", activeClusterID)
+
+		return nil
+	}
+
+	if slot.ClusterState() == nil {
+		return nil
+	}
+
+	icsSeed, err := k.lottery.computeICSSeed(slot.ClusterState().Participants)
+	if err != nil {
+		k.logger.Error("Failed to compute ICS Seed", "error", err)
+
+		return nil
+	}
+
+	if req.Msg.ICSSeed != icsSeed {
+		k.logger.Error("Invalid ICS seed")
+
+		return nil
+	}
+
+	lk := common.NewLotteryKey(req.Ixs[0].Hash(), icsSeed)
+
+	if err = k.verifyOperatorLottery(
+		req.Operator,
+		lk,
+		req.Msg.VrfOutput,
+		req.Msg.VrfProof,
+	); err != nil && !errors.Is(err, common.ErrOperatorNotEligible) {
+		return nil
+	}
+
+	return k.lottery.GetEligibleOperators(lk)
+}
+
+func sendResponse(req ktypes.Request, data any, err error) {
+	req.ResponseChan <- ktypes.Response{
+		Err:  err,
+		Data: data,
+	}
+}
+
 func (k *Engine) AddActiveAccount(addr identifiers.Address) bool {
 	return k.slots.AddActiveAccount(addr)
 }
@@ -1839,10 +2048,6 @@ func (k *Engine) ClearActiveAccount(addr identifiers.Address) {
 	k.slots.ClearActiveAccount(addr)
 
 	k.logger.Trace("removed from active accounts", "address", addr)
-}
-
-func sendResponse(req ktypes.Request, err error) {
-	req.ResponseChan <- err
 }
 
 func getDistinctNodes(operator kramaid.KramaID, nodeSets []*common.NodeSet) ([]kramaid.KramaID, int, bool) {

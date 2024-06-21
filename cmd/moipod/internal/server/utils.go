@@ -317,8 +317,11 @@ func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
 		EnableDebugMode:       p.rawCfg.Consensus.EnableDebugMode,
 		MinGossipPeers:        p.rawCfg.Consensus.MinGossipPeers,
 		MaxGossipPeers:        p.rawCfg.Consensus.MinGossipPeers,
+		EnableSortition:       p.rawCfg.Consensus.EnableSortition,
 		GenesisTimestamp:      p.rawCfg.Consensus.GenesisTime,
 		GenesisFilePath:       p.rawCfg.Consensus.GenesisPath,
+		GenesisSeed:           p.rawCfg.Consensus.GenesisSeed,
+		GenesisProof:          p.rawCfg.Consensus.GenesisProof,
 	}
 }
 

@@ -259,7 +259,7 @@ func setServerPeers(t *testing.T, s *Server, peersList ...kramaid.KramaID) {
 }
 
 // helper functions
-func getPeerInfo(t *testing.T, server *Server) *peer.AddrInfo {
+func getPeerInfo(t *testing.T, server *Server, isInbound bool) PeerInfo {
 	t.Helper()
 
 	address := server.GetAddrs()
@@ -269,9 +269,12 @@ func getPeerInfo(t *testing.T, server *Server) *peer.AddrInfo {
 	peerID, err := peer.Decode(networkID)
 	require.NoError(t, err)
 
-	return &peer.AddrInfo{
-		ID:    peerID,
-		Addrs: address,
+	return PeerInfo{
+		AddrInfo: peer.AddrInfo{
+			ID:    peerID,
+			Addrs: address,
+		},
+		IsInboundPeer: isInbound,
 	}
 }
 
@@ -560,7 +563,7 @@ func connectTo(t *testing.T, source *Server, destinations ...*Server) {
 
 	for _, destination := range destinations {
 		ctx := context.Background()
-		err := source.host.Connect(ctx, *getPeerInfo(t, destination))
+		err := source.host.Connect(ctx, getPeerInfo(t, destination, false).AddrInfo)
 		require.NoError(t, err)
 	}
 }
@@ -811,16 +814,6 @@ func validateHandShakeMsg(t *testing.T, s *Server, msg *networkmsg.Message) {
 	handShake := getHandShakeMsg(t, msg)
 
 	require.Equal(t, []byte("ping"), handShake.Data)
-}
-
-func validateNewPeerEvent(t *testing.T, newPeerSub *utils.Subscription, s *Server) {
-	t.Helper()
-
-	obj := <-newPeerSub.Chan()
-	event, ok := obj.Data.(NewPeerEvent)
-	require.True(t, ok)
-	require.NotNil(t, event.Peer)
-	require.Equal(t, s.host.ID(), event.Peer.networkID)
 }
 
 func validateHelloMessage(t *testing.T, hello networkmsg.HelloMsg, sender *Server) {

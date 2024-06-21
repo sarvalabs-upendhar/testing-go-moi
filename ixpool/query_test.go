@@ -294,7 +294,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 			accounts: map[identifiers.Address]int{
 				addressList[0]: 1,
 				addressList[1]: 5,
-				addressList[2]: 10,
+				addressList[2]: 4,
 				addressList[3]: MaxWaitCounter + 1,
 			},
 		},

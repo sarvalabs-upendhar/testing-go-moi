@@ -60,6 +60,7 @@ var (
 	debug            = flag.Bool("debug", false, "specify whether to collect logs")
 	shouldExecute    = flag.Bool("should-execute", true, "specify whether to execute tesseract while syncing")
 	oldState         = flag.Bool("old-state", false, "specify whether to run on previous state")
+	enableSorition   = flag.Bool("enable-sortition", false, "specify whether to use sortition for operator selection")
 )
 
 type BattleGroundConfig struct {
@@ -151,6 +152,7 @@ func (te *TestEnvironment) configureBattleGround() error {
 		d.GuardianPath = "../../moiclient/"
 		d.ShouldExecute = *shouldExecute
 		d.OldState = *oldState
+		d.EnableSortition = *enableSorition
 
 		te.bgClient = bgclient.NewClient(&bgclient.Config{
 			ClusterConfig: d,

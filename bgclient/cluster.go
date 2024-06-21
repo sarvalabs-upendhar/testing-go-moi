@@ -331,6 +331,7 @@ func (c *Cluster) generateDataDir() error {
 		"--instances-path", c.Config.Dir(instancesFile),
 		"--directory-path", c.Config.TempDir,
 		fmt.Sprintf("--shouldExecute=%v", c.Config.ShouldExecute),
+		fmt.Sprintf("--enable-sortition=%v", c.Config.EnableSortition),
 	}
 
 	return runCommand(c.Config.McutilsBinary, args, c.Config.GetStdout("init"))
@@ -469,9 +470,14 @@ func (c *Cluster) initTestServer(i int) {
 		ValidatorSlots:    3,
 	}
 
+	if c.Config.EnableSortition {
+		cfg.OperatorSlots = 1
+	} else if i == 0 {
+		cfg.OperatorSlots = 1
+	}
+
 	// make the first node as operator
 	if i == 0 {
-		cfg.OperatorSlots = 1
 		cfg.JSONRPCPort = c.Config.JSONRPCPort // use the give port number as it is without incrementing it
 	} else {
 		cfg.JSONRPCPort = c.Config.GetOpenPortForServer() // get incremented port number from second node onwards

@@ -4,11 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/network"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-msgio"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
@@ -44,7 +41,6 @@ type SubHandler struct {
 	chain               *lattice.ChainManager
 	mux                 *utils.TypeMux
 	ixSub               *utils.Subscription
-	newPeerSub          *utils.Subscription
 	server              *Server
 	reputationManager   ReputationManager
 	pendingMessageQueue *RequestQueue
@@ -59,7 +55,7 @@ func NewSubHandler(
 	logger hclog.Logger,
 	server *Server,
 	reputationManager ReputationManager,
-	peerSet *peerSet,
+	peers *peerSet,
 	mux *utils.TypeMux,
 	pool ixPool,
 	chain *lattice.ChainManager,
@@ -70,7 +66,7 @@ func NewSubHandler(
 		id:                  id,
 		ctx:                 ctx,
 		ctxCancel:           ctxCancel,
-		peers:               peerSet,
+		peers:               peers,
 		mux:                 mux,
 		chain:               chain,
 		ixpool:              pool,
@@ -80,8 +76,7 @@ func NewSubHandler(
 		signalChan:          make(chan struct{}),
 		pendingMessageQueue: NewRequestQueue(MaxQueueSize), // Max message queue limit is 200
 		// Subscribe the TypeMux to AddedInteractionEvent and NewPeerEvent events
-		ixSub:      mux.Subscribe(utils.AddedInteractionEvent{}),
-		newPeerSub: mux.Subscribe(NewPeerEvent{}),
+		ixSub: mux.Subscribe(utils.AddedInteractionEvent{}),
 	}
 }
 
@@ -100,116 +95,48 @@ func (eh *SubHandler) Start() error {
 
 	go eh.messageWorker()
 	// Start the handler loops for new peers, broadcasting interactions
-	go eh.newPeerLoop()
+	go eh.msgHandler()
 	go eh.ixBroadcastLoop()
 
 	return nil
 }
 
-// newPeerLoop is a method of SubHandler that handles NewPeerEvents.
-// Creates a new Peer for every NewPeerEvent signal, registers it with the
-// handler working set and starts a goroutine to listen for messages from the peer.
-func (eh *SubHandler) newPeerLoop() {
-	// Read events from a newpeer channel
-	for obj := range eh.newPeerSub.Chan() {
-		if event, ok := obj.Data.(NewPeerEvent); ok && event.Peer != nil {
-			// If minimum peer count is met, send a hello message
-			if eh.peers.Len() > 3 {
-				eh.server.SendHelloMessage()
-			}
-
-			if event.Peer.stream.Stat().Direction == network.DirInbound {
-				go eh.handleInboundPeer(event.Peer)
-
-				continue
-			}
-
-			go eh.handleOutboundPeer(event.Peer)
-		}
-	}
-}
-
-// handleInboundPeer handles inbound peer connection and messages.
-func (eh *SubHandler) handleInboundPeer(peer *Peer) {
-	defer func() {
-		// Update inbound connection count based on the peer stream's direction
-		eh.server.ConnManager.updateConnCount(network.DirInbound, 0, -1)
-
-		if err := eh.server.ConnManager.ResetStream(peer.stream, ""); err != nil {
-			eh.server.logger.Trace("Failed to reset connection", "err", err)
-		}
-
-		eh.logger.Info("Inbound Peer Disconnected", "krama-ID", peer.kramaID)
-	}()
-
-	// Handle messages from the peer
+// msgHandler handles all the inbound messages
+func (eh *SubHandler) msgHandler() {
 	for {
-		if err := eh.handlePeerMessage(peer); err != nil {
-			eh.logger.Error("Error handling inbound peer message", "err", err)
-
+		select {
+		case <-eh.ctx.Done():
 			return
+		case msg := <-eh.server.MsgChan():
+			if err := eh.handleMsg(msg); err != nil {
+				eh.logger.Debug(
+					"Failed to handle peer msg",
+					"error", common.ErrPeerNotAvailable,
+					"krama-id", msg.Sender,
+				)
+			}
 		}
 	}
 }
 
-// handleOutboundPeer handles the outbound peer connection.
-func (eh *SubHandler) handleOutboundPeer(peer *Peer) {
-	// Defer the peer unregister from the handler working set
-	defer func() {
-		if err := eh.peers.Unregister(peer); err != nil {
-			eh.logger.Error("Error unregistering peer", "err", err)
-
-			return
-		}
-
-		// Update outbound connection count based on the peer stream's direction
-		eh.server.ConnManager.updateConnCount(network.DirOutbound, peer.GetRTT(), -1)
-
-		if err := eh.server.ConnManager.ResetStream(peer.stream, MOIStreamTag); err != nil {
-			eh.server.logger.Trace("Failed to reset connection", "err", err)
-		}
-
-		eh.logger.Info("Outbound Peer Disconnected", "krama-ID", peer.kramaID)
-	}()
-
-	// Handle messages from the peer
-	for {
-		reader := msgio.NewReader(peer.rw.Reader)
-
-		_, err := reader.ReadMsg()
-		if err != nil {
-			eh.logger.Error("Error handling outbound peer message", "err", err)
-
-			return
-		}
-	}
-}
-
-// handlePeerMessage is a method of SubHandler that handles a message from a Peer
-func (eh *SubHandler) handlePeerMessage(p *Peer) error {
-	// Read the peer's io read/writer into a buffer
-	// p.mtxLock.Lock()
-	// defer p.mtxLock.Unlock()
-	reader := msgio.NewReader(p.rw.Reader)
-
-	buffer, err := reader.ReadMsg()
-	if err != nil {
-		return err
-	}
-
-	// Unmarshal the buffer into a proto message
-	message := new(networkmsg.Message)
-	if err := message.FromBytes(buffer); err != nil {
-		return err
-	}
-
+func (eh *SubHandler) handleMsg(msg *networkmsg.Message) error {
 	// log.Println("Got new Message", message.GetType())
-	switch message.MsgType {
+	switch msg.MsgType {
 	// NEWIXTS
 	case networkmsg.NEWIXSMSG:
+		peerID, err := msg.Sender.DecodedPeerID()
+		if err != nil {
+			eh.logger.Error("Failed to decode peerID")
+		}
+
+		p := eh.peers.Peer(peerID)
+		if p == nil {
+			return common.ErrPeerNotAvailable
+		}
+
 		// Unmarshal message proto into an InteractionsData message
 		ixns := new(common.Interactions)
-		if err := ixns.FromBytes(message.Payload); err != nil {
+		if err := ixns.FromBytes(msg.Payload); err != nil {
 			if !errors.Is(err, polo.ErrNullPack) {
 				return err
 			}
@@ -217,7 +144,7 @@ func (eh *SubHandler) handlePeerMessage(p *Peer) error {
 
 		// Mark the interactions in the message as 'known' by the peer
 		for _, v := range *ixns {
-			eh.logger.Info("Received interactions from", "krama-ID", p.kramaID, "ix-hash", v.Hash())
+			eh.logger.Info("Received interactions from", "krama-id", p.kramaID, "ix-hash", v.Hash())
 
 			p.markInteraction(v.Hash())
 		}
@@ -296,7 +223,7 @@ func (eh *SubHandler) helloMsgHandler(msg *pubsub.Message) error {
 		return err
 	}
 
-	eh.logger.Trace("Received hello message", "krama-ID", helloMsg.KramaID)
+	eh.logger.Trace("Received hello message", "krama-id", helloMsg.KramaID)
 
 	if err := eh.pendingMessageQueue.Push(helloMsg); err != nil {
 		eh.signalNewMessages()
@@ -380,7 +307,7 @@ func (eh *SubHandler) handleMessages(msgs []*networkmsg.HelloMsg) {
 			NTQ:           senatus.DefaultPeerNTQ,
 			PeerSignature: msg.Signature,
 		}); err != nil {
-			eh.logger.Error("Failed to add node meta information", "err", err, "krama-ID", msg.KramaID)
+			eh.logger.Error("Failed to add node meta information", "err", err, "krama-id", msg.KramaID)
 
 			continue
 		}
@@ -389,5 +316,4 @@ func (eh *SubHandler) handleMessages(msgs []*networkmsg.HelloMsg) {
 
 func (eh *SubHandler) Close() {
 	eh.ixSub.Unsubscribe()
-	eh.newPeerSub.Unsubscribe()
 }

@@ -8,6 +8,9 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/network/message"
+	"github.com/sarvalabs/go-moi/telemetry/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // handler initializes and runs a loop to handle inbound messages.
@@ -19,7 +22,7 @@ func (k *Engine) handler() {
 		case msg := <-k.transport.Messages():
 			k.handleInboundMessage(msg)
 		case clusterID := <-k.slotCloseCh:
-			k.logger.Debug("Cleaning up the slot", clusterID)
+			k.logger.Debug("Cleaning consensus slot", clusterID)
 			k.slots.CleanupSlot(clusterID)
 		}
 	}
@@ -60,15 +63,31 @@ func (k *Engine) handleICSRequest(msg *types.ICSMSG) error {
 	var (
 		icsReq          = new(types.ICSRequest)
 		canonicalICSReq = new(types.CanonicalICSRequest)
-		respChan        = make(chan error)
+		respChan        = make(chan types.Response)
 		interactions    = new(common.Interactions)
 		statusCode      = types.InternalError
+		operators       = make([]types.ICSOperatorInfo, 0)
 	)
 
 	k.logger.Trace("Received ICS request", "cluster-id", msg.ClusterID, "sender", msg.Sender)
+	ctx, span := tracing.Span(
+		k.ctx,
+		"Krama.KramaEngine",
+		"handleICSReq",
+		trace.WithAttributes(
+			attribute.String("clusterID", msg.ClusterID.String()),
+			attribute.Int("slotType", int(types.ValidatorSlot)),
+		),
+	)
+
+	defer span.End()
+
+	if err := k.transport.ConnectToDirectPeer(ctx, msg.Sender, msg.ClusterID); err != nil {
+		k.logger.Error("Failed to connect to direct peer", "peer-id", msg.Sender, "error", err)
+	}
 
 	defer func() {
-		if err := k.SendICSResponse(msg.Sender, msg.ClusterID, statusCode); err != nil {
+		if err := k.SendICSResponse(msg.Sender, msg.ClusterID, statusCode, operators); err != nil {
 			k.logger.Error("Failed to send ics response", "err", err)
 		}
 
@@ -94,6 +113,7 @@ func (k *Engine) handleICSRequest(msg *types.ICSMSG) error {
 	}
 
 	kramaRequest := types.Request{
+		Ctx:          ctx,
 		SlotType:     types.ValidatorSlot,
 		Operator:     id.KramaID(canonicalICSReq.Operator),
 		Msg:          canonicalICSReq,
@@ -104,23 +124,33 @@ func (k *Engine) handleICSRequest(msg *types.ICSMSG) error {
 
 	k.Requests() <- kramaRequest
 
-	// Wait for response from krama engine
-	if err := <-respChan; err != nil {
-		switch err.Error() {
+	select {
+	case <-k.ctx.Done():
+		return k.ctx.Err()
+	case resp := <-respChan:
+		if resp.Data != nil {
+			operators = resp.Data.([]types.ICSOperatorInfo) //nolint
+		}
+
+		if resp.Err == nil {
+			statusCode = types.Success
+
+			return nil
+		}
+
+		switch resp.Err.Error() {
 		case common.ErrSlotsFull.Error():
 			statusCode = types.SlotsFull
 		case common.ErrHashMismatch.Error():
 			statusCode = types.InvalidHash
+		case common.ErrOperatorNotEligible.Error():
+			statusCode = types.NotEligible
 		default:
 			statusCode = types.InternalError
 		}
 
-		return err
+		return resp.Err
 	}
-
-	statusCode = types.Success
-
-	return nil
 }
 
 // handleICSResponse handles the incoming ICS response and updates the cluster state accordingly.
@@ -145,6 +175,17 @@ func (k *Engine) handleICSResponse(msg *types.ICSMSG) error {
 	}
 
 	slot.ClusterState().IncrementICSRespCount(1)
+
+	for _, info := range icsRes.OperatorsInfo {
+		k.logger.Trace(
+			"Adding Operator Info",
+			"ixnHash", slot.ClusterState().IxnHash(),
+			"krama-id", info.KramaID,
+			"priority", info.Priority,
+		)
+
+		k.lottery.AddICSOperatorInfo(slot.ClusterState().LotteryKey, info.KramaID, info.Priority)
+	}
 
 	if icsRes.StatusCode != types.Success {
 		return nil
@@ -206,7 +247,12 @@ func (k *Engine) handleICSSuccess(msg *types.ICSMSG) error {
 	}
 
 	clusterState.SetSuccessMsg(msg)
-	slot.ICSSuccessChan <- true
+
+	select {
+	case slot.ICSSuccessChan <- true:
+	default:
+		k.logger.Trace("Failed to forward msg to ICS success channel", "cluster-id", msg.ClusterID, "sender", msg.Sender)
+	}
 
 	return nil
 }
@@ -227,7 +273,10 @@ func (k *Engine) handleICSFailure(msg *types.ICSMSG) error {
 		return nil
 	}
 
-	slot.ICSSuccessChan <- false
+	select {
+	case slot.ICSSuccessChan <- false:
+	default:
+	}
 
 	return nil
 }

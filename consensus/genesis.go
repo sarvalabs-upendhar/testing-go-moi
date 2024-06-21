@@ -12,7 +12,7 @@ import (
 func createGenesisTesseract(
 	addresses []identifiers.Address,
 	stateHashes, contextHashes []common.Hash,
-	timestamp uint64,
+	timestamp uint64, icsSeed, icsProof string,
 ) *common.Tesseract {
 	var (
 		ixHashString = "Genesis"
@@ -42,6 +42,8 @@ func createGenesisTesseract(
 	poxt := common.PoXtData{
 		Round:     0,
 		ClusterID: common.GenesisIdentifier,
+		ICSSeed:   common.HexToHash(icsSeed),
+		ICSProof:  common.Hex2Bytes(icsProof),
 	}
 
 	return common.NewTesseract(

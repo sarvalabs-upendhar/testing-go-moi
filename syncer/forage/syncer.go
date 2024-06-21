@@ -280,7 +280,7 @@ func (s *Syncer) addTrustedPeersToPeerstore() error {
 
 		peerID, err := bestPeer.ID.DecodedPeerID()
 		if err != nil {
-			s.logger.Error("Failed to get peer ID from krama ID", "krama-ID", bestPeer.ID, "err", err)
+			s.logger.Error("Failed to get peer ID from krama ID", "krama-id", bestPeer.ID, "err", err)
 
 			return common.ErrInvalidKramaID
 		}

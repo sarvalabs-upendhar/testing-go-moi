@@ -51,6 +51,8 @@ type PoXtData struct {
 	BinaryHash   Hash         `json:"binary_hash"`
 	IdentityHash Hash         `json:"identity_hash"`
 	ICSHash      Hash         `json:"ics_hash"`
+	ICSSeed      [32]byte     `json:"ics_seed"`
+	ICSProof     []byte       `json:"ics_proof"`
 	ClusterID    ClusterID    `json:"cluster_id"`
 	ICSSignature []byte       `json:"ics_signature"`
 	ICSVoteset   *ArrayOfBits `json:"ics_vote_set"`
@@ -389,6 +391,14 @@ func (t *Tesseract) ClusterID() ClusterID {
 
 func (t *Tesseract) ICSHash() Hash {
 	return t.consensusInfo.ICSHash
+}
+
+func (t *Tesseract) ICSSeed() [32]byte {
+	return t.consensusInfo.ICSSeed
+}
+
+func (t *Tesseract) ICSProof() []byte {
+	return t.consensusInfo.ICSProof
 }
 
 func (t *Tesseract) SetRound(round int32) {

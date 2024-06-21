@@ -903,9 +903,14 @@ func connectClientToServers(t *testing.T, client *p2p.Server, servers ...*p2p.Se
 	for _, s := range servers {
 		info := getPeerInfo(t, s)
 
-		client.AddPeerInfo(info)
+		client.AddPeerInfo(*info)
 
-		err := client.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, s.GetKramaID(), 50)
+		err := client.ConnManager.ConnectAndRegisterPeer(
+			context.Background(),
+			p2p.PeerInfo{AddrInfo: *info},
+			s.GetKramaID(),
+			50,
+		)
 		require.NoError(t, err)
 	}
 }

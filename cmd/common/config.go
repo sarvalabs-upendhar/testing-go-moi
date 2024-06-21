@@ -24,6 +24,7 @@ type Config struct {
 	JSONRPC        JSONRPCConfig    `json:"jsonrpc"`
 	NetworkID      config.NetworkID `json:"network_id"`
 	State          StateConfig      `json:"state"`
+	GenesisTime    uint64           `json:"genesis_time"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
@@ -320,8 +321,11 @@ func DefaultBabylonConfig(path string) *Config {
 			ValidatorSlots:        5,
 			MaxGossipPeers:        5,
 			MinGossipPeers:        3,
+			EnableSortition:       true,
 			GenesisTime:           config.DefaultGenesisTime,
 			GenesisPath:           path + "/genesis.json",
+			GenesisSeed:           config.DefaultGenesisSeed,
+			GenesisProof:          config.DefaultGenesisProof,
 		},
 		DB: DBConfig{
 			CleanDB:     false,
@@ -399,6 +403,9 @@ func DefaultDevnetConfig(path string) *Config {
 			AccountWaitTime:       1500,
 			OperatorSlots:         -1,
 			ValidatorSlots:        3,
+			EnableSortition:       false,
+			GenesisSeed:           config.DefaultGenesisSeed,
+			GenesisProof:          config.DefaultGenesisProof,
 			GenesisTime:           0,
 			GenesisPath:           path + "/genesis.json",
 		},
@@ -500,6 +507,9 @@ type ConsensusConfig struct {
 	MinGossipPeers        int    `json:"min_gossip_peers"`
 	GenesisTime           uint64 `json:"genesis_time"`
 	GenesisPath           string `json:"genesis_path"`
+	EnableSortition       bool   `json:"enable_sortition"`
+	GenesisSeed           string `json:"genesis_seed"`
+	GenesisProof          string `json:"genesis_proof"`
 }
 
 type ExecutionConfig struct {

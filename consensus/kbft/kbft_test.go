@@ -54,7 +54,7 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -70,7 +70,7 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -156,7 +156,7 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -172,7 +172,7 @@ func TestFullRound_WithLessThan23rdPrevotes(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -241,7 +241,7 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -257,7 +257,7 @@ func TestFullRound_WithLessThan23rdPrecommit(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -341,7 +341,7 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -357,7 +357,7 @@ func TestFullRound_WithAny23rdPrevote_Any23rdPrecommit(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -446,7 +446,7 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -462,7 +462,7 @@ func TestFullRound_With23rdNilPrecommit(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -555,7 +555,7 @@ func TestSignVote(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -571,7 +571,7 @@ func TestSignVote(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -610,7 +610,7 @@ func TestConflictPrevote(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -626,7 +626,7 @@ func TestConflictPrevote(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -686,7 +686,7 @@ func TestConflictPrecommit(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -702,7 +702,7 @@ func TestConflictPrecommit(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -786,7 +786,7 @@ func TestRandomValidatorPreVote(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -802,7 +802,7 @@ func TestRandomValidatorPreVote(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -868,7 +868,7 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -884,7 +884,7 @@ func TestRandomValidatorPrecommit(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -974,7 +974,7 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -990,7 +990,7 @@ func TestReceivePrevoteDuringPrevoteWait(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 
@@ -1062,7 +1062,7 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 	ctx := context.Background()
 	thisNode := valSet[0][0]
 
-	ixHash, err := clusterInfo.Ixs.Hash()
+	ixHash, err := clusterInfo.Ixns().Hash()
 	require.NoError(t, err)
 
 	kbft := NewKBFTService(
@@ -1078,7 +1078,7 @@ func TestReceivePrecommitDuringPrecommmitWait(t *testing.T) {
 		c.finalizeTesseractGrid,
 		withDefaultEventMux(),
 		WithLogger(hclog.NewNullLogger()),
-		WithWal(nullWal{}),
+		WithWal(NullWal{}),
 		WithEvidence(NewEvidence(ixHash, clusterInfo.Operator, clusterInfo.Size())),
 	)
 

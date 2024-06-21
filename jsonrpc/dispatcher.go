@@ -358,8 +358,6 @@ func (d *dispatcher) logInternalError(method string, err error) {
 }
 
 func (d *dispatcher) handleReq(req Request) ([]byte, Error) {
-	d.logger.Debug("request", "method", req.Method, "id", req.ID)
-
 	service, funcData, funcErr := d.getMethodHandler(req)
 	if funcErr != nil {
 		return nil, funcErr

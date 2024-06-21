@@ -64,6 +64,7 @@ type ClusterConfig struct {
 	GuardianPath        string
 	ShouldExecute       bool
 	OldState            bool
+	EnableSortition     bool
 }
 
 func DefaultClusterConfig() *ClusterConfig {
@@ -88,6 +89,7 @@ func DefaultClusterConfig() *ClusterConfig {
 		WithStdout:          true,
 		GuardianPath:        "./",
 		ShouldExecute:       true,
+		EnableSortition:     false,
 	}
 }
 

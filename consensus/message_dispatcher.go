@@ -118,6 +118,7 @@ func (k *Engine) SendICSResponse(
 	kramaID id.KramaID,
 	clusterID common.ClusterID,
 	statusCode types.ICSResponseCode,
+	operators []types.ICSOperatorInfo,
 ) error {
 	k.logger.Trace("Sending ICS Response", "cluster-id", clusterID, "to", kramaID, "status-code", statusCode)
 
@@ -126,7 +127,7 @@ func (k *Engine) SendICSResponse(
 		k.selfID,
 		clusterID,
 		networkmsg.ICSRESPONSE,
-		types.NewICSResponse(statusCode)); err != nil {
+		types.NewICSResponse(statusCode, operators)); err != nil {
 		k.logger.Error("Failed to send ics response", "krama-id", kramaID, "err", err)
 
 		return err

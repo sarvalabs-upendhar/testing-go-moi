@@ -26,6 +26,7 @@ var (
 	GuardianLogicPath      string
 	writeLogsToFile        bool
 	shouldExecute          bool
+	enableSortition        bool
 	libp2pPort             int
 	jsonrpcPort            int
 	peerList               *common.PeerList

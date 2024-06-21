@@ -229,6 +229,33 @@ func (i *ICSNodeSet) GetNodes(respondedOnly bool) []kramaid.KramaID {
 	return distinctNodes
 }
 
+func (i *ICSNodeSet) GetInactiveNodes() []kramaid.KramaID {
+	nodes := make(map[kramaid.KramaID]struct{})
+	distinctNodes := make([]kramaid.KramaID, 0)
+
+	for _, nodeSet := range i.Sets {
+		if nodeSet == nil {
+			continue
+		}
+
+		for index, kramaID := range nodeSet.Ids {
+			if nodeSet.Responses.GetIndex(index) {
+				continue
+			}
+
+			if _, ok := nodes[kramaID]; ok {
+				continue
+			}
+
+			nodes[kramaID] = struct{}{}
+
+			distinctNodes = append(distinctNodes, kramaID)
+		}
+	}
+
+	return distinctNodes
+}
+
 // GetVoteset returns combined voteset of all the nodes from the ICSNodeSet
 func (i *ICSNodeSet) GetVoteset() *ArrayOfBits {
 	voteSet := NewArrayOfBits(i.totalNodes)

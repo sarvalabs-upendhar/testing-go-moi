@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"math/rand"
 	"os"
@@ -11,6 +12,9 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
+	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -18,12 +22,15 @@ import (
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 
+	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/sarvalabs/go-moi/crypto"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -147,22 +154,54 @@ func (e *MockExec) ExecuteInteractions(
 
 type MockStateManager struct {
 	accountRegistration map[identifiers.Address]bool
+	stateObjects        map[identifiers.Address]*state.Object
+	publicKeys          map[kramaid.KramaID][]byte
+	icsSeed             map[identifiers.Address][32]byte
 	participantsContext map[identifiers.Address]struct {
 		contextHash common.Hash
 		beSet       *common.NodeSet
 		rSet        *common.NodeSet
 	}
-	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
-
+	accMetaInfo            map[identifiers.Address]*common.AccountMetaInfo
 	GetAccountMetaInfoHook func() error
 	IsInitialTesseractHook func() error
 	isSealValid            func() bool
+}
+
+func (ms *MockStateManager) GetRegisteredGuardiansCount() (int, error) {
+	obj, ok := ms.stateObjects[common.GuardianLogicAddr]
+	if !ok {
+		return 0, common.ErrObjectNotFound
+	}
+
+	return guardianregistry.GetGuardiansLen(obj)
+}
+
+func (ms *MockStateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error) {
+	obj, ok := ms.stateObjects[common.GuardianLogicAddr]
+	if !ok {
+		return 0, common.ErrObjectNotFound
+	}
+
+	return guardianregistry.GetGuardianIncentive(obj, id)
+}
+
+func (ms *MockStateManager) GetTotalIncentives() (uint64, error) {
+	obj, ok := ms.stateObjects[common.GuardianLogicAddr]
+	if !ok {
+		return 0, common.ErrObjectNotFound
+	}
+
+	return guardianregistry.GetTotalIncentives(obj)
 }
 
 func NewMockStateManager() *MockStateManager {
 	return &MockStateManager{
 		accMetaInfo:         make(map[identifiers.Address]*common.AccountMetaInfo),
 		accountRegistration: make(map[identifiers.Address]bool),
+		stateObjects:        make(map[identifiers.Address]*state.Object),
+		publicKeys:          make(map[kramaid.KramaID][]byte),
+		icsSeed:             make(map[identifiers.Address][32]byte),
 		participantsContext: make(map[identifiers.Address]struct {
 			contextHash common.Hash
 			beSet       *common.NodeSet
@@ -295,8 +334,23 @@ func (ms *MockStateManager) FetchLatestParticipantContext(addr identifiers.Addre
 func (ms *MockStateManager) Cleanup(addr identifiers.Address) {}
 
 func (ms *MockStateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error) {
-	// TODO implement me
-	panic("implement me")
+	pubKeys := make([][]byte, 0)
+
+	for _, id := range ids {
+		if publicKey, ok := ms.publicKeys[id]; ok {
+			pubKeys = append(pubKeys, publicKey)
+		}
+	}
+
+	if len(pubKeys) == 0 {
+		return nil, common.ErrPublicKeyNotFound
+	}
+
+	return pubKeys, nil
+}
+
+func (ms *MockStateManager) setPublicKey(kramaID kramaid.KramaID, pubKey []byte) {
+	ms.publicKeys[kramaID] = pubKey
 }
 
 func (ms *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
@@ -313,8 +367,15 @@ func (ms *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*commo
 }
 
 func (ms *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
-	// TODO implement me
-	panic("implement me")
+	if stateObject, ok := ms.stateObjects[addr]; ok {
+		return stateObject, nil
+	}
+
+	return nil, errors.New("state object doesn't exist")
+}
+
+func (ms *MockStateManager) setLatestStateObject(addr identifiers.Address, so *state.Object) {
+	ms.stateObjects[addr] = so
 }
 
 func (ms *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
@@ -322,10 +383,51 @@ func (ms *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.
 	panic("implement me")
 }
 
+func (ms *MockStateManager) GetICSSeed(addr identifiers.Address) ([32]byte, error) {
+	if icsSeed, ok := ms.icsSeed[addr]; ok {
+		return icsSeed, nil
+	}
+
+	return [32]byte{}, errors.New("seed not found")
+}
+
 func (ms *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
 	_, ok := ms.accountRegistration[addr]
 
 	return ok, nil
+}
+
+type MockVault struct {
+	kramaID          kramaid.KramaID
+	consensusPrivKey crypto.PrivateKey // Private key used in consensus
+}
+
+func newMockVault() *MockVault {
+	return &MockVault{}
+}
+
+func (mv *MockVault) KramaID() kramaid.KramaID {
+	return mv.kramaID
+}
+
+func (mv *MockVault) setKramaID(kramaID kramaid.KramaID) {
+	mv.kramaID = kramaID
+}
+
+func (mv *MockVault) GetConsensusPrivateKey() crypto.PrivateKey {
+	return mv.consensusPrivKey
+}
+
+func (mv *MockVault) setConsensusPrivateKey(privKey []byte) {
+	cPriv := new(crypto.BLSPrivKey)
+	cPriv.UnMarshal(privKey)
+
+	mv.consensusPrivKey = cPriv
+}
+
+func (mv *MockVault) Sign(data []byte, sigType cryptocommon.SigType, signOptions ...crypto.SignOption) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 type MockDB struct {
@@ -433,6 +535,7 @@ type createKramaEngineParams struct {
 	db             *MockDB
 	sm             *MockStateManager
 	cm             *MockChainManager
+	vault          *MockVault
 	cfg            *config.ConsensusConfig
 	smCallback     func(sm *MockStateManager)
 	dbCallback     func(db *MockDB)
@@ -449,6 +552,7 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 	var (
 		sm     = NewMockStateManager()
 		cfg    = createTestConsensusConfig()
+		vault  = newMockVault()
 		server = newMockServer()
 		cm     = NewMockChainManager()
 		db     = NewMockDB()
@@ -483,6 +587,10 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 		params.dbCallback(db)
 	}
 
+	if params.vault != nil {
+		vault = params.vault
+	}
+
 	if params.cfg != nil {
 		cfg = params.cfg
 	}
@@ -504,11 +612,11 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 		cfg,
 		hclog.NewNullLogger(),
 		nil,
-		"",
+		vault.KramaID(),
 		sm,
 		exec,
 		nil,
-		nil,
+		vault,
 		cm,
 		nil,
 		nil,
@@ -633,6 +741,7 @@ func createTestClusterState(
 		selfID,
 		ps,
 		nodeset,
+		common.LotteryKey{},
 	)
 
 	if callback != nil {
@@ -1293,4 +1402,133 @@ func checkParticipantInfo(
 		require.Equal(t, p.LockType, ixnParticipant[addr].LockType)
 		require.Equal(t, p.IsSigner, ixnParticipant[addr].IsSigner)
 	}
+}
+
+func createTestLotteryKey(t *testing.T, ixHash common.Hash, seeds ...[32]byte) common.LotteryKey {
+	t.Helper()
+
+	finalSeed := seeds[0]
+
+	for i := 1; i < len(seeds); i++ {
+		for j := 0; j < len(seeds[i]); j++ {
+			finalSeed[j] ^= seeds[i][j]
+		}
+	}
+
+	return common.NewLotteryKey(ixHash, finalSeed)
+}
+
+func checkForOperatorInfo(
+	t *testing.T,
+	engine *Engine,
+	lk common.LotteryKey,
+	kramaID kramaid.KramaID,
+	priority uint64,
+) {
+	t.Helper()
+
+	info, ok := engine.lottery.ixOperators.Get(lk)
+	require.True(t, ok)
+
+	operators := info.(ICSOperators) //nolint
+
+	for _, info := range operators {
+		if info.KramaID == kramaID && info.Priority == priority {
+			return
+		}
+	}
+
+	require.Fail(t, "kramaID is not found")
+}
+
+func createSortitionVault(t *testing.T, isEligible bool) *MockVault {
+	t.Helper()
+
+	mockVault := newMockVault()
+
+	if isEligible {
+		mockVault.setKramaID("3WvfmcZCP85fghMBc7NWvYzNgAk5b6XQLTULBLJmVRHZy8Mo8Je3.16Uiu2HAkupwrGKxG7s55qtQ" +
+			"9rHRb5RRSQ4VdBTxickMEwFmTGMjA")
+		mockVault.setConsensusPrivateKey([]byte{
+			40, 74, 193, 90, 79, 247, 13, 74, 32, 66, 190, 54, 82, 18, 11, 133, 235, 58, 50, 58,
+			250, 42, 252, 220, 83, 113, 51, 250, 253, 130, 148, 73,
+		})
+
+		return mockVault
+	}
+
+	mockVault.setKramaID("3WyR9BoaWznXD19kNW3pwMvQUybuU4sbkwRwftB39F8gD4qRCnHM.16Uiu2HAkvMe9u6B7MM3JnstkCPpgtqZ" +
+		"N2B3Upq5cSeFKL251QTqK")
+	mockVault.setConsensusPrivateKey([]byte{
+		68, 157, 28, 23, 108, 108, 250, 232, 100, 61, 64, 128, 0, 112, 65, 242, 248, 87, 225, 227, 213,
+		100, 64, 60, 17, 186, 217, 114, 222, 33, 39, 194,
+	})
+
+	return mockVault
+}
+
+func updateTotalIncentive(t *testing.T, so *state.Object, count uint64) {
+	t.Helper()
+
+	_, err := so.GetStorageTree(common.GuardianLogicID)
+	if err != nil {
+		err := so.CreateStorageTreeForLogic(common.GuardianLogicID)
+		require.NoError(t, err)
+	}
+
+	key := pisa.GenerateStorageKey(guardianregistry.SlotTotalIncentives)
+
+	value, err := polo.Polorize(count)
+	require.NoError(t, err)
+
+	err = so.SetStorageEntry(common.GuardianLogicID, key, value)
+	require.NoError(t, err)
+}
+
+func updateTotalIncentives(t *testing.T, sm *MockStateManager, totalIncentive uint64) {
+	t.Helper()
+
+	so, ok := sm.stateObjects[common.GuardianLogicAddr]
+	if !ok {
+		so = state.NewStateObject(
+			common.GuardianLogicAddr, nil, tests.NewTestTreeCache(),
+			nil, common.Account{}, state.NilMetrics(), false,
+		)
+	}
+
+	updateTotalIncentive(t, so, totalIncentive)
+
+	sm.setLatestStateObject(common.GuardianLogicAddr, so)
+}
+
+func updateGuardianIncentive(t *testing.T, sm *MockStateManager, id kramaid.KramaID, incentive uint64) {
+	t.Helper()
+
+	so, ok := sm.stateObjects[common.GuardianLogicAddr]
+	if !ok {
+		so = state.NewStateObject(
+			common.GuardianLogicAddr, nil, tests.NewTestTreeCache(),
+			nil, common.Account{}, state.NilMetrics(), false,
+		)
+	}
+
+	_, err := so.GetStorageTree(common.GuardianLogicID)
+	if err != nil {
+		err := so.CreateStorageTreeForLogic(common.GuardianLogicID)
+		require.NoError(t, err)
+	}
+
+	encoded, _ := polo.Polorize(id)
+	hashed := blake2b.Sum256(encoded)
+
+	// Generate a storage access key for Registry.Guardians[kramaID].PubKey
+	key := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(hashed), pisa.ClsFld(2), pisa.ClsFld(0))
+
+	value, err := polo.Polorize(incentive)
+	require.NoError(t, err)
+
+	err = so.SetStorageEntry(common.GuardianLogicID, key, value)
+	require.NoError(t, err)
+
+	sm.setLatestStateObject(common.GuardianLogicAddr, so)
 }

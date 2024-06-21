@@ -94,4 +94,5 @@ var (
 	ErrReadingGenesisFile          = errors.New("error reading genesis file")
 	ErrEmptyServiceName            = errors.New("jsonrpc: serviceName cannot be empty")
 	ErrEmptyMethodName             = errors.New("methodName cannot be empty")
+	ErrOperatorNotEligible         = errors.New("operator not eligible")
 )

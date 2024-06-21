@@ -86,9 +86,9 @@ func TestDiscover(t *testing.T) {
 
 	go servers[1].ds.discover()
 
-	peerInfo := <-servers[1].ds.peerChan
+	info := <-servers[1].ds.peerChan
 
-	require.Equal(t, servers[0].host.ID(), peerInfo.ID)
+	require.Equal(t, servers[0].host.ID(), info.AddrInfo.ID)
 }
 
 func TestCheckEvents(t *testing.T) {
@@ -114,8 +114,6 @@ func TestCheckEvents(t *testing.T) {
 		closeTestServers(t, servers)
 	})
 
-	PeerEventSub := servers[0].mux.Subscribe(NewPeerEvent{}) // subscribe to server-1 events
-
 	initDiscoveryAndAdvertise(t, servers[0])
 	initDiscoveryAndAdvertise(t, servers[1])
 
@@ -125,8 +123,6 @@ func TestCheckEvents(t *testing.T) {
 	// check if server-0,1 are able to discover each other
 	checkForPeerRegistration(t, servers[0], servers[1], true)
 	checkForPeerRegistration(t, servers[1], servers[0], true)
-
-	validateNewPeerEvent(t, PeerEventSub, servers[1])
 }
 
 func TestHandleDiscoveredPeers(t *testing.T) {
@@ -205,11 +201,13 @@ func TestHandleDiscoveredPeers(t *testing.T) {
 
 			go test.source.ds.handleDiscoveredPeers()
 
-			test.source.ds.peerChan <- peer.AddrInfo{
-				ID:    test.destination.host.ID(),
-				Addrs: test.destination.host.Addrs(),
+			test.source.ds.peerChan <- PeerInfo{
+				AddrInfo: peer.AddrInfo{
+					ID:    test.destination.host.ID(),
+					Addrs: test.destination.host.Addrs(),
+				},
+				IsInboundPeer: false,
 			}
-
 			waitForDiscovery(t, test.source, test.expectedPeerCount)
 
 			require.Equal(t, test.expectedPeerCount, len(test.source.ConnManager.getPeers()))
@@ -284,11 +282,13 @@ func TestHandlePeers_CheckConfig(t *testing.T) {
 
 			go servers[0].ds.handleDiscoveredPeers()
 			time.Sleep(100 * time.Millisecond)
-			servers[0].ds.peerChan <- peer.AddrInfo{
-				ID:    servers[1].host.ID(),
-				Addrs: servers[1].host.Addrs(),
+			servers[0].ds.peerChan <- PeerInfo{
+				AddrInfo: peer.AddrInfo{
+					ID:    servers[1].host.ID(),
+					Addrs: servers[1].host.Addrs(),
+				},
+				IsInboundPeer: false,
 			}
-
 			waitForDiscovery(t, servers[0], test.expectedPeerCount)
 
 			require.Equal(t, test.expectedPeerCount, len(servers[0].ConnManager.getPeers()))

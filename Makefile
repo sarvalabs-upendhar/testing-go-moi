@@ -20,4 +20,4 @@ test:
 	make install && go test ./... -v -race --shuffle=on --short --count=1 --timeout=5m
 
 test-e2e:
-	make install && go test ./test/... -v --race --count=1 --shuffle=on
+	make install && go test ./test/... -v --race --count=1 --shuffle=on --enable-sortition

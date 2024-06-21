@@ -5,7 +5,7 @@
 FROM golang@sha256:90246ec31bcf460ff3dbe8a4a63e8997bc36781a2eba9e0419e9b53e0bd36a0d AS build
 
 # essential packages for build-dep
-ENV pkgs "git gcc g++ ca-certificates tzdata"
+ENV pkgs "git gcc g++ ca-certificates tzdata openssl libgcc libstdc++"
 RUN apk add --no-cache $pkgs && update-ca-certificates
 
 # importing private go-packages
@@ -15,6 +15,7 @@ RUN go env -w GOPRIVATE=github.com/sarvalabs/battleground
 ARG ACCESS_TOKEN
 ENV CGO_ENABLED=1
 ENV GO111MODULE=auto
+ENV CGO_CFLAGS=-"O -D__BLST_PORTABLE__"
 
 # for private go-packages
 RUN git config --global url."https://sarvalabs:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
@@ -39,9 +40,11 @@ VOLUME /data
 ARG GIT_COMMIT
 ENV GIT_COMMIT="${GIT_COMMIT}"
 
+ENV pkgs "git gcc g++ ca-certificates tzdata openssl libgcc libstdc++"
+RUN apk add --no-cache $pkgs && update-ca-certificates
+
 COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
-
 COPY --from=build /bin/moipod /bin/moipod
 
 ENTRYPOINT [ "/bin/moipod" ]

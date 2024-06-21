@@ -1,6 +1,9 @@
 package common
 
 import (
+	"encoding/hex"
+	"fmt"
+
 	"github.com/mr-tron/base58"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
@@ -65,4 +68,27 @@ func (ci *ICSClusterInfo) FromBytes(bytes []byte) error {
 	}
 
 	return nil
+}
+
+type LotteryKey [64]byte
+
+func NewLotteryKey(ixHash Hash, icsSeed [32]byte) LotteryKey {
+	var array [64]byte
+
+	copy(array[:32], ixHash.Bytes())
+	copy(array[32:], icsSeed[:])
+
+	return array
+}
+
+func (lk LotteryKey) String() string {
+	return fmt.Sprintf("ix-hash 0x%s seed 0x%s", hex.EncodeToString(lk[:32]), hex.EncodeToString(lk[32:]))
+}
+
+func (lk *LotteryKey) IxHash() Hash {
+	return BytesToHash(lk[:32])
+}
+
+func (lk *LotteryKey) Seed() Hash {
+	return BytesToHash(lk[32:])
 }

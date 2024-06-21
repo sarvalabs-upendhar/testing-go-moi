@@ -71,3 +71,13 @@ func (ps Participants) IxnParticipants() map[identifiers.Address]IxParticipant {
 
 	return ixnParticipants
 }
+
+func (ps Participants) HasSystemAccounts() bool {
+	for addr := range ps {
+		if IsSystemAccount(addr) {
+			return true
+		}
+	}
+
+	return false
+}

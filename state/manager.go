@@ -335,7 +335,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 ) {
 	behaviouralContext, randomContext, err := sm.getContext(addr, hash)
 	if err != nil {
-		sm.logger.Error("Failed to retrieve the sender context nodes", "err", err)
+		sm.logger.Error("Failed to retrieve context nodes", "err", err, "addr", addr)
 
 		return nil, nil, err
 	}
@@ -408,6 +408,20 @@ func (sm *StateManager) GetCommittedContextHash(addr identifiers.Address) (commo
 	}
 
 	return accMetaInfo.ContextHash, nil
+}
+
+func (sm *StateManager) GetICSSeed(addr identifiers.Address) ([32]byte, error) {
+	metaInfo, err := sm.GetAccountMetaInfo(addr)
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	ts, err := sm.getTesseractByHash(metaInfo.TesseractHash, false)
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	return ts.ICSSeed(), nil
 }
 
 func (sm *StateManager) getContext(
@@ -828,6 +842,57 @@ func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaI
 	}
 
 	return guardianregistry.GetGuardianPublicKeys(object, ids...)
+}
+
+func (sm *StateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error) {
+	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+
+	defer func() {
+		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		}
+	}()
+
+	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	if err != nil {
+		return 0, err
+	}
+
+	return guardianregistry.GetGuardianIncentive(object, id)
+}
+
+func (sm *StateManager) GetRegisteredGuardiansCount() (int, error) {
+	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+
+	defer func() {
+		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		}
+	}()
+
+	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	if err != nil {
+		return 0, err
+	}
+
+	return guardianregistry.GetGuardiansLen(object)
+}
+
+func (sm *StateManager) GetTotalIncentives() (uint64, error) {
+	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+
+	defer func() {
+		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		}
+	}()
+
+	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	if err != nil {
+		return 0, err
+	}
+
+	return guardianregistry.GetTotalIncentives(object)
 }
 
 // IsLogicRegistered checks if the logicID is registered with the account.

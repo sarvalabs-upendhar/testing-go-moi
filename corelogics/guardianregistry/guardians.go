@@ -24,6 +24,8 @@ const (
 
 	SlotNodeLimitKYC = 6
 	SlotNodeLimitKYB = 7
+
+	SlotTotalIncentives = 10
 )
 
 type Master struct {
@@ -89,4 +91,63 @@ func GetGuardianPublicKeys(state StateObject, ids ...kramaid.KramaID) ([][]byte,
 	}
 
 	return pubkeys, nil
+}
+
+func GetGuardianIncentive(state StateObject, id kramaid.KramaID) (uint64, error) {
+	encoded, _ := polo.Polorize(id)
+	hashed := blake2b.Sum256(encoded)
+
+	// Generate a storage access key for Registry.Guardians[kramaID].PubKey
+	key := pisa.GenerateStorageKey(SlotGuardians, pisa.MapKey(hashed), pisa.ClsFld(2), pisa.ClsFld(0))
+
+	// Retrieve the value for the storage key
+	val, err := state.GetStorageEntry(common.GuardianLogicID, key)
+	if err != nil {
+		return 0, err
+	}
+
+	// Decode the value into uint64 -> amount
+	var amount uint64
+	if err := polo.Depolorize(&amount, val); err != nil {
+		return 0, err
+	}
+
+	return amount, nil
+}
+
+func GetGuardiansLen(state StateObject) (int, error) {
+	// Generate a storage access key for Registry.Guardians
+	key := pisa.GenerateStorageKey(SlotGuardians)
+
+	// Retrieve the value for the storage key
+	val, err := state.GetStorageEntry(common.GuardianLogicID, key)
+	if err != nil {
+		return 0, err
+	}
+
+	var size int
+
+	if err := polo.Depolorize(&size, val); err != nil {
+		return 0, err
+	}
+
+	return size, nil
+}
+
+func GetTotalIncentives(state StateObject) (uint64, error) {
+	// Generate a storage access key for Registry.TotalIncentives
+	key := pisa.GenerateStorageKey(SlotTotalIncentives)
+
+	// Retrieve the value for the storage key
+	val, err := state.GetStorageEntry(common.GuardianLogicID, key)
+	if err != nil {
+		return 0, err
+	}
+
+	var totalIncentives uint64
+	if err := polo.Depolorize(&totalIncentives, val); err != nil {
+		return 0, err
+	}
+
+	return totalIncentives, nil
 }

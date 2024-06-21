@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/crypto/vrf"
+	blst "github.com/supranational/blst/bindings/go"
+
 	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
@@ -25,6 +28,8 @@ import (
 var (
 	validCommitSign   = []byte{1}
 	invalidCommitSign = []byte{0}
+	testVRFOutput     = [32]byte{2, 3, 5}
+	testVRFProof      = []byte{1, 2, 9, 7, 6}
 )
 
 func TestUpdateContextDelta(t *testing.T) {
@@ -1496,4 +1501,276 @@ func NewTestSlot(
 	))
 
 	return s
+}
+
+func TestEngine_runLottery(t *testing.T) {
+	nonEligibleVault := createSortitionVault(t, false)
+	eligibleVault := createSortitionVault(t, true)
+
+	testcases := []struct {
+		name        string
+		lk          common.LotteryKey
+		params      *createKramaEngineParams
+		preTestFn   func(lk common.LotteryKey, engine *Engine)
+		expectedErr error
+	}{
+		{
+			name: "cache hit with eligible operator",
+			lk:   createTestLotteryKey(t, common.NilHash, common.NilHash),
+			params: &createKramaEngineParams{
+				vault: eligibleVault,
+			},
+			preTestFn: func(lk common.LotteryKey, engine *Engine) {
+				engine.lottery.cache.Add(
+					lk, NewLotteryResult(true, testVRFOutput, testVRFProof),
+				)
+				engine.lottery.AddICSOperatorInfo(lk, eligibleVault.KramaID(), 2)
+			},
+		},
+		{
+			name: "cache hit with non eligible operator",
+			lk:   createTestLotteryKey(t, common.NilHash, tests.RandomHash(t)),
+			preTestFn: func(lk common.LotteryKey, engine *Engine) {
+				engine.lottery.cache.Add(
+					lk, NewLotteryResult(false, [32]byte{}, []byte{}),
+				)
+			},
+			expectedErr: ErrOperatorNotEligible,
+		},
+		{
+			name: "cache miss with eligible operator",
+			// We need a constant value for Seed, so that priority can be estimated
+			lk: createTestLotteryKey(t, common.NilHash, common.NilHash),
+			params: &createKramaEngineParams{
+				vault: eligibleVault,
+				smCallback: func(sm *MockStateManager) {
+					updateGuardianIncentive(t, sm, eligibleVault.KramaID(), 10)
+					updateTotalIncentives(t, sm, 50)
+				},
+			},
+		},
+		{
+			name: "cache miss with non eligible operator",
+			params: &createKramaEngineParams{
+				vault: nonEligibleVault,
+				smCallback: func(sm *MockStateManager) {
+					updateGuardianIncentive(t, sm, nonEligibleVault.KramaID(), 5)
+					updateTotalIncentives(t, sm, 50)
+				},
+			},
+			expectedErr: ErrOperatorNotEligible,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			engine := createTestKramaEngine(t, test.params)
+
+			if test.preTestFn != nil {
+				test.preTestFn(test.lk, engine)
+			}
+
+			output, proof, err := engine.runLottery(test.lk)
+
+			if test.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, test.expectedErr, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotEmpty(t, output)
+			require.NotEmpty(t, proof)
+			// priority is 2, based on calculation
+			checkForOperatorInfo(t, engine, test.lk, test.params.vault.KramaID(), 2)
+		})
+	}
+}
+
+func TestEngine_checkOperatorEligibility(t *testing.T) {
+	eligibleVault := createSortitionVault(t, true)
+	ls := NewLotteryResult(true, testVRFOutput, testVRFProof)
+	testcases := []struct {
+		name        string
+		params      *createKramaEngineParams
+		cs          *ktypes.ClusterState
+		req         ktypes.Request
+		preTestFn   func(lk common.LotteryKey, engine *Engine)
+		vrfOutput   [32]byte
+		vrfProof    []byte
+		expectedErr error
+	}{
+		{
+			name: "lottery disabled",
+			params: &createKramaEngineParams{
+				cfgCallback: func(cfg *config.ConsensusConfig) {
+					cfg.EnableSortition = false
+				},
+			},
+			cs:        &ktypes.ClusterState{},
+			req:       ktypes.Request{},
+			vrfProof:  nil,
+			vrfOutput: [32]byte{},
+		},
+
+		{
+			name: "should run lottery for self request",
+			params: &createKramaEngineParams{
+				cfgCallback: func(cfg *config.ConsensusConfig) {
+					cfg.EnableSortition = true
+				},
+			},
+			preTestFn: func(lk common.LotteryKey, engine *Engine) {
+				engine.lottery.cache.Add(
+					lk, ls,
+				)
+			},
+			cs: &ktypes.ClusterState{
+				LotteryKey: createTestLotteryKey(t, common.NilHash, tests.RandomHash(t)),
+			},
+			req: ktypes.Request{
+				Operator: eligibleVault.KramaID(),
+			},
+			vrfOutput: testVRFOutput,
+			vrfProof:  testVRFProof,
+		},
+		{
+			name: "should verify the lottery result for peer request",
+			params: &createKramaEngineParams{
+				cfgCallback: func(cfg *config.ConsensusConfig) {
+					cfg.EnableSortition = true
+				},
+			},
+			preTestFn: func(lk common.LotteryKey, engine *Engine) {
+				engine.lottery.cache.Add(
+					lk, ls,
+				)
+			},
+			cs: &ktypes.ClusterState{
+				Operator:   tests.RandomKramaIDs(t, 1)[0],
+				LotteryKey: createTestLotteryKey(t, common.NilHash, tests.RandomHash(t)),
+			},
+			req: ktypes.Request{
+				Msg: &ktypes.CanonicalICSRequest{
+					VrfOutput: testVRFOutput,
+					VrfProof:  testVRFProof,
+				},
+			},
+			expectedErr: common.ErrPublicKeyNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			engine := createTestKramaEngine(t, test.params)
+
+			if test.preTestFn != nil {
+				test.preTestFn(test.cs.LotteryKey, engine)
+			}
+
+			err := engine.checkOperatorEligibility(test.cs, test.req)
+			if test.expectedErr != nil {
+				require.Error(t, err)
+				require.Equal(t, test.expectedErr, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.vrfOutput, test.cs.VRFOutput)
+			require.Equal(t, test.vrfProof, test.cs.VRFProof)
+		})
+	}
+}
+
+func TestEngine_verifyOperatorLottery(t *testing.T) {
+	vault := createSortitionVault(t, true)
+
+	sk := new(blst.SecretKey)
+	sk.Deserialize(vault.GetConsensusPrivateKey().Bytes())
+
+	icsSeed := [32]byte{1, 2, 5, 6, 9, 70}
+	vrfPrivKey := vrf.NewVRFSigner(sk)
+	icsOutput, icsProof, _ := vrfPrivKey.Evaluate(icsSeed[:])
+
+	testcases := []struct {
+		name        string
+		icsOutput   [32]byte
+		icsProof    []byte
+		lk          common.LotteryKey
+		params      *createKramaEngineParams
+		preTestFn   func(engine *Engine)
+		expectedErr error
+	}{
+		{
+			name:      "valid vrf proof",
+			icsOutput: icsOutput,
+			icsProof:  icsProof,
+			lk:        createTestLotteryKey(t, common.NilHash, icsSeed),
+			params: &createKramaEngineParams{
+				vault: vault,
+				smCallback: func(sm *MockStateManager) {
+					updateTotalIncentives(t, sm, uint64(ExpectedSortionSize))
+					updateGuardianIncentive(t, sm, vault.KramaID(), 5)
+					sm.setPublicKey(vault.kramaID, vault.GetConsensusPrivateKey().GetPublicKeyInBytes())
+				},
+			},
+		},
+		{
+			name:      "should return error if operator is not eligible",
+			icsOutput: icsOutput,
+			icsProof:  icsProof,
+			lk:        createTestLotteryKey(t, common.NilHash, icsSeed),
+			preTestFn: func(engine *Engine) {
+				// add an ics operator with high priority
+				engine.lottery.AddICSOperatorInfo(
+					createTestLotteryKey(t, common.NilHash, icsSeed),
+					tests.RandomKramaID(t, 0), 8)
+			},
+			params: &createKramaEngineParams{
+				vault: vault,
+				smCallback: func(sm *MockStateManager) {
+					updateTotalIncentives(t, sm, uint64(ExpectedSortionSize))
+					updateGuardianIncentive(t, sm, vault.KramaID(), 5)
+					sm.setPublicKey(vault.kramaID, vault.GetConsensusPrivateKey().GetPublicKeyInBytes())
+				},
+			},
+			expectedErr: ErrOperatorNotEligible,
+		},
+		{
+			name:      "invalid vrf proof",
+			icsOutput: icsOutput,
+			icsProof:  icsProof[4:],
+			lk:        createTestLotteryKey(t, common.NilHash, common.NilHash),
+			params: &createKramaEngineParams{
+				vault: vault,
+				smCallback: func(sm *MockStateManager) {
+					sm.setPublicKey(vault.kramaID, vault.GetConsensusPrivateKey().GetPublicKeyInBytes())
+				},
+			},
+			expectedErr: errors.New("invalid VRF proof"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			engine := createTestKramaEngine(t, test.params)
+
+			if test.preTestFn != nil {
+				test.preTestFn(engine)
+			}
+
+			err := engine.verifyOperatorLottery(vault.kramaID, test.lk, test.icsOutput, test.icsProof)
+			if test.expectedErr != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, test.expectedErr, err.Error())
+
+				return
+			}
+
+			checkForOperatorInfo(t, engine, test.lk, vault.kramaID, 5)
+			require.NoError(t, err)
+		})
+	}
 }

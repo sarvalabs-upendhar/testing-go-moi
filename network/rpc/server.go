@@ -249,11 +249,6 @@ func (server *Server) ID() peer.ID {
 
 func (server *Server) handle(s *streamWrap) {
 	for {
-		server.logger.Trace(
-			"Handling remote RPC from",
-			"peer-ID", s.stream.Conn().RemotePeer(),
-		)
-
 		var svcID ServiceID
 
 		ctx := context.Background()

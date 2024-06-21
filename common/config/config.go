@@ -109,6 +109,9 @@ type ConsensusConfig struct {
 	EnableDebugMode       bool
 	MaxGossipPeers        int
 	MinGossipPeers        int
+	GenesisSeed           string
+	GenesisProof          string
+	EnableSortition       bool
 	GenesisTimestamp      uint64
 	GenesisFilePath       string
 }
@@ -166,6 +169,9 @@ func DefaultDevnetConfig(path string) *Config {
 			MaxGossipPeers:        5,
 			MinGossipPeers:        3,
 			GenesisFilePath:       path + "/genesis.json",
+			EnableSortition:       false,
+			GenesisProof:          DefaultGenesisProof,
+			GenesisSeed:           DefaultGenesisSeed,
 		},
 		DB: &DBConfig{
 			CleanDB:      false,

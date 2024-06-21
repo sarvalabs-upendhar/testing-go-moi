@@ -506,6 +506,7 @@ type CreateTesseractParams struct {
 
 	Ixns     common.Interactions
 	Receipts common.Receipts
+	Seed     [32]byte
 }
 
 type TesseractData struct {
@@ -656,6 +657,25 @@ func GetHashes(t *testing.T, count int) []common.Hash {
 	}
 
 	return hashes
+}
+
+func XORBytes(t *testing.T, arrays ...[32]byte) [32]byte {
+	t.Helper()
+
+	var result [32]byte
+	if len(arrays) == 0 {
+		return result
+	}
+
+	result = arrays[0]
+
+	for _, array := range arrays[1:] {
+		for i := 0; i < 32; i++ {
+			result[i] ^= array[i]
+		}
+	}
+
+	return result
 }
 
 type CreateIxParams struct {
@@ -1045,6 +1065,31 @@ func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID
 	require.NoError(t, err)
 
 	return kramaID, networkKey
+}
+
+// GetKramaIDAndConsensusKey returns kramaID and consensus key
+func GetKramaIDAndConsensusKey(t *testing.T, nthValidator uint32) (kramaid.KramaID, []byte) {
+	t.Helper()
+
+	var signKey [32]byte
+
+	_, err := rand.Read(signKey[:]) // fill sign key with random bytes
+	require.NoError(t, err)
+
+	// get private key and public key
+	privKeyBytes, moiPubBytes, err := GetPrivKeysForTest(t, signKey[:])
+	require.NoError(t, err)
+
+	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
+		1,
+		privKeyBytes[32:],
+		nthValidator,
+		hex.EncodeToString(moiPubBytes),
+		true,
+	)
+	require.NoError(t, err)
+
+	return kramaID, privKeyBytes[:32]
 }
 
 func GetRandomNumber(t *testing.T, max int) int {

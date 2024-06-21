@@ -16,8 +16,28 @@ const (
 	InvalidHash
 	InvalidInteractions
 	InternalError
+	NotEligible
 	Success
 )
+
+func (rc ICSResponseCode) String() string {
+	switch rc {
+	case SlotsFull:
+		return "SlotsFull"
+	case InvalidHash:
+		return "InvalidHash"
+	case InvalidInteractions:
+		return "InvalidInteractions"
+	case InternalError:
+		return "InternalError"
+	case NotEligible:
+		return "NotEligible"
+	case Success:
+		return "Success"
+	}
+
+	return "Invalid Status Code"
+}
 
 type ICSPayload interface {
 	Bytes() ([]byte, error)
@@ -70,6 +90,9 @@ type CanonicalICSRequest struct {
 	ObserverSet             []id.KramaID
 	RequiredRandomSetSize   uint32
 	RequiredObserverSetSize uint32
+	VrfOutput               [32]byte
+	VrfProof                []byte
+	ICSSeed                 [32]byte
 }
 
 func (ics CanonicalICSRequest) Bytes() ([]byte, error) {
@@ -119,12 +142,14 @@ func (ir *ICSRequest) FromBytes(bytes []byte) error {
 }
 
 type ICSResponse struct {
-	StatusCode ICSResponseCode
+	StatusCode    ICSResponseCode
+	OperatorsInfo []ICSOperatorInfo
 }
 
-func NewICSResponse(statusCode ICSResponseCode) *ICSResponse {
+func NewICSResponse(statusCode ICSResponseCode, operators []ICSOperatorInfo) *ICSResponse {
 	return &ICSResponse{
-		StatusCode: statusCode,
+		StatusCode:    statusCode,
+		OperatorsInfo: operators,
 	}
 }
 

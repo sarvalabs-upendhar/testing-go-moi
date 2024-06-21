@@ -20,16 +20,21 @@ const (
 	discoveryTimeout = 1 * time.Minute
 
 	// searchTimeout timeout is the timeout for locating a peer in the Kademlia DHT.
-	searchTimeout = 1 * time.Minute
+	searchTimeout = 2 * time.Minute
 
 	connectionTimeout = 1200 * time.Millisecond
 )
+
+type PeerInfo struct {
+	AddrInfo      peer.AddrInfo
+	IsInboundPeer bool
+}
 
 // DiscoveryService is a struct that manages peer discovery.
 type DiscoveryService struct {
 	server    *Server
 	discovery *discovery.RoutingDiscovery
-	peerChan  chan peer.AddrInfo
+	peerChan  chan PeerInfo
 }
 
 // NewDiscoveryService creates a new instance of DiscoveryService.
@@ -37,7 +42,7 @@ func NewDiscoveryService(server *Server) *DiscoveryService {
 	return &DiscoveryService{
 		server:    server,
 		discovery: discovery.NewRoutingDiscovery(server.kadDHT),
-		peerChan:  make(chan peer.AddrInfo),
+		peerChan:  make(chan PeerInfo, 1),
 	}
 }
 
@@ -99,8 +104,11 @@ func (ds *DiscoveryService) findPeers(ctx context.Context) error {
 		return err
 	}
 
-	for peerInfo := range peerChan {
-		ds.peerChan <- peerInfo
+	for addrInfo := range peerChan {
+		ds.peerChan <- PeerInfo{
+			AddrInfo:      addrInfo,
+			IsInboundPeer: false,
+		}
 	}
 
 	return nil
@@ -114,28 +122,28 @@ func (ds *DiscoveryService) handleDiscoveredPeers() {
 
 	for {
 		select {
-		case peerInfo := <-ds.peerChan:
+		case info := <-ds.peerChan:
 			// Skip the iteration if the peer address doesn't exist
-			if len(peerInfo.Addrs) == 0 {
+			if len(info.AddrInfo.Addrs) == 0 {
 				continue
 			}
 
 			// Skip iteration if the peer addresses points to self
-			if peerInfo.ID == ds.server.host.ID() {
+			if info.AddrInfo.ID == ds.server.host.ID() {
 				continue
 			}
 
 			// Skip iteration if the peer already exists in the peer set
-			if ds.server.Peers.ContainsPeer(peerInfo.ID) {
+			if ds.server.Peers.ContainsPeer(info.AddrInfo.ID) {
 				continue
 			}
 
 			// Skip the iteration if the peer is under cool down period
-			if ds.server.ConnManager.coolDownCache.Has(peerInfo.ID) {
+			if !info.IsInboundPeer && ds.server.ConnManager.coolDownCache.Has(info.AddrInfo.ID) {
 				continue
 			}
 
-			kramaID, rtt, err := ds.server.ConnManager.retrieveRTTAndRefreshSenatus(peerInfo)
+			kramaID, rtt, err := ds.server.ConnManager.retrieveRTTAndRefreshSenatus(info.AddrInfo)
 			if err != nil {
 				ds.server.logger.Error("Failed to retrieve rtt and refresh senatus", "err", err)
 
@@ -143,7 +151,7 @@ func (ds *DiscoveryService) handleDiscoveredPeers() {
 			}
 
 			if !ds.server.cfg.NoDiscovery {
-				err = ds.server.ConnManager.ConnectAndRegisterPeer(ds.server.ctx, peerInfo, kramaID, rtt)
+				err = ds.server.ConnManager.ConnectAndRegisterPeer(ds.server.ctx, info, kramaID, rtt)
 				if err != nil {
 					/*
 						Skip iteration on,
@@ -152,13 +160,17 @@ func (ds *DiscoveryService) handleDiscoveredPeers() {
 						* Error fetching ntq
 						* Handshake failure
 					*/
-					ds.server.ConnManager.coolDownCache.Add(peerInfo.ID)
+					ds.server.ConnManager.coolDownCache.Add(info.AddrInfo.ID)
 
 					if !errors.Is(err, common.ErrOutboundConnLimit) {
-						ds.server.logger.Trace("Failed to connect peer", "peerid", peerInfo.ID, "err", err)
+						ds.server.logger.Trace("Failed to connect peer", "peerid", info.AddrInfo.ID, "err", err)
 					}
 
 					continue
+				}
+
+				if ds.server.Peers.Len() > 3 {
+					ds.server.SendHelloMessage()
 				}
 			}
 
@@ -176,30 +188,34 @@ func (ds *DiscoveryService) handlePeerDiscoveryRequest() {
 	ds.server.logger.Info("Handling the discover peer event")
 
 	for event := range sub.Chan() {
-		event, ok := event.Data.(DiscoverPeerEvent)
-		if ok {
-			// Retrieve peer information from the DHT based on the event ID
-			peerInfo, err := ds.findPeer(ds.server.ctx, event.ID)
-			if err != nil {
-				ds.server.logger.Error("Failed to find peer in dht", event.ID)
+		dsPeerEvent, ok := event.Data.(DiscoverPeerEvent)
+		if !ok {
+			continue
+		}
 
-				continue
+		go func(p peer.ID) {
+			// Retrieve peer information from the DHT based on the event ID
+			peerInfo, err := ds.findPeer(ds.server.ctx, p)
+			if err != nil {
+				ds.server.logger.Error("Failed to find peer in dht", "err", err, "peer-id", p)
+
+				return
 			}
 
 			kramaID, rtt, err := ds.server.ConnManager.pingPeer(peerInfo)
 			if err != nil {
-				ds.server.logger.Error("Failed to ping peer", "err", err, "peer-id", event.ID)
+				ds.server.logger.Error("Failed to ping peer", "err", err, "peer-id", p)
 
-				continue
+				return
 			}
 
 			err = ds.server.ConnManager.refreshSenatus(peerInfo, kramaID, rtt)
 			if err != nil {
-				ds.server.logger.Error("Failed to refresh senatus", "err", err, "peer-id", event.ID)
+				ds.server.logger.Error("Failed to refresh senatus", "err", err, "peer-id", p)
 
-				continue
+				return
 			}
-		}
+		}(dsPeerEvent.ID)
 	}
 }
 

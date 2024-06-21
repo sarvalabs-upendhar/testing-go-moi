@@ -28,7 +28,6 @@ type Slot struct {
 	ICSSuccessChan                  chan bool
 	BftOutboundChan, BftInboundChan chan ConsensusMessage
 	ExecutionResp                   chan ExecutionResponse
-	CloseCh                         chan struct{}
 }
 
 func NewSlot(slotType SlotType, ps map[identifiers.Address]common.IxParticipant) *Slot {
@@ -39,7 +38,6 @@ func NewSlot(slotType SlotType, ps map[identifiers.Address]common.IxParticipant)
 		ExecutionResp:   make(chan ExecutionResponse),
 		BftOutboundChan: make(chan ConsensusMessage, 1000),
 		BftInboundChan:  make(chan ConsensusMessage, 1000),
-		CloseCh:         make(chan struct{}),
 	}
 }
 
@@ -75,6 +73,7 @@ func (info *Slot) UpdateClusterState(cs *ClusterState) {
 
 type Slots struct {
 	slots                   map[common.ClusterID]*Slot
+	activeIxns              map[common.Hash]common.ClusterID
 	availableOperatorSlots  int
 	availableValidatorSlots int
 	activeAccounts          map[identifiers.Address]common.ClusterID
@@ -87,6 +86,7 @@ func NewSlots(operatorSlots, validatorSlots int) *Slots {
 		availableOperatorSlots:  operatorSlots,
 		availableValidatorSlots: validatorSlots,
 		activeAccounts:          make(map[identifiers.Address]common.ClusterID, (operatorSlots+validatorSlots)*2),
+		activeIxns:              make(map[common.Hash]common.ClusterID),
 	}
 }
 
@@ -126,19 +126,19 @@ func (s *Slots) CreateSlot(
 	clusterID common.ClusterID,
 	req Request,
 	ps map[identifiers.Address]common.IxParticipant,
-) *Slot {
+) (*Slot, common.ClusterID) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	// if any one of the accounts are active return false
 	for addr := range ps {
 		if s.areAccountsActive(addr) {
-			return nil
+			return nil, s.activeIxns[req.Ixs[0].Hash()]
 		}
 	}
 
 	if !s.areSlotsAvailable(req.SlotType) {
-		return nil
+		return nil, ""
 	}
 
 	s.slots[clusterID] = NewSlot(req.SlotType, ps)
@@ -148,7 +148,9 @@ func (s *Slots) CreateSlot(
 		s.activeAccounts[addr] = clusterID
 	}
 
-	return s.slots[clusterID]
+	s.activeIxns[req.Ixs[0].Hash()] = clusterID
+
+	return s.slots[clusterID], ""
 }
 
 func (s *Slots) GetSlot(id common.ClusterID) *Slot {
@@ -175,16 +177,24 @@ func (s *Slots) areSlotsAvailable(slotType SlotType) bool {
 
 func (s *Slots) CleanupSlot(id common.ClusterID) {
 	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	defer func() {
+		s.mtx.Unlock()
+	}()
 
 	if slot, ok := s.slots[id]; ok {
 		for addr := range slot.ps {
 			delete(s.activeAccounts, addr)
 		}
 
-		close(slot.CloseCh)
 		close(slot.BftInboundChan)
 		delete(s.slots, id)
+
+		for ixHash, clusterID := range s.activeIxns {
+			if clusterID == id {
+				delete(s.activeIxns, ixHash)
+			}
+		}
+
 		s.incrementSlots(slot.SlotType)
 	}
 }

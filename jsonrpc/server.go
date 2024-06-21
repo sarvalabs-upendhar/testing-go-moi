@@ -119,17 +119,12 @@ func (s *Server) handleJSONRPCRequest(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	// log request
-	s.logger.Trace("handle", "request", string(data))
-
 	resp, err := s.dispatcher.handle(data)
 	if err != nil {
 		_, _ = w.Write([]byte(err.Error()))
 	} else {
 		_, _ = w.Write(resp)
 	}
-
-	s.logger.Debug("handle", "response", string(resp))
 }
 
 func (s *Server) handle(w http.ResponseWriter, req *http.Request) {

@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"crypto/rand"
 	"sync"
 	"time"
@@ -21,7 +22,7 @@ type ClusterState struct {
 	mtx                      sync.Mutex
 	selfID                   kramaid.KramaID
 	NodeSet                  *common.ICSNodeSet
-	Ixs                      common.Interactions
+	ixns                     common.Interactions
 	ClusterID                common.ClusterID
 	Operator                 kramaid.KramaID
 	BinaryHash, IdentityHash common.Hash
@@ -37,6 +38,9 @@ type ClusterState struct {
 	Transition               *gtypes.Transition
 	IsObserver               bool
 	quorum                   []uint32
+	VRFOutput                [32]byte
+	VRFProof                 []byte
+	LotteryKey               common.LotteryKey
 }
 
 // TODO: Check on locks
@@ -50,10 +54,11 @@ func NewICS(
 	selfID kramaid.KramaID,
 	participants map[identifiers.Address]*common.Participant,
 	nodeSet *common.ICSNodeSet,
+	lotteryKey common.LotteryKey,
 ) *ClusterState {
 	return &ClusterState{
 		NodeSet:          nodeSet,
-		Ixs:              ixs,
+		ixns:             ixs,
 		selfID:           selfID,
 		ClusterID:        clusterID,
 		Operator:         operator,
@@ -64,7 +69,12 @@ func NewICS(
 		RequestMsg:       icsReqMsg,
 		Participants:     participants,
 		Transition:       gtypes.NewTransition(nil),
+		LotteryKey:       lotteryKey,
 	}
+}
+
+func (cs *ClusterState) IxnHash() common.Hash {
+	return cs.ixns[0].Hash()
 }
 
 func (cs *ClusterState) SelfKramaID() kramaid.KramaID {
@@ -142,7 +152,7 @@ func (cs *ClusterState) NewHeights() map[identifiers.Address]uint64 {
 func (cs *ClusterState) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 	m := &ICSMetaInfo{
 		ClusterID:    string(cs.ClusterID),
-		IxHash:       cs.Ixs[0].Hash(), // Need to be improved
+		IxHash:       cs.ixns[0].Hash(), // Need to be improved
 		Operator:     string(cs.Operator),
 		ClusterSize:  cs.NodeSet.TotalNodes(),
 		BinaryHash:   cs.BinaryHash,
@@ -443,6 +453,10 @@ func (cs *ClusterState) ContextDelta() common.ContextDelta {
 	return contextDelta
 }
 
+func (cs *ClusterState) Ixns() common.Interactions {
+	return cs.ixns
+}
+
 type AccountInfo struct {
 	AccType       common.AccountType
 	Address       identifiers.Address
@@ -496,12 +510,13 @@ func (a AccountInfos) Address() []identifiers.Address {
 }
 
 type Request struct {
+	Ctx          context.Context
 	Ixs          common.Interactions
 	Msg          *CanonicalICSRequest
 	Operator     kramaid.KramaID
 	SlotType     SlotType
 	ReqTime      time.Time
-	ResponseChan chan error
+	ResponseChan chan Response
 }
 
 func (r *Request) IxHash() common.Hash {
@@ -519,6 +534,11 @@ func (r *Request) GetClusterID() (common.ClusterID, error) {
 	}
 }
 
+type Response struct {
+	Err  error
+	Data any
+}
+
 func generateClusterID() (common.ClusterID, error) {
 	randHash := make([]byte, 32)
 
@@ -527,4 +547,10 @@ func generateClusterID() (common.ClusterID, error) {
 	}
 
 	return common.ClusterID(base58.Encode(randHash)), nil
+}
+
+type ICSOperatorInfo struct {
+	KramaID  kramaid.KramaID
+	Priority uint64
+	Attempts uint8
 }

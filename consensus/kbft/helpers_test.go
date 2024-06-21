@@ -449,6 +449,7 @@ func createTestClusterInfo(
 		tests.RandomKramaIDs(t, 2)[1],
 		ps,
 		icsNodes,
+		common.LotteryKey{},
 	)
 
 	clusterInfo.Tesseract = common.NewTesseract(
