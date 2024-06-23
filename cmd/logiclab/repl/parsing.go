@@ -24,7 +24,6 @@ const (
 
 	TokenDesignated
 	TokenSender
-	TokenReceiver
 
 	TokenBig
 	TokenManifest
@@ -75,7 +74,6 @@ var keywords = map[string]symbolizer.TokenKind{
 
 	"designated": TokenDesignated,
 	"sender":     TokenSender,
-	"receiver":   TokenReceiver,
 
 	"big":      TokenBig,
 	"manifest": TokenManifest,

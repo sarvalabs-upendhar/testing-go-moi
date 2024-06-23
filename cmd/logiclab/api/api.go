@@ -31,7 +31,6 @@ func (api *API) Start(port int) error {
 	// Basic API Primitives
 	api.router.GET("/", api.getAPIMetadata)
 	api.router.DELETE("/", api.resetLabDB)
-	api.router.GET("/engines", api.getEngineRuntimes)
 
 	// Environment APIs
 	api.router.GET("/environments", api.getAllEnvironments)
@@ -45,9 +44,6 @@ func (api *API) Start(port int) error {
 	api.router.POST("/defaults/sender", api.setDefaultSender)
 	api.router.GET("/defaults/sender", api.getDefaultSender)
 	api.router.DELETE("/defaults/sender", api.wipeDefaultSender)
-	api.router.POST("/defaults/receiver", api.setDefaultReceiver)
-	api.router.GET("/defaults/receiver", api.getDefaultReceiver)
-	api.router.DELETE("/defaults/receiver", api.wipeDefaultReceiver)
 
 	// User Management APIs
 	api.router.GET("/users", api.getAllUsers)
@@ -82,20 +78,12 @@ func (api *API) Start(port int) error {
 }
 
 type VersionResponse struct {
-	Version string `json:"version"`
-	Website string `json:"website"`
+	Version string            `json:"version"`
+	Engines map[string]string `json:"engines"`
+	Website string            `json:"website"`
 }
 
 func (api *API) getAPIMetadata(c *gin.Context) {
-	version := VersionResponse{
-		Version: config.ProtocolVersion,
-		Website: core.DOCS,
-	}
-
-	c.JSON(http.StatusOK, Success().WithData(version))
-}
-
-func (api *API) getEngineRuntimes(c *gin.Context) {
 	engines := make(map[string]string)
 
 	for _, engine := range core.Engines {
@@ -108,7 +96,13 @@ func (api *API) getEngineRuntimes(c *gin.Context) {
 		engines[engine.String()] = "v" + runtime.Version()
 	}
 
-	c.JSON(http.StatusOK, Success().WithData(engines))
+	version := VersionResponse{
+		Version: config.ProtocolVersion,
+		Engines: engines,
+		Website: core.DOCS,
+	}
+
+	c.JSON(http.StatusOK, Success().WithData(version))
 }
 
 func (api *API) resetLabDB(c *gin.Context) {

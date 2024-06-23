@@ -30,7 +30,6 @@ type Environment struct {
 	Logics map[string]LogicMetadata
 
 	Sender   string
-	Receiver string
 	CallFuel uint64
 
 	Config ReplConfig
@@ -205,10 +204,6 @@ func (env *Environment) RemoveUser(username string) error {
 	if env.Sender == username {
 		env.Sender = ""
 	}
-	// If the user is assigned as default receiver, unset
-	if env.Receiver == username {
-		env.Receiver = ""
-	}
 
 	// Delete all entries prefixed with user's address
 	if err := env.database.PrefixDelete(db.AccountPrefix(env.ID, addr)); err != nil {
@@ -247,24 +242,6 @@ func (env *Environment) SetDefaultSender(username string) error {
 
 	// Update the environment
 	env.Sender = username
-
-	return nil
-}
-
-// SetDefaultReceiver sets a user as receiver with a given username.
-func (env *Environment) SetDefaultReceiver(username string) error {
-	// Check if user with the given username exists in the inventory
-	if !env.UserExists(username) {
-		return ErrUserNotFound
-	}
-
-	// Check if receiver has already been configured
-	if env.Receiver != "" {
-		return ErrReceiverAlreadyConf
-	}
-
-	// Update the environment
-	env.Receiver = username
 
 	return nil
 }

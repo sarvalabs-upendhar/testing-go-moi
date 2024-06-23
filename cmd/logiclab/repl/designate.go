@@ -40,14 +40,11 @@ func parseGetDesignated(parser *symbolizer.Parser) Command {
 	return func(repl *Repl) string {
 		var username string
 
-		switch actor.Kind {
-		case TokenSender:
-			username = repl.env.Sender
-		case TokenReceiver:
-			username = repl.env.Receiver
-		default:
+		if actor.Kind != TokenSender {
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
+
+		username = repl.env.Sender
 
 		return fmt.Sprintf("designated.%v: %v", actor.Literal, username)
 	}
@@ -74,17 +71,12 @@ func parseSetDesignated(parser *symbolizer.Parser) Command {
 	}
 
 	return func(repl *Repl) string {
-		switch actor.Kind {
-		case TokenSender:
-			if err = repl.env.SetDefaultSender(string(username)); err != nil {
-				return fmt.Sprintf("could not set user as sender: %v", err)
-			}
-		case TokenReceiver:
-			if err = repl.env.SetDefaultReceiver(string(username)); err != nil {
-				return fmt.Sprintf("could not set user as receiver: %v", err)
-			}
-		default:
+		if actor.Kind != TokenSender {
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
+		}
+
+		if err = repl.env.SetDefaultSender(string(username)); err != nil {
+			return fmt.Sprintf("could not set user as sender: %v", err)
 		}
 
 		return fmt.Sprintf("designated.%v: %v", actor.Literal, username)
@@ -100,14 +92,11 @@ func parseWipeDesignated(parser *symbolizer.Parser) Command {
 	actor := parser.Cursor()
 
 	return func(repl *Repl) string {
-		switch actor.Kind {
-		case TokenSender:
-			repl.env.Sender = ""
-		case TokenReceiver:
-			repl.env.Receiver = ""
-		default:
+		if actor.Kind != TokenSender {
 			return fmt.Sprintf("invalid designated parameter: %v", actor.Literal)
 		}
+
+		repl.env.Sender = ""
 
 		return fmt.Sprintf("wiped designated.%v", actor.Literal)
 	}

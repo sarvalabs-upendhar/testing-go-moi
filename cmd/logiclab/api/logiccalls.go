@@ -38,51 +38,80 @@ type LogicCallResponse struct {
 	Events []core.Event `json:"events"`
 }
 
-func (api *API) obtainInteractionDetails(c *gin.Context) (*core.Environment, *LogicCallRequest, *core.Logic) {
+type callDetails struct {
+	code  int
+	env   *core.Environment
+	req   *LogicCallRequest
+	logic *core.Logic
+	err   error
+}
+
+func (api *API) obtainCallDetails(header string, request *LogicCallRequest) callDetails {
 	// Retrieve the environment
-	env, exists, err := api.lab.GetEnvironment(c.GetHeader(HeaderLabEnv))
+	env, exists, err := api.lab.GetEnvironment(header)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return nil, nil, nil
+		return callDetails{
+			code: http.StatusInternalServerError,
+			err:  err,
+		}
 	}
 
 	// Environment was not found
 	if !exists {
-		c.JSON(http.StatusNotFound, Error(core.ErrEnvironmentNotFound))
-		return nil, nil, nil
-	}
-
-	request := new(LogicCallRequest)
-	// Call BindJSON to bind the received JSON to logicCall
-	if err = c.ShouldBindJSON(request); err != nil {
-		c.JSON(http.StatusBadRequest, Error(err))
-		return nil, nil, nil
+		return callDetails{
+			code: http.StatusNotFound,
+			err:  core.ErrEnvironmentNotFound,
+		}
 	}
 
 	// Extract the value for name of logic
 	logicName := request.Name
 	if logicName == "" {
-		c.JSON(http.StatusNotFound, Error(errors.New("logic not found")))
-		return nil, nil, nil
+		return callDetails{
+			code: http.StatusNotFound,
+			err:  errors.New("logic not found"),
+		}
 	}
 
 	// Retrieve the logic from the environment
 	logic, err := env.FetchLogic(logicName)
 	if err != nil {
 		if errors.Is(err, core.ErrLogicNotFound) {
-			c.JSON(http.StatusNotFound, Error(err))
-			return nil, nil, nil
+			return callDetails{
+				code: http.StatusNotFound,
+				err:  err,
+			}
 		}
 
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return nil, nil, nil //nolint:wsl
+		return callDetails{
+			code: http.StatusInternalServerError,
+			err:  err,
+		}
 	}
 
-	return env, request, logic
+	return callDetails{
+		code:  http.StatusOK,
+		env:   env,
+		req:   request,
+		logic: logic,
+	}
 }
 
 func (api *API) InteractLogicDeploy(c *gin.Context) {
-	env, request, logic := api.obtainInteractionDetails(c)
+	request := new(LogicCallRequest)
+	// Call BindJSON to bind the received JSON to logicCall
+	if err := c.ShouldBindJSON(request); err != nil {
+		c.JSON(http.StatusBadRequest, Error(err))
+	}
+
+	callInfo := api.obtainCallDetails(c.GetHeader(HeaderLabEnv), request)
+	if callInfo.err != nil {
+		c.JSON(callInfo.code, Error(callInfo.err))
+		return
+	}
+
+	env := callInfo.env
+	logic := callInfo.logic
 
 	// Perform deploy gating
 	// Only allow to deploy, if logic is not ready.
@@ -212,7 +241,20 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 }
 
 func (api *API) InteractLogicInvoke(c *gin.Context) {
-	env, request, logic := api.obtainInteractionDetails(c)
+	request := new(LogicCallRequest)
+	// Call BindJSON to bind the received JSON to logicCall
+	if err := c.ShouldBindJSON(request); err != nil {
+		c.JSON(http.StatusBadRequest, Error(err))
+	}
+
+	callInfo := api.obtainCallDetails(c.GetHeader(HeaderLabEnv), request)
+	if callInfo.err != nil {
+		c.JSON(callInfo.code, Error(callInfo.err))
+		return
+	}
+
+	env := callInfo.env
+	logic := callInfo.logic
 
 	// Perform deploy gating
 	// Only allow to invoke, if logic is ready.

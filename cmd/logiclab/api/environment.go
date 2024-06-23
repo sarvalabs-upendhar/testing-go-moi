@@ -27,9 +27,8 @@ type EnvironmentInventoryResponse struct {
 }
 
 type EnvironmentDefaults struct {
-	Sender   string `json:"sender"`
-	Receiver string `json:"receiver"`
-	Fuel     uint64 `json:"fuel"`
+	Sender string `json:"sender"`
+	Fuel   uint64 `json:"fuel"`
 }
 
 func (api *API) createEnvironment(c *gin.Context) {
@@ -85,9 +84,8 @@ func (api *API) getEnvironment(c *gin.Context) {
 		Users:  env.Users,
 		Logics: env.Logics,
 		Defaults: EnvironmentDefaults{
-			Sender:   env.Sender,
-			Receiver: env.Receiver,
-			Fuel:     env.CallFuel,
+			Sender: env.Sender,
+			Fuel:   env.CallFuel,
 		},
 	}))
 }
