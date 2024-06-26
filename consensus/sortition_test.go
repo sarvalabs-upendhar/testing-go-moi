@@ -58,7 +58,7 @@ func TestOperatorSortition_computeICSSeed(t *testing.T) {
 			},
 			icsSeeds: map[identifiers.Address][32]byte{
 				addresses[0]: seeds[0],
-				addresses[1]: seeds[1],
+				addresses[1]: seeds[0],
 			},
 			expected:      seeds[0], // Only addr0's seed is considered
 			expectedError: nil,

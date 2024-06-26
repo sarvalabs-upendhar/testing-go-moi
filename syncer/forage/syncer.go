@@ -2388,6 +2388,13 @@ func (s *Syncer) TesseractValidator(
 		return pubsub.ValidationReject, err
 	}
 
+	if err := s.mux.Post(utils.TSTrackerEvent{
+		TSHash:     ts.Hash(),
+		ExpiryTime: time.Now().Add(1 * time.Second),
+	}); err != nil {
+		s.logger.Error("Error posting tesseract tracker event", "ts-hash", ts.Hash())
+	}
+
 	// check db if tesseract already exists
 	exists := s.db.HasTesseract(ts.Hash())
 	if exists {

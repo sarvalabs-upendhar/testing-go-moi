@@ -562,8 +562,7 @@ func createTestChainManager(t *testing.T, params *CreateChainParams) *ChainManag
 	}
 
 	var (
-		db = mockDB()
-
+		db      = mockDB()
 		senatus = mockSenatus(t)
 		ixPool  = mockIXPool()
 		network = mockNetwork(t)

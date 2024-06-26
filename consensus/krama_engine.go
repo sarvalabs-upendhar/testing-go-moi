@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"math/big"
 	"os"
@@ -179,6 +180,7 @@ type Engine struct {
 	slotCloseCh       chan common.ClusterID
 	lottery           *OperatorSelection
 	signatureVerifier AggregatedSignatureVerifier
+	tsTracker         map[common.Hash]*utils.TSTrackerEvent
 }
 
 func NewKramaEngine(
@@ -234,6 +236,7 @@ func NewKramaEngine(
 		slotCloseCh:       make(chan common.ClusterID),
 		signatureVerifier: verifier,
 		lottery:           operatorSortition,
+		tsTracker:         make(map[common.Hash]*utils.TSTrackerEvent),
 	}
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
@@ -565,6 +568,9 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 }
 
 func (k *Engine) Start() {
+	eventSub := k.mux.Subscribe(utils.TSTrackerEvent{})
+	go k.handleTSTracker(eventSub)
+
 	go k.minter()
 
 	go k.executionRoutine()
@@ -1284,8 +1290,20 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		return err
 	}
 
-	if err = k.transport.BroadcastTesseract(msg); err != nil {
-		k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-id", clusterID)
+	// only operator broadcasts the tesseract and other cluster nodes broadcast it if the tesseract isn't received
+	// from operator before expiry time.
+	if tesseract.Operator() == string(k.selfID) {
+		if err = k.transport.BroadcastTesseract(msg); err != nil {
+			k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-id", clusterID)
+		}
+	} else {
+		if err := k.mux.Post(utils.TSTrackerEvent{
+			TSHash:     tesseract.Hash(),
+			Msg:        msg,
+			ExpiryTime: time.Now().Add(300 * time.Millisecond),
+		}); err != nil {
+			k.logger.Error("Error posting tesseract tracker event", "ts-hash", tesseract.Hash())
+		}
 	}
 
 	for _, addr := range tesseract.Addresses() {
@@ -1293,6 +1311,51 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 	}
 
 	return nil
+}
+
+// handleTSTracker adds a received event to the map if its pair doesn't exist
+// and removes it if its pair already exists.
+// It wakes up once every 300ms, checks if the event has expired, and removes it from the map if it has.
+// If the event has the tesseract, it will be broadcasted as the operator's broadcasted tesseract didn't reach us.
+func (k *Engine) handleTSTracker(eventSub *utils.Subscription) {
+	for {
+		select {
+		case <-k.ctx.Done():
+			return
+
+		case <-time.After(300 * time.Millisecond):
+			now := time.Now()
+			for _, event := range k.tsTracker {
+				if now.After(event.ExpiryTime) {
+					if event.Msg != nil {
+						if err := k.transport.BroadcastTesseract(event.Msg); err != nil {
+							k.logger.Error("Error broadcasting tesseract", "ts-hash", event.TSHash)
+						}
+					}
+
+					delete(k.tsTracker, event.TSHash)
+				}
+			}
+
+		case msg, ok := <-eventSub.Chan():
+			if ok {
+				event, ok := msg.Data.(utils.TSTrackerEvent)
+				if !ok {
+					log.Println("Error casting event data to TSTrackerEvent")
+
+					continue
+				}
+
+				if _, ok := k.tsTracker[event.TSHash]; ok {
+					delete(k.tsTracker, event.TSHash)
+
+					continue
+				}
+
+				k.tsTracker[event.TSHash] = &event
+			}
+		}
+	}
 }
 
 func generatePoXtData(state *ktypes.ClusterState) common.PoXtData {

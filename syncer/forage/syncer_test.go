@@ -1267,17 +1267,16 @@ func TestTesseractValidator(t *testing.T) {
 	}
 
 	server := createMultipleServers(t, 1, paramsMap)
-	testPM, _ := createPersistenceManager(t, ctx)
-	mockLogger := hclog.NewNullLogger()
-	mockState := newMockStateManager(nil)
+	pm, _ := createPersistenceManager(t, ctx)
+	sm := newMockStateManager(nil)
 
-	testSyncer := NewTestSyncerForValidation(
+	s := NewTestSyncerForValidation(
 		ctx,
 		defaultSyncerConfig(),
 		server[0],
-		testPM,
-		mockLogger,
-		mockState,
+		pm,
+		hclog.NewNullLogger(),
+		sm,
 	)
 
 	testTesseract := tests.CreateTesseract(t, nil)
@@ -1286,7 +1285,7 @@ func TestTesseractValidator(t *testing.T) {
 	rawTS, err := testTesseract.Canonical().Bytes()
 	require.NoError(t, err)
 
-	kramaID := testSyncer.network.GetKramaID()
+	kramaID := s.network.GetKramaID()
 	peerID, err := kramaID.DecodedPeerID()
 	require.NoError(t, err)
 
@@ -1327,10 +1326,10 @@ func TestTesseractValidator(t *testing.T) {
 			name:    "Valid pubsub message",
 			msgData: rawData,
 			preTestFn: func(tessract *common.Tesseract) {
-				mockState.setTSSeal(tessract)
+				sm.setTSSeal(tessract)
 			},
 			postTestFn: func(tesseract *common.Tesseract) {
-				mockState.removeTSSeal(tesseract)
+				sm.removeTSSeal(tesseract)
 			},
 			expectedResponse: pubsub.ValidationAccept,
 		},
@@ -1362,13 +1361,13 @@ func TestTesseractValidator(t *testing.T) {
 			msgData: rawData,
 			preTestFn: func(tesseract *common.Tesseract) {
 				// set mock tesseract seal
-				mockState.setTSSeal(tesseract)
+				sm.setTSSeal(tesseract)
 
 				// Storing tesseract in Cache
-				testSyncer.tesseractRegistry.Add(tesseract.Hash())
+				s.tesseractRegistry.Add(tesseract.Hash())
 			},
 			postTestFn: func(tesseract *common.Tesseract) {
-				mockState.removeTSSeal(tesseract)
+				sm.removeTSSeal(tesseract)
 			},
 			expectedResponse: pubsub.ValidationIgnore,
 		},
@@ -1377,14 +1376,14 @@ func TestTesseractValidator(t *testing.T) {
 			msgData: rawData,
 			preTestFn: func(tesseract *common.Tesseract) {
 				// set mock tesseract seal
-				mockState.setTSSeal(tesseract)
+				sm.setTSSeal(tesseract)
 
 				// Storing tesseract in DB
-				err = testPM.SetTesseract(tesseract.Hash(), rawTS)
+				err = pm.SetTesseract(tesseract.Hash(), rawTS)
 				require.NoError(t, err)
 			},
 			postTestFn: func(tesseract *common.Tesseract) {
-				mockState.removeTSSeal(tesseract)
+				sm.removeTSSeal(tesseract)
 			},
 			expectedResponse: pubsub.ValidationIgnore,
 		},
@@ -1403,7 +1402,7 @@ func TestTesseractValidator(t *testing.T) {
 				testcase.preTestFn(testTesseract)
 			}
 
-			resp, err := testSyncer.TesseractValidator(context.Background(), "", msg)
+			resp, err := s.TesseractValidator(context.Background(), "", msg)
 
 			if testcase.expectedError != "" {
 				require.ErrorContains(t, err, testcase.expectedError)
