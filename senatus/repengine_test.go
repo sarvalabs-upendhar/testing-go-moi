@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -747,7 +746,7 @@ func TestReputationEngine_TotalPeerCount(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			reputationEngine, mockDB := createTestReputationEngine(t)
+			reputationEngine, _ := createTestReputationEngine(t)
 
 			if test.preTestFn != nil {
 				test.preTestFn(reputationEngine)
@@ -756,11 +755,6 @@ func TestReputationEngine_TotalPeerCount(t *testing.T) {
 			count := reputationEngine.TotalPeerCount()
 
 			require.Equal(t, test.expectedCount, count)
-
-			// peer count should match with the value in the db
-			dbPeerCount, err := mockDB.TotalPeersCount()
-			require.NoError(t, err)
-			require.Equal(t, test.expectedCount, dbPeerCount)
 		})
 	}
 }
@@ -1028,21 +1022,14 @@ func TestReputationEngine_LoadPeerCountWhileSetup(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name: "Failed to read senatus peer count from DB",
-			preTestFn: func(db *MockDB) {
-				db.peerCountHook = func() error {
-					return errors.New("db init failed")
-				}
-			},
-			expectedError: errors.New("db init failed"),
-		},
-		{
 			name: "PeerCount entry exists in DB",
 			preTestFn: func(db *MockDB) {
-				db.peerCount = 10
+				db.setNodeInfo(t, tests.RandomPeerID(t), &NodeMetaInfo{})
+				db.setNodeInfo(t, tests.RandomPeerID(t), &NodeMetaInfo{})
+				db.setNodeInfo(t, tests.RandomPeerID(t), &NodeMetaInfo{})
 			},
 			expectedError: nil,
-			expectedCount: 11, // This is 10+1, as self node info is added to senatus
+			expectedCount: 4, // This is 3+1, as self node info is added to senatus
 		},
 		{
 			name: "PeerCount entry doesn't exists in DB",

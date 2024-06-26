@@ -32,8 +32,6 @@ type senatusStore interface {
 	ReadEntry(key []byte) ([]byte, error)
 	NewBatchWriter() db.BatchWriter
 	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *common.DBEntry, error)
-	UpdatePeerCount(count uint64) error
-	TotalPeersCount() (uint64, error)
 }
 
 type stateManager interface {
@@ -76,11 +74,6 @@ func NewReputationEngine(
 		return nil, errors.Wrap(err, "reputation engine failed")
 	}
 
-	totalPeers, err := db.TotalPeersCount()
-	if err != nil && !errors.Is(err, common.ErrKeyNotFound) {
-		return nil, errors.Wrap(err, "failed to fetch total peers count")
-	}
-
 	ctx, cancel := context.WithCancel(context.Background())
 
 	r := &ReputationEngine{
@@ -94,8 +87,10 @@ func NewReputationEngine(
 		dirtyEntries:      make(map[peer.ID]*NodeMetaInfo),
 		eventSubscription: subscribeToEvent(mux),
 		State:             state,
+	}
 
-		peerCount: totalPeers,
+	if err = r.LoadPeerCountFromDB(); err != nil {
+		return nil, err
 	}
 
 	// Listen to system account sync event
@@ -189,10 +184,6 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 		info = data
 
 		r.UpdatePeerCount(1)
-
-		if err = r.db.UpdatePeerCount(1); err != nil {
-			return err
-		}
 	}
 
 	r.dirtyLock.Lock()
@@ -516,6 +507,22 @@ func (r *ReputationEngine) cleanUpDirtyStorage() {
 	defer r.dirtyLock.Unlock()
 
 	r.dirtyEntries = make(map[peer.ID]*NodeMetaInfo)
+}
+
+func (r *ReputationEngine) LoadPeerCountFromDB() error {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+
+	peerInfos, err := r.StreamPeerInfos(r.ctx)
+	if err != nil {
+		return err
+	}
+
+	for range peerInfos {
+		r.peerCount++
+	}
+
+	return nil
 }
 
 func (r *ReputationEngine) Start() error {

@@ -65,7 +65,7 @@ func (db *MockDB) TotalPeersCount() (uint64, error) {
 }
 
 func (db *MockDB) UpdatePeerCount(count uint64) error {
-	db.peerCount += count
+	db.peerCount = count
 
 	return nil
 }
