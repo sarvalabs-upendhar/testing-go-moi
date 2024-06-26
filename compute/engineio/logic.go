@@ -1,12 +1,31 @@
 package engineio
 
 import (
-	"testing"
-
 	"github.com/manishmeganathan/depgraph"
 
 	"github.com/sarvalabs/go-moi-identifiers"
 )
+
+type (
+	// ElementKind is a type alias for an element kind string
+	ElementKind = string
+	// ElementPtr is a type alias for an element pointer
+	ElementPtr = uint64
+)
+
+// Classdef represents a class definition in a Logic.
+// It can be resolved from a string by looking it up on the Logic
+type Classdef struct {
+	Ptr  ElementPtr `json:"ptr" yaml:"ptr"`
+	Name string     `json:"name" yaml:"name"`
+}
+
+// Eventdef represents an event definition in a Logic.
+// It can be resolved from a string by looking it up on the Logic
+type Eventdef struct {
+	Ptr  ElementPtr `json:"ptr" yaml:"ptr"`
+	Name string     `json:"name" yaml:"name"`
+}
 
 // LogicDescriptor is a container type returned by the CompileManifest method of EngineRuntime.
 // It allows different engine runtime to have a unified output standard when compiling manifests.
@@ -31,6 +50,19 @@ type LogicDescriptor struct {
 	Classdefs map[string]Classdef
 
 	Eventdefs map[string]Eventdef
+}
+
+// LogicElement represents a generic container for a logic Element.
+// It is uniquely identified with a group name and an index pointer.
+// Engine implementations are responsible for handling
+// namespacing and index conflicts within a group.
+type LogicElement struct {
+	// Kind represents some type identifier for the element
+	Kind ElementKind
+	// Deps represents the relational neighbours of the element
+	Deps []ElementPtr
+	// Data represents the data container for the element
+	Data []byte
 }
 
 // LogicDriver is an interface for logic that can be executed within an Engine.
@@ -76,110 +108,4 @@ type LogicDriver interface {
 	// GetElementDeps returns the aggregated dependencies of an element pointer.
 	// The aggregation includes all sub-dependencies recursively.
 	GetElementDeps(ElementPtr) []ElementPtr
-}
-
-func NewDebugLogicDriver(t *testing.T, address identifiers.Address, descriptor LogicDescriptor) LogicDriver {
-	t.Helper()
-
-	// Generate the LogicID from the payload
-	logicID := identifiers.NewLogicIDv0(
-		descriptor.Persistent != nil,
-		descriptor.Ephemeral != nil,
-		descriptor.Interactable, false,
-		0, address,
-	)
-
-	return debugLogicDriver{
-		id:       logicID,
-		kind:     descriptor.Engine,
-		manifest: descriptor.ManifestHash,
-
-		sealed:     false,
-		persistent: descriptor.Persistent,
-		ephemeral:  descriptor.Ephemeral,
-
-		dependencies: descriptor.Depgraph,
-		elements:     descriptor.Elements,
-
-		callsites: descriptor.Callsites,
-		classdefs: descriptor.Classdefs,
-
-		eventdefs: descriptor.Eventdefs,
-	}
-}
-
-type debugLogicDriver struct {
-	id       identifiers.LogicID
-	kind     EngineKind
-	manifest [32]byte
-
-	sealed     bool
-	persistent *uint64
-	ephemeral  *uint64
-
-	elements     map[ElementPtr]*LogicElement
-	dependencies *depgraph.DependencyGraph
-
-	callsites map[string]Callsite
-	classdefs map[string]Classdef
-
-	eventdefs map[string]Eventdef
-}
-
-func (logic debugLogicDriver) LogicID() identifiers.LogicID { return logic.id }
-func (logic debugLogicDriver) Engine() EngineKind           { return logic.kind }
-func (logic debugLogicDriver) ManifestHash() [32]byte       { return logic.manifest }
-func (logic debugLogicDriver) IsSealed() bool               { return logic.sealed }
-
-func (logic debugLogicDriver) IsInteractable() bool {
-	identifier, err := logic.id.Identifier()
-	if err != nil {
-		panic("failed to fetch logic identifier")
-	}
-
-	return identifier.HasInteractableSites()
-}
-
-func (logic debugLogicDriver) PersistentState() (ElementPtr, bool) {
-	if logic.persistent == nil {
-		return 0, false
-	}
-
-	return *logic.persistent, true
-}
-
-func (logic debugLogicDriver) EphemeralState() (ElementPtr, bool) {
-	if logic.ephemeral == nil {
-		return 0, false
-	}
-
-	return *logic.ephemeral, true
-}
-
-func (logic debugLogicDriver) GetCallsite(name string) (Callsite, bool) {
-	callsite, ok := logic.callsites[name]
-
-	return callsite, ok
-}
-
-func (logic debugLogicDriver) GetClassdef(name string) (Classdef, bool) {
-	classdef, ok := logic.classdefs[name]
-
-	return classdef, ok
-}
-
-func (logic debugLogicDriver) GetEventdef(name string) (Eventdef, bool) {
-	eventdef, ok := logic.eventdefs[name]
-
-	return eventdef, ok
-}
-
-func (logic debugLogicDriver) GetElement(ptr ElementPtr) (*LogicElement, bool) {
-	element, ok := logic.elements[ptr]
-
-	return element, ok
-}
-
-func (logic debugLogicDriver) GetElementDeps(ptr ElementPtr) []ElementPtr {
-	return logic.dependencies.Dependencies(ptr)
 }

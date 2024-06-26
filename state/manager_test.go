@@ -5,16 +5,14 @@ import (
 	"errors"
 	"testing"
 
-	iradix "github.com/hashicorp/go-immutable-radix"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-
 	"github.com/decred/dcrd/crypto/blake256"
+	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/hashicorp/golang-lru"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -456,73 +454,6 @@ func TestStateManager_GetMetaContextObject(t *testing.T) {
 			obj, ok := sm.cache.Get(test.hash)
 			require.True(t, ok)
 			require.Equal(t, test.ctx, obj)
-		})
-	}
-}
-
-func TestStateManager_GetICSSeed(t *testing.T) {
-	addrWithoutDBEntry := tests.RandomAddress(t)
-	addrWithoutTS := tests.RandomAddress(t)
-	addrWithTS := tests.RandomAddress(t)
-
-	tsHash := tests.RandomHash(t)
-	seed := tests.RandomHash(t)
-
-	smParams := &createStateManagerParams{
-		dbCallback: func(db *MockDB) {
-			db.setAccountMetaInfo(&common.AccountMetaInfo{
-				Address:       addrWithoutTS,
-				TesseractHash: tests.RandomHash(t),
-			})
-			db.setAccountMetaInfo(&common.AccountMetaInfo{
-				Address:       addrWithTS,
-				TesseractHash: tsHash,
-			})
-		},
-		smCallBack: func(sm *StateManager) {
-			sm.cache.Add(tsHash, tests.CreateTesseract(t, &tests.CreateTesseractParams{
-				TSDataCallback: func(ts *tests.TesseractData) {
-					ts.ConsensusInfo.ICSSeed = seed
-				},
-			}))
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	testcases := []struct {
-		name          string
-		addr          identifiers.Address
-		expectedSeed  [32]byte
-		expectedError error
-	}{
-		{
-			name:          "Account meta info doesn't exist",
-			addr:          addrWithoutDBEntry,
-			expectedError: common.ErrKeyNotFound,
-		},
-		{
-			name:          "Tesseract doesn't exist",
-			addr:          addrWithoutTS,
-			expectedError: common.ErrFetchingTesseract,
-		},
-		{
-			name:         "should return seed for existing tesseract",
-			addr:         addrWithTS,
-			expectedSeed: seed,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			s, err := sm.GetICSSeed(test.addr)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.Equal(t, seed, common.BytesToHash(s[:]))
 		})
 	}
 }
@@ -1774,7 +1705,7 @@ func TestStateManager_GetStorageEntry(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			storageEntry, err := sm.GetStorageEntry(test.logicID, test.slot, test.stateHash)
+			storageEntry, err := sm.GetPersistentStorageEntry(test.logicID, test.slot, test.stateHash)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1989,7 +1920,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 
 	engineio.RegisterEngine(pisa.NewEngine())
 
-	manifest, err := engineio.NewManifestFromFile("../compute/manifests/tokenledger.yaml")
+	manifest, err := engineio.NewManifestFromFile("../compute/exlogics/tokenledger/tokenledger.yaml")
 	require.NoError(t, err)
 
 	encodedManifest, err := manifest.Encode(common.POLO)
@@ -2604,7 +2535,7 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 				ObserverSet: obj[5].Ids,
 				Responses:   createRandomArrayOfBits(t, 6),
 			},
-			expectedError: errors.New("logic storage tree not found"),
+			expectedError: common.ErrLogicStorageTreeNotFound,
 		},
 	}
 

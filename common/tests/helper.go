@@ -19,10 +19,11 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -912,7 +913,7 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 	t.Helper()
 
 	// create dummy logs
-	logs := &common.Log{
+	log := common.Log{
 		Address: RandomAddress(t),
 		LogicID: GetLogicID(t, RandomAddress(t)),
 		Topics:  GetHashes(t, 1),
@@ -922,7 +923,7 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 	receipt := &common.Receipt{
 		IxType:    2,
 		IxHash:    RandomHash(t),
-		Logs:      []*common.Log{logs},
+		Logs:      []common.Log{log},
 		Status:    common.ReceiptStateReverted,
 		FuelUsed:  99,
 		ExtraData: []byte{1, 2},

@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-hclog"
+	"github.com/stretchr/testify/require"
+
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
-	"github.com/stretchr/testify/require"
 )
 
 type MessageParams struct {
@@ -354,7 +355,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 	hashes := tests.GetHashes(t, 2)
 
 	// create dummy logs
-	log := &common.Log{
+	log := common.Log{
 		Address: address,
 		LogicID: logic,
 		Topics:  hashes,
@@ -363,7 +364,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 
 	// create dummy receipts with logs
 	receipts := createReceipt(t, func(r *common.Receipt) {
-		r.Logs = []*common.Log{
+		r.Logs = []common.Log{
 			log,
 			{
 				Address: address,
@@ -388,7 +389,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 		name              string
 		filter            *LogQuery
 		expectedTesseract *common.Tesseract
-		expectedLogs      []*common.Log
+		expectedLogs      []common.Log
 		expectedError     error
 	}{
 		{
@@ -404,7 +405,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 				},
 			},
 			expectedTesseract: tesseract,
-			expectedLogs:      []*common.Log{log},
+			expectedLogs:      []common.Log{log},
 		},
 	}
 
@@ -436,7 +437,7 @@ func TestGetLogsForQuery(t *testing.T) {
 	logic := tests.GetLogicID(t, address)
 	hashes := tests.GetHashes(t, 2)
 
-	log := &common.Log{
+	log := common.Log{
 		Address: address,
 		LogicID: logic,
 		Topics:  hashes,
@@ -444,7 +445,7 @@ func TestGetLogsForQuery(t *testing.T) {
 	}
 
 	receipts := createReceipt(t, func(r *common.Receipt) {
-		r.Logs = []*common.Log{
+		r.Logs = []common.Log{
 			log,
 			{
 				Address: address,
@@ -496,7 +497,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		name               string
 		filter             LogQuery
 		expectedTesseracts []*common.Tesseract
-		expectedLogs       []*common.Log
+		expectedLogs       []common.Log
 		expectedError      error
 	}{
 		{
@@ -512,7 +513,7 @@ func TestGetLogsForQuery(t *testing.T) {
 				},
 			},
 			expectedTesseracts: tesseracts,
-			expectedLogs:       []*common.Log{log, log},
+			expectedLogs:       []common.Log{log, log},
 		},
 		{
 			name: "invalid start height",

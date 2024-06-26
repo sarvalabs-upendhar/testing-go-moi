@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
@@ -267,6 +268,35 @@ func (env *Environment) LookupAccount(addr identifiers.Address) (AccountKind, st
 	}
 
 	return account.Kind, account.Name
+}
+
+func (env *Environment) Enlisted(addr identifiers.Address, logic identifiers.LogicID) bool {
+	// Check if the address exists in the environment
+	if !env.AddrExists(addr) {
+		return false
+	}
+
+	// Get the raw account details from the db
+	ok, err := env.database.Has(db.LogicStoragePrefix(env.ID, addr, logic))
+	if err != nil {
+		return false
+	}
+
+	return ok
+}
+
+func (env *Environment) Enlist(addr identifiers.Address, logic identifiers.LogicID) error {
+	// Check if the address exists in the environment
+	if !env.AddrExists(addr) {
+		return errors.New("user already enlisted")
+	}
+
+	// Get the raw account details from the db
+	if err := env.database.Set(db.LogicStoragePrefix(env.ID, addr, logic), []byte{2}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // IncrementNonce increases the nonce by 1.

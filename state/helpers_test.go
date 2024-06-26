@@ -7,9 +7,10 @@ import (
 	"reflect"
 	"testing"
 
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
-	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/common/config"
 
@@ -21,11 +22,12 @@ import (
 	"github.com/manishmeganathan/depgraph"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -1995,10 +1997,10 @@ func getEntries(t *testing.T, count int) ([][]byte, [][]byte) {
 	return getRandomBytes(t, count), getRandomBytes(t, count)
 }
 
-func getDirtyEntries(t *testing.T, count int) LogicStorageObject {
+func getDirtyEntries(t *testing.T, count int) Storage {
 	t.Helper()
 
-	d := make(LogicStorageObject, count)
+	d := make(Storage, count)
 
 	for i := 0; i < count; i++ {
 		d[tests.RandomHash(t).Hex()] = tests.RandomAddress(t).Bytes()

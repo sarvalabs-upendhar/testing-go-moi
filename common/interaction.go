@@ -5,6 +5,7 @@ import (
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
@@ -214,7 +215,7 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 			},
 		}
 
-	case IxLogicDeploy, IxLogicInvoke:
+	case IxLogicDeploy, IxLogicInvoke, IxLogicEnlist:
 		logicPayload := new(LogicPayload)
 		if err = logicPayload.FromBytes(ixData.Input.Payload); err != nil {
 			return nil, err
@@ -289,7 +290,7 @@ func (ix Interaction) Receiver() identifiers.Address {
 		return payload.Mint.Asset.Address()
 	case IxLogicDeploy:
 		return NewAccountAddress(ix.Nonce(), ix.Sender())
-	case IxLogicInvoke:
+	case IxLogicInvoke, IxLogicEnlist:
 		payload, err := ix.GetLogicPayload()
 		if err != nil {
 			panic(err)

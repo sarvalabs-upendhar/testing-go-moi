@@ -12,10 +12,11 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/peer"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
+
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/bgclient"
 	"github.com/sarvalabs/go-moi/common"
@@ -352,4 +353,30 @@ func CheckIfNodesInitialSyncDone(t *testing.T, validatorCount int, jsonRPCUrls [
 
 	// Wait for all goroutines to finish
 	wg.Wait()
+}
+
+type StorageReader struct {
+	client  *Client
+	logicID identifiers.LogicID
+	address identifiers.Address
+}
+
+func (c *Client) NewStorageReader(address identifiers.Address, logicID identifiers.LogicID) StorageReader {
+	return StorageReader{client: c, logicID: logicID, address: address}
+}
+
+func (reader StorageReader) GetStorageEntry(key []byte) ([]byte, error) {
+	content, err := reader.client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
+		LogicID:    reader.logicID,
+		Address:    reader.address,
+		StorageKey: key,
+		Options: rpcargs.TesseractNumberOrHash{
+			TesseractNumber: &rpcargs.LatestTesseractHeight,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return content, nil
 }

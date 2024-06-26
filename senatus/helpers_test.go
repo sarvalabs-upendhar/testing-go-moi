@@ -149,7 +149,7 @@ func (m *MockStateManager) setStorageEntry(
 	m.logicStorage[string(logicID)] = store
 }
 
-func (m *MockStateManager) GetStorageEntry(
+func (m *MockStateManager) GetPersistentStorageEntry(
 	logicID identifiers.LogicID,
 	slot []byte,
 	state common.Hash,

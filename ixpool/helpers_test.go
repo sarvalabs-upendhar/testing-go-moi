@@ -8,8 +8,9 @@ import (
 	"github.com/sarvalabs/go-moi/state"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -205,6 +206,19 @@ type MockExecutionManager struct {
 	validateLogicInvokeHook func() error
 }
 
+func (ms *MockExecutionManager) ValidateLogicInvoke(ix *common.Interaction, calleracc, logicacc *state.Object) error {
+	if ms.validateLogicInvokeHook != nil {
+		return ms.validateLogicInvokeHook()
+	}
+
+	return nil
+}
+
+func (ms *MockExecutionManager) ValidateLogicEnlist(ix *common.Interaction, calleracc, logicacc *state.Object) error {
+	// TODO implement me
+	panic("implement me")
+}
+
 func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
 	t.Helper()
 
@@ -213,17 +227,9 @@ func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
 	return exec
 }
 
-func (ms *MockExecutionManager) ValidateLogicDeploy(ix *common.Interaction, data []byte) error {
+func (ms *MockExecutionManager) ValidateLogicDeploy(ix *common.Interaction) error {
 	if ms.validateLogicDeployHook != nil {
 		return ms.validateLogicDeployHook()
-	}
-
-	return nil
-}
-
-func (ms *MockExecutionManager) ValidateLogicInvoke(receiverObject *state.Object, ix *common.Interaction) error {
-	if ms.validateLogicInvokeHook != nil {
-		return ms.validateLogicInvokeHook()
 	}
 
 	return nil

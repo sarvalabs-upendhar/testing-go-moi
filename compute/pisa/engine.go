@@ -2,10 +2,11 @@ package pisa
 
 import (
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-pisa"
-	"github.com/sarvalabs/go-pisa/exception"
+	"github.com/sarvalabs/go-pisa/drivers"
 	"github.com/sarvalabs/go-pisa/values"
 	"github.com/sarvalabs/go-polo"
 )
@@ -63,9 +64,10 @@ func (engine Engine) SpawnInstance(
 	return &Instance{
 		logicIO: logic,
 		internal: pisa.NewInstance(
-			fuel, engine.library,
+			engine.library,
 			Logic{logic},
 			newState(state),
+			drivers.NewMeteredFuelTank(fuel),
 			env, engine.crypto,
 			EventStream{event},
 		),
@@ -99,13 +101,14 @@ func (engine Engine) CompileManifest(
 }
 
 func (engine Engine) DecodeErrorResult(data []byte) (engineio.ErrorResult, error) {
-	// Create a new Error object
-	except := new(exception.Exception)
-	if err := polo.Depolorize(except, data); err != nil {
+	// Create a new ErrorResult object
+	var result pisa.ErrorResult
+	// Decode the error result
+	if err := polo.Depolorize(&result, data); err != nil {
 		return nil, err
 	}
 
-	return Error{except: *except}, nil
+	return Error{err: result}, nil
 }
 
 // ValidateCalldata verifies the given engineio.IxnDriver for an engineio.LogicDriver.
@@ -130,21 +133,23 @@ func (engine Engine) ValidateCalldata(logic engineio.LogicDriver, ixn engineio.I
 
 	// Check that the callsite kind and ixn type of the IxnObject are compatible
 	switch callsite.Kind {
-	case engineio.CallsiteInvokable:
+	case engineio.CallsiteInvoke:
 		if ixn.Type() != common.IxLogicInvoke {
 			return errors.Errorf("invalid callsite '%v' for IxnLogicInvoke", ixn.Callsite())
 		}
 
-	case engineio.CallsiteDeployer:
+	case engineio.CallsiteDeploy:
 		if ixn.Type() != common.IxLogicDeploy {
 			return errors.Errorf("invalid callsite '%v' for IxnLogicDeploy", ixn.Callsite())
 		}
 
-	case engineio.CallsiteInteractable, engineio.CallsiteEnlister:
-		return errors.Errorf("unsupported callsite kind '%v' for callsite '%v'", callsite.Kind, ixn.Callsite())
+	case engineio.CallsiteEnlist:
+		if ixn.Type() != common.IxLogicEnlist {
+			return errors.Errorf("invalid callsite '%v' for IxnLogicEnlist", ixn.Callsite())
+		}
 
 	default:
-		panic("invalid callsite kind variant detected")
+		return errors.Errorf("unsupported callsite kind '%v' for callsite '%v'", callsite.Kind, ixn.Callsite())
 	}
 
 	element, ok := logic.GetElement(callsite.Ptr)
@@ -208,4 +213,21 @@ func (engine Engine) GetCallEncoderFromManifest(
 ) {
 	// TODO implement me
 	panic("implement me")
+}
+
+func (engine Engine) SpawnDebugInstance(
+	logic engineio.LogicDriver,
+	fuel engineio.EngineFuel,
+	state engineio.StateDriver,
+	env engineio.EnvironmentDriver,
+	event engineio.EventDriver,
+) (
+	engineio.DebugEngineInstance, error,
+) {
+	instance, err := engine.SpawnInstance(logic, fuel, state, env, event)
+	if err != nil {
+		return nil, err
+	}
+
+	return instance.(*Instance), nil //nolint:forcetypeassert
 }

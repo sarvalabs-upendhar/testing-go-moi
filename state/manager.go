@@ -841,7 +841,9 @@ func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaI
 		return nil, err
 	}
 
-	return guardianregistry.GetGuardianPublicKeys(object, ids...)
+	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
+
+	return guardianregistry.GetGuardianPublicKeys(storageReader, ids...)
 }
 
 func (sm *StateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error) {
@@ -858,7 +860,9 @@ func (sm *StateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error
 		return 0, err
 	}
 
-	return guardianregistry.GetGuardianIncentive(object, id)
+	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
+
+	return guardianregistry.GetGuardianIncentive(storageReader, id)
 }
 
 func (sm *StateManager) GetRegisteredGuardiansCount() (int, error) {
@@ -875,7 +879,9 @@ func (sm *StateManager) GetRegisteredGuardiansCount() (int, error) {
 		return 0, err
 	}
 
-	return guardianregistry.GetGuardiansLen(object)
+	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
+
+	return guardianregistry.GetGuardiansCount(storageReader)
 }
 
 func (sm *StateManager) GetTotalIncentives() (uint64, error) {
@@ -892,7 +898,9 @@ func (sm *StateManager) GetTotalIncentives() (uint64, error) {
 		return 0, err
 	}
 
-	return guardianregistry.GetTotalIncentives(object)
+	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
+
+	return guardianregistry.GetTotalIncentives(storageReader)
 }
 
 // IsLogicRegistered checks if the logicID is registered with the account.
@@ -1018,9 +1026,26 @@ func (sm *StateManager) SyncLogicTree(
 	return sm.syncTree(logicTree, newRoot)
 }
 
-// GetStorageEntry returns the storage data associated with the given slot and logicID
-func (sm *StateManager) GetStorageEntry(logicID identifiers.LogicID, slot []byte, state common.Hash) ([]byte, error) {
+// GetPersistentStorageEntry returns the storage data associated with the given slot and logicID
+func (sm *StateManager) GetPersistentStorageEntry(
+	logicID identifiers.LogicID, slot []byte, state common.Hash,
+) ([]byte, error) {
 	so, err := sm.getStateObject(logicID.Address(), state)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	return so.GetStorageEntry(logicID, slot)
+}
+
+// GetEphemeralStorageEntry returns the storage data associated with the given slot and logicID
+func (sm *StateManager) GetEphemeralStorageEntry(
+	addr identifiers.Address,
+	logicID identifiers.LogicID,
+	slot []byte,
+	state common.Hash,
+) ([]byte, error) {
+	so, err := sm.getStateObject(addr, state)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}

@@ -4,7 +4,6 @@ package api
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"net/http"
 	"strings"
@@ -43,58 +42,40 @@ type callDetails struct {
 	env   *core.Environment
 	req   *LogicCallRequest
 	logic *core.Logic
-	err   error
 }
 
-func (api *API) obtainCallDetails(header string, request *LogicCallRequest) callDetails {
+func (api *API) obtainCallDetails(header string, request *LogicCallRequest) (callDetails, error) {
 	// Retrieve the environment
 	env, exists, err := api.lab.GetEnvironment(header)
 	if err != nil {
-		return callDetails{
-			code: http.StatusInternalServerError,
-			err:  err,
-		}
+		return callDetails{code: http.StatusInternalServerError}, err
 	}
 
 	// Environment was not found
 	if !exists {
-		return callDetails{
-			code: http.StatusNotFound,
-			err:  core.ErrEnvironmentNotFound,
-		}
+		return callDetails{code: http.StatusNotFound}, core.ErrEnvironmentNotFound
 	}
 
 	// Extract the value for name of logic
 	logicName := request.Name
 	if logicName == "" {
-		return callDetails{
-			code: http.StatusNotFound,
-			err:  errors.New("logic not found"),
-		}
+		return callDetails{code: http.StatusNotFound}, errors.New("logic not found")
 	}
 
 	// Retrieve the logic from the environment
 	logic, err := env.FetchLogic(logicName)
 	if err != nil {
 		if errors.Is(err, core.ErrLogicNotFound) {
-			return callDetails{
-				code: http.StatusNotFound,
-				err:  err,
-			}
+			return callDetails{code: http.StatusNotFound}, err
 		}
 
-		return callDetails{
-			code: http.StatusInternalServerError,
-			err:  err,
-		}
+		return callDetails{code: http.StatusInternalServerError}, err
 	}
 
 	return callDetails{
-		code:  http.StatusOK,
-		env:   env,
-		req:   request,
-		logic: logic,
-	}
+		code: http.StatusOK,
+		env:  env, req: request, logic: logic,
+	}, nil
 }
 
 func (api *API) InteractLogicDeploy(c *gin.Context) {
@@ -104,14 +85,14 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, Error(err))
 	}
 
-	callInfo := api.obtainCallDetails(c.GetHeader(HeaderLabEnv), request)
-	if callInfo.err != nil {
-		c.JSON(callInfo.code, Error(callInfo.err))
+	call, err := api.obtainCallDetails(c.GetHeader(HeaderLabEnv), request)
+	if err != nil {
+		c.JSON(call.code, Error(err))
 		return
 	}
 
-	env := callInfo.env
-	logic := callInfo.logic
+	env := call.env
+	logic := call.logic
 
 	// Perform deploy gating
 	// Only allow to deploy, if logic is not ready.
@@ -128,7 +109,7 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 	}
 
 	// Check that call kind matches for the callsite
-	if callsite.Kind != engineio.CallsiteDeployer {
+	if callsite.Kind != engineio.CallsiteDeploy {
 		c.JSON(http.StatusBadRequest, Error(errors.New("callsite is not deployable")))
 		return
 	}
@@ -154,7 +135,7 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 	instance, err := engine.SpawnInstance(
 		logic.Object,
 		env.CallFuel,
-		core.NewContextDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
+		core.NewStorageDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
 		api.lab,
 		eventstream,
 	)
@@ -171,24 +152,28 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 	// Get the address of the sender
 	senderAddress := env.Users[env.Sender]
 	// Generate the context object for the sender
-	senderContext := core.NewContextDriver(env.ID, api.lab.Database, senderAddress, logicID)
+	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderAddress, logicID)
+	// If the logic describes an ephemeral state, enlist the sender (deployer)
+	if _, ok = logic.Object.EphemeralState(); ok {
+		_ = env.Enlist(senderAddress, logicID)
+	}
 
 	// Generate an interaction from the kind, callsite, calldata and manifest
 	ixn := core.LogicInteraction{
-		Kind:  common.IxLogicDeploy,
 		Nonce: env.Nonce,
-		Price: new(big.Int).SetUint64(core.LabFuelPrice),
 		Limit: env.CallFuel,
-		Site:  request.Callsite,
-	}
+		Price: new(big.Int).SetUint64(core.LabFuelPrice),
 
-	env.IncrementNonce()
+		Kind: common.IxLogicDeploy,
+		Site: request.Callsite,
+		Call: func() []byte {
+			// Set the calldata as nil if no calldata is provided
+			if request.Calldata != "" {
+				return calldata
+			}
 
-	// Set the calldata as nil if no calldata is provided
-	if request.Calldata == "" {
-		ixn.Call = nil
-	} else {
-		ixn.Call = calldata
+			return nil
+		}(),
 	}
 
 	// Validate the calldata
@@ -205,6 +190,11 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 		return
 	}
 
+	// Mark the logic as deployed
+	logic.Ready = true
+
+	env.IncrementNonce()
+
 	// Get the logic interaction hash
 	hash, err := ixn.Hash()
 	if err != nil {
@@ -214,27 +204,24 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 
 	// Get the events of core.Event type
 	events := core.GetEventsFromStream(eventstream, hash)
-
-	err = env.InsertEvent(events)
-	if err != nil {
+	// Insert events into the environment
+	if err = env.InsertEvents(events); err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
-	}
-	// Mark the logic as deployed
-	logic.Ready = true
-
-	err = fmt.Errorf("")
-	// Convert error into hex string
-	if result.Error() != nil {
-		err = fmt.Errorf("0x" + hex.EncodeToString(result.Error()))
 	}
 
 	c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
 		Ixhash: hash,
 		Result: Result{
-			Ok:    result.Ok(),
-			Fuel:  result.Fuel(),
-			Error: err.Error(),
+			Ok:   result.Ok(),
+			Fuel: result.Fuel(),
+			Error: func() (err string) {
+				if result.Error() != nil {
+					err = "0x" + hex.EncodeToString(result.Error())
+				}
+
+				return
+			}(),
 		},
 		Events: events,
 	}))
@@ -247,14 +234,14 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, Error(err))
 	}
 
-	callInfo := api.obtainCallDetails(c.GetHeader(HeaderLabEnv), request)
-	if callInfo.err != nil {
-		c.JSON(callInfo.code, Error(callInfo.err))
+	call, err := api.obtainCallDetails(c.GetHeader(HeaderLabEnv), request)
+	if err != nil {
+		c.JSON(call.code, Error(err))
 		return
 	}
 
-	env := callInfo.env
-	logic := callInfo.logic
+	env := call.env
+	logic := call.logic
 
 	// Perform deploy gating
 	// Only allow to invoke, if logic is ready.
@@ -271,7 +258,7 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 	}
 
 	// Check that call kind matches for the callsite
-	if callsite.Kind != engineio.CallsiteInvokable {
+	if callsite.Kind != engineio.CallsiteInvoke {
 		c.JSON(http.StatusBadRequest, Error(errors.New("callsite is not invokable")))
 		return
 	}
@@ -297,7 +284,7 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 	instance, err := engine.SpawnInstance(
 		logic.Object,
 		env.CallFuel,
-		core.NewContextDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
+		core.NewStorageDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
 		api.lab,
 		eventstream,
 	)
@@ -313,25 +300,36 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 
 	// Get the address of the sender
 	senderAddress := env.Users[env.Sender]
+
+	identifier, _ := logicID.Identifier()
+	// Check if the logic has an ephemeral state
+	if identifier.HasEphemeralState() {
+		// Check if sender has been enlisted for the logic ID
+		if !env.Enlisted(senderAddress, logicID) {
+			c.JSON(http.StatusExpectationFailed, "sender is not enlisted with ephemeral logic")
+			return
+		}
+	}
+
 	// Generate the context object for the sender
-	senderContext := core.NewContextDriver(env.ID, api.lab.Database, senderAddress, logicID)
+	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderAddress, logicID)
 
 	// Generate an interaction from the kind, callsite, calldata and manifest
 	ixn := core.LogicInteraction{
-		Kind:  common.IxLogicInvoke,
 		Nonce: env.Nonce,
-		Price: new(big.Int).SetUint64(core.LabFuelPrice),
 		Limit: env.CallFuel,
-		Site:  request.Callsite,
-	}
+		Price: new(big.Int).SetUint64(core.LabFuelPrice),
 
-	env.IncrementNonce()
+		Kind: common.IxLogicInvoke,
+		Site: request.Callsite,
+		Call: func() []byte {
+			// Set the calldata as nil if no calldata is provided
+			if request.Calldata != "" {
+				return calldata
+			}
 
-	// Set the calldata as nil if no calldata is provided
-	if request.Calldata == "" {
-		ixn.Call = nil
-	} else {
-		ixn.Call = calldata
+			return nil
+		}(),
 	}
 
 	// Validate the calldata
@@ -348,6 +346,8 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 		return
 	}
 
+	env.IncrementNonce()
+
 	// Get the logic interaction hash
 	hash, err := ixn.Hash()
 	if err != nil {
@@ -357,9 +357,8 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 
 	// Get the events of core.Event type
 	events := core.GetEventsFromStream(eventstream, hash)
-
-	err = env.InsertEvent(events)
-	if err != nil {
+	// Insert events into the environment
+	if err = env.InsertEvents(events); err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
 	}
@@ -370,20 +369,178 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 		output = "0x" + hex.EncodeToString(result.Outputs())
 	}
 
-	err = fmt.Errorf("")
-	// Convert error into hex string
-	if result.Error() != nil {
-		err = fmt.Errorf("0x" + hex.EncodeToString(result.Error()))
+	c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
+		Ixhash: hash,
+		Events: events,
+		Result: Result{
+			Ok:   result.Ok(),
+			Fuel: result.Fuel(),
+
+			Output: output,
+			Error: func() (err string) {
+				if result.Error() != nil {
+					err = "0x" + hex.EncodeToString(result.Error())
+				}
+
+				return
+			}(),
+		},
+	}))
+}
+
+func (api *API) InteractLogicEnlist(c *gin.Context) {
+	request := new(LogicCallRequest)
+	// Call BindJSON to bind the received JSON to logicCall
+	if err := c.ShouldBindJSON(request); err != nil {
+		c.JSON(http.StatusBadRequest, Error(err))
+	}
+
+	call, err := api.obtainCallDetails(c.GetHeader(HeaderLabEnv), request)
+	if err != nil {
+		c.JSON(call.code, Error(err))
+		return
+	}
+
+	env := call.env
+	logic := call.logic
+
+	// Only allow to enlist, if logic is ready.
+	if !logic.Ready {
+		c.JSON(http.StatusBadRequest,
+			Error(errors.New("logic is not ready. has an persistent that must be initialised with 'deploy'")))
+		return
+	}
+
+	// Get the callsite from the logic, error if not found
+	callsite, ok := logic.Object.GetCallsite(request.Callsite)
+	if !ok {
+		c.JSON(http.StatusNotFound, Error(errors.New("callsite not found on logic")))
+		return
+	}
+
+	// Check that call kind matches for the callsite
+	if callsite.Kind != engineio.CallsiteEnlist {
+		c.JSON(http.StatusBadRequest, Error(errors.New("callsite is not enlister")))
+		return
+	}
+
+	// Obtain the engine for the logic engine in the header
+	engine, ok := engineio.FetchEngine(logic.Object.Engine())
+	if !ok {
+		c.JSON(http.StatusInternalServerError, Error(errors.New("failed to retrieve runtime for logic")))
+		return
+	}
+
+	// Decode hex string into bytes
+	calldata, err := hex.DecodeString(strings.TrimPrefix(request.Calldata, "0x"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, Error(err))
+		return
+	}
+
+	logicID := logic.Object.ID
+	eventstream := compute.NewEventStream(logicID)
+
+	if env.Sender == "" {
+		c.JSON(http.StatusNotFound, Error(core.ErrSenderNotConf))
+		return
+	}
+
+	// Get the address of the sender
+	senderAddress := env.Users[env.Sender]
+	// Check if the user has already enlisted with logic
+	if env.Enlisted(senderAddress, logicID) {
+		c.JSON(http.StatusBadRequest, Error(errors.New("user already enlisted with logic")))
+		return
+	}
+
+	// Spawn an instance for the engine
+	instance, err := engine.SpawnInstance(
+		logic.Object,
+		env.CallFuel,
+		core.NewStorageDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
+		api.lab,
+		eventstream,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(errors.Wrap(err, "failed to spawn engine")))
+		return
+	}
+
+	// Generate the context object for the sender
+	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderAddress, logicID)
+
+	// Generate an interaction from the kind, callsite and calldata
+	ixn := core.LogicInteraction{
+		Nonce: env.Nonce,
+		Limit: env.CallFuel,
+		Price: new(big.Int).SetUint64(core.LabFuelPrice),
+
+		Kind: common.IxLogicEnlist,
+		Site: request.Callsite,
+		Call: func() []byte {
+			// Set the calldata as nil if no calldata is provided
+			if request.Calldata != "" {
+				return calldata
+			}
+
+			return nil
+		}(),
+	}
+
+	// Validate the calldata
+	err = engine.ValidateCalldata(logic.Object, ixn)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
+	// Execute the function
+	result, err := instance.Call(context.Background(), ixn, senderContext)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
+	env.IncrementNonce()
+	_ = env.Enlist(senderAddress, logicID)
+
+	// Get the logic interaction hash
+	hash, err := ixn.Hash()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
+	// Get the events of core.Event type
+	events := core.GetEventsFromStream(eventstream, hash)
+	// Insert events into the environment
+	if err = env.InsertEvents(events); err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
+	// Convert output into hex string
+	var output string
+	if result.Outputs() != nil {
+		output = "0x" + hex.EncodeToString(result.Outputs())
 	}
 
 	c.JSON(http.StatusOK, Success().WithData(LogicCallResponse{
 		Ixhash: hash,
-		Result: Result{
-			Ok:     result.Ok(),
-			Fuel:   result.Fuel(),
-			Output: output,
-			Error:  err.Error(),
-		},
 		Events: events,
+		Result: Result{
+			Ok:   result.Ok(),
+			Fuel: result.Fuel(),
+
+			Output: output,
+			Error: func() (err string) {
+				if result.Error() != nil {
+					err = "0x" + hex.EncodeToString(result.Error())
+				}
+
+				return
+			}(),
+		},
 	}))
 }

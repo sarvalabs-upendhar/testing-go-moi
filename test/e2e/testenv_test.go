@@ -12,11 +12,12 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+
 	"github.com/sarvalabs/battleground/network/infrastructure"
 	"github.com/sarvalabs/battleground/types"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 
 	"github.com/sarvalabs/go-moi/bgclient"
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
@@ -41,7 +42,7 @@ const (
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
 	DefaultAccountCount     = 2 // 2 accounts are enough to fire ixns in debug mode
-	InitialKMOITokens       = 25000
+	InitialKMOITokens       = 50000
 	DefaultJSONRPCPort      = 29000
 )
 

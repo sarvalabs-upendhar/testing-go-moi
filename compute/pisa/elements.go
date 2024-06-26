@@ -65,6 +65,7 @@ type MethodSchema struct {
 	Name  string `json:"name" yaml:"name"`
 	Class string `json:"class" yaml:"class"`
 
+	Mutable bool              `json:"mutable" yaml:"mutable"`
 	Accepts []TypefieldSchema `json:"accepts" yaml:"accepts"`
 	Returns []TypefieldSchema `json:"returns" yaml:"returns"`
 
@@ -79,7 +80,7 @@ type StateSchema struct {
 
 type EventSchema struct {
 	Name   string            `json:"name" yaml:"name"`
-	Topics []uint8           `json:"topics" yaml:"topics"`
+	Topics uint8             `json:"topics" yaml:"topics"`
 	Fields []TypefieldSchema `json:"fields" yaml:"fields"`
 }
 

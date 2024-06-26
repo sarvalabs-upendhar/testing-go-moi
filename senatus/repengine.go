@@ -38,7 +38,7 @@ type senatusStore interface {
 
 type stateManager interface {
 	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
-	GetStorageEntry(logicID identifiers.LogicID, slot []byte, state common.Hash) ([]byte, error)
+	GetPersistentStorageEntry(logicID identifiers.LogicID, slot []byte, state common.Hash) ([]byte, error)
 }
 
 type chainManager interface {
@@ -469,7 +469,7 @@ func (r *ReputationEngine) isGuardianRegisterd(kramaID kramaid.KramaID) bool {
 		return false
 	}
 
-	_, err = r.State.GetStorageEntry(
+	_, err = r.State.GetPersistentStorageEntry(
 		common.GuardianLogicID,
 		storageKey,
 		ts.StateHash(common.GuardianLogicID.Address()),

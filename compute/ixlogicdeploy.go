@@ -63,7 +63,7 @@ func RunLogicDeploy(
 	}
 
 	// Set the logs in the receipt
-	receipt.SetLogs(eventstream.GetAsLogs())
+	receipt.SetLogs(eventstream.Collect())
 
 	return receipt
 }
@@ -215,7 +215,7 @@ func (deployer logicDeployer) callDeployer(
 	instance, err := engine.SpawnInstance(
 		logic,
 		deployer.fueltank.Level(),
-		deployer.logicState.GenerateLogicContextObject(logic.ID),
+		deployer.logicState.GenerateLogicStorageObject(logic.ID),
 		ctx,
 		eventstream,
 	)
@@ -227,7 +227,15 @@ func (deployer logicDeployer) callDeployer(
 	var deployerCtx engineio.StateDriver
 	// Create the deployer context driver if not nil
 	if deployer.deployerState != nil {
-		deployerCtx = deployer.deployerState.GenerateLogicContextObject(logic.ID)
+		// If the logic describes an ephemeral state
+		if _, ok := logic.EphemeralState(); ok {
+			// We need to initialise the logic tree for the deployer as well
+			if err = deployer.deployerState.InitLogicStorage(logic.LogicID()); err != nil {
+				return nil, err
+			}
+		}
+
+		deployerCtx = deployer.deployerState.GenerateLogicStorageObject(logic.ID)
 	}
 
 	// Perform execution call on the engine
@@ -242,4 +250,34 @@ func (deployer logicDeployer) callDeployer(
 	}
 
 	return result, nil
+}
+
+func (manager *Manager) ValidateLogicDeploy(ix *common.Interaction) error {
+	// Check that the manifest decodes correctly
+	manifest, err := engineio.NewManifest(ix.Manifest(), common.POLO)
+	if err != nil {
+		return err
+	}
+
+	runtime, ok := engineio.FetchEngine(manifest.Kind())
+	if !ok {
+		return errors.New("failed to get runtime for logic")
+	}
+
+	// Attempt to compile the manifest into logic descriptor with fuel limit
+	descriptor, _, err := runtime.CompileManifest(manifest, ix.FuelLimit())
+	if err != nil {
+		return err
+	}
+
+	if ix.Callsite() == "" {
+		// If no callsite is provided, skip calldata validation
+		return nil
+	}
+
+	// Create a logic object from the descriptor
+	logic := state.NewLogicObject(ix.Receiver(), descriptor)
+	// TODO: this logic object is wasted after creation, consider caching somewhere?
+
+	return runtime.ValidateCalldata(logic, ix)
 }

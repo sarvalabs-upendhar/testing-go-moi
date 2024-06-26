@@ -39,7 +39,7 @@ const (
 	genesisFile     = "genesis.json"
 	bootnodeFileKey = "file.key"
 
-	guardianManifest = "./../corelogics/guardianregistry/guardians.json"
+	guardianManifest = "./../corelogics/guardianregistry/guardians.yaml"
 )
 
 var startTime int64

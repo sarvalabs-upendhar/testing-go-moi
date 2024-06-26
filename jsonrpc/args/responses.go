@@ -165,7 +165,7 @@ type SyncStatusResponse struct {
 
 type RPCLog struct {
 	Address identifiers.Address `json:"address"`
-	LogicID identifiers.LogicID `json:"logic_id"`
+	LogicID identifiers.LogicID `json:"logic_id,omitempty"`
 	Topics  []common.Hash       `json:"topics"`
 	Data    []byte              `json:"data"`
 

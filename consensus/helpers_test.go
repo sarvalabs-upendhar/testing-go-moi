@@ -12,26 +12,29 @@ import (
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"golang.org/x/crypto/blake2b"
+
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
-	"golang.org/x/crypto/blake2b"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/assert"
 
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/stretchr/testify/require"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/crypto"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -174,7 +177,9 @@ func (ms *MockStateManager) GetRegisteredGuardiansCount() (int, error) {
 		return 0, common.ErrObjectNotFound
 	}
 
-	return guardianregistry.GetGuardiansLen(obj)
+	storageReader := state.NewLogicStorageObject(common.GuardianLogicID, obj)
+
+	return guardianregistry.GetGuardiansCount(storageReader)
 }
 
 func (ms *MockStateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error) {
@@ -183,7 +188,9 @@ func (ms *MockStateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, e
 		return 0, common.ErrObjectNotFound
 	}
 
-	return guardianregistry.GetGuardianIncentive(obj, id)
+	storageReader := state.NewLogicStorageObject(common.GuardianLogicID, obj)
+
+	return guardianregistry.GetGuardianIncentive(storageReader, id)
 }
 
 func (ms *MockStateManager) GetTotalIncentives() (uint64, error) {
@@ -192,7 +199,9 @@ func (ms *MockStateManager) GetTotalIncentives() (uint64, error) {
 		return 0, common.ErrObjectNotFound
 	}
 
-	return guardianregistry.GetTotalIncentives(obj)
+	storageReader := state.NewLogicStorageObject(common.GuardianLogicID, obj)
+
+	return guardianregistry.GetTotalIncentives(storageReader)
 }
 
 func NewMockStateManager() *MockStateManager {
@@ -1023,7 +1032,7 @@ func getTestAccountWithAccType(t *testing.T, accType common.AccountType) common.
 func getTestGenesisLogics(t *testing.T) []common.LogicSetupArgs {
 	t.Helper()
 
-	manifestFile, err := engineio.NewManifestFromFile("./../compute/manifests/tokenledger.yaml")
+	manifestFile, err := engineio.NewManifestFromFile("./../compute/exlogics/tokenledger/tokenledger.yaml")
 	require.NoError(t, err)
 
 	manifestEncoded, err := manifestFile.Encode(common.POLO)
@@ -1036,7 +1045,7 @@ func getTestGenesisLogics(t *testing.T) []common.LogicSetupArgs {
 	logic := common.LogicSetupArgs{
 		Name: "staking-contract",
 
-		Callsite: "Seeder",
+		Callsite: "Seed",
 		Calldata: hexutil.Bytes(common.Hex2Bytes(calldata)),
 		Manifest: hexutil.Bytes(common.Hex2Bytes(manifest)),
 

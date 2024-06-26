@@ -71,10 +71,12 @@ type Engine interface {
 	// ValidateCalldata verifies the calldata and callsite in an InteractionDriver.
 	// The Logic must describe a callsite which accepts the calldata.
 	ValidateCalldata(LogicDriver, InteractionDriver) error
+
 	// SpawnInstance returns a new EngineInstance instance and initializes it with some
 	// EngineFuel, a LogicDriver, the StateDriver associated with the logic and an EnvironmentDriver.
 	// Will return an error if the Logic and its StateDriver do not match.
 	SpawnInstance(LogicDriver, EngineFuel, StateDriver, EnvironmentDriver, EventDriver) (EngineInstance, error)
+	SpawnDebugInstance(LogicDriver, EngineFuel, StateDriver, EnvironmentDriver, EventDriver) (DebugEngineInstance, error)
 }
 
 // EngineInstance is an execution engine runner with a specific EngineKind.

@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-polo"
 
@@ -14,7 +15,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
 )
@@ -24,7 +24,7 @@ var (
 	transferAmount      = uint64(1000000)
 
 	ledgerManifest = func() string {
-		path := "./../../compute/manifests/tokenledger.yaml"
+		path := "./../../compute/exlogics/tokenledger/tokenledger.yaml"
 
 		engineio.RegisterEngine(pisa.NewEngine())
 
@@ -40,7 +40,6 @@ var (
 
 		return "0x" + common.BytesToHex(encoded)
 	}()
-
 	deployCalldata = "0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"
 )
 
@@ -74,7 +73,7 @@ func (te *TestEnvironment) deployLogic(
 // 3. fetch actual logic manifest of deployed logic
 // 4. make sure expected logic manifest and actual logic manifest matches
 // 5. fetch ledger state and ensure it matches call data of logic payload
-func validateTokenLedgerLogicDeploy(
+func validateLogicDeploy(
 	te *TestEnvironment,
 	sender identifiers.Address,
 	payload *common.LogicPayload,
@@ -126,20 +125,20 @@ func (te *TestEnvironment) TestLogicDeploy() {
 		expectedError       error
 	}{
 		{
-			name:   "valid logic deploy",
+			name:   "valid ledger logic deploy",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "Seeder",
+				Callsite: "Seed",
 				Calldata: common.Hex2Bytes(deployCalldata),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
-			postTest: validateTokenLedgerLogicDeploy,
+			postTest: validateLogicDeploy,
 		},
 		{
 			name:   "empty manifest",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "Seeder",
+				Callsite: "Seed",
 				Calldata: common.Hex2Bytes(ledgerManifest),
 				Manifest: []byte{},
 			},
@@ -159,7 +158,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			name:   "empty call data",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "Seeder",
+				Callsite: "Seed",
 				Calldata: make(polo.Document).Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
@@ -179,7 +178,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			name:   "invalid call data",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Callsite: "Seeder",
+				Callsite: "Seed",
 				Calldata: []byte{1, 2, 3},
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},

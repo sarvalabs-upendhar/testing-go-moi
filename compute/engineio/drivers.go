@@ -2,17 +2,25 @@ package engineio
 
 import (
 	"math/big"
-	"testing"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 )
 
-// CryptographyDriver represents an interface for cryptographic operations.
-// It can be used to validate signature formats and verify them for a public key.
-// This interfaces allows us to pass the capabilities of go-moi's crypto package to different engine runtimes.
-type CryptographyDriver interface {
-	ValidateSignature(sig []byte) bool
-	VerifySignature(data, sig, pub []byte) (bool, error)
+// StateDriver represents an interface for accessing and manipulating state information of an account.
+// It is bounded to a particular account and can only mutate within applicable portions
+// of the state within the bounds of the logic's namespace
+type StateDriver interface {
+	Address() identifiers.Address
+	LogicID() identifiers.LogicID
+
+	GetStorageEntry([]byte) ([]byte, error)
+	SetStorageEntry([]byte, []byte) error
+}
+
+// StorageReader is an interface that allows reading storage data
+type StorageReader interface {
+	GetStorageEntry([]byte) ([]byte, error)
 }
 
 // InteractionDriver represents a driver for interaction information.
@@ -20,7 +28,6 @@ type CryptographyDriver interface {
 // other information such as the Interaction's fuel parameters or transfer funds.
 type InteractionDriver interface {
 	Type() common.IxType
-	// Supports(Callsite) bool
 
 	FuelPrice() *big.Int
 	FuelLimit() uint64
@@ -29,35 +36,20 @@ type InteractionDriver interface {
 	Calldata() []byte
 }
 
-func NewDebugIxnDriver(
-	t *testing.T, kind common.IxType,
-	callsite string, calldata []byte,
-	limit uint64, price *big.Int,
-) InteractionDriver {
-	t.Helper()
+// EventDriver represents a driver for event collection.
+// It describes methods to fetch events from the event stream along
+// with methods to emit events to the stream and reset the stream.
+type EventDriver interface {
+	Logic() identifiers.LogicID
+	Count() uint64
+	Reset()
 
-	return debugIxnDriver{
-		kind:     kind,
-		price:    price,
-		limit:    limit,
-		callsite: callsite,
-		calldata: calldata,
-	}
+	Fetch(uint64) (common.Log, bool)
+	Insert(common.Log)
+
+	Collect() []common.Log
+	Iterate() <-chan common.Log
 }
-
-type debugIxnDriver struct {
-	kind     common.IxType
-	price    *big.Int
-	limit    uint64
-	callsite string
-	calldata []byte
-}
-
-func (ixn debugIxnDriver) Type() common.IxType { return ixn.kind }
-func (ixn debugIxnDriver) FuelPrice() *big.Int { return ixn.price }
-func (ixn debugIxnDriver) FuelLimit() uint64   { return ixn.limit }
-func (ixn debugIxnDriver) Callsite() string    { return ixn.callsite }
-func (ixn debugIxnDriver) Calldata() []byte    { return ixn.calldata }
 
 // EnvironmentDriver represents a driver for environmental information.
 // It describes information about the execution context such
@@ -67,19 +59,10 @@ type EnvironmentDriver interface {
 	ClusterID() string
 }
 
-func NewDebugEnvDriver(t *testing.T, timestamp uint64, clusterID string) debugEnvDriver {
-	t.Helper()
-
-	return debugEnvDriver{
-		timestamp: 0,
-		clusterID: "",
-	}
+// CryptographyDriver represents an interface for cryptographic operations.
+// It can be used to validate signature formats and verify them for a public key.
+// This interfaces allows us to pass the capabilities of go-moi's crypto package to different engine runtimes.
+type CryptographyDriver interface {
+	ValidateSignature(sig []byte) bool
+	VerifySignature(data, sig, pub []byte) (bool, error)
 }
-
-type debugEnvDriver struct {
-	timestamp uint64
-	clusterID string
-}
-
-func (env debugEnvDriver) Timestamp() uint64 { return env.timestamp }
-func (env debugEnvDriver) ClusterID() string { return env.clusterID }

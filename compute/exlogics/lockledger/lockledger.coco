@@ -1,0 +1,53 @@
+coco LockLedger
+
+state ephemeral:
+    Spendable U256
+    Lockedup U256
+
+state persistent:
+    Name String
+    Symbol String
+    Supply U256
+    Owner Address
+
+endpoint deploy Seed(name, symbol String, supply U256):
+    // Set the name, symbol and supply of the asset
+    mutate name -> LockLedger.Name
+    mutate symbol -> LockLedger.Symbol
+    mutate supply -> LockLedger.Supply
+
+    // Set the owner as the sender and set the supply to their spendable balance
+    mutate Address(Sender) -> LockLedger.Owner
+    mutate supply -> Sender.LockLedger.Spendable
+
+endpoint enlist Register():
+    mutate 0 -> Sender.LockLedger.Spendable
+    mutate 0 -> Sender.LockLedger.Lockedup
+
+endpoint invoke ephemeral Lockup(amount U256):
+    mutate spendable <- Sender.LockLedger.Spendable:
+        if spendable < amount: 
+            throw "insufficient balance"
+
+        spendable -= amount
+
+    mutate lockup <- Sender.LockLedger.Lockedup:
+        lockup += amount
+
+// todo: interact is not supported yet
+// endpoint interact ephemeral Transfer(amount U256, addr Address):
+//     mutate spendable <- Sender.LockLedger.Spendable:
+//         if spendable < amount: 
+//             throw "insufficient balance"
+
+//         spendable -= amount
+
+//     mutate spendable <- Participant(addr).LockLedger.Spendable:
+//         spendable += amount
+
+endpoint invoke persistent Mint(amount U256):
+    mutate supply <- LockLedger.Supply:
+        supply += amount
+
+    mutate spendable <- Sender.LockLedger.Spendable:
+        spendable += amount

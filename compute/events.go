@@ -3,80 +3,51 @@ package compute
 import (
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 type EventStream struct {
 	logicID identifiers.LogicID
-	events  []engineio.LogicEvent
+	events  []common.Log
 }
 
 // NewEventStream generates a new EventStream to emit the events on
 func NewEventStream(logicID identifiers.LogicID) *EventStream {
 	return &EventStream{
 		logicID: logicID,
-		events:  make([]engineio.LogicEvent, 0),
+		events:  make([]common.Log, 0),
 	}
 }
 
-func (es *EventStream) Size() uint64 {
-	return uint64(len(es.events))
+func (stream *EventStream) Logic() identifiers.LogicID { return stream.logicID }
+func (stream *EventStream) Count() uint64              { return uint64(len(stream.events)) }
+func (stream *EventStream) Collect() []common.Log      { return stream.events }
+
+func (stream *EventStream) Reset() {
+	stream.events = make([]common.Log, 0)
 }
 
-func (es *EventStream) Reset() error {
-	es.events = make([]engineio.LogicEvent, 0)
-
-	return nil
+func (stream *EventStream) Insert(event common.Log) {
+	stream.events = append(stream.events, event)
 }
 
-func (es *EventStream) Get() []engineio.LogicEvent {
-	return es.events
+func (stream *EventStream) Fetch(index uint64) (common.Log, bool) {
+	if index >= stream.Count() {
+		return common.Log{}, false
+	}
+
+	return stream.events[index], true
 }
 
-func (es *EventStream) Iter() chan<- engineio.LogicEvent {
-	ch := make(chan engineio.LogicEvent)
+func (stream *EventStream) Iterate() <-chan common.Log {
+	ch := make(chan common.Log)
 
 	go func() {
 		defer close(ch)
 
-		for _, event := range es.events {
+		for _, event := range stream.events {
 			ch <- event
 		}
 	}()
 
 	return ch
-}
-
-func (es *EventStream) Emit(event engineio.LogicEvent) error {
-	es.events = append(es.events, event)
-
-	return nil
-}
-
-func (es *EventStream) Logic() identifiers.LogicID {
-	return es.logicID
-}
-
-// GetAsLogs converts the events in the EventStream to common.Log format
-func (es *EventStream) GetAsLogs() []*common.Log {
-	logs := make([]*common.Log, 0)
-
-	// Iterate over each event in the event stream
-	for _, event := range es.events {
-		log := &common.Log{
-			Address: identifiers.Address(event.Address),
-			LogicID: es.logicID,
-			Topics:  make([]common.Hash, len(event.Topics)),
-			Data:    event.Data,
-		}
-
-		// Copy topics to log.Topics
-		for i, topic := range event.Topics {
-			log.Topics[i] = topic
-		}
-
-		logs = append(logs, log)
-	}
-
-	return logs
 }

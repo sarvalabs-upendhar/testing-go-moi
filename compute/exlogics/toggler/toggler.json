@@ -1,0 +1,239 @@
+{
+  "syntax": 1,
+  "engine": {
+    "kind": "PISA",
+    "flags": []
+  },
+  "elements": [
+    {
+      "ptr": 0,
+      "kind": "state",
+      "data": {
+        "mode": "ephemeral",
+        "fields": [
+          {
+            "slot": 0,
+            "label": "value",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "ptr": 1,
+      "deps": [
+        0
+      ],
+      "kind": "routine",
+      "data": {
+        "name": "Init",
+        "mode": "ephemeral",
+        "kind": "enlist",
+        "accepts": [],
+        "returns": [],
+        "executes": {
+          "bin": []
+        },
+        "catches": []
+      }
+    },
+    {
+      "ptr": 2,
+      "deps": [
+        6,
+        0
+      ],
+      "kind": "routine",
+      "data": {
+        "name": "Seed",
+        "mode": "ephemeral",
+        "kind": "enlist",
+        "accepts": [
+          {
+            "slot": 0,
+            "label": "initial",
+            "type": "bool"
+          }
+        ],
+        "returns": [],
+        "executes": {
+          "bin": [
+            10,
+            0,
+            4,
+            1,
+            0,
+            83,
+            0,
+            0,
+            1,
+            17,
+            1,
+            6,
+            12,
+            0,
+            1,
+            0
+          ]
+        },
+        "catches": []
+      }
+    },
+    {
+      "ptr": 3,
+      "deps": [
+        0
+      ],
+      "kind": "routine",
+      "data": {
+        "name": "Get",
+        "mode": "readonly",
+        "kind": "invoke",
+        "accepts": [],
+        "returns": [
+          {
+            "slot": 0,
+            "label": "value",
+            "type": "bool"
+          }
+        ],
+        "executes": {
+          "bin": [
+            115,
+            0,
+            131,
+            1,
+            0,
+            0,
+            5,
+            1,
+            0,
+            133,
+            1,
+            0
+          ]
+        },
+        "catches": []
+      }
+    },
+    {
+      "ptr": 4,
+      "deps": [
+        6,
+        0
+      ],
+      "kind": "routine",
+      "data": {
+        "name": "Set",
+        "mode": "ephemeral",
+        "kind": "invoke",
+        "accepts": [
+          {
+            "slot": 0,
+            "label": "value",
+            "type": "bool"
+          }
+        ],
+        "returns": [],
+        "executes": {
+          "bin": [
+            10,
+            0,
+            4,
+            1,
+            0,
+            83,
+            0,
+            0,
+            1,
+            17,
+            1,
+            6,
+            12,
+            0,
+            1,
+            0
+          ]
+        },
+        "catches": []
+      }
+    },
+    {
+      "ptr": 5,
+      "deps": [
+        0
+      ],
+      "kind": "routine",
+      "data": {
+        "name": "Toggle",
+        "mode": "ephemeral",
+        "kind": "invoke",
+        "accepts": [],
+        "returns": [],
+        "executes": {
+          "bin": [
+            115,
+            0,
+            131,
+            1,
+            0,
+            0,
+            55,
+            2,
+            1,
+            98,
+            2,
+            2,
+            54,
+            1,
+            2,
+            132,
+            1,
+            0
+          ]
+        },
+        "catches": []
+      }
+    },
+    {
+      "ptr": 6,
+      "deps": [
+        0
+      ],
+      "kind": "routine",
+      "data": {
+        "name": "set",
+        "mode": "ephemeral",
+        "kind": "internal",
+        "accepts": [
+          {
+            "slot": 0,
+            "label": "value",
+            "type": "bool"
+          }
+        ],
+        "returns": [],
+        "executes": {
+          "bin": [
+            115,
+            0,
+            131,
+            1,
+            0,
+            0,
+            4,
+            2,
+            0,
+            54,
+            1,
+            2,
+            132,
+            1,
+            0
+          ]
+        },
+        "catches": []
+      }
+    }
+  ]
+}

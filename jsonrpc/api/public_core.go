@@ -410,6 +410,15 @@ func (p *PublicCoreAPI) AccountState(args *rpcargs.GetAccountArgs) (*rpcargs.RPC
 	}, nil
 }
 
+func (p *PublicCoreAPI) LogicEnlisted(args *rpcargs.LogicEnlistedArgs) (bool, error) {
+	obj, err := p.sm.GetLatestStateObject(args.Address)
+	if err != nil {
+		return false, err
+	}
+
+	return obj.HasStorageTree(args.LogicID)
+}
+
 // LogicManifest returns the manifest associated with the given logic id
 func (p *PublicCoreAPI) LogicManifest(args *rpcargs.LogicManifestArgs) (hexutil.Bytes, error) {
 	if args.LogicID == "" {
@@ -464,12 +473,21 @@ func (p *PublicCoreAPI) LogicStorage(args *rpcargs.GetLogicStorageArgs) (hexutil
 		return nil, common.ErrEmptyLogicID
 	}
 
-	stateHash, err := p.getStateHash(getTesseractArgs(args.LogicID.Address(), args.Options))
+	address := args.Address
+	if args.Address.IsNil() {
+		address = args.LogicID.Address()
+	}
+
+	stateHash, err := p.getStateHash(getTesseractArgs(address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	return p.sm.GetStorageEntry(args.LogicID, args.StorageKey, stateHash)
+	if args.Address.IsNil() {
+		return p.sm.GetPersistentStorageEntry(args.LogicID, args.StorageKey, stateHash)
+	}
+
+	return p.sm.GetEphemeralStorageEntry(args.Address, args.LogicID, args.StorageKey, stateHash)
 }
 
 // LogicIDs will fetch the logic IDs from the logic tree

@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -58,14 +59,13 @@ func RunLogicInvoke(
 	receipt.SetFuelUsed(tank.Consumed)
 	// Set the extra data of the receipt
 	common.SetReceiptExtraData(receipt, *receiptPayload)
+	// Set the logs in the receipt
+	receipt.SetLogs(eventstream.Collect())
 
 	// Set the status of the receipt
 	if receiptPayload.Error != nil {
 		receipt.Status = common.ReceiptExceptionRaised
 	}
-
-	// Set the logs in the receipt
-	receipt.SetLogs(eventstream.GetAsLogs())
 
 	return receipt
 }
@@ -146,7 +146,7 @@ func InvokeLogic(
 	instance, err := engine.SpawnInstance(
 		invoker.logicObject,
 		invoker.fueltank.Level(),
-		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.ID),
+		invoker.logicState.GenerateLogicStorageObject(invoker.logicObject.ID),
 		ctx,
 		eventstream,
 	)
@@ -158,7 +158,7 @@ func InvokeLogic(
 	var senderCtx engineio.StateDriver
 	// Create the deployer context driver if not nil
 	if invoker.senderState != nil {
-		senderCtx = invoker.senderState.GenerateLogicContextObject(invoker.logicObject.ID)
+		senderCtx = invoker.senderState.GenerateLogicStorageObject(invoker.logicObject.ID)
 	}
 
 	// Perform execution call on the engine
@@ -188,4 +188,41 @@ type logicInvoker struct {
 	fueltank    *FuelTank
 	logicState  *state.Object
 	senderState *state.Object
+}
+
+func (manager *Manager) ValidateLogicInvoke(ix *common.Interaction, callerAcc, logicAcc *state.Object) error {
+	// Fetch logic ID
+	logicID := ix.LogicID()
+
+	identifier, err := logicID.Identifier()
+	if err != nil {
+		return errors.Wrap(err, "invalid logic id")
+	}
+
+	// Check if the logic has an ephemeral state
+	if ok := identifier.HasEphemeralState(); ok {
+		// Check if the call has a storage tree for the logic
+		// This means the account has enlisted (as required)
+		ok, err = callerAcc.HasStorageTree(logicID)
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			return errors.New("caller not enlisted with ephemeral logic")
+		}
+	}
+
+	// Fetch the logic object for the ID
+	logic, err := logicAcc.FetchLogicObject(logicID)
+	if err != nil {
+		return err
+	}
+
+	runtime, ok := engineio.FetchEngine(logic.Engine())
+	if !ok {
+		return errors.New("failed to get runtime for logic")
+	}
+
+	return runtime.ValidateCalldata(logic, ix)
 }

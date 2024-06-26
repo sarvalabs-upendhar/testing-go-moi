@@ -4,8 +4,7 @@ import (
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-polo"
 )
@@ -18,14 +17,14 @@ const (
 	SlotKnownOperators = 3
 	SlotMasterOperator = 8
 
-	SlotApproved        = 4
+	SlotApproved       = 4
+	SlotAdministrators = 9
+
 	SlotReferralRewards = 5
-	SlotAdministrators  = 9
+	SlotTotalIncentives = 10
 
 	SlotNodeLimitKYC = 6
 	SlotNodeLimitKYB = 7
-
-	SlotTotalIncentives = 10
 )
 
 type Master struct {
@@ -60,11 +59,7 @@ type Incentive struct {
 	ReferralWallet  [32]byte `polo:"ReferralWallet"`
 }
 
-type StateObject interface {
-	GetStorageEntry(identifiers.LogicID, []byte) ([]byte, error)
-}
-
-func GetGuardianPublicKeys(state StateObject, ids ...kramaid.KramaID) ([][]byte, error) {
+func GetGuardianPublicKeys(storage engineio.StorageReader, ids ...kramaid.KramaID) ([][]byte, error) {
 	pubkeys := make([][]byte, 0, len(ids))
 
 	for _, id := range ids {
@@ -76,14 +71,14 @@ func GetGuardianPublicKeys(state StateObject, ids ...kramaid.KramaID) ([][]byte,
 		key := pisa.GenerateStorageKey(SlotGuardians, pisa.MapKey(hashed), pisa.ClsFld(3))
 
 		// Retrieve the value for the storage key
-		val, err := state.GetStorageEntry(common.GuardianLogicID, key)
+		val, err := storage.GetStorageEntry(key)
 		if err != nil {
 			return nil, err
 		}
 
 		// Decode the value into some bytes -> public key
 		pubkey := make([]byte, 0)
-		if err := polo.Depolorize(&pubkey, val); err != nil {
+		if err = polo.Depolorize(&pubkey, val); err != nil {
 			return nil, err
 		}
 
@@ -93,7 +88,7 @@ func GetGuardianPublicKeys(state StateObject, ids ...kramaid.KramaID) ([][]byte,
 	return pubkeys, nil
 }
 
-func GetGuardianIncentive(state StateObject, id kramaid.KramaID) (uint64, error) {
+func GetGuardianIncentive(storage engineio.StorageReader, id kramaid.KramaID) (uint64, error) {
 	encoded, _ := polo.Polorize(id)
 	hashed := blake2b.Sum256(encoded)
 
@@ -101,7 +96,7 @@ func GetGuardianIncentive(state StateObject, id kramaid.KramaID) (uint64, error)
 	key := pisa.GenerateStorageKey(SlotGuardians, pisa.MapKey(hashed), pisa.ClsFld(2), pisa.ClsFld(0))
 
 	// Retrieve the value for the storage key
-	val, err := state.GetStorageEntry(common.GuardianLogicID, key)
+	val, err := storage.GetStorageEntry(key)
 	if err != nil {
 		return 0, err
 	}
@@ -115,37 +110,36 @@ func GetGuardianIncentive(state StateObject, id kramaid.KramaID) (uint64, error)
 	return amount, nil
 }
 
-func GetGuardiansLen(state StateObject) (int, error) {
+func GetGuardiansCount(storage engineio.StorageReader) (int, error) {
 	// Generate a storage access key for Registry.Guardians
 	key := pisa.GenerateStorageKey(SlotGuardians)
 
 	// Retrieve the value for the storage key
-	val, err := state.GetStorageEntry(common.GuardianLogicID, key)
+	val, err := storage.GetStorageEntry(key)
 	if err != nil {
 		return 0, err
 	}
 
 	var size int
-
-	if err := polo.Depolorize(&size, val); err != nil {
+	if err = polo.Depolorize(&size, val); err != nil {
 		return 0, err
 	}
 
 	return size, nil
 }
 
-func GetTotalIncentives(state StateObject) (uint64, error) {
+func GetTotalIncentives(storage engineio.StorageReader) (uint64, error) {
 	// Generate a storage access key for Registry.TotalIncentives
 	key := pisa.GenerateStorageKey(SlotTotalIncentives)
 
 	// Retrieve the value for the storage key
-	val, err := state.GetStorageEntry(common.GuardianLogicID, key)
+	val, err := storage.GetStorageEntry(key)
 	if err != nil {
 		return 0, err
 	}
 
 	var totalIncentives uint64
-	if err := polo.Depolorize(&totalIncentives, val); err != nil {
+	if err = polo.Depolorize(&totalIncentives, val); err != nil {
 		return 0, err
 	}
 

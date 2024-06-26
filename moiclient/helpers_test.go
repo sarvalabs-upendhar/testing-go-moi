@@ -36,7 +36,7 @@ var (
 		engineio.RegisterEngine(pisa.NewEngine())
 
 		// Read manifest file
-		manifest, err := engineio.NewManifestFromFile("../compute/manifests/tokenledger.yaml")
+		manifest, err := engineio.NewManifestFromFile("../compute/exlogics/tokenledger/tokenledger.yaml")
 		if err != nil {
 			panic(err)
 		}

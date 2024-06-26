@@ -8,12 +8,14 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/state"
 	errgroup "golang.org/x/sync/errgroup"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/utils"
+	"github.com/sarvalabs/go-moi/state"
+
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -1816,6 +1818,7 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 			preTestFn: func(interaction *common.Interaction, msm *MockStateManager) {
 				msm.registerLogicID(t, "logicID-1")
 				msm.setLatestStateObject(interaction.Receiver(), &state.Object{})
+				msm.setLatestStateObject(interaction.Sender(), &state.Object{})
 			},
 		},
 		{
@@ -1829,7 +1832,9 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 				}
 			},
 			preTestFn: func(interaction *common.Interaction, msm *MockStateManager) {
+				msm.registerLogicID(t, "logicID-1")
 				msm.setLatestStateObject(interaction.Receiver(), &state.Object{})
+				msm.setLatestStateObject(interaction.Sender(), &state.Object{})
 			},
 			expectedErr: errors.New("failed to validate logic invoke"),
 		},

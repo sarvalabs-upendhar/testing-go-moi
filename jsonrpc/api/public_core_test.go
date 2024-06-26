@@ -1513,9 +1513,9 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 	logicID := tests.GetLogicID(t, ts.AnyAddress())
 	logicIDWithoutState := tests.GetLogicID(t, tests.RandomAddress(t))
 
-	poloManifest, jsonManifest, yamlManifest := getManifestInAllEncoding(t, "./../../compute/manifests/tokenledger.yaml")
+	poloM, jsonM, yamlM := getManifestInAllEncoding(t, "./../../compute/exlogics/tokenledger/tokenledger.yaml")
 
-	stateManager.setLogicManifest(string(logicID), poloManifest)
+	stateManager.setLogicManifest(string(logicID), poloM)
 	chainManager.setTesseractByHash(t, ts)
 
 	testcases := []struct {
@@ -1544,7 +1544,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 					TesseractHash: &tsHash,
 				},
 			},
-			expectedLogicManifest: jsonManifest,
+			expectedLogicManifest: jsonM,
 		},
 		{
 			name: "fetched polo encoded logic manifest successfully",
@@ -1555,7 +1555,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 					TesseractHash: &tsHash,
 				},
 			},
-			expectedLogicManifest: poloManifest,
+			expectedLogicManifest: poloM,
 		},
 		{
 			name: "fetched yaml encoded logic manifest successfully",
@@ -1566,7 +1566,7 @@ func TestPublicCoreAPI_GetLogicManifest(t *testing.T) {
 					TesseractHash: &tsHash,
 				},
 			},
-			expectedLogicManifest: yamlManifest,
+			expectedLogicManifest: yamlM,
 		},
 	}
 

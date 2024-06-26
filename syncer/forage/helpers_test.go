@@ -164,6 +164,7 @@ func NewTestSyncerForValidation(
 		logger:            logger,
 		state:             state,
 		tesseractRegistry: common.NewHashRegistry(60),
+		mux:               &utils.TypeMux{},
 	}
 }
 

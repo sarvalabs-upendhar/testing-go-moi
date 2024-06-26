@@ -29,10 +29,10 @@ type CallsiteKind int
 
 const (
 	CallsiteInternal CallsiteKind = iota
-	CallsiteDeployer
-	CallsiteEnlister
-	CallsiteInvokable
-	CallsiteInteractable
+	CallsiteDeploy
+	CallsiteEnlist
+	CallsiteInvoke
+	CallsiteInteract
 )
 
 func (kind CallsiteKind) String() string {
@@ -113,17 +113,17 @@ func newCallsiteKindFromString(str string) (CallsiteKind, error) {
 }
 
 var callsiteKindToString = map[CallsiteKind]string{
-	CallsiteInternal:     "internal",
-	CallsiteInvokable:    "invokable",
-	CallsiteInteractable: "interactable",
-	CallsiteDeployer:     "deployer",
-	CallsiteEnlister:     "enlister",
+	CallsiteInternal: "internal",
+	CallsiteInvoke:   "invoke",
+	CallsiteInteract: "interact",
+	CallsiteDeploy:   "deploy",
+	CallsiteEnlist:   "enlist",
 }
 
 var callsiteKindFromString = map[string]CallsiteKind{
-	"internal":     CallsiteInternal,
-	"invokable":    CallsiteInvokable,
-	"interactable": CallsiteInteractable,
-	"deployer":     CallsiteDeployer,
-	"enlister":     CallsiteEnlister,
+	"internal": CallsiteInternal,
+	"invoke":   CallsiteInvoke,
+	"interact": CallsiteInteract,
+	"deploy":   CallsiteDeploy,
+	"enlist":   CallsiteEnlist,
 }

@@ -18,4 +18,5 @@ var ixRunnerLookup = map[common.IxType]IxRunner{
 	common.IxAssetBurn:     RunAssetBurn,
 	common.IxLogicDeploy:   RunLogicDeploy,
 	common.IxLogicInvoke:   RunLogicInvoke,
+	common.IxLogicEnlist:   RunLogicEnlist,
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -124,7 +125,7 @@ func CreateRPCInteraction(
 			return nil, err
 		}
 
-	case common.IxLogicInvoke, common.IxLogicDeploy:
+	case common.IxLogicInvoke, common.IxLogicDeploy, common.IxLogicEnlist:
 		logicPayload := new(common.LogicPayload)
 
 		if err = logicPayload.FromBytes(ix.Payload()); err != nil {

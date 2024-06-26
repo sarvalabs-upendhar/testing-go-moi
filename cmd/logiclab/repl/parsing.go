@@ -155,9 +155,9 @@ func Parse(cmd string) Command {
 		return parseStorageKeyCommand(parser)
 
 	case TokenDeploy:
-		return parseLogicCall(parser, engineio.CallsiteDeployer)
+		return parseLogicCall(parser, engineio.CallsiteDeploy)
 	case TokenInvoke:
-		return parseLogicCall(parser, engineio.CallsiteInvokable)
+		return parseLogicCall(parser, engineio.CallsiteInvoke)
 
 	default:
 		return InvalidCommandError("")

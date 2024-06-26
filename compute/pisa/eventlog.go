@@ -1,60 +1,78 @@
 package pisa
 
 import (
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-pisa/drivers"
 	"github.com/sarvalabs/go-polo"
 )
 
 type EventStream struct {
-	stream engineio.EventDriver
+	driver engineio.EventDriver
 }
 
-func (es EventStream) Count() uint64 {
-	return es.stream.Size()
+func (stream EventStream) Count() uint64 { return stream.driver.Count() }
+func (stream EventStream) Empty() bool   { return stream.driver.Count() == 0 }
+
+func (stream EventStream) Reset() error {
+	stream.driver.Reset()
+
+	return nil
 }
 
-func (es EventStream) Empty() bool {
-	return es.stream.Size() == 0
-}
-
-func (es EventStream) Emit(event drivers.Event) error {
-	logicEvent := engineio.LogicEvent{
+func (stream EventStream) Emit(event drivers.Event) error {
+	log := common.Log{
+		LogicID: stream.driver.Logic(),
 		Address: event.Address,
-		Topics:  event.Topics,
 		Data:    event.Data.Bytes(),
 	}
 
-	return es.stream.Emit(logicEvent)
+	for _, topic := range event.Topics {
+		log.Topics = append(log.Topics, topic)
+	}
+
+	stream.driver.Insert(log)
+
+	return nil
 }
 
-func (es EventStream) Reset() error {
-	return es.stream.Reset()
-}
-
-func (es EventStream) Get(index uint64) (drivers.Event, bool) {
-	if index >= es.stream.Size() {
+func (stream EventStream) Get(index uint64) (drivers.Event, bool) {
+	log, ok := stream.driver.Fetch(index)
+	if !ok {
 		return drivers.Event{}, false
 	}
 
-	return es.GetAll()[index], true
+	return Log2Event(log), true
 }
 
-func (es EventStream) GetAll() []drivers.Event {
+func (stream EventStream) GetAll() []drivers.Event {
 	events := make([]drivers.Event, 0)
 
-	for _, event := range es.stream.Get() {
-		data := make(polo.Document)
-		_ = polo.Depolorize(&data, event.Data)
-
-		drvEvent := drivers.Event{
-			Address: event.Address,
-			Topics:  event.Topics,
-			Data:    data,
-		}
-
-		events = append(events, drvEvent)
+	for log := range stream.driver.Iterate() {
+		event := Log2Event(log)
+		events = append(events, event)
 	}
 
 	return events
+}
+
+func Log2Event(log common.Log) drivers.Event {
+	return drivers.Event{
+		Address: log.Address,
+		Topics: func() [][32]byte {
+			topics := make([][32]byte, 0, len(log.Topics))
+
+			for _, topic := range log.Topics {
+				topics = append(topics, topic)
+			}
+
+			return topics
+		}(),
+		Data: func() polo.Document {
+			data := make(polo.Document)
+			_ = polo.Depolorize(&data, log.Data)
+
+			return data
+		}(),
+	}
 }

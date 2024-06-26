@@ -2,8 +2,16 @@ package pisa
 
 import (
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-pisa/drivers"
 	pisastate "github.com/sarvalabs/go-pisa/state"
+)
+
+const (
+	StorageReadCost   = 1
+	StorageWriteCost  = 3
+	StorageDeleteCost = 2
 )
 
 type State struct {
@@ -24,29 +32,34 @@ func (state State) Address() [32]byte   { return state.driver.Address() }
 func (state State) LogicID() string     { return string(state.driver.LogicID()) }
 func (state State) LogicAddr() [32]byte { return state.driver.LogicID().Address() }
 
-func (state *State) Free(slot uint8) bool {
-	if !state.IsBorrowed(slot) {
+func (state *State) Free(slot pisastate.SlotDriver, tank drivers.FuelTank) bool {
+	if !state.IsBorrowed(slot.Slot()) {
 		return false
 	}
 
-	delete(state.borrows, slot)
+	// Read costs 1 fuel per byte
+	if !tank.Exhaust(slot.Meter() * StorageReadCost) {
+		return false
+	}
+
+	delete(state.borrows, slot.Slot())
 
 	return true
 }
 
-func (state *State) Return(slot pisastate.SlotDriver) (pisastate.AccessReceipt, error) {
+func (state *State) Return(slot pisastate.SlotDriver, tank drivers.FuelTank) (pisastate.AccessReceipt, error) {
 	if !state.IsBorrowed(slot.Slot()) {
 		return pisastate.AccessReceipt{}, errors.New("slot not currently borrowed")
 	}
 
 	// Flush the changes and get the access receipt
-	receipt, err := slot.Flush()
+	receipt, err := slot.Flush(tank)
 	if err != nil {
 		return receipt, err
 	}
 
 	// Free the slot
-	state.Free(slot.Slot())
+	state.Free(slot, tank)
 
 	return receipt, nil
 }
@@ -100,8 +113,9 @@ type Slot struct {
 	readCache map[[32]byte][]byte
 }
 
-func (slot Slot) Slot() uint8   { return slot.slot }
-func (slot Slot) Count() uint64 { return slot.readCount }
+func (slot Slot) Slot() uint8       { return slot.slot }
+func (slot Slot) Meter() uint64     { return slot.readCount }
+func (slot Slot) Address() [32]byte { return slot.state.Address() }
 
 func (slot *Slot) Exists(key pisastate.StorageKey) bool {
 	// Read the value and check if it exists
@@ -127,8 +141,8 @@ func (slot *Slot) Read(key pisastate.StorageKey) ([]byte, bool) {
 	}
 
 	// If not found in caches, attempt to read from the state tree
-	rawval, ok := slot.state.driver.GetStorageEntry(rawkey[:])
-	if !ok {
+	rawval, err := slot.state.driver.GetStorageEntry(rawkey[:])
+	if err != nil {
 		return nil, false
 	}
 
@@ -150,7 +164,7 @@ func (slot *Slot) Write(key pisastate.StorageKey, val []byte) error {
 	return nil
 }
 
-func (slot *Slot) Flush() (pisastate.AccessReceipt, error) {
+func (slot *Slot) Flush(tank drivers.FuelTank) (pisastate.AccessReceipt, error) {
 	// Create an access receipt with the read count
 	receipt := pisastate.AccessReceipt{Read: slot.readCount}
 
@@ -158,17 +172,29 @@ func (slot *Slot) Flush() (pisastate.AccessReceipt, error) {
 		// This forces the compiler to create new pointers for each key iteration
 		key, val := key, val
 
-		if len(val) == 0 {
+		size := len(val)
+
+		if size == 0 {
 			// Get the current entry for the key in the storage
 			// If there is no value, len(entry) == 0
 			entry, _ := slot.state.driver.GetStorageEntry(key[:])
 			// Increment the deletion count on the access receipt
 			receipt.Delete += uint64(len(entry))
 
+			// Delete exhausts 2 fuel per byte
+			if ok := tank.Exhaust(uint64(size * StorageDeleteCost)); !ok {
+				return receipt, errors.New("out of fuel")
+			}
+
 			// Delete the value for the key
 			slot.state.driver.SetStorageEntry(key[:], []byte{})
 
 			continue
+		}
+
+		// Write exhausts 3 fuel per byte
+		if ok := tank.Exhaust(uint64(size * StorageWriteCost)); !ok {
+			return receipt, errors.New("out of fuel")
 		}
 
 		slot.state.driver.SetStorageEntry(key[:], val)

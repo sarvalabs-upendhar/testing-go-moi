@@ -95,4 +95,5 @@ var (
 	ErrEmptyServiceName            = errors.New("jsonrpc: serviceName cannot be empty")
 	ErrEmptyMethodName             = errors.New("methodName cannot be empty")
 	ErrOperatorNotEligible         = errors.New("operator not eligible")
+	ErrAlreadyEnlisted             = errors.New("caller already enlisted with ephemeral logic")
 )

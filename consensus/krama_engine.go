@@ -19,6 +19,9 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -31,8 +34,6 @@ import (
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/telemetry/tracing"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -1502,7 +1503,9 @@ func (k *Engine) isIxValid(ix *common.Interaction) error {
 			return errors.New("asset already found")
 		}
 
-	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxAssetMint, common.IxAssetBurn:
+	case common.IxAssetMint, common.IxAssetBurn:
+		return nil
+	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
 		return nil
 	default:
 		return common.ErrInvalidInteractionType

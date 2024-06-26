@@ -51,6 +51,9 @@ const (
 	// DeployerRoutineSurcharge is the additional cost for compiling a Deployer RoutineElement.
 	// This surcharge is applied on top of the BaseRoutineCost
 	DeployerRoutineSurcharge engineio.EngineFuel = 10
+	// EnlisterRoutineSurcharge is the additional cost for compiling a Enlister RoutineElement.
+	// This surcharge is applied on top of the BaseRoutineCost
+	EnlisterRoutineSurcharge engineio.EngineFuel = 10
 
 	// BaseInstructionCost is the base cost for compiling a BIN instruction.
 	// It is applied per instruction in a RoutineElement or MethodElement
@@ -81,9 +84,9 @@ type ManifestCompiler struct {
 	callsites map[string]engineio.Callsite
 
 	deployers []uint64
+	enlisters []uint64
 
 	eventdefs map[string]engineio.Eventdef
-	// enlisters []uint64
 }
 
 func NewManifestCompiler(fuel uint64, manifest engineio.Manifest) *ManifestCompiler {
@@ -221,9 +224,18 @@ func (compiler *ManifestCompiler) CompileDescriptor() (engineio.LogicDescriptor,
 		}
 	}
 
-	// if ptr, ok := compiler.builder.GetEphemeralStatePtr(); ok {
-	//	descriptor.Persistent = &ptr
-	// }
+	// Check if the compiled logic includes a ephemeral state
+	if ptr := artifact.Directory.Ephemeral; ptr != nil {
+		// Set the persistent state pointer to the descriptor
+		descriptor.Ephemeral = ptr
+
+		// Check that at least one enlister has been compiled
+		if len(compiler.enlisters) == 0 {
+			return engineio.LogicDescriptor{},
+				compiler.fueltank,
+				errors.New("logic with ephemeral state must have at least one enlister")
+		}
+	}
 
 	for ptr := uint64(0); ptr < artifact.Size(); ptr++ {
 		element, _ := artifact.Element(ptr)
@@ -380,7 +392,11 @@ func (compiler *ManifestCompiler) compileEventElement(element engineio.ManifestE
 	}
 
 	// Create a new Event Typedef
-	event := datatypes.NewEvent(schema.Name, schema.Topics, fields)
+	event, err := datatypes.NewEvent(schema.Name, schema.Topics, fields)
+	if err != nil {
+		return errors.Errorf("invalid event element: %v", err)
+	}
+
 	// Add the Event element into the builder
 	if err = compiler.builder.AddEvent(element.Ptr, event); err != nil {
 		return errors.Wrap(err, "invalid event element")
@@ -457,6 +473,7 @@ func (compiler *ManifestCompiler) compileMethodElement(element engineio.Manifest
 		},
 		Datatype:  class,
 		Code:      *methodCode,
+		Mutable:   schema.Mutable,
 		Instructs: instructions,
 	}
 
@@ -499,7 +516,13 @@ func (compiler *ManifestCompiler) compileStateElement(element engineio.ManifestE
 		return nil
 
 	case state.Ephemeral:
-		return errors.New("ephemeral state elements are not supported")
+		// Add the State element into the builder
+		if err = compiler.builder.AddEphemeralState(element.Ptr, state.NewStateFields(fields), element.Deps); err != nil {
+			return errors.Wrap(err, "invalid class element")
+		}
+
+		return nil
+
 	default:
 		return errors.Errorf("invalid mode '%v' for state element", schema.Mode)
 	}
@@ -524,7 +547,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 	case engineio.CallsiteInternal:
 		// Supported with no checks (all dependencies supported)
 
-	case engineio.CallsiteInvokable:
+	case engineio.CallsiteInvoke:
 		// Exhaust surcharge fuel for invokable endpoint compilation
 		if !compiler.exhaust(InvokableRoutineSurcharge) {
 			return ErrInsufficientCompileFuel
@@ -532,7 +555,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 		// Supported with no checks (all dependencies supported)
 
-	case engineio.CallsiteDeployer:
+	case engineio.CallsiteDeploy:
 		// Exhaust surcharge fuel for deployer endpoint compilation
 		if !compiler.exhaust(DeployerRoutineSurcharge) {
 			return ErrInsufficientCompileFuel
@@ -554,10 +577,31 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 			return errors.New("invalid routine element: missing dependency on persistent state for deployer")
 		}
 
-	case engineio.CallsiteInteractable:
+	case engineio.CallsiteInteract:
 		return errors.New("interactable routine elements are not supported")
-	case engineio.CallsiteEnlister:
-		return errors.New("enlister routine elements are not supported")
+
+	case engineio.CallsiteEnlist:
+		// Exhaust surcharge fuel for enlister endpoint compilation
+		if !compiler.exhaust(EnlisterRoutineSurcharge) {
+			return ErrInsufficientCompileFuel
+		}
+
+		// Check that enlister has the ephemeral mode
+		if schema.Mode != state.Ephemeral {
+			return errors.New("invalid routine element: invalid state mode for enlister routine")
+		}
+
+		// Check if the ephemeral state has been compiled
+		estate, ok := compiler.builder.GetEphemeralStatePtr()
+		if !ok {
+			return errors.New("invalid routine element: enlister routine for non-existent ephemeral storage")
+		}
+
+		// Check if the routine has the necessary dependency for the ephemeral state
+		if !contains(element.Deps, estate) {
+			return errors.New("invalid routine element: missing dependency on ephemeral state for enlister")
+		}
+
 	default:
 		return errors.Errorf("invalid kind '%v' for routine element", schema.Kind)
 	}
@@ -600,8 +644,11 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 	// Add the endpoint reference to the compiler metadata
 	if routine.Endpoint {
-		if schema.Kind == engineio.CallsiteDeployer {
+		switch schema.Kind {
+		case engineio.CallsiteDeploy:
 			compiler.deployers = append(compiler.deployers, element.Ptr)
+		case engineio.CallsiteEnlist:
+			compiler.enlisters = append(compiler.enlisters, element.Ptr)
 		}
 
 		compiler.callsites[schema.Name] = engineio.Callsite{Ptr: element.Ptr, Name: schema.Name, Kind: schema.Kind}

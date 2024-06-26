@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/stretchr/testify/require"
 )
 
 func TestUnmarshalJSON(t *testing.T) {
@@ -135,7 +136,7 @@ func TestMatchTopics(t *testing.T) {
 	testcases := []struct {
 		name   string
 		filter LogQuery
-		log    *common.Log
+		log    common.Log
 		match  bool
 	}{
 		{
@@ -146,7 +147,7 @@ func TestMatchTopics(t *testing.T) {
 					{},
 				},
 			},
-			log: &common.Log{
+			log: common.Log{
 				Topics: []common.Hash{
 					hashes[0],
 				},
@@ -163,7 +164,7 @@ func TestMatchTopics(t *testing.T) {
 					},
 				},
 			},
-			log: &common.Log{
+			log: common.Log{
 				Topics: []common.Hash{
 					hashes[0],
 				},
@@ -182,7 +183,7 @@ func TestMatchTopics(t *testing.T) {
 					},
 				},
 			},
-			log: &common.Log{
+			log: common.Log{
 				Topics: []common.Hash{
 					hashes[0],
 				},
@@ -200,7 +201,7 @@ func TestMatchTopics(t *testing.T) {
 					},
 				},
 			},
-			log: &common.Log{
+			log: common.Log{
 				Topics: []common.Hash{
 					hashes[0],
 					hashes[1],
@@ -221,7 +222,7 @@ func TestMatchTopics(t *testing.T) {
 					},
 				},
 			},
-			log: &common.Log{
+			log: common.Log{
 				Topics: []common.Hash{
 					hashes[0],
 					hashes[1],
@@ -245,7 +246,7 @@ func TestMatchTopics(t *testing.T) {
 					},
 				},
 			},
-			log: &common.Log{
+			log: common.Log{
 				Topics: []common.Hash{
 					hashes[0],
 					hashes[3],

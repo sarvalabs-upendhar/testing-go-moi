@@ -60,14 +60,15 @@ func (api *API) Start(port int) error {
 	api.router.DELETE("/logics/:name", api.wipeLogic)
 	api.router.GET("/logics/:name/manifest", api.getLogicManifest)
 	api.router.GET("/logics/:name/manifest/:encoding", api.getEncodedLogicManifest)
+	api.router.GET("/logics/:name/storage/:storekey", api.getLogicStorage)
 
-	// Logic APIs
-	api.router.GET("/logics/:name/state/:storekey", api.getLogicStorage)
+	// Interact APIs
 	api.router.POST("/interact/logic/deploy", api.InteractLogicDeploy)
 	api.router.POST("/interact/logic/invoke", api.InteractLogicInvoke)
+	api.router.POST("/interact/logic/enlist", api.InteractLogicEnlist)
 
 	// Account APIs
-	api.router.GET("accounts/:addr", api.getAccount)
+	api.router.GET("/accounts/:addr", api.getAccount)
 	api.router.GET("/accounts/:addr/storage/:logicID/:storekey", api.getAccountStorage)
 
 	// Event APIs

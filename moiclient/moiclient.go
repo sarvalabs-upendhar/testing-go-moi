@@ -329,6 +329,18 @@ func (c *Client) PendingInteractionCount(
 	return count, nil
 }
 
+// LogicEnlisted returns whether the account is enlisted with the logic
+func (c *Client) LogicEnlisted(ctx context.Context, args *rpcargs.LogicEnlistedArgs) (bool, error) {
+	var res bool
+
+	err := c.Call(ctx, &res, "moi.LogicEnlisted", args)
+	if err != nil {
+		return false, err
+	}
+
+	return res, nil
+}
+
 // LogicStorage returns the data associated with the given storage slot
 func (c *Client) LogicStorage(ctx context.Context, args *rpcargs.GetLogicStorageArgs) (hexutil.Bytes, error) {
 	var res hexutil.Bytes

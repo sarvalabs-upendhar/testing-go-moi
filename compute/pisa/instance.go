@@ -37,17 +37,20 @@ func (instance Instance) Call(
 		return nil, errors.Errorf("callsite '%v' does not exist", ixn.Callsite())
 	}
 
-	switch kind := callsite.Kind; kind {
-	// Deployer Callsite: IxLogicDeploy
-	case engineio.CallsiteDeployer:
-		if ixn.Type() != common.IxLogicDeploy {
-			return nil, errors.Errorf("callsite kind '%v' is not appropriate for IxLogicDeploy", kind)
+	switch kind := ixn.Type(); kind {
+	case common.IxLogicInvoke:
+		if callsite.Kind != engineio.CallsiteInvoke {
+			return nil, errors.Errorf("callsite kind '%v' is not appropriate for IxLogicInvoke", callsite.Kind)
 		}
 
-	// Invokable Callsite: IxLogicInvoke
-	case engineio.CallsiteInvokable:
-		if ixn.Type() != common.IxLogicInvoke {
-			return nil, errors.Errorf("callsite kind '%v' is not appropriate for IxLogicInvoke", kind)
+	case common.IxLogicDeploy:
+		if callsite.Kind != engineio.CallsiteDeploy {
+			return nil, errors.Errorf("callsite kind '%v' is not appropriate for IxLogicDeploy", callsite.Kind)
+		}
+
+	case common.IxLogicEnlist:
+		if callsite.Kind != engineio.CallsiteEnlist {
+			return nil, errors.Errorf("callsite kind '%v' is not appropriate for IxLogicEnlist", callsite.Kind)
 		}
 
 	default:
@@ -58,7 +61,7 @@ func (instance Instance) Call(
 		return nil, errors.Errorf("sender driver cannot be nil")
 	}
 
-	result, err := instance.internal.PerformCall(newIxn(ixn), newState(sender), nil)
+	result, err := instance.internal.Call(newIxn(ixn), newState(sender), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -74,4 +77,27 @@ func (instance Instance) Call(
 		consumed: result.FuelUsed,
 		outdata:  result.OutData.Bytes(),
 	}, nil
+}
+
+func (instance Instance) FuelReset()        { instance.internal.FuelReset() }
+func (instance Instance) FuelLevel() uint64 { return instance.internal.FuelLevel() }
+
+func (instance Instance) GetEventDriver() engineio.EventDriver {
+	return instance.internal.GetEventDriver().(EventStream).driver //nolint:forcetypeassert
+}
+
+func (instance Instance) GetLocalDriver() engineio.StateDriver {
+	return instance.internal.GetLocalDriver().(*State).driver //nolint:forcetypeassert
+}
+
+func (instance Instance) SetLocalDriver(driver engineio.StateDriver) {
+	instance.internal.SetLocalDriver(newState(driver))
+}
+
+func (instance Instance) GetSenderDriver() engineio.StateDriver {
+	return instance.internal.GetSenderDriver().(*State).driver //nolint:forcetypeassert
+}
+
+func (instance Instance) SetSenderDriver(driver engineio.StateDriver) {
+	instance.internal.SetSenderDriver(newState(driver))
 }

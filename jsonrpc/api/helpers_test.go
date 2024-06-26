@@ -24,11 +24,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2pTest "github.com/libp2p/go-libp2p/core/test"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -347,13 +348,38 @@ func (s *MockStateManager) setStorageEntry(t *testing.T, logicID identifiers.Log
 	s.logicStorage[string(logicID)] = storage
 }
 
-func (s *MockStateManager) GetStorageEntry(logicID identifiers.LogicID, slot []byte, _ common.Hash) ([]byte, error) {
-	storage, ok := s.logicStorage[string(logicID)]
+func (s *MockStateManager) GetPersistentStorageEntry(
+	logicID identifiers.LogicID,
+	key []byte, _ common.Hash,
+) (
+	[]byte, error,
+) {
+	logicStorage, ok := s.logicStorage[string(logicID)]
 	if !ok {
 		return nil, common.ErrLogicStorageTreeNotFound
 	}
 
-	value, ok := storage[string(slot)]
+	value, ok := logicStorage[string(key)]
+	if !ok {
+		return nil, common.ErrKeyNotFound
+	}
+
+	return []byte(value), nil
+}
+
+func (s *MockStateManager) GetEphemeralStorageEntry(
+	addr identifiers.Address,
+	logicID identifiers.LogicID,
+	key []byte, _ common.Hash,
+) (
+	[]byte, error,
+) {
+	logicStorage, ok := s.logicStorage[string(logicID)]
+	if !ok {
+		return nil, common.ErrLogicStorageTreeNotFound
+	}
+
+	value, ok := logicStorage[string(key)]
 	if !ok {
 		return nil, common.ErrKeyNotFound
 	}

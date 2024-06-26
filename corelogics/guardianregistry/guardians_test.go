@@ -6,20 +6,16 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
-	"github.com/sarvalabs/go-pisa/exception"
 	"github.com/sarvalabs/go-polo"
 )
 
-func init() {
-	engineio.RegisterEngine(pisa.NewEngine())
-}
-
 func TestGuardianTestSuite(t *testing.T) {
+	engineio.RegisterEngine(pisa.NewEngine())
+
 	// Run GuardianRegistry suite with Setup deployer
 	suite.Run(t, new(GuardianSetupTestSuite))
 	// Run GuardianRegistry suite with Import deployer
@@ -64,9 +60,9 @@ func (suite *GuardianSetupTestSuite) SetupSuite() {
 	suite.Require().NoErrorf(err, "could not read manifest file")
 
 	// Initialise the test suite
-	consumed, err := suite.Initialise(manifest, AdminAddr1)
+	consumed, err := suite.Initialise(engineio.PISA, manifest, AdminAddr1)
 	suite.Require().NoErrorf(err, "could not read initialise test")
-	suite.Require().Equal(uint64(0xae42), consumed)
+	suite.Require().Equal(uint64(0x2413), consumed)
 
 	inputs := struct {
 		Master      Master     `polo:"master"`
@@ -109,7 +105,7 @@ func (suite *GuardianSetupTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Deploy the logic to initialise its initial state
-	suite.Deploy("Setup", calldata, nil, 5740, nil)
+	suite.Deploy("Setup", calldata, nil, nil)
 
 	// Check the setup consistency
 	suite.T().Run("CheckSetup", suite.testSetup)
@@ -125,9 +121,9 @@ func (suite *GuardianImportTestSuite) SetupSuite() {
 	suite.Require().NoErrorf(err, "could not read manifest file")
 
 	// Initialise the test suite
-	consumed, err := suite.Initialise(manifest, AdminAddr1)
+	consumed, err := suite.Initialise(engineio.PISA, manifest, AdminAddr1)
 	suite.Require().NoErrorf(err, "could not read initialise test")
-	suite.Require().Equal(uint64(0xae42), consumed)
+	suite.Require().Equal(uint64(0x2413), consumed)
 
 	inputs := struct {
 		Master          Master     `polo:"master"`
@@ -203,38 +199,38 @@ func (suite *GuardianImportTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Deploy the logic to initialise its initial state
-	suite.Deploy("Import", calldata, nil, 4694, nil)
+	suite.Deploy("Import", calldata, nil, nil)
 
 	// Check the setup consistency
 	suite.T().Run("CheckSetup", suite.testSetup)
 }
 
 type GuardianTestSuite struct {
-	pisa.TestSuite
+	engineio.TestSuite
 }
 
 func (suite *GuardianTestSuite) testSetup(_ *testing.T) {
 	// Check that there are 2 admin addresses
 	keyAdminsLen := pisa.GenerateStorageKey(SlotAdministrators)
-	suite.CheckStorage(keyAdminsLen, uint64(2))
+	suite.CheckPersistentStorage(keyAdminsLen, uint64(2))
 
-	keyAdmin1 := pisa.GenerateStorageKey(SlotAdministrators, mapKey(AdminAddr1))
-	suite.CheckStorage(keyAdmin1, true)
+	keyAdmin1 := pisa.GenerateStorageKey(SlotAdministrators, pisa.MakeMapKey(AdminAddr1))
+	suite.CheckPersistentStorage(keyAdmin1, true)
 
-	keyAdmin2 := pisa.GenerateStorageKey(SlotAdministrators, mapKey(AdminAddr2))
-	suite.CheckStorage(keyAdmin2, true)
+	keyAdmin2 := pisa.GenerateStorageKey(SlotAdministrators, pisa.MakeMapKey(AdminAddr2))
+	suite.CheckPersistentStorage(keyAdmin2, true)
 
 	// Check that there are 4 approved krama IDs
 	// This includes the 2 in the pre-approved and 2 in the master guardians
 	keyApprovedLen := pisa.GenerateStorageKey(SlotApproved)
-	suite.CheckStorage(keyApprovedLen, uint64(4))
+	suite.CheckPersistentStorage(keyApprovedLen, uint64(4))
 
 	// Check if Krama ID added to master guardians was approved
 	suite.Invoke(
 		"IsApproved",
 		suite.DocGen(map[string]any{"kramaID": GuardianKramaID1}),
 		suite.DocGen(map[string]any{"ok": true}),
-		176, nil,
+		nil,
 	)
 
 	// Check if Krama ID in the pre-approved set is approved
@@ -242,7 +238,7 @@ func (suite *GuardianTestSuite) testSetup(_ *testing.T) {
 		"IsApproved",
 		suite.DocGen(map[string]any{"kramaID": GuardianKramaID3}),
 		suite.DocGen(map[string]any{"ok": true}),
-		176, nil,
+		nil,
 	)
 
 	// Check if some other KramaID was not approved
@@ -250,7 +246,7 @@ func (suite *GuardianTestSuite) testSetup(_ *testing.T) {
 		"IsApproved",
 		suite.DocGen(map[string]any{"kramaID": GuardianKramaID6}),
 		suite.DocGen(map[string]any{"ok": false}),
-		167, nil,
+		nil,
 	)
 
 	// Check if the master MOI ID was marked as verified
@@ -258,7 +254,7 @@ func (suite *GuardianTestSuite) testSetup(_ *testing.T) {
 		"IsVerified",
 		suite.DocGen(map[string]any{"moiID": MasterMOIID}),
 		suite.DocGen(map[string]any{"ok": true}),
-		176, nil,
+		nil,
 	)
 
 	// Check if some other MOI ID was not verified
@@ -266,46 +262,46 @@ func (suite *GuardianTestSuite) testSetup(_ *testing.T) {
 		"IsVerified",
 		suite.DocGen(map[string]any{"moiID": identifiers.NewRandomAddress().Hex()}),
 		suite.DocGen(map[string]any{"ok": false}),
-		167, nil,
+		nil,
 	)
 
 	// Check that there is 1 known operators
 	// This is the given master operator
 	keyKnownOperatorsLen := pisa.GenerateStorageKey(SlotKnownOperators)
-	suite.CheckStorage(keyKnownOperatorsLen, uint64(1))
+	suite.CheckPersistentStorage(keyKnownOperatorsLen, uint64(1))
 
 	// Check that master MOI ID is at known operators index 0
 	keyKnownOperators0 := pisa.GenerateStorageKey(SlotKnownOperators, pisa.ArrIdx(0))
-	suite.CheckStorage(keyKnownOperators0, MasterMOIID)
+	suite.CheckPersistentStorage(keyKnownOperators0, MasterMOIID)
 
 	// Check that there are 2 known guardians
 	// These are the given master guardians
 	keyKnownGuardiansLen := pisa.GenerateStorageKey(SlotKnownGuardians)
-	suite.CheckStorage(keyKnownGuardiansLen, uint64(2))
+	suite.CheckPersistentStorage(keyKnownGuardiansLen, uint64(2))
 
 	// Check that krama ID 1 is at known guardians index 0
 	keyKnownGuardian0 := pisa.GenerateStorageKey(SlotKnownGuardians, pisa.ArrIdx(0))
-	suite.CheckStorage(keyKnownGuardian0, GuardianKramaID1)
+	suite.CheckPersistentStorage(keyKnownGuardian0, GuardianKramaID1)
 
 	// Check that krama ID 2 is at known guardians index 1
 	keyKnownGuardian1 := pisa.GenerateStorageKey(SlotKnownGuardians, pisa.ArrIdx(1))
-	suite.CheckStorage(keyKnownGuardian1, GuardianKramaID2)
+	suite.CheckPersistentStorage(keyKnownGuardian1, GuardianKramaID2)
 
 	// Check the master MOI ID
 	keyMasterOpMOIID := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(0))
-	suite.CheckStorage(keyMasterOpMOIID, MasterMOIID)
+	suite.CheckPersistentStorage(keyMasterOpMOIID, MasterMOIID)
 
 	// Check the master wallet address
 	keyMasterOpWallet := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(1))
-	suite.CheckStorage(keyMasterOpWallet, MasterAddr)
+	suite.CheckPersistentStorage(keyMasterOpWallet, MasterAddr)
 
 	// Check the master public key
 	keyMasterOpPubKey := pisa.GenerateStorageKey(SlotMasterOperator, pisa.ClsFld(1))
-	suite.CheckStorage(keyMasterOpPubKey, MasterAddr.Bytes())
+	suite.CheckPersistentStorage(keyMasterOpPubKey, MasterAddr.Bytes())
 
 	// Check the public key of the guardian 1
-	keyGuardian1PubKey := pisa.GenerateStorageKey(SlotGuardians, mapKey(GuardianKramaID1), pisa.ClsFld(3))
-	suite.CheckStorage(keyGuardian1PubKey, GuardianPubKey1)
+	keyGuardian1PubKey := pisa.GenerateStorageKey(SlotGuardians, pisa.MakeMapKey(GuardianKramaID1), pisa.ClsFld(3))
+	suite.CheckPersistentStorage(keyGuardian1PubKey, GuardianPubKey1)
 }
 
 func (suite *GuardianTestSuite) TestApprovals() {
@@ -317,7 +313,7 @@ func (suite *GuardianTestSuite) TestApprovals() {
 				GuardianKramaID6,
 			},
 		}),
-		nil, 943, nil,
+		nil, nil,
 	)
 
 	// Check if KramaID 5 was approved successfully
@@ -325,7 +321,7 @@ func (suite *GuardianTestSuite) TestApprovals() {
 		"IsApproved",
 		suite.DocGen(map[string]any{"kramaID": GuardianKramaID5}),
 		suite.DocGen(map[string]any{"ok": true}),
-		176, nil,
+		nil,
 	)
 
 	// Check if KramaID 6 was approved successfully
@@ -333,7 +329,7 @@ func (suite *GuardianTestSuite) TestApprovals() {
 		"IsApproved",
 		suite.DocGen(map[string]any{"kramaID": GuardianKramaID6}),
 		suite.DocGen(map[string]any{"ok": true}),
-		176, nil,
+		nil,
 	)
 }
 
@@ -346,16 +342,13 @@ func (suite *GuardianTestSuite) TestRegistration() {
 			"moiID":        MasterMOIID,
 			"verification": VerifyProof{},
 		}),
-		nil, 543,
-		&exception.Exception{
-			Class:  "string",
-			Error:  "operator already exists",
-			Revert: true,
-			Trace: []string{
+		nil, pisa.NewError(
+			"string", "operator already exists", true,
+			[]string{
 				"runtime.root()",
 				"routine.RegisterOperator() [0x24] ... [0x14: REVERT 0x2]",
 			},
-		},
+		),
 	)
 
 	// Create a new address for the operator
@@ -369,23 +362,23 @@ func (suite *GuardianTestSuite) TestRegistration() {
 			"moiID":        newOpID,
 			"verification": VerifyProof{"kyc", []byte{}},
 		}),
-		nil, 975, nil,
+		nil, nil,
 	)
 
 	// Check that known operators list has grown by 1
 	keyKnownOperatorsLen := pisa.GenerateStorageKey(SlotKnownOperators)
-	suite.CheckStorage(keyKnownOperatorsLen, uint64(2))
+	suite.CheckPersistentStorage(keyKnownOperatorsLen, uint64(2))
 
 	// Check that operators map has grown by 1
 	keyOperatorsLen := pisa.GenerateStorageKey(SlotOperators)
-	suite.CheckStorage(keyOperatorsLen, uint64(2))
+	suite.CheckPersistentStorage(keyOperatorsLen, uint64(2))
 
 	// Check if new operator MOI ID is verified
 	suite.Invoke(
 		"IsVerified",
 		suite.DocGen(map[string]any{"moiID": newOpID}),
 		suite.DocGen(map[string]any{"ok": true}),
-		176, nil,
+		nil,
 	)
 
 	// Attempt to register an already existing guardian
@@ -402,17 +395,14 @@ func (suite *GuardianTestSuite) TestRegistration() {
 				ExtraData:  nil,
 			},
 		}),
-		nil, 829,
-		&exception.Exception{
-			Class:  "string",
-			Error:  "guardian already exists",
-			Revert: false,
-			Trace: []string{
+		nil, pisa.NewError(
+			"string", "guardian already exists", false,
+			[]string{
 				"runtime.root()",
-				"routine.RegisterGuardian() [0x25] ... [0x3d: THROW 0x5]",
+				"routine.RegisterGuardian() [0x25] ... [0x3c: THROW 0x5]",
 			},
-		},
-		pisa.UseSender(newOp),
+		),
+		engineio.UseSender(newOp),
 	)
 
 	// Attempt to register a guardian that is not approved
@@ -429,18 +419,15 @@ func (suite *GuardianTestSuite) TestRegistration() {
 				ExtraData:  nil,
 			},
 		}),
-		nil, 1313,
-		&exception.Exception{
-			Class:  "string",
-			Error:  "guardian krama id is not approved",
-			Revert: false,
-			Trace: []string{
+		nil, pisa.NewError(
+			"string", "guardian krama id is not approved", false,
+			[]string{
 				"runtime.root()",
-				"routine.RegisterGuardian() [0x25] ... [0x4b: CALLR 0x4 0x5 0x4]",
+				"routine.RegisterGuardian() [0x25] ... [0x4a: CALLR 0x4 0x5 0x4]",
 				"routine.CanRegisterGuardian() [0x26] ... [0x11: THROW 0x1]",
 			},
-		},
-		pisa.UseSender(newOp),
+		),
+		engineio.UseSender(newOp),
 	)
 
 	// Register an approved guardian
@@ -457,21 +444,21 @@ func (suite *GuardianTestSuite) TestRegistration() {
 				},
 			},
 		}),
-		nil, 2438, nil,
-		pisa.UseSender(newOp),
+		nil, nil,
+		engineio.UseSender(newOp),
 	)
 
 	// Check that known guardians list has grown by 1
 	keyKnownGuardiansLen := pisa.GenerateStorageKey(SlotKnownGuardians)
-	suite.CheckStorage(keyKnownGuardiansLen, uint64(3))
+	suite.CheckPersistentStorage(keyKnownGuardiansLen, uint64(3))
 
 	// Check that operator guardians list has grown by 1
-	keyOperatorGuardiansLen := pisa.GenerateStorageKey(SlotOperators, mapKey(newOpID), pisa.ClsFld(2))
-	suite.CheckStorage(keyOperatorGuardiansLen, uint64(1))
+	keyOperatorGuardiansLen := pisa.GenerateStorageKey(SlotOperators, pisa.MakeMapKey(newOpID), pisa.ClsFld(2))
+	suite.CheckPersistentStorage(keyOperatorGuardiansLen, uint64(1))
 
 	// Check that krama ID 3 is at the 0th index of the operator's guardians
-	keyOpGuardian0 := pisa.GenerateStorageKey(SlotOperators, mapKey(newOpID), pisa.ClsFld(2), pisa.ArrIdx(0))
-	suite.CheckStorage(keyOpGuardian0, GuardianKramaID3)
+	keyOpGuardian0 := pisa.GenerateStorageKey(SlotOperators, pisa.MakeMapKey(newOpID), pisa.ClsFld(2), pisa.ArrIdx(0))
+	suite.CheckPersistentStorage(keyOpGuardian0, GuardianKramaID3)
 }
 
 func (suite *GuardianTestSuite) TestIncentivisation() {
@@ -481,7 +468,7 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 			"GetIncentives",
 			suite.DocGen(map[string]any{"kramaID": GuardianKramaID1}),
 			suite.DocGen(map[string]any{"incentive": uint64(100)}),
-			120, nil,
+			nil,
 		)
 
 		// Attempt to add incentives.
@@ -492,16 +479,13 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 				"incentiveIDs":     []string{GuardianKramaID1},
 				"incentiveAmounts": []uint64{100, 200},
 			}),
-			nil, 442,
-			&exception.Exception{
-				Class:  "string",
-				Error:  "invalid incentive inputs: mismatched size",
-				Revert: false,
-				Trace: []string{
+			nil, pisa.NewError(
+				"string", "invalid incentive inputs: mismatched size", false,
+				[]string{
 					"runtime.root()",
 					"routine.AddIncentives() [0x29] ... [0xc: THROW 0x1]",
 				},
-			},
+			),
 		)
 
 		// Attempt to add incentives to a guardian who does not exist
@@ -511,16 +495,12 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 				"incentiveIDs":     []string{GuardianKramaID6},
 				"incentiveAmounts": []uint64{100},
 			}),
-			nil, 791,
-			&exception.Exception{
-				Class:  "string",
-				Error:  "guardian does not exist",
-				Revert: true,
-				Trace: []string{
+			nil, pisa.NewError("string", "guardian does not exist", true,
+				[]string{
 					"runtime.root()",
 					"routine.AddIncentives() [0x29] ... [0x27: REVERT 0x9]",
 				},
-			},
+			),
 		)
 
 		// Add incentives for an existing krama ID with valid inputs
@@ -530,16 +510,16 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 				"incentiveIDs":     []string{GuardianKramaID1},
 				"incentiveAmounts": []uint64{100},
 			}),
-			nil, 1486, nil,
+			nil, nil,
 		)
 
 		// Check the incentive for the krama ID
 		keyGuardian1Incentive := pisa.GenerateStorageKey(
 			SlotGuardians,
-			mapKey(GuardianKramaID1),
+			pisa.MakeMapKey(GuardianKramaID1),
 			pisa.ClsFld(2), pisa.ClsFld(0),
 		)
-		suite.CheckStorage(keyGuardian1Incentive, 200)
+		suite.CheckPersistentStorage(keyGuardian1Incentive, 200)
 	})
 
 	suite.T().Run("WithReferral", func(t *testing.T) {
@@ -561,8 +541,8 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 					},
 				},
 			}),
-			nil, 1647, nil,
-			pisa.UseSender(MasterAddr),
+			nil, nil,
+			engineio.UseSender(MasterAddr),
 		)
 
 		suite.Invoke(
@@ -571,20 +551,20 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 				"incentiveIDs":     []string{GuardianKramaID3},
 				"incentiveAmounts": []uint64{100},
 			}),
-			nil, 1920, nil,
+			nil, nil,
 		)
 
 		// Check the incentive for the krama ID
 		keyGuardian1Incentive := pisa.GenerateStorageKey(
 			SlotGuardians,
-			mapKey(GuardianKramaID3),
+			pisa.MakeMapKey(GuardianKramaID3),
 			pisa.ClsFld(2), pisa.ClsFld(0),
 		)
-		suite.CheckStorage(keyGuardian1Incentive, 50)
+		suite.CheckPersistentStorage(keyGuardian1Incentive, 50)
 
 		// Check that the referral amount was added
-		keyReferralAmount := pisa.GenerateStorageKey(SlotReferralRewards, mapKey(referralWallet))
-		suite.CheckStorage(keyReferralAmount, 50)
+		keyReferralAmount := pisa.GenerateStorageKey(SlotReferralRewards, pisa.MakeMapKey(referralWallet))
+		suite.CheckPersistentStorage(keyReferralAmount, 50)
 	})
 }
 
@@ -593,7 +573,7 @@ func (suite *GuardianTestSuite) TestChangeNodeLimit() {
 		// Generate storage keys for kyc node limit
 		keyLimitKYC := pisa.GenerateStorageKey(SlotNodeLimitKYC)
 		// Check the initial state of the node limit
-		suite.CheckStorage(keyLimitKYC, uint64(1))
+		suite.CheckPersistentStorage(keyLimitKYC, uint64(1))
 
 		// Change the KYC limit to 5 and check storage
 		suite.Invoke(
@@ -601,9 +581,9 @@ func (suite *GuardianTestSuite) TestChangeNodeLimit() {
 				"kind":    "kyc",
 				"updated": 5,
 			}),
-			nil, 699, nil,
+			nil, nil,
 		)
-		suite.CheckStorage(keyLimitKYC, uint64(5))
+		suite.CheckPersistentStorage(keyLimitKYC, uint64(5))
 
 		// Attempt change the KYC limit to 3
 		// This should cause an exception and the storage must be unchanged
@@ -612,25 +592,22 @@ func (suite *GuardianTestSuite) TestChangeNodeLimit() {
 				"kind":    "kyc",
 				"updated": 3,
 			}),
-			nil, 592,
-			&exception.Exception{
-				Class:  "string",
-				Error:  "updated limit cannot be be less than existing",
-				Revert: true,
-				Trace: []string{
+			nil, pisa.NewError(
+				"string", "updated limit cannot be be less than existing", true,
+				[]string{
 					"runtime.root()",
 					"routine.ChangeNodeLimit() [0x2a] ... [0x13: REVERT 0x5]",
 				},
-			},
+			),
 		)
-		suite.CheckStorage(keyLimitKYC, uint64(5))
+		suite.CheckPersistentStorage(keyLimitKYC, uint64(5))
 	})
 
 	suite.T().Run("KYB", func(t *testing.T) {
 		// Generate storage keys for kyb node limit
 		keyLimitKYB := pisa.GenerateStorageKey(SlotNodeLimitKYB)
 		// Check the initial state of the node limit
-		suite.CheckStorage(keyLimitKYB, uint64(3))
+		suite.CheckPersistentStorage(keyLimitKYB, uint64(3))
 
 		// Change the KYB limit to 7 and check storage
 		suite.Invoke(
@@ -638,9 +615,9 @@ func (suite *GuardianTestSuite) TestChangeNodeLimit() {
 				"kind":    "kyb",
 				"updated": 7,
 			}),
-			nil, 801, nil,
+			nil, nil,
 		)
-		suite.CheckStorage(keyLimitKYB, uint64(7))
+		suite.CheckPersistentStorage(keyLimitKYB, uint64(7))
 
 		// Attempt change the KYB limit to 3
 		// This should cause an exception and the storage must be unchanged
@@ -649,32 +626,14 @@ func (suite *GuardianTestSuite) TestChangeNodeLimit() {
 				"kind":    "kyb",
 				"updated": 3,
 			}),
-			nil, 693,
-			&exception.Exception{
-				Class:  "string",
-				Error:  "updated limit cannot be be less than existing",
-				Revert: true,
-				Trace: []string{
+			nil, pisa.NewError(
+				"string", "updated limit cannot be be less than existing", true,
+				[]string{
 					"runtime.root()",
 					"routine.ChangeNodeLimit() [0x2a] ... [0x2a: REVERT 0x4]",
 				},
-			},
+			),
 		)
-		suite.CheckStorage(keyLimitKYB, uint64(7))
+		suite.CheckPersistentStorage(keyLimitKYB, uint64(7))
 	})
-}
-
-func mapKey(object any) pisa.MapKey {
-	serial := must(polo.Polorize(object))
-	hashed := blake2b.Sum256(serial)
-
-	return hashed
-}
-
-func must[T any](t T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-
-	return t
 }

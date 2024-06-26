@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-polo"
 	"gopkg.in/yaml.v3"
+
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -37,8 +38,9 @@ type Manifest interface {
 	// The boolean indicated is such an element exists in the Manifest.
 	GetElement(ElementPtr) (ManifestElement, bool)
 
-	// Encode returns the encoded bytes form of the Manifest for the specified encoding.
+	// Encode returns the encoded bytes form of the Manifest for the specified encoding
 	Encode(common.Encoding) ([]byte, error)
+	// Decode decodes the given encoded bytes in the specified encoding into the Manifest
 	Decode(common.Encoding, []byte) error
 }
 

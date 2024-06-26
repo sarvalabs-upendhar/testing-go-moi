@@ -6,6 +6,7 @@ import (
 
 	"github.com/manishmeganathan/symbolizer"
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 )
 

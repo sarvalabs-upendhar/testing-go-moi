@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/stretchr/testify/require"
 )
 
 // CheckForRPCTesseract validates fields of rpc tesseract
@@ -140,10 +141,7 @@ func CheckForRPCIxn(
 
 		require.Equal(t, expectedPayload, []byte(rpcIxn.Payload))
 
-	case common.IxLogicDeploy:
-		fallthrough
-
-	case common.IxLogicInvoke:
+	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
 		logicPayload := new(common.LogicPayload)
 
 		err := logicPayload.FromBytes(ix.Payload())

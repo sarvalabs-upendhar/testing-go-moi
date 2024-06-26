@@ -16,6 +16,8 @@ import (
 	gorillaWS "github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
@@ -24,7 +26,6 @@ import (
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/sarvalabs/go-moi/state"
-	"github.com/stretchr/testify/require"
 )
 
 var serverAddr = &net.TCPAddr{
@@ -247,7 +248,14 @@ func (m *MockStateManager) GetLogicManifest(_ identifiers.LogicID, _ common.Hash
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetStorageEntry(_ identifiers.LogicID, _ []byte, _ common.Hash) ([]byte, error) {
+func (m *MockStateManager) GetPersistentStorageEntry(_ identifiers.LogicID, _ []byte, _ common.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) GetEphemeralStorageEntry(
+	_ identifiers.Address, _ identifiers.LogicID, _ []byte, _ common.Hash,
+) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -311,14 +319,14 @@ func createTSandLogs(
 	t *testing.T,
 	address identifiers.Address,
 	hashes []common.Hash,
-) ([]*common.Tesseract, *common.Log) {
+) ([]*common.Tesseract, common.Log) {
 	t.Helper()
 
 	logic := tests.GetLogicID(t, address)
 	data := []byte{1}
 
 	// create dummy logs
-	logs := &common.Log{
+	logs := common.Log{
 		Address: address,
 		Topics:  hashes,
 		LogicID: logic,
@@ -327,7 +335,7 @@ func createTSandLogs(
 
 	// create dummy receipts with logs
 	receipts := createReceipt(t, func(r *common.Receipt) {
-		r.Logs = []*common.Log{logs}
+		r.Logs = []common.Log{logs}
 		r.IxHash = hashes[0]
 	})
 
@@ -358,7 +366,7 @@ func createTSandLogs(
 	return tesseracts, logs
 }
 
-func validateLogs(t *testing.T, log *common.Log, rpcLog *rpcargs.RPCLog) {
+func validateLogs(t *testing.T, log common.Log, rpcLog *rpcargs.RPCLog) {
 	t.Helper()
 
 	require.Equal(t, log.Address, rpcLog.Address)
@@ -479,7 +487,7 @@ func assertRPCTesseract(
 func assertRPCLogs(
 	t *testing.T,
 	expectedTesseract *common.Tesseract,
-	logs *common.Log,
+	logs common.Log,
 	expectedHash common.Hash,
 	res *Message,
 ) {

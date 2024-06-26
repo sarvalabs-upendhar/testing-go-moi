@@ -174,39 +174,39 @@ func GetManifestHashFromRawLogicObject(raw []byte) (common.Hash, error) {
 	return ManifestHash, nil
 }
 
-type LogicContextObject struct {
+type LogicStorageObject struct {
 	state *Object
 	logic identifiers.LogicID
 }
 
-func NewLogicContextObject(logic identifiers.LogicID, state *Object) *LogicContextObject {
-	return &LogicContextObject{state: state, logic: logic}
+func NewLogicStorageObject(logic identifiers.LogicID, state *Object) *LogicStorageObject {
+	return &LogicStorageObject{state: state, logic: logic}
 }
 
-func (ctx LogicContextObject) Address() identifiers.Address {
+func (ctx LogicStorageObject) Address() identifiers.Address {
 	return ctx.state.Address()
 }
 
-func (ctx LogicContextObject) LogicID() identifiers.LogicID {
+func (ctx LogicStorageObject) LogicID() identifiers.LogicID {
 	return ctx.logic
 }
 
-func (ctx LogicContextObject) GetStorageEntry(key []byte) ([]byte, bool) {
+func (ctx LogicStorageObject) GetStorageEntry(key []byte) ([]byte, error) {
 	data, err := ctx.state.GetStorageEntry(ctx.logic, key)
 
-	return data, err == nil
+	return data, err
 }
 
-func (ctx LogicContextObject) SetStorageEntry(key, val []byte) bool {
+func (ctx LogicStorageObject) SetStorageEntry(key, val []byte) error {
 	err := ctx.state.SetStorageEntry(ctx.logic, key, val)
 
-	return err == nil
+	return err
 }
 
-type LogicStorageObject map[string][]byte
+type Storage map[string][]byte
 
-func (storage LogicStorageObject) Copy() LogicStorageObject {
-	clone := make(LogicStorageObject)
+func (storage Storage) Copy() Storage {
+	clone := make(Storage)
 
 	for key, value := range storage {
 		v := make([]byte, len(value))

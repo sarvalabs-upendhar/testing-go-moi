@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/libp2p/go-libp2p/core/network"
+
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 
@@ -42,27 +43,26 @@ type ChainManager interface {
 }
 
 type StateManager interface {
-	FetchIxStateObjects(
-		ixns common.Interactions,
-		hashes map[identifiers.Address]common.Hash,
-	) (
-		*state.Transition, error,
-	)
-	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
-	GetContextByHash(identifiers.Address, common.Hash) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
-	GetBalances(addrs identifiers.Address, stateHash common.Hash) (*state.BalanceObject, error)
-	GetBalance(addr identifiers.Address, assetID identifiers.AssetID, stateHash common.Hash) (*big.Int, error)
-	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
-	GetAccountState(addr identifiers.Address, stateHash common.Hash) (*common.Account, error)
-	GetLogicManifest(logicID identifiers.LogicID, stateHash common.Hash) ([]byte, error)
-	GetStorageEntry(logicID identifiers.LogicID, slot []byte, stateHash common.Hash) ([]byte, error)
-	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
-	GetLogicIDs(addr identifiers.Address, stateHash common.Hash) ([]identifiers.LogicID, error)
-	GetAssetInfo(assetID identifiers.AssetID, stateHash common.Hash) (*common.AssetDescriptor, error)
-	GetRegistry(addr identifiers.Address, stateHash common.Hash) (map[string][]byte, error)
+	GetLatestStateObject(identifiers.Address) (*state.Object, error)
 	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
 	GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error)
+	FetchIxStateObjects(common.Interactions, map[identifiers.Address]common.Hash) (*state.Transition, error)
+
+	GetNonce(identifiers.Address, common.Hash) (uint64, error)
+	GetAccountState(identifiers.Address, common.Hash) (*common.Account, error)
+	GetAccountMetaInfo(identifiers.Address) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(identifiers.Address) (bool, error)
+	GetContextByHash(identifiers.Address, common.Hash) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
+
+	GetAssetInfo(identifiers.AssetID, common.Hash) (*common.AssetDescriptor, error)
+	GetBalances(identifiers.Address, common.Hash) (*state.BalanceObject, error)
+	GetBalance(identifiers.Address, identifiers.AssetID, common.Hash) (*big.Int, error)
+	GetRegistry(identifiers.Address, common.Hash) (map[string][]byte, error)
+
+	GetLogicIDs(identifiers.Address, common.Hash) ([]identifiers.LogicID, error)
+	GetLogicManifest(identifiers.LogicID, common.Hash) ([]byte, error)
+	GetPersistentStorageEntry(identifiers.LogicID, []byte, common.Hash) ([]byte, error)
+	GetEphemeralStorageEntry(identifiers.Address, identifiers.LogicID, []byte, common.Hash) ([]byte, error)
 }
 
 type ExecutionManager interface {

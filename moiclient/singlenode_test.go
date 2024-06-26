@@ -1230,7 +1230,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
-		Callsite: "Seeder",
+		Callsite: "Seed",
 		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
 			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
 	}
@@ -1280,7 +1280,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 					},
 				},
 			},
-			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(2180)),
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(3473)),
 		},
 		{
 			name: "failed to fetch fuel estimate as options are empty",
@@ -1325,7 +1325,7 @@ func (tn *TestSingleNode) TestCall() {
 
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
-		Callsite: "Seeder",
+		Callsite: "Seed",
 		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
 			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
 	}
@@ -1349,7 +1349,7 @@ func (tn *TestSingleNode) TestCall() {
 
 	receiptWithFuelParams := &common.Receipt{
 		IxType:   common.IxLogicDeploy,
-		FuelUsed: 2180,
+		FuelUsed: 3473,
 	}
 
 	receiptWithoutFuelParams := &common.Receipt{

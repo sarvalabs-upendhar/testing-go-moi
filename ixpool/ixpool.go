@@ -11,6 +11,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
+
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -48,8 +49,9 @@ type stateManager interface {
 }
 
 type executionManager interface {
-	ValidateLogicInvoke(receiverObject *state.Object, ix *common.Interaction) error
-	ValidateLogicDeploy(ix *common.Interaction, manifest []byte) error
+	ValidateLogicDeploy(ix *common.Interaction) error
+	ValidateLogicInvoke(ix *common.Interaction, calleracc, logicacc *state.Object) error
+	ValidateLogicEnlist(ix *common.Interaction, calleracc, logicacc *state.Object) error
 }
 
 type IxConfig struct {
@@ -573,6 +575,8 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 		return i.validateLogicDeployPayload(ix)
 	case common.IxLogicInvoke:
 		return i.validateLogicInvokePayload(ix)
+	case common.IxLogicEnlist:
+		return i.validateLogicEnlistPayload(ix)
 	default:
 		return common.ErrInvalidInteractionType
 	}
@@ -682,17 +686,18 @@ func (i *IxPool) validateAssetBurn(ix *common.Interaction) error {
 }
 
 func (i *IxPool) validateLogicDeployPayload(ix *common.Interaction) error {
+	// Obtain logic payload
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return err
 	}
 
-	// manifest cannot be empty
+	// Manifest cannot be empty for logic deploy
 	if len(payload.Manifest) == 0 {
 		return common.ErrEmptyManifest
 	}
 
-	if err := i.exec.ValidateLogicDeploy(ix, payload.Manifest); err != nil {
+	if err = i.exec.ValidateLogicDeploy(ix); err != nil {
 		return errors.Wrap(err, "failed to validate logic deploy")
 	}
 
@@ -700,32 +705,85 @@ func (i *IxPool) validateLogicDeployPayload(ix *common.Interaction) error {
 }
 
 func (i *IxPool) validateLogicInvokePayload(ix *common.Interaction) error {
+	// Obtain logic payload
 	payload, err := ix.GetLogicPayload()
 	if err != nil {
 		return err
 	}
 
-	// callsite cannot be empty
+	// Callsite cannot be empty
 	if len(payload.Callsite) == 0 {
 		return common.ErrEmptyCallSite
 	}
 
-	// logicID cannot be empty
+	// LogicID cannot be empty
 	if len(payload.Logic) == 0 {
 		return common.ErrMissingLogicID
 	}
 
-	receiverObject, err := i.sm.GetLatestStateObject(ix.Receiver())
+	// Obtain state object of sender
+	callerAcc, err := i.sm.GetLatestStateObject(ix.Sender())
 	if err != nil {
 		return err
 	}
 
-	if err := i.exec.ValidateLogicInvoke(receiverObject, ix); err != nil {
+	// Obtain state object of receiver (logic)
+	logicAcc, err := i.sm.GetLatestStateObject(ix.Receiver())
+	if err != nil {
+		return err
+	}
+
+	// Check if logic is registered
+	if err = i.sm.IsLogicRegistered(payload.Logic); err != nil {
+		return err
+	}
+
+	if err := i.exec.ValidateLogicInvoke(ix, callerAcc, logicAcc); err != nil {
 		return errors.Wrap(err, "failed to validate logic invoke")
 	}
 
-	// make sure logic is registered
-	return i.sm.IsLogicRegistered(payload.Logic)
+	return nil
+}
+
+func (i *IxPool) validateLogicEnlistPayload(ix *common.Interaction) error {
+	// Obtain logic payload
+	payload, err := ix.GetLogicPayload()
+	if err != nil {
+		return err
+	}
+
+	// Callsite cannot be empty
+	if len(payload.Callsite) == 0 {
+		return common.ErrEmptyCallSite
+	}
+
+	// LogicID cannot be empty
+	if len(payload.Logic) == 0 {
+		return common.ErrMissingLogicID
+	}
+
+	// Obtain state object of sender
+	callerAcc, err := i.sm.GetLatestStateObject(ix.Sender())
+	if err != nil {
+		return err
+	}
+
+	// Obtain state object of receiver (logic)
+	logicAcc, err := i.sm.GetLatestStateObject(ix.Receiver())
+	if err != nil {
+		return err
+	}
+
+	// Check if logic is registered
+	if err = i.sm.IsLogicRegistered(payload.Logic); err != nil {
+		return err
+	}
+
+	if err := i.exec.ValidateLogicEnlist(ix, callerAcc, logicAcc); err != nil {
+		return errors.Wrap(err, "failed to validate logic enlist")
+	}
+
+	return nil
 }
 
 func (i *IxPool) removeNonceHoleAccounts() {

@@ -10,6 +10,7 @@ import (
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 
@@ -43,7 +44,7 @@ type Object struct {
 	storageTrees    map[identifiers.LogicID]tree.MerkleTree
 	fileTree        tree.MerkleTree //nolint:unused
 
-	dirtyEntries LogicStorageObject
+	dirtyEntries Storage
 	receipts     common.Receipts
 
 	storageTreeTxns map[identifiers.LogicID]*iradix.Txn
@@ -76,7 +77,7 @@ func NewStateObject(
 			PrvHash:   common.NilHash,
 		},
 		files:           make(map[common.Hash][]byte),
-		dirtyEntries:    make(LogicStorageObject),
+		dirtyEntries:    make(Storage),
 		receipts:        make(common.Receipts),
 		storageTreeTxns: make(map[identifiers.LogicID]*iradix.Txn),
 		storageTrees:    make(map[identifiers.LogicID]tree.MerkleTree),
@@ -599,15 +600,23 @@ func (object *Object) CreateLogic(descriptor engineio.LogicDescriptor) (identifi
 		return "", errors.Wrap(err, "could not insert logic object into state object")
 	}
 
-	// Initialize a storage tree for the LogicID on the state object
-	_, err := object.createStorageTreeForLogic(logicObject.ID)
-	if err != nil {
+	// Initialise the logic for itself
+	if err := object.InitLogicStorage(logicObject.LogicID()); err != nil {
 		return "", err
 	}
 
-	object.storageTreeTxns[logicObject.LogicID()] = iradix.New().Txn()
-
 	return logicObject.ID, nil
+}
+
+func (object *Object) InitLogicStorage(logicID identifiers.LogicID) error {
+	// Initialize a storage tree for the LogicID on the state object
+	if _, err := object.createStorageTreeForLogic(logicID); err != nil {
+		return err
+	}
+
+	object.storageTreeTxns[logicID] = iradix.New().Txn()
+
+	return nil
 }
 
 func (object *Object) AddAccountGenesisInfo(address identifiers.Address, ixHash common.Hash) error {
@@ -816,6 +825,23 @@ func (object *Object) loadRegistryObject() error {
 	return nil
 }
 
+func (object *Object) HasStorageTree(logicID identifiers.LogicID) (bool, error) {
+	if _, ok := object.storageTrees[logicID]; ok {
+		return true, nil
+	}
+
+	metaStorageTree, err := object.getMetaStorageTree()
+	if err != nil {
+		return false, err
+	}
+
+	if _, err := metaStorageTree.Get(logicID.Bytes()); err != nil {
+		return false, nil
+	}
+
+	return true, nil
+}
+
 func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTree, error) {
 	storageTree, ok := object.storageTrees[logicID]
 	if ok {
@@ -889,7 +915,7 @@ func (object *Object) GetStorageEntry(logicID identifiers.LogicID, key []byte) (
 	return merkleTree.Get(key)
 }
 
-func (object *Object) GetDirtyStorage() LogicStorageObject {
+func (object *Object) GetDirtyStorage() Storage {
 	return object.dirtyEntries
 }
 
@@ -1020,9 +1046,9 @@ func (object *Object) FetchLogicObject(logicID identifiers.LogicID) (*LogicObjec
 	return object.getLogicObject(logicID)
 }
 
-// GenerateLogicContextObject returns a LogicContextObject scoped to a given types.LogicID
-func (object *Object) GenerateLogicContextObject(logicID identifiers.LogicID) *LogicContextObject {
-	return NewLogicContextObject(logicID, object)
+// GenerateLogicStorageObject returns a LogicStorageObject scoped to a given types.LogicID
+func (object *Object) GenerateLogicStorageObject(logicID identifiers.LogicID) *LogicStorageObject {
+	return NewLogicStorageObject(logicID, object)
 }
 
 func (object *Object) HasSufficientFuel(amount *big.Int) (bool, error) {

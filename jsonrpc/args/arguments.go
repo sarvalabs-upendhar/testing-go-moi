@@ -58,12 +58,18 @@ type GetAccountArgs struct {
 	Options TesseractNumberOrHash `json:"options"`
 }
 
+type LogicEnlistedArgs struct {
+	Address identifiers.Address `json:"address"`
+	LogicID identifiers.LogicID `json:"logic_id"`
+}
+
 type InteractionCountArgs struct {
 	Address identifiers.Address   `json:"address"`
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type GetLogicStorageArgs struct {
+	Address    identifiers.Address   `json:"address"`
 	LogicID    identifiers.LogicID   `json:"logic_id"`
 	StorageKey hexutil.Bytes         `json:"storage_key"`
 	Options    TesseractNumberOrHash `json:"options"`

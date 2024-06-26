@@ -60,7 +60,7 @@ func (q *LogQuery) UnmarshalJSON(data []byte) error {
 // {{A}, {B}}         matches topic A in first position AND B in second position
 // {{A, B}, {C, D}}   matches topic (A OR B) in first position AND (C OR D) in second position
 // MatchTopics returns whether the log match the query
-func (q *LogQuery) MatchTopics(log *common.Log) bool {
+func (q *LogQuery) MatchTopics(log common.Log) bool {
 	// assuming there are no duplicate topics in logs
 	if len(q.Topics) > len(log.Topics) {
 		return false
