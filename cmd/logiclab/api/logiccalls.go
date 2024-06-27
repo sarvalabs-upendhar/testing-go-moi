@@ -177,9 +177,8 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 	}
 
 	// Validate the calldata
-	err = engine.ValidateCalldata(logic.Object, ixn)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
+	if err = engine.ValidateCalldata(logic.Object, ixn); err != nil {
+		c.JSON(http.StatusBadRequest, Error(err))
 		return
 	}
 
@@ -333,9 +332,8 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 	}
 
 	// Validate the calldata
-	err = engine.ValidateCalldata(logic.Object, ixn)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
+	if err = engine.ValidateCalldata(logic.Object, ixn); err != nil {
+		c.JSON(http.StatusBadRequest, Error(err))
 		return
 	}
 
@@ -489,9 +487,8 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 	}
 
 	// Validate the calldata
-	err = engine.ValidateCalldata(logic.Object, ixn)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
+	if err = engine.ValidateCalldata(logic.Object, ixn); err != nil {
+		c.JSON(http.StatusBadRequest, Error(err))
 		return
 	}
 

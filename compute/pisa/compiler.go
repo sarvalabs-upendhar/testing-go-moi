@@ -347,7 +347,7 @@ func (compiler *ManifestCompiler) compileClassElement(element engineio.ManifestE
 	}
 
 	// Create a new datatypes.TypeFields from the class fields
-	fields, err := compiler.compileTypeFields(schema.Fields)
+	fields, err := compiler.compileTypeFields(schema.Fields, false)
 	if err != nil {
 		return errors.Errorf("invalid class element: invalid fields: %v", err)
 	}
@@ -386,7 +386,7 @@ func (compiler *ManifestCompiler) compileEventElement(element engineio.ManifestE
 	}
 
 	// Create a new datatypes.TypeFields from the event fields
-	fields, err := compiler.compileTypeFields(schema.Fields)
+	fields, err := compiler.compileTypeFields(schema.Fields, false)
 	if err != nil {
 		return errors.Errorf("invalid event element: invalid fields: %v", err)
 	}
@@ -422,13 +422,14 @@ func (compiler *ManifestCompiler) compileMethodElement(element engineio.Manifest
 	}
 
 	// Create a new TypeFields from the schema 'accepts'
-	inputs, err := compiler.compileTypeFields(schema.Accepts)
+	inputs, err := compiler.compileTypeFields(schema.Accepts, false)
 	if err != nil {
 		return errors.Wrap(err, "invalid accept fields")
 	}
 
 	// Create a new TypeFields from the schema 'returns'
-	outputs, err := compiler.compileTypeFields(schema.Returns)
+	// WE ALLOW EVENTS IN THIS ONLY TO SUPPORT __event__ METHODS FOR CLASSES
+	outputs, err := compiler.compileTypeFields(schema.Returns, true)
 	if err != nil {
 		return errors.Wrap(err, "invalid return fields")
 	}
@@ -500,7 +501,7 @@ func (compiler *ManifestCompiler) compileStateElement(element engineio.ManifestE
 	}
 
 	// Create a new TypeFields from the map set
-	fields, err := compiler.compileTypeFields(schema.Fields)
+	fields, err := compiler.compileTypeFields(schema.Fields, false)
 	if err != nil {
 		return errors.Errorf("invalid state element: invalid fields: %v", err)
 	}
@@ -607,13 +608,13 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 	}
 
 	// Create a new TypeFields from the schema 'accepts'
-	inputs, err := compiler.compileTypeFields(schema.Accepts)
+	inputs, err := compiler.compileTypeFields(schema.Accepts, false)
 	if err != nil {
 		return errors.Wrap(err, "invalid routine: invalid accept fields")
 	}
 
 	// Create a new TypeFields from the schema 'returns'
-	outputs, err := compiler.compileTypeFields(schema.Returns)
+	outputs, err := compiler.compileTypeFields(schema.Returns, false)
 	if err != nil {
 		return errors.Wrap(err, "invalid routine: invalid return fields")
 	}
@@ -659,7 +660,11 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 // compileTypeFields compiles a list of TypefieldSchema objects into datatypes.TypeFields.
 // Returns an error if the given map of field expressions contains positional gaps or invalid expressions.
-func (compiler *ManifestCompiler) compileTypeFields(table []TypefieldSchema) (*datatypes.TypeFields, error) {
+func (compiler *ManifestCompiler) compileTypeFields(
+	table []TypefieldSchema, allowEvents bool,
+) (
+	*datatypes.TypeFields, error,
+) {
 	// Error if there are more than 2^8 slots
 	if len(table) > 256 {
 		return nil, errors.New("invalid field set: too many typefield schema (max 256)")
@@ -690,7 +695,7 @@ func (compiler *ManifestCompiler) compileTypeFields(table []TypefieldSchema) (*d
 	}
 
 	// Gap detection is performed implicitly when using this constructor
-	return datatypes.NewFieldsWithSlots(fields)
+	return datatypes.NewFieldsWithSlots(fields, allowEvents)
 }
 
 // compileInstructions compiles an InstructionsSchema into some runtime.Instructions.

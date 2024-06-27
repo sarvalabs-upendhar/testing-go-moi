@@ -522,8 +522,8 @@ github.com/sarvalabs/go-legacy-kramaid v0.1.0 h1:YB2ySZGUvGfaF9aDOEye7QU1GhrZ5/P
 github.com/sarvalabs/go-legacy-kramaid v0.1.0/go.mod h1:mepQbz24Umrv4O2tUOGcMYzBs1eq71pu0l4dW7JhZnI=
 github.com/sarvalabs/go-moi-identifiers v0.1.0 h1:7JM/f+n4hvEFsaGQAvI8xLajkI6MamecSZLTPDtTEdg=
 github.com/sarvalabs/go-moi-identifiers v0.1.0/go.mod h1:oui+KkrobvXej/S+qU6iaLunWRHtbxfvVnIWdbHEE6o=
-github.com/sarvalabs/go-pisa v0.3.0-rc.9 h1:ToJcXQsPLgrWJnDhrL8SaeSVV3Kkh85nLyznuuQ1/g8=
-github.com/sarvalabs/go-pisa v0.3.0-rc.9/go.mod h1:ZSah118AgRpg4IkOL/STgv9uVderXadM224S62m3RgI=
+github.com/sarvalabs/go-pisa v0.3.0 h1:tpoQgiWc+1QsfgJXsZXpai57IIFWOK6pEqXJhOAxmAE=
+github.com/sarvalabs/go-pisa v0.3.0/go.mod h1:ZSah118AgRpg4IkOL/STgv9uVderXadM224S62m3RgI=
 github.com/sarvalabs/go-polo v0.4.3 h1:jXQM/lLAIxLOO6eqtEy9d0qMNYgla1kRZzsE+Ui8WPc=
 github.com/sarvalabs/go-polo v0.4.3/go.mod h1:hC7l4cLn3THJWfxz65diRlY7iGVYCQHk18u0U3uzy4s=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
