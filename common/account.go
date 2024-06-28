@@ -61,6 +61,8 @@ type AccountMetaInfo struct {
 	Address       identifiers.Address `json:"address"`
 	Height        uint64              `json:"height"`
 	TesseractHash Hash                `json:"tesseract_hash"`
+	StateHash     Hash                `json:"state_hash"`
+	ContextHash   Hash                `json:"context_hash"`
 }
 
 func (ami *AccountMetaInfo) Bytes() ([]byte, error) {

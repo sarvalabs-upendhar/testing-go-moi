@@ -14,7 +14,7 @@ import (
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
+	"github.com/sarvalabs/go-moi/jsonrpc"
 
 	"github.com/sarvalabs/go-moi/common/tests"
 
@@ -36,7 +36,7 @@ var (
 		engineio.RegisterEngine(pisa.NewEngine())
 
 		// Read manifest file
-		manifest, err := engineio.NewManifestFromFile("../compute/manifests/tokenledger.yaml")
+		manifest, err := engineio.NewManifestFromFile("../compute/exlogics/tokenledger/tokenledger.yaml")
 		if err != nil {
 			panic(err)
 		}
@@ -55,7 +55,7 @@ var (
 
 // makeHTTPRequest takes method, args and makes an HTTP POST request to node specified by url constant
 // returning a response with data, status, and error.
-func makeHTTPRequest(t *testing.T, url string, method string, args interface{}) *rpcargs.Response {
+func makeHTTPRequest(t *testing.T, url string, method string, result interface{}, args ...interface{}) {
 	t.Helper()
 
 	params, err := json.Marshal(args)
@@ -84,25 +84,17 @@ func makeHTTPRequest(t *testing.T, url string, method string, args interface{}) 
 	require.NoError(t, err)
 	require.Nil(t, jsonResp.Error)
 
-	var resp rpcargs.Response
-
-	err = json.Unmarshal(jsonResp.Result, &resp)
+	err = json.Unmarshal(jsonResp.Result, &result)
 	require.NoError(t, err)
-	require.Nil(t, resp.Error)
-
-	return &resp
 }
 
 // httpTesseract returns RPCTesseract based on the given arguments
-func httpTesseract(t *testing.T, url string, args interface{}) *rpcargs.RPCTesseract {
+func httpTesseract(t *testing.T, url string, args ...interface{}) *rpcargs.RPCTesseract {
 	t.Helper()
-
-	resp := makeHTTPRequest(t, url, "moi.Tesseract", args)
 
 	var tess rpcargs.RPCTesseract
 
-	err := json.Unmarshal(resp.Data, &tess)
-	require.NoError(t, err)
+	makeHTTPRequest(t, url, "moi.Tesseract", &tess, args...)
 
 	return &tess
 }
@@ -234,7 +226,7 @@ func createLogFilter(
 ) *rpcargs.FilterResponse {
 	t.Helper()
 
-	logFilter, err := moiClient.NewLogFilter(ctx, &websocket.LogQuery{
+	logFilter, err := moiClient.NewLogFilter(ctx, &jsonrpc.LogQuery{
 		Address: addr,
 	})
 	require.NoError(t, err)

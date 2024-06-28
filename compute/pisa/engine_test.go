@@ -7,8 +7,8 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-pisa/drivers"
-	"github.com/sarvalabs/go-pisa/exception"
 	"github.com/sarvalabs/go-pisa/logic"
 	"github.com/sarvalabs/go-pisa/state"
 )
@@ -35,9 +35,9 @@ func TestInterfaces(t *testing.T) {
 }
 
 func TestError_Decode(t *testing.T) {
-	tests := []*exception.Exception{
-		exception.NewException(exception.CallFailure, "failure"),
-		exception.NewException(exception.RuntimeFailure, "failed!"),
+	tests := []*pisa.ErrorResult{
+		{Kind: "CallFailure", Error: "failure"},
+		{Kind: "RuntimeFailure", Error: "failed", Revert: true, Trace: []string{"foo", "boo"}},
 	}
 
 	engine := NewEngine()
@@ -52,7 +52,7 @@ func TestError_Decode(t *testing.T) {
 func TestManifestSerialization(t *testing.T) {
 	engineio.RegisterEngine(NewEngine())
 
-	manifest, err := engineio.NewManifestFromFile("./../manifests/tokenledger.yaml")
+	manifest, err := engineio.NewManifestFromFile("./../exlogics/tokenledger/tokenledger.yaml")
 	require.NoError(t, err)
 
 	encoded, err := manifest.Encode(common.POLO)

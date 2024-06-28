@@ -31,6 +31,8 @@ const (
 	BaseClassCost engineio.EngineFuel = 10
 	// BaseStateCost is the base cost for compiling a StateElement
 	BaseStateCost engineio.EngineFuel = 20
+	// BaseEventCost is the base cost for compiling an EventElement
+	BaseEventCost engineio.EngineFuel = 15
 
 	// ConstantCompileCost is the cost to compile a ConstantElement
 	ConstantCompileCost engineio.EngineFuel = 20
@@ -49,6 +51,9 @@ const (
 	// DeployerRoutineSurcharge is the additional cost for compiling a Deployer RoutineElement.
 	// This surcharge is applied on top of the BaseRoutineCost
 	DeployerRoutineSurcharge engineio.EngineFuel = 10
+	// EnlisterRoutineSurcharge is the additional cost for compiling a Enlister RoutineElement.
+	// This surcharge is applied on top of the BaseRoutineCost
+	EnlisterRoutineSurcharge engineio.EngineFuel = 10
 
 	// BaseInstructionCost is the base cost for compiling a BIN instruction.
 	// It is applied per instruction in a RoutineElement or MethodElement
@@ -79,7 +84,9 @@ type ManifestCompiler struct {
 	callsites map[string]engineio.Callsite
 
 	deployers []uint64
-	// enlisters []uint64
+	enlisters []uint64
+
+	eventdefs map[string]engineio.Eventdef
 }
 
 func NewManifestCompiler(fuel uint64, manifest engineio.Manifest) *ManifestCompiler {
@@ -94,6 +101,8 @@ func NewManifestCompiler(fuel uint64, manifest engineio.Manifest) *ManifestCompi
 		callsites: make(map[string]engineio.Callsite),
 
 		deployers: make([]uint64, 0),
+
+		eventdefs: make(map[string]engineio.Eventdef),
 		// enlisters: make([]uint64, 0),
 	}
 }
@@ -157,6 +166,12 @@ func (compiler *ManifestCompiler) CompileArtifact() (*logic.Artifact, engineio.E
 				return nil, compiler.fueltank, errors.Wrapf(err, "method element [%#v] compile failed", ptr)
 			}
 
+		case EventElement:
+			// Compile the element as an EventElement
+			if err := compiler.compileEventElement(element); err != nil {
+				return nil, compiler.fueltank, errors.Wrapf(err, "event element [%#v] compile failed", ptr)
+			}
+
 		default:
 			return nil, compiler.fueltank, errors.Errorf("invalid element kind [%#v]: %v", ptr, element.Kind)
 		}
@@ -192,6 +207,8 @@ func (compiler *ManifestCompiler) CompileDescriptor() (engineio.LogicDescriptor,
 
 		Depgraph: compiler.dependency,
 		Elements: make(map[engineio.ElementPtr]*engineio.LogicElement),
+
+		Eventdefs: compiler.eventdefs,
 	}
 
 	// Check if the compiled logic includes a persistent state
@@ -207,9 +224,18 @@ func (compiler *ManifestCompiler) CompileDescriptor() (engineio.LogicDescriptor,
 		}
 	}
 
-	// if ptr, ok := compiler.builder.GetEphemeralStatePtr(); ok {
-	//	descriptor.Persistent = &ptr
-	// }
+	// Check if the compiled logic includes a ephemeral state
+	if ptr := artifact.Directory.Ephemeral; ptr != nil {
+		// Set the persistent state pointer to the descriptor
+		descriptor.Ephemeral = ptr
+
+		// Check that at least one enlister has been compiled
+		if len(compiler.enlisters) == 0 {
+			return engineio.LogicDescriptor{},
+				compiler.fueltank,
+				errors.New("logic with ephemeral state must have at least one enlister")
+		}
+	}
 
 	for ptr := uint64(0); ptr < artifact.Size(); ptr++ {
 		element, _ := artifact.Element(ptr)
@@ -321,7 +347,7 @@ func (compiler *ManifestCompiler) compileClassElement(element engineio.ManifestE
 	}
 
 	// Create a new datatypes.TypeFields from the class fields
-	fields, err := compiler.compileTypeFields(schema.Fields)
+	fields, err := compiler.compileTypeFields(schema.Fields, false)
 	if err != nil {
 		return errors.Errorf("invalid class element: invalid fields: %v", err)
 	}
@@ -345,6 +371,43 @@ func (compiler *ManifestCompiler) compileClassElement(element engineio.ManifestE
 	return nil
 }
 
+// compileEventElement compiles an engineio.ManifestElement object into an EventElement
+func (compiler *ManifestCompiler) compileEventElement(element engineio.ManifestElement) error {
+	// Exhaust fuel for event element compilation
+	// We will charge cost beyond this per field in the event
+	if !compiler.exhaust(BaseEventCost) {
+		return ErrInsufficientCompileFuel
+	}
+
+	// Convert element into an EventSchema
+	schema, ok := element.Data.(*EventSchema)
+	if !ok {
+		return errors.New("invalid element data for 'event' kind")
+	}
+
+	// Create a new datatypes.TypeFields from the event fields
+	fields, err := compiler.compileTypeFields(schema.Fields, false)
+	if err != nil {
+		return errors.Errorf("invalid event element: invalid fields: %v", err)
+	}
+
+	// Create a new Event Typedef
+	event, err := datatypes.NewEvent(schema.Name, schema.Topics, fields)
+	if err != nil {
+		return errors.Errorf("invalid event element: %v", err)
+	}
+
+	// Add the Event element into the builder
+	if err = compiler.builder.AddEvent(element.Ptr, event); err != nil {
+		return errors.Wrap(err, "invalid event element")
+	}
+
+	// Add the eventdef to the compiler
+	compiler.eventdefs[schema.Name] = engineio.Eventdef{Ptr: element.Ptr, Name: schema.Name}
+
+	return nil
+}
+
 // compileMethodElement compiles an engineio.ManifestElement object into a MethodElement
 func (compiler *ManifestCompiler) compileMethodElement(element engineio.ManifestElement) error {
 	// Exhaust fuel for method compilation
@@ -359,13 +422,14 @@ func (compiler *ManifestCompiler) compileMethodElement(element engineio.Manifest
 	}
 
 	// Create a new TypeFields from the schema 'accepts'
-	inputs, err := compiler.compileTypeFields(schema.Accepts)
+	inputs, err := compiler.compileTypeFields(schema.Accepts, false)
 	if err != nil {
 		return errors.Wrap(err, "invalid accept fields")
 	}
 
 	// Create a new TypeFields from the schema 'returns'
-	outputs, err := compiler.compileTypeFields(schema.Returns)
+	// WE ALLOW EVENTS IN THIS ONLY TO SUPPORT __event__ METHODS FOR CLASSES
+	outputs, err := compiler.compileTypeFields(schema.Returns, true)
 	if err != nil {
 		return errors.Wrap(err, "invalid return fields")
 	}
@@ -410,6 +474,7 @@ func (compiler *ManifestCompiler) compileMethodElement(element engineio.Manifest
 		},
 		Datatype:  class,
 		Code:      *methodCode,
+		Mutable:   schema.Mutable,
 		Instructs: instructions,
 	}
 
@@ -436,7 +501,7 @@ func (compiler *ManifestCompiler) compileStateElement(element engineio.ManifestE
 	}
 
 	// Create a new TypeFields from the map set
-	fields, err := compiler.compileTypeFields(schema.Fields)
+	fields, err := compiler.compileTypeFields(schema.Fields, false)
 	if err != nil {
 		return errors.Errorf("invalid state element: invalid fields: %v", err)
 	}
@@ -452,7 +517,13 @@ func (compiler *ManifestCompiler) compileStateElement(element engineio.ManifestE
 		return nil
 
 	case state.Ephemeral:
-		return errors.New("ephemeral state elements are not supported")
+		// Add the State element into the builder
+		if err = compiler.builder.AddEphemeralState(element.Ptr, state.NewStateFields(fields), element.Deps); err != nil {
+			return errors.Wrap(err, "invalid class element")
+		}
+
+		return nil
+
 	default:
 		return errors.Errorf("invalid mode '%v' for state element", schema.Mode)
 	}
@@ -477,7 +548,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 	case engineio.CallsiteInternal:
 		// Supported with no checks (all dependencies supported)
 
-	case engineio.CallsiteInvokable:
+	case engineio.CallsiteInvoke:
 		// Exhaust surcharge fuel for invokable endpoint compilation
 		if !compiler.exhaust(InvokableRoutineSurcharge) {
 			return ErrInsufficientCompileFuel
@@ -485,7 +556,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 		// Supported with no checks (all dependencies supported)
 
-	case engineio.CallsiteDeployer:
+	case engineio.CallsiteDeploy:
 		// Exhaust surcharge fuel for deployer endpoint compilation
 		if !compiler.exhaust(DeployerRoutineSurcharge) {
 			return ErrInsufficientCompileFuel
@@ -507,22 +578,43 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 			return errors.New("invalid routine element: missing dependency on persistent state for deployer")
 		}
 
-	case engineio.CallsiteInteractable:
+	case engineio.CallsiteInteract:
 		return errors.New("interactable routine elements are not supported")
-	case engineio.CallsiteEnlister:
-		return errors.New("enlister routine elements are not supported")
+
+	case engineio.CallsiteEnlist:
+		// Exhaust surcharge fuel for enlister endpoint compilation
+		if !compiler.exhaust(EnlisterRoutineSurcharge) {
+			return ErrInsufficientCompileFuel
+		}
+
+		// Check that enlister has the ephemeral mode
+		if schema.Mode != state.Ephemeral {
+			return errors.New("invalid routine element: invalid state mode for enlister routine")
+		}
+
+		// Check if the ephemeral state has been compiled
+		estate, ok := compiler.builder.GetEphemeralStatePtr()
+		if !ok {
+			return errors.New("invalid routine element: enlister routine for non-existent ephemeral storage")
+		}
+
+		// Check if the routine has the necessary dependency for the ephemeral state
+		if !contains(element.Deps, estate) {
+			return errors.New("invalid routine element: missing dependency on ephemeral state for enlister")
+		}
+
 	default:
 		return errors.Errorf("invalid kind '%v' for routine element", schema.Kind)
 	}
 
 	// Create a new TypeFields from the schema 'accepts'
-	inputs, err := compiler.compileTypeFields(schema.Accepts)
+	inputs, err := compiler.compileTypeFields(schema.Accepts, false)
 	if err != nil {
 		return errors.Wrap(err, "invalid routine: invalid accept fields")
 	}
 
 	// Create a new TypeFields from the schema 'returns'
-	outputs, err := compiler.compileTypeFields(schema.Returns)
+	outputs, err := compiler.compileTypeFields(schema.Returns, false)
 	if err != nil {
 		return errors.Wrap(err, "invalid routine: invalid return fields")
 	}
@@ -553,8 +645,11 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 	// Add the endpoint reference to the compiler metadata
 	if routine.Endpoint {
-		if schema.Kind == engineio.CallsiteDeployer {
+		switch schema.Kind {
+		case engineio.CallsiteDeploy:
 			compiler.deployers = append(compiler.deployers, element.Ptr)
+		case engineio.CallsiteEnlist:
+			compiler.enlisters = append(compiler.enlisters, element.Ptr)
 		}
 
 		compiler.callsites[schema.Name] = engineio.Callsite{Ptr: element.Ptr, Name: schema.Name, Kind: schema.Kind}
@@ -565,7 +660,11 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 // compileTypeFields compiles a list of TypefieldSchema objects into datatypes.TypeFields.
 // Returns an error if the given map of field expressions contains positional gaps or invalid expressions.
-func (compiler *ManifestCompiler) compileTypeFields(table []TypefieldSchema) (*datatypes.TypeFields, error) {
+func (compiler *ManifestCompiler) compileTypeFields(
+	table []TypefieldSchema, allowEvents bool,
+) (
+	*datatypes.TypeFields, error,
+) {
 	// Error if there are more than 2^8 slots
 	if len(table) > 256 {
 		return nil, errors.New("invalid field set: too many typefield schema (max 256)")
@@ -596,7 +695,7 @@ func (compiler *ManifestCompiler) compileTypeFields(table []TypefieldSchema) (*d
 	}
 
 	// Gap detection is performed implicitly when using this constructor
-	return datatypes.NewFieldsWithSlots(fields)
+	return datatypes.NewFieldsWithSlots(fields, allowEvents)
 }
 
 // compileInstructions compiles an InstructionsSchema into some runtime.Instructions.

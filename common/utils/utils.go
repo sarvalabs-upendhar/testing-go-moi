@@ -75,7 +75,7 @@ func ExponentialTimeout(baseTime time.Duration, exponent int32) time.Duration {
 	if exponent > 0 {
 		s1 := rand.NewSource(time.Now().UnixNano())
 		reg := rand.New(s1)
-		r := 1 + reg.Float64()*(2-1)
+		r := 1 + reg.Float64()*(2-1) // Range 0-1
 		x := r * float64(baseTime.Milliseconds()) * math.Pow(2, float64(exponent))
 		timeout = time.Duration(x) * time.Millisecond
 	}

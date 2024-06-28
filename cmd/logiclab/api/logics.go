@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/hex"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
@@ -220,18 +221,7 @@ func (api *API) purgeLogics(c *gin.Context) {
 	c.JSON(http.StatusOK, Success())
 }
 
-type LogicManifestRequest struct {
-	Target string `json:"target"`
-}
-
 func (api *API) getLogicManifest(c *gin.Context) {
-	// Decode the request
-	request := new(LogicManifestRequest)
-	if err := c.ShouldBindJSON(request); err != nil {
-		c.JSON(http.StatusBadRequest, Error(err))
-		return
-	}
-
 	// Get the environment ID
 	envID := c.GetHeader(HeaderLabEnv)
 	// Retrieve the environment
@@ -249,15 +239,44 @@ func (api *API) getLogicManifest(c *gin.Context) {
 
 	// Extract the value for name of logic
 	logicName := c.Param("name")
-	// Get the logic ID and check if the logic exists
-	logicID, ok := env.Logics[logicName]
+
+	// Get the logic metadata of the logic
+	logicMetaData, ok := env.Logics[logicName]
+	if !ok {
+		c.JSON(http.StatusNotFound, Error(core.ErrLogicNotFound))
+		return
+	}
+
+	c.JSON(http.StatusOK, Success().WithData(logicMetaData))
+}
+
+func (api *API) getEncodedLogicManifest(c *gin.Context) {
+	// Get the environment ID
+	envID := c.GetHeader(HeaderLabEnv)
+	// Retrieve the environment
+	env, exists, err := api.lab.GetEnvironment(envID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
+	// Environment was not found
+	if !exists {
+		c.JSON(http.StatusNotFound, Error(core.ErrEnvironmentNotFound))
+		return
+	}
+
+	// Extract the value for name of logic
+	logicName := c.Param("name")
+	// Get the logic metadata and check if the logic exists
+	logicMetaData, ok := env.Logics[logicName]
 	if !ok {
 		c.JSON(http.StatusNotFound, Error(core.ErrLogicNotFound))
 		return
 	}
 
 	// Get the logic manifest for the given name
-	value, err := api.lab.Database.Get(db.LogicManifestKey(env.ID, logicID))
+	value, err := api.lab.Database.Get(db.LogicManifestKey(env.ID, logicMetaData.LogicID))
 	if errors.Is(err, db.ErrKeyNotFound) {
 		c.JSON(http.StatusNotFound, Error(errors.New("unable to find logic manifest")))
 		return
@@ -270,12 +289,15 @@ func (api *API) getLogicManifest(c *gin.Context) {
 		return
 	}
 
+	// Extract the value for encoding
+	encoding := c.Param("encoding")
+
 	// Convert the manifest into expected format
-	encoding := common.EncodingFromString(request.Target)
-	converted := core.PrintManifest(manifest, encoding)
+	target := common.EncodingFromString(strings.ToUpper(encoding))
+	converted := core.PrintManifest(manifest, target)
 
 	c.JSON(http.StatusOK, Success().WithData(Manifest{
-		Encoding: request.Target,
+		Encoding: strings.ToUpper(encoding),
 		Content:  converted,
 	}))
 }
@@ -301,12 +323,15 @@ func (api *API) getLogicStorage(c *gin.Context) {
 
 	// Extract the value for name of logic
 	logicName := c.Param("name")
-	// Get the logic ID of the logic
-	logicID, exists := env.Logics[logicName]
+	// Get the logic metadata of the logic
+	logicMetaData, exists := env.Logics[logicName]
 	if !exists {
 		c.JSON(http.StatusNotFound, Error(core.ErrLogicNotFound))
 		return
 	}
+
+	// Get the logic ID
+	logicID := logicMetaData.LogicID
 
 	// Extract the storage key
 	storekey := c.Param("storekey")

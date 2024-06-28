@@ -5,6 +5,7 @@ import (
 	"math"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -21,7 +22,7 @@ func RunLogicInvoke(
 	ix *common.Interaction,
 	ctx *common.ExecutionContext,
 	tank *FuelTank,
-	objects state.ObjectMap,
+	objects *state.Transition,
 ) *common.Receipt {
 	// Obtain the Logic Payload from the Interaction
 	payload, _ := ix.GetLogicPayload()
@@ -41,7 +42,10 @@ func RunLogicInvoke(
 	options = append(options, InvokerState(invoker))
 	options = append(options, InvokeFuelLimit(tank.Level()))
 
-	consumption, receiptPayload, err := InvokeLogic(ix, ctx, logicacc, options...)
+	// Create an event stream to emit the events on
+	eventstream := NewEventStream(ix.LogicID())
+
+	consumption, receiptPayload, err := InvokeLogic(ix, ctx, logicacc, eventstream, options...)
 	if err != nil {
 		receipt.Status = common.ReceiptStateReverted
 	}
@@ -55,6 +59,8 @@ func RunLogicInvoke(
 	receipt.SetFuelUsed(tank.Consumed)
 	// Set the extra data of the receipt
 	common.SetReceiptExtraData(receipt, *receiptPayload)
+	// Set the logs in the receipt
+	receipt.SetLogs(eventstream.Collect())
 
 	// Set the status of the receipt
 	if receiptPayload.Error != nil {
@@ -93,6 +99,7 @@ func InvokeLogic(
 	ixn *common.Interaction,
 	ctx *common.ExecutionContext,
 	state *state.Object,
+	eventstream *EventStream,
 	opts ...LogicInvokeOption,
 ) (
 	uint64, *common.LogicInvokeReceipt, error,
@@ -137,8 +144,11 @@ func InvokeLogic(
 
 	// Create a new engine for the execution
 	instance, err := engine.SpawnInstance(
-		invoker.logicObject, invoker.fueltank.Level(),
-		invoker.logicState.GenerateLogicContextObject(invoker.logicObject.ID), ctx,
+		invoker.logicObject,
+		invoker.fueltank.Level(),
+		invoker.logicState.GenerateLogicStorageObject(invoker.logicObject.ID),
+		ctx,
+		eventstream,
 	)
 	if err != nil {
 		return 0, nil, errors.Wrap(err, "could not bootstrap engine")
@@ -148,7 +158,7 @@ func InvokeLogic(
 	var senderCtx engineio.StateDriver
 	// Create the deployer context driver if not nil
 	if invoker.senderState != nil {
-		senderCtx = invoker.senderState.GenerateLogicContextObject(invoker.logicObject.ID)
+		senderCtx = invoker.senderState.GenerateLogicStorageObject(invoker.logicObject.ID)
 	}
 
 	// Perform execution call on the engine
@@ -178,4 +188,41 @@ type logicInvoker struct {
 	fueltank    *FuelTank
 	logicState  *state.Object
 	senderState *state.Object
+}
+
+func (manager *Manager) ValidateLogicInvoke(ix *common.Interaction, callerAcc, logicAcc *state.Object) error {
+	// Fetch logic ID
+	logicID := ix.LogicID()
+
+	identifier, err := logicID.Identifier()
+	if err != nil {
+		return errors.Wrap(err, "invalid logic id")
+	}
+
+	// Check if the logic has an ephemeral state
+	if ok := identifier.HasEphemeralState(); ok {
+		// Check if the call has a storage tree for the logic
+		// This means the account has enlisted (as required)
+		ok, err = callerAcc.HasStorageTree(logicID)
+		if err != nil {
+			return err
+		}
+
+		if !ok {
+			return errors.New("caller not enlisted with ephemeral logic")
+		}
+	}
+
+	// Fetch the logic object for the ID
+	logic, err := logicAcc.FetchLogicObject(logicID)
+	if err != nil {
+		return err
+	}
+
+	runtime, ok := engineio.FetchEngine(logic.Engine())
+	if !ok {
+		return errors.New("failed to get runtime for logic")
+	}
+
+	return runtime.ValidateCalldata(logic, ix)
 }

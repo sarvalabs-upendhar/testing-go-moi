@@ -69,7 +69,7 @@ func (an *AgoraNetwork) streamHandler(stream p2pnet.Stream) {
 func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	defer func() {
 		if err := an.server.ConnManager.ResetStream(peer.stream, p2p.AgoraStreamTag); err != nil {
-			an.logger.Info("Failed to close stream", "err", err, "peer-id", peer.id)
+			an.logger.Debug("Failed to close stream", "err", err, "peer-id", peer.id)
 		}
 
 		an.peers.Delete(peer.id)
@@ -220,7 +220,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 func (an *AgoraNetwork) ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Address) error {
 	peerID, err := utils.GetNetworkID(kramaID)
 	if err != nil {
-		an.logger.Error("Error parsing krama ID", "krama-ID", kramaID)
+		an.logger.Error("Error parsing krama ID", "krama-id", kramaID)
 
 		return err
 	}

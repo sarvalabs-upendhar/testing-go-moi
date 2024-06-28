@@ -1,6 +1,7 @@
 package common
 
 import (
+	"bytes"
 	"encoding/binary"
 
 	"github.com/sarvalabs/go-moi-identifiers"
@@ -53,4 +54,30 @@ func NewAccountAddress(nonce uint64, address identifiers.Address) identifiers.Ad
 	hash := GetHash(rawBytes).Bytes()
 
 	return identifiers.NewAddressFromBytes(hash)
+}
+
+type Addresses []identifiers.Address
+
+func (addrs Addresses) Len() int {
+	return len(addrs)
+}
+
+func (addrs Addresses) Less(i, j int) bool {
+	if polarity := bytes.Compare(addrs[i].Bytes(), addrs[j].Bytes()); polarity < 0 {
+		return true
+	}
+
+	return false
+}
+
+func (addrs Addresses) Swap(i, j int) {
+	addrs[i], addrs[j] = addrs[j], addrs[i]
+}
+
+func IsSystemAccount(addr identifiers.Address) bool {
+	if addr == SargaAddress || addr == GuardianLogicAddr {
+		return true
+	}
+
+	return false
 }

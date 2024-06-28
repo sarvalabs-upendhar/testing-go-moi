@@ -50,8 +50,8 @@ func TestCopyReceipt(t *testing.T) {
 
 				for i := 0; i < len(expectedReceipt.Logs); i++ {
 					require.NotEqual(t,
-						reflect.ValueOf(expectedReceipt.Logs[i]).Pointer(),
-						reflect.ValueOf(copiedReceipt.Logs[i]).Pointer(),
+						reflect.ValueOf(expectedReceipt.Logs[i]),
+						reflect.ValueOf(copiedReceipt.Logs[i]),
 					)
 				}
 			}
@@ -62,20 +62,20 @@ func TestCopyReceipt(t *testing.T) {
 func TestCopyLog(t *testing.T) {
 	testcases := []struct {
 		name string
-		log  *common.Log
+		log  common.Log
 	}{
 		{
 			name: "copy log",
-			log: &common.Log{
-				Addresses: tests.GetAddresses(t, 1),
-				LogicID:   tests.GetLogicID(t, tests.RandomAddress(t)),
-				Topics:    tests.GetHashes(t, 1),
-				Data:      []byte{1},
+			log: common.Log{
+				Address: tests.RandomAddress(t),
+				LogicID: tests.GetLogicID(t, tests.RandomAddress(t)),
+				Topics:  tests.GetHashes(t, 1),
+				Data:    []byte{1},
 			},
 		},
 		{
 			name: "empty addresses,topics,data",
-			log: &common.Log{
+			log: common.Log{
 				LogicID: tests.GetLogicID(t, tests.RandomAddress(t)),
 			},
 		},
@@ -88,14 +88,7 @@ func TestCopyLog(t *testing.T) {
 
 			// Add assertions to check individual fields of the copied log
 			require.Equal(t, expectedLog, copiedLog)
-
-			if len(expectedLog.Addresses) > 0 {
-				// Compare Addresses pointers
-				require.NotEqual(t,
-					reflect.ValueOf(expectedLog.Addresses).Pointer(),
-					reflect.ValueOf(copiedLog.Addresses).Pointer(),
-				)
-			}
+			require.Equal(t, expectedLog.Address, copiedLog.Address)
 
 			if len(expectedLog.Topics) > 0 {
 				// Compare Topics pointers

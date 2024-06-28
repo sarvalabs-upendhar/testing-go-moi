@@ -23,6 +23,9 @@ func (i *IxPool) GetNonce(addr identifiers.Address) (uint64, error) {
 func (i *IxPool) GetIxs(addr identifiers.Address, inclQueued bool) (
 	promoted, enqueued []*common.Interaction,
 ) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+
 	return i.accounts.getIxs(addr, inclQueued)
 }
 
@@ -30,6 +33,9 @@ func (i *IxPool) GetIxs(addr identifiers.Address, inclQueued bool) (
 func (i *IxPool) GetAllIxs(inclQueued bool) (
 	allPromoted, allEnqueued map[identifiers.Address][]*common.Interaction,
 ) {
+	i.mu.RLock()
+	defer i.mu.RUnlock()
+
 	return i.accounts.allIxs(inclQueued)
 }
 

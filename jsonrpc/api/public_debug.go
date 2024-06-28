@@ -48,9 +48,7 @@ func (p *PublicDebugAPI) DBGet(args *rpcargs.DebugArgs) (string, error) {
 		return "", err
 	}
 
-	decodedData := common.BytesToHex(content)
-
-	return decodedData, nil
+	return common.BytesToHex(content), nil
 }
 
 // getNodeMetaInfoByPeerID retrieves and returns node meta information from the database for the given peer id
@@ -68,15 +66,18 @@ func (p *PublicDebugAPI) getNodeMetaInfoByPeerID(peerID peer.ID) (*senatus.NodeM
 	return info, nil
 }
 
-// GetNodeMetaInfo retrieves and returns the metadata of nodes from the database based on the provided
+// NodeMetaInfo retrieves and returns the metadata of nodes from the database based on the provided
 // peer id or krama id. If neither peer id nor krama id is provided, returns the metadata of all nodes.
-func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[string]map[string]interface{}, error) {
+func (p *PublicDebugAPI) NodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (
+	map[string]rpcargs.NodeMetaInfoResponse,
+	error,
+) {
 	var (
 		peerID peer.ID
 		err    error
 	)
 
-	nodeMetaInfo := make(map[string]map[string]interface{})
+	nodeMetaInfo := make(map[string]rpcargs.NodeMetaInfoResponse)
 
 	if args.PeerID != "" && args.KramaID != "" {
 		return nil, common.ErrInvalidIDCombination
@@ -100,11 +101,11 @@ func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[st
 			return nil, err
 		}
 
-		nodeMetaInfo[peerID.String()] = map[string]interface{}{
-			"addrs":        info.Addrs,
-			"krama_id":     info.KramaID,
-			"rtt":          hexutil.Uint64(info.RTT),
-			"wallet_count": hexutil.Uint(info.WalletCount),
+		nodeMetaInfo[peerID.String()] = rpcargs.NodeMetaInfoResponse{
+			Addrs:       info.Addrs,
+			KramaID:     info.KramaID,
+			RTT:         hexutil.Uint64(info.RTT),
+			WalletCount: hexutil.Uint(info.WalletCount),
 		}
 
 		return nodeMetaInfo, nil
@@ -123,24 +124,24 @@ func (p *PublicDebugAPI) GetNodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (map[st
 			continue
 		}
 
-		nodeMetaInfo[peerID.String()] = map[string]interface{}{
-			"addrs":        info.Addrs,
-			"krama_id":     info.KramaID,
-			"rtt":          hexutil.Uint64(info.RTT),
-			"wallet_count": hexutil.Uint(info.WalletCount),
+		nodeMetaInfo[peerID.String()] = rpcargs.NodeMetaInfoResponse{
+			Addrs:       info.Addrs,
+			KramaID:     info.KramaID,
+			RTT:         hexutil.Uint64(info.RTT),
+			WalletCount: hexutil.Uint(info.WalletCount),
 		}
 	}
 
 	return nodeMetaInfo, nil
 }
 
-// GetAccounts returns a list of registered account addresses
-func (p *PublicDebugAPI) GetAccounts() ([]identifiers.Address, error) {
+// Accounts returns a list of registered account addresses
+func (p *PublicDebugAPI) Accounts() ([]identifiers.Address, error) {
 	return p.db.GetRegisteredAccounts()
 }
 
-// GetConnections returns a list of active connections and connection stats
-func (p *PublicDebugAPI) GetConnections() rpcargs.ConnectionsResponse {
+// Connections returns a list of active connections and connection stats
+func (p *PublicDebugAPI) Connections() (*rpcargs.ConnectionsResponse, error) {
 	connections := make([]rpcargs.Connection, 0, len(p.network.GetConns()))
 
 	for _, conn := range p.network.GetConns() {
@@ -150,12 +151,12 @@ func (p *PublicDebugAPI) GetConnections() rpcargs.ConnectionsResponse {
 		})
 	}
 
-	return rpcargs.ConnectionsResponse{
+	return &rpcargs.ConnectionsResponse{
 		Conns:              connections,
 		InboundConnCount:   p.network.GetInboundConnCount(),
 		OutboundConnCount:  p.network.GetOutboundConnCount(),
 		ActivePubSubTopics: p.network.GetSubscribedTopics(),
-	}
+	}, nil
 }
 
 /*
@@ -171,15 +172,15 @@ Report includes:
 Generated report will be stored at {outpath}/go-moi[timestamp].zip
 These profiles can be monitored using pprof, reference documentation for more help
 */
-func (p *PublicDebugAPI) RunDiagnosis(args *rpcargs.DiagnosisRequest) error {
+func (p *PublicDebugAPI) RunDiagnosis(args *rpcargs.DiagnosisRequest) (*rpcargs.DiagnosisResponse, error) {
 	profileDuration, err := time.ParseDuration(args.ProfileTime)
 	if err != nil {
-		return errors.New("Invalid profile duration")
+		return nil, errors.New("Invalid profile duration")
 	}
 
 	blockProfileDuration, err := time.ParseDuration(args.BlockProfileRate)
 	if err != nil {
-		return errors.New("Invalid block profile rate")
+		return nil, errors.New("Invalid block profile rate")
 	}
 
 	if len(args.Collectors) == 0 {
@@ -187,26 +188,22 @@ func (p *PublicDebugAPI) RunDiagnosis(args *rpcargs.DiagnosisRequest) error {
 	}
 
 	if _, err := os.Stat(args.OutputPath); err != nil {
-		return errors.New("Invalid output path")
+		return nil, errors.New("Invalid output path")
 	}
 
-	return diagnosis.WriteProfiles(context.Background(),
+	return nil, diagnosis.WriteProfiles(context.Background(),
 		filepath.Join(args.OutputPath, "go-moi"+time.Now().Format(utils.TimeFormat)+".zip"), diagnosis.Options{
 			Collectors:           args.Collectors,
 			ProfileDuration:      profileDuration,
 			MutexProfileFraction: args.MutexProfileFraction,
 			BlockProfileRate:     blockProfileDuration,
-		})
+		},
+	)
 }
 
-// GetSyncJob returns the sync job meta info for given address
-func (p *PublicDebugAPI) GetSyncJob(args *rpcargs.SyncJobRequest) (*rpcargs.SyncJobInfo, error) {
-	syncJob, err := p.syncer.GetSyncJobInfo(args.Address)
-	if err != nil {
-		return nil, err
-	}
-
-	return syncJob, nil
+// SyncJob returns the sync job meta info for given address
+func (p *PublicDebugAPI) SyncJob(args *rpcargs.SyncJobRequest) (*rpcargs.SyncJobInfo, error) {
+	return p.syncer.GetSyncJobInfo(args.Address)
 }
 
 // helper functions

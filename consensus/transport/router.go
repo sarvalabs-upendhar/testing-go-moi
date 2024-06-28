@@ -515,7 +515,7 @@ func (cr *ContextRouter) handleICSWant(msg *types.ICSMSG) error {
 	cr.logger.Trace("Handling ICSWant", "peer", msg.Sender)
 
 	votes := cr.voteset.GetVotes(icsWant.RoundVoteBitSets)
-	cr.logger.Trace("Sending Votes", "peer", msg.Sender, votes)
+	cr.logger.Trace("Sending Votes", "peer", msg.Sender)
 
 	icsHave := types.NewICSHave(nil, votes...)
 
@@ -606,7 +606,7 @@ func (cr *ContextRouter) getRandomPeers() []id.KramaID {
 func (cr *ContextRouter) connectToGossipPeers(ctx context.Context) {
 	waitGroup := sync.WaitGroup{}
 
-	for peerID := range cr.transport.getTransitPeers(cr.clusterID) {
+	for _, peerID := range cr.transport.getTransitPeers(cr.clusterID) {
 		cr.gossipPeers.add(peerID, false)
 	}
 
@@ -621,6 +621,7 @@ func (cr *ContextRouter) connectToGossipPeers(ctx context.Context) {
 	for kramaID := range cr.gossipPeers.entries() {
 		waitGroup.Add(1)
 
+		// TODO: Can we improve this
 		go func(kramaID id.KramaID) {
 			defer waitGroup.Done()
 

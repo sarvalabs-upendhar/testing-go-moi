@@ -1,0 +1,130 @@
+syntax: 1
+engine:
+  kind: PISA
+  flags: []
+elements:
+- ptr: 0
+  kind: state
+  data:
+    mode: ephemeral
+    fields:
+    - slot: 0
+      label: value
+      type: bool
+- ptr: 1
+  deps:
+  - 0
+  kind: routine
+  data:
+    name: Init
+    mode: ephemeral
+    kind: enlist
+    accepts: []
+    returns: []
+    executes:
+      bin: []
+    catches: []
+- ptr: 2
+  deps:
+  - 6
+  - 0
+  kind: routine
+  data:
+    name: Seed
+    mode: ephemeral
+    kind: enlist
+    accepts:
+    - slot: 0
+      label: initial
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - SETFLD $0 &0 $1
+      - LDPTR1 $1 0x6
+      - CALLR $0 $1 $0
+    catches: []
+- ptr: 3
+  deps:
+  - 0
+  kind: routine
+  data:
+    name: Get
+    mode: readonly
+    kind: invoke
+    accepts: []
+    returns:
+    - slot: 0
+      label: value
+      type: bool
+    executes:
+      asm:
+      - SENDER $0
+      - ELOAD $1 &0 $0
+      - YIELD $1 &0
+      - EFREE $1 $0
+    catches: []
+- ptr: 4
+  deps:
+  - 6
+  - 0
+  kind: routine
+  data:
+    name: Set
+    mode: ephemeral
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: value
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - SETFLD $0 &0 $1
+      - LDPTR1 $1 0x6
+      - CALLR $0 $1 $0
+    catches: []
+- ptr: 5
+  deps:
+  - 0
+  kind: routine
+  data:
+    name: Toggle
+    mode: ephemeral
+    kind: invoke
+    accepts: []
+    returns: []
+    executes:
+      asm:
+      - SENDER $0
+      - ELOAD $1 &0 $0
+      - GATHER $2 $1
+      - NOT $2 $2
+      - DISPERSE $1 $2
+      - ESAVE $1 $0
+    catches: []
+- ptr: 6
+  deps:
+  - 0
+  kind: routine
+  data:
+    name: set
+    mode: ephemeral
+    kind: internal
+    accepts:
+    - slot: 0
+      label: value
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - SENDER $0
+      - ELOAD $1 &0 $0
+      - OBTAIN $2 &0
+      - DISPERSE $1 $2
+      - ESAVE $1 $0
+    catches: []

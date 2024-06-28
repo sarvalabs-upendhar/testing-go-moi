@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/jsonrpc"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -25,7 +27,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	"github.com/sarvalabs/go-moi/storage"
 )
 
@@ -71,7 +72,7 @@ func (tn *TestSingleNode) SetupSuite() {
 	tn.initLogger()
 
 	d := bgclient.DefaultClusterConfig()
-	d.WithLogs = false
+	d.WithLogs = true
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 21000
@@ -357,7 +358,7 @@ func (tn *TestSingleNode) TestGetBalance() {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("asset not found"),
+			expectedError: common.ErrAssetNotFound,
 		},
 	}
 
@@ -676,7 +677,7 @@ func (tn *TestSingleNode) TestLogicStorage() {
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("invalid logic ID"),
+			expectedError: errors.New("Invalid Params"),
 		},
 	}
 
@@ -1142,19 +1143,19 @@ func (tn *TestSingleNode) TestNewTesseractsByAccountFilter() {
 func (tn *TestSingleNode) TestNewLogFilter() {
 	testcases := []struct {
 		name            string
-		filterQueryArgs *websocket.LogQuery
+		filterQueryArgs *jsonrpc.LogQuery
 		expectedError   error
 	}{
 		{
 			name: "add log filter successfully",
-			filterQueryArgs: &websocket.LogQuery{
+			filterQueryArgs: &jsonrpc.LogQuery{
 				Address: tests.RandomAddress(tn.T()),
 			},
 		},
 		{
 			name:            "failed to add log filter",
-			filterQueryArgs: &websocket.LogQuery{},
-			expectedError:   common.ErrInvalidAddress,
+			filterQueryArgs: &jsonrpc.LogQuery{},
+			expectedError:   errors.New("Invalid Params"),
 		},
 	}
 
@@ -1229,9 +1230,8 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
-		Callsite: "Seeder",
-		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
-			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
+		Callsite: "Seed",
+		Calldata: common.Hex2Bytes("0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"),
 	}
 
 	rawLogicPayload, err := logicPayload.Bytes()
@@ -1279,7 +1279,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 					},
 				},
 			},
-			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(2180)),
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(3473)),
 		},
 		{
 			name: "failed to fetch fuel estimate as options are empty",
@@ -1324,9 +1324,8 @@ func (tn *TestSingleNode) TestCall() {
 
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
-		Callsite: "Seeder",
-		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
-			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
+		Callsite: "Seed",
+		Calldata: common.Hex2Bytes("0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"),
 	}
 
 	rawLogicPayload, err := logicPayload.Bytes()
@@ -1348,7 +1347,7 @@ func (tn *TestSingleNode) TestCall() {
 
 	receiptWithFuelParams := &common.Receipt{
 		IxType:   common.IxLogicDeploy,
-		FuelUsed: 2180,
+		FuelUsed: 3473,
 	}
 
 	receiptWithoutFuelParams := &common.Receipt{

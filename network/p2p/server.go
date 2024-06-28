@@ -81,6 +81,10 @@ type Server struct {
 	metrics *Metrics
 
 	basicSeqnoValidator pubsub.ValidatorEx // default validation for messages
+	msgs                chan *networkmsg.Message
+
+	inboundStreamsMx sync.Mutex
+	inboundStreams   map[peer.ID]network.Stream
 }
 
 // NewServer is a constructor function that generates, configures and returns a Server.
@@ -106,6 +110,8 @@ func NewServer(
 		vault:               vault,
 		metrics:             metrics,
 		basicSeqnoValidator: pubsub.NewBasicSeqnoValidator(newpeerMsgNonceStore()),
+		msgs:                make(chan *networkmsg.Message, 100),
+		inboundStreams:      make(map[peer.ID]network.Stream),
 	}
 
 	return server
@@ -121,7 +127,7 @@ func (s *Server) Close() error {
 	return nil
 }
 
-func (s *Server) AddPeerInfo(info *peer.AddrInfo) {
+func (s *Server) AddPeerInfo(info peer.AddrInfo) {
 	s.host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.ConnectedAddrTTL)
 }
 
@@ -151,7 +157,7 @@ func (s *Server) SetupServer() error {
 // StartServer sets up node's libp2p host, Kad DHT, PubSub route
 // after which it bootstraps itself by attempting to connect to bootstrap peers.
 func (s *Server) StartServer() error {
-	s.logger.Info("Starting server", "krama-ID", s.id, "addr", s.host.Addrs())
+	s.logger.Info("Starting server", "krama-id", s.id, "addr", s.host.Addrs())
 
 	if err := s.ConnManager.Start(); err != nil {
 		return err
@@ -442,4 +448,34 @@ func (s *Server) GetOutboundConnCount() int64 {
 
 func (s *Server) constructHandshakeMSG() (*networkmsg.HandshakeMSG, error) {
 	return networkmsg.ConstructHandshakeMSG([]byte("ping")), nil
+}
+
+func (s *Server) MsgChan() chan *networkmsg.Message {
+	return s.msgs
+}
+
+// handlePeerMessage is a method of SubHandler that handles a message from a Peer
+func (s *Server) handlePeerMessage(p *Peer) error {
+	// Read the peer's io read/writer into a buffer
+	// p.mtxLock.Lock()
+	// defer p.mtxLock.Unlock()
+	reader := msgio.NewReader(p.rw.Reader)
+
+	buffer, err := reader.ReadMsg()
+	if err != nil {
+		return err
+	}
+
+	// Unmarshal the buffer into a proto message
+	message := new(networkmsg.Message)
+	if err := message.FromBytes(buffer); err != nil {
+		return err
+	}
+
+	select {
+	case <-s.ctx.Done():
+	case s.msgs <- message:
+	}
+
+	return nil
 }

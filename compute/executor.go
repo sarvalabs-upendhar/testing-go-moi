@@ -14,13 +14,11 @@ import (
 // execution of a group of Interactions within a single cluster.
 type IxExecutor struct {
 	Interactions common.Interactions
-	contextDelta common.ContextDelta
+	execContext  *common.ExecutionContext
 
-	mgr   *Manager
-	state StateManager
+	mgr *Manager
 
-	baseline   *Transition
-	transition *Transition
+	transition *state.Transition
 
 	metrics *Metrics
 
@@ -32,28 +30,17 @@ type IxExecutor struct {
 func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.ExecutionContext) error {
 	// Update the interaction and the context delta into the executor
 	executor.Interactions = ixs
-	executor.contextDelta = ctx.ContextDelta()
+	executor.execContext = ctx
 
-	// Load all the state objects for all interaction participants
-	objects, err := executor.LoadStateObjects()
-	if err != nil {
-		return errors.Wrap(err, "execution failed")
-	}
-
-	executor.baseline.objects = objects
-	executor.baseline.receipts = make(map[common.Hash]*common.Receipt)
-
-	executor.transition = executor.baseline.Copy()
 	checkpoint := executor.transition.Copy()
 
 	for _, ix := range executor.Interactions {
 		// Execute the interaction using the transition state
-		if err = executor.executeInteraction(ix, ctx); err != nil {
+		if err := executor.executeInteraction(ix, ctx); err != nil {
 			// If the receiver account is new, delete the object
-			accountRegistered, _ := executor.state.IsAccountRegistered(ix.Receiver())
-			if !accountRegistered {
+			if executor.transition.IsGenesis(ix.Receiver()) {
 				executor.deleteObject(ix.Receiver())
-				delete(checkpoint.objects, ix.Receiver())
+				checkpoint.Delete(ix.Receiver())
 			}
 
 			executor.transition = checkpoint
@@ -63,11 +50,11 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 		}
 
 		// After successful execution, update the executor checkpoint
-		checkpoint = executor.transition
+		checkpoint = executor.transition.Copy()
 	}
 
 	// Update the context for participants
-	if err = executor.UpdateContext(); err != nil {
+	if err := executor.UpdateContext(); err != nil {
 		return errors.Wrap(err, "execution failed")
 	}
 
@@ -95,14 +82,14 @@ func (executor *IxExecutor) executeInteraction(
 
 	// Increment the nonce of the sender address
 	if ix.Sender() != identifiers.NilAddress {
-		executor.transition.objects.GetObject(ix.Sender()).IncrementNonce(1)
+		executor.transition.IncrementNonce(ix.Sender(), 1)
 	}
 
 	// Set the receipt to the transition
-	executor.setReceipt(ix.Hash(), receipt)
+	executor.transition.SetReceipt(ix.Hash(), receipt)
 
 	// Deduct fuel for the ix execution from the sender
-	executor.transition.objects.GetObject(ix.Sender()).DeductFuel(new(big.Int).SetUint64(receipt.FuelUsed))
+	executor.transition.DeductFuel(ix.Sender(), new(big.Int).SetUint64(receipt.FuelUsed))
 
 	// Update Sarga state if the interaction receiver if it is an unregistered (new) account
 	if err := executor.updateSargaState(ix); err != nil {
@@ -112,33 +99,16 @@ func (executor *IxExecutor) executeInteraction(
 	return nil
 }
 
-// Receipts returns all the execution receipts in the executor as
-// types.Receipt objects in a map index by their interaction hash.
-func (executor *IxExecutor) Receipts() common.Receipts {
-	return executor.transition.receipts
-}
-
-// setReceipt sets a common.Receipt object to the executor's cache
-func (executor *IxExecutor) setReceipt(ixhash common.Hash, receipt *common.Receipt) {
-	executor.transition.receipts[ixhash] = receipt
-}
-
 // UpdateContext updates the context of the participant accounts using context delta
 func (executor *IxExecutor) UpdateContext() error {
-	for address, object := range executor.transition.objects {
-		delta, ok := executor.contextDelta[address]
+	for address, object := range executor.transition.Objects() {
+		delta, ok := executor.execContext.ContextDelta()[address]
 		if !ok {
 			continue
 		}
 
-		// Check if the account is registered
-		accountRegistered, err := executor.state.IsAccountRegistered(object.Address())
-		if err != nil {
-			return err
-		}
-
 		// Create a context for the account state object if it is a new account
-		if !accountRegistered {
+		if executor.transition.IsGenesis(object.Address()) {
 			if _, err := object.CreateContext(delta.BehaviouralNodes, delta.RandomNodes); err != nil {
 				return errors.Wrap(common.ErrContextCreation, err.Error())
 			}
@@ -146,7 +116,7 @@ func (executor *IxExecutor) UpdateContext() error {
 			continue
 		}
 
-		_, err = object.UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
+		_, err := object.UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
 		if err != nil {
 			return errors.Wrap(common.ErrContextCreation, err.Error())
 		}
@@ -159,19 +129,13 @@ func (executor *IxExecutor) UpdateContext() error {
 // information for the receiver of an Interaction if it has not been registered.
 // If the receiver address is already registered, no change is performed.
 func (executor *IxExecutor) updateSargaState(ix *common.Interaction) error {
-	// Check if the receiver address is an already registered account
-	accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
-	if err != nil {
-		return err
-	}
-
 	// If account is registered, sarga state does not need to be updated
-	if accountRegistered {
+	if !executor.transition.IsGenesis(ix.Receiver()) {
 		return nil
 	}
 
 	// Get dirty object for sarga
-	sargaObject := executor.transition.objects.GetObject(common.SargaAddress)
+	sargaObject := executor.transition.GetObject(common.SargaAddress)
 	if sargaObject == nil {
 		return errors.New("sarga object not found")
 	}
@@ -183,7 +147,7 @@ func (executor *IxExecutor) updateSargaState(ix *common.Interaction) error {
 // CommitStateObjects commits all StateObjects of the interaction participants to the state db.
 // If the interaction receiver is a new account, the Object of the sarga account is also committed.
 func (executor *IxExecutor) CommitStateObjects() error {
-	for address, object := range executor.transition.objects {
+	for address, object := range executor.transition.Objects() {
 		h, err := object.Commit()
 		if err != nil {
 			return err
@@ -196,61 +160,6 @@ func (executor *IxExecutor) CommitStateObjects() error {
 	return nil
 }
 
-func (executor *IxExecutor) LoadStateObjects() (state.ObjectMap, error) {
-	// Create a new objects map
-	objects := make(state.ObjectMap)
-
-	for _, ix := range executor.Interactions {
-		// Fetch state object for sender if valid and not already available in the executor
-		if sender := ix.Sender(); !sender.IsNil() && executor.baseline.objects.GetObject(sender) == nil {
-			// Retrieve the dirty object for the sender from the state manager
-			senderObject, err := executor.state.GetLatestStateObject(sender)
-			if err != nil {
-				return nil, errors.Wrap(err, "state object fetch failed")
-			}
-
-			// Add sender state object and its snapshot to the executor
-			objects[sender] = senderObject
-		}
-
-		// Fetch state object for receiver if valid
-		if receiver := ix.Receiver(); !receiver.IsNil() {
-			var receiverObject *state.Object
-
-			// Check if the receiver address is an already registered account
-			accountRegistered, err := executor.state.IsAccountRegistered(ix.Receiver())
-			if err != nil {
-				return nil, errors.Wrap(err, "state object fetch failed")
-			}
-
-			if !accountRegistered {
-				// Retrieve the dirty object for genesis (sarga) address
-				genesisObject, err := executor.state.GetLatestStateObject(common.SargaAddress)
-				if err != nil {
-					return nil, errors.Wrap(err, "state object fetch failed")
-				}
-
-				// Add genesis state object and its snapshot to the executor
-				objects[common.SargaAddress] = genesisObject
-
-				// Create a new dirty state object for the account
-				receiverObject = executor.state.CreateStateObject(receiver, common.AccTypeFromIxType(ix.Type()))
-			} else {
-				// Retrieve the dirty object for the receiver from the state manager
-				if receiverObject, err = executor.state.GetLatestStateObject(receiver); err != nil {
-					return nil, errors.Wrap(err, "state object fetch failed")
-				}
-			}
-
-			// Add receiver state object and its snapshot to the executor
-			objects[receiver] = receiverObject
-		}
-	}
-
-	return objects, nil
-}
-
 func (executor *IxExecutor) deleteObject(addr identifiers.Address) {
-	delete(executor.transition.objects, addr)
-	delete(executor.baseline.objects, addr)
+	executor.transition.Delete(addr)
 }

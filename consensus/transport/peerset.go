@@ -10,12 +10,7 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-var (
-	// Represents an error that occurs when a registered peer is attempted to be registered again
-	errAlreadyRegistered = errors.New("peer is already registered")
-	// Represents an error that occurs when a peer is not registered
-	errNotRegistered = errors.New("peer is not registered")
-)
+var errAlreadyRegistered = errors.New("peer is already registered")
 
 // icsPeerSet is a struct that represents a set of Peers.
 // It is used to track a set of active participants
@@ -88,41 +83,25 @@ func (ps *icsPeerSet) List() []id.KramaID {
 // Returns an errClosed if the icsPeerSet is closed, or an errAlreadyRegistered
 // if the peer is already a part of the working set
 func (ps *icsPeerSet) Register(p *icsPeer) error {
-	if ps.ContainsPeer(p.kramaID) {
-		return errAlreadyRegistered
-	}
-
-	// Add the peer to the icsPeerSet mapping
-	go p.handleMessage()
-
-	ps.addPeer(p)
-
-	return nil
-}
-
-func (ps *icsPeerSet) addPeer(p *icsPeer) {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
+	if _, ok := ps.peers[p.kramaID]; ok {
+		return errAlreadyRegistered
+	}
+
 	ps.peers[p.kramaID] = p
+
+	return nil
 }
 
 // Unregister is a method of icsPeerSet that unregisters a peer by removing it from the working set.
 // Returns an errNotRegistered if the peer is not part of the working set.
-func (ps *icsPeerSet) Unregister(p *icsPeer) error {
+func (ps *icsPeerSet) Unregister(kramaID id.KramaID) {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
-	_, ok := ps.peers[p.kramaID]
-	if !ok {
-		return errNotRegistered
-	}
-
-	p.close()
-
-	delete(ps.peers, p.kramaID)
-
-	return nil
+	delete(ps.peers, kramaID)
 }
 
 func (ps *icsPeerSet) ForEach(fn func(kPeer *icsPeer)) {
@@ -160,11 +139,16 @@ func (pl *peerList) addPeer(kramaID id.KramaID) {
 }
 
 // getPeers returns the peerList.
-func (pl *peerList) getPeers() map[id.KramaID]struct{} {
+func (pl *peerList) getPeers() []id.KramaID {
 	pl.mtx.RLock()
 	defer pl.mtx.RUnlock()
+	ls := make([]id.KramaID, 0, len(pl.peers))
 
-	return pl.peers
+	for kramaID := range pl.peers {
+		ls = append(ls, kramaID)
+	}
+
+	return ls
 }
 
 // getUpdatedAt returns the updatedAt timestamp.

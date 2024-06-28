@@ -17,7 +17,6 @@ type Config struct {
 	KramaIDVersion int
 	Vault          *crypto.VaultConfig
 	Network        *NetworkConfig
-	Chain          *ChainConfig
 	Consensus      *ConsensusConfig
 	DB             *DBConfig
 	Execution      *ExecutionConfig
@@ -26,7 +25,7 @@ type Config struct {
 	Metrics        Telemetry
 	LogFilePath    string
 	JSONRPC        *JSONRPCConfig
-	NetworkID      string
+	NetworkID      NetworkID
 	State          *StateConfig
 }
 
@@ -41,11 +40,6 @@ type SyncerConfig struct {
 	TrustedPeers   []NodeInfo
 	EnableSnapSync bool
 	SyncMode       common.SyncMode
-}
-
-type ChainConfig struct {
-	GenesisFilePath  string
-	GenesisTimestamp uint64
 }
 
 type DBConfig struct {
@@ -115,10 +109,16 @@ type ConsensusConfig struct {
 	EnableDebugMode       bool
 	MaxGossipPeers        int
 	MinGossipPeers        int
+	GenesisSeed           string
+	GenesisProof          string
+	EnableSortition       bool
+	GenesisTimestamp      uint64
+	GenesisFilePath       string
 }
 
 type JSONRPCConfig struct {
 	TesseractRangeLimit uint8
+	BatchLengthLimit    uint64
 }
 
 type StateConfig struct {
@@ -146,10 +146,6 @@ func DefaultDevnetConfig(path string) *Config {
 			DisablePrivateIP:   false,
 			DiscoveryInterval:  DefaultDiscoveryInterval,
 		},
-		Chain: &ChainConfig{
-			GenesisFilePath:  path + "/genesis.json",
-			GenesisTimestamp: DefaultGenesisTime,
-		},
 		Syncer: &SyncerConfig{
 			ShouldExecute:  true,
 			SyncMode:       DefaultSyncMode,
@@ -172,6 +168,10 @@ func DefaultDevnetConfig(path string) *Config {
 			ValidatorSlotCount:    3,
 			MaxGossipPeers:        5,
 			MinGossipPeers:        3,
+			GenesisFilePath:       path + "/genesis.json",
+			EnableSortition:       false,
+			GenesisProof:          DefaultGenesisProof,
+			GenesisSeed:           DefaultGenesisSeed,
 		},
 		DB: &DBConfig{
 			CleanDB:      false,
@@ -192,6 +192,7 @@ func DefaultDevnetConfig(path string) *Config {
 		},
 		JSONRPC: &JSONRPCConfig{
 			TesseractRangeLimit: DefaultTesseractRangeLimit,
+			BatchLengthLimit:    DefaultBatchLengthLimit,
 		},
 	}
 

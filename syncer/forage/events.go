@@ -7,8 +7,6 @@ type eventDataJobState struct {
 	height  uint64
 }
 
-type eventSystemAccounts struct{}
-
 type eventBucketSync struct{}
 
 type eventLoadSyncJobsDB struct{}

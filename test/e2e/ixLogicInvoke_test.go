@@ -21,8 +21,11 @@ func (te *TestEnvironment) logicInvoke(
 	logicPayload *common.LogicPayload,
 ) (common.Hash, error) {
 	te.logger.Debug("invoke logic ",
-		"sender", acc.Addr, "logicID", logicPayload.Logic,
-		"call site", logicPayload.Callsite, "call data", logicPayload.Calldata)
+		"sender", acc.Addr,
+		"logicID", logicPayload.Logic,
+		"callsite", logicPayload.Callsite,
+		"calldata", logicPayload.Calldata,
+	)
 
 	payload, err := logicPayload.Bytes()
 	te.Suite.NoError(err)
@@ -81,7 +84,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 	ixHash, err := te.deployLogic(
 		sender,
 		&common.LogicPayload{
-			Callsite: "Seeder",
+			Callsite: "Seed",
 			Calldata: common.Hex2Bytes(deployCalldata),
 			Manifest: common.Hex2Bytes(ledgerManifest),
 		},
@@ -90,7 +93,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	logicID := moiclient.GetLogicID(te.T(), te.moiClient, sender.Addr, args.LatestTesseractHeight)
+	ledgerLogicID := moiclient.GetLogicID(te.T(), te.moiClient, sender.Addr, args.LatestTesseractHeight)
 
 	testcases := []struct {
 		name         string
@@ -109,7 +112,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "valid logic invoke",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    logicID,
+				Logic:    ledgerLogicID,
 				Callsite: "Transfer",
 				Calldata: hexutil.Bytes(common.Hex2Bytes(invokeCalldata)),
 			},
@@ -123,13 +126,13 @@ func (te *TestEnvironment) TestLogicInvoke() {
 				Callsite: "Transfer",
 				Calldata: hexutil.Bytes(common.Hex2Bytes(invokeCalldata)),
 			},
-			expectedError: errors.New("missing logic id"),
+			expectedError: common.ErrMissingLogicID,
 		},
 		{
 			name:   "empty call data",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    logicID,
+				Logic:    ledgerLogicID,
 				Callsite: "Transfer",
 				Calldata: make(polo.Document).Bytes(),
 			},
@@ -139,7 +142,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "empty callsite",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    logicID,
+				Logic:    ledgerLogicID,
 				Callsite: "",
 				Calldata: common.Hex2Bytes(invokeCalldata),
 			},
@@ -166,7 +169,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "invalid callsite",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    logicID,
+				Logic:    ledgerLogicID,
 				Callsite: "abcd",
 				Calldata: []byte{},
 			},
@@ -176,7 +179,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "invalid call data",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    logicID,
+				Logic:    ledgerLogicID,
 				Callsite: "Transfer",
 				Calldata: []byte{1, 2, 3},
 			},

@@ -47,7 +47,7 @@ func (server *Server) Start(debugMode bool) {
 		// add discovery interval
 		"--discovery-interval", config.DiscoveryInterval,
 		// add clean db
-		"--clean-db", config.CleanDB,
+		fmt.Sprintf("--clean-db=%v", config.CleanDB),
 		// add config path
 		"--config-path", config.ConfigPath,
 		// add genesis path

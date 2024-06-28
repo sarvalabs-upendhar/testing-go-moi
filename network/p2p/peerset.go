@@ -100,9 +100,6 @@ func (ps *peerSet) addPeer(p *Peer) {
 }
 
 func (ps *peerSet) removePeer(peerID peer.ID) {
-	ps.lock.Lock()
-	defer ps.lock.Unlock()
-
 	delete(ps.peers, peerID)
 }
 
@@ -122,11 +119,14 @@ func (ps *peerSet) getPeers() map[peer.ID]*Peer {
 // Unregister is a method of peerSet that unregisters a peer by removing it from the working set.
 // Returns an errNotRegistered if the peer is not part of the working set.
 func (ps *peerSet) Unregister(p *Peer) error {
+	ps.lock.Lock()
+	defer ps.lock.Unlock()
+
 	if ps.closed {
 		return nil
 	}
 
-	if !ps.ContainsPeer(p.networkID) {
+	if _, ok := ps.peers[p.networkID]; !ok {
 		return errNotRegistered
 	}
 

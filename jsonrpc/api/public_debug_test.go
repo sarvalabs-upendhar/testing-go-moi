@@ -135,7 +135,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 				db.setNodeMetaInfo(t, test.entries)
 			}
 
-			nodeMetaInfo, err := debugAPI.GetNodeMetaInfo(&test.args)
+			nodeMetaInfo, err := debugAPI.NodeMetaInfo(&test.args)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -150,9 +150,9 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 				nodeInfo := nodeMetaInfo[peerID.String()]
 
 				require.NotNil(t, nodeInfo)
-				require.Equal(t, test.entries[peerID].KramaID, nodeInfo["krama_id"])
-				require.Equal(t, hexutil.Uint64(test.entries[peerID].RTT), nodeInfo["rtt"])
-				require.Equal(t, hexutil.Uint(test.entries[peerID].WalletCount), nodeInfo["wallet_count"])
+				require.Equal(t, test.entries[peerID].KramaID, nodeInfo.KramaID)
+				require.Equal(t, hexutil.Uint64(test.entries[peerID].RTT), nodeInfo.RTT)
+				require.Equal(t, hexutil.Uint(test.entries[peerID].WalletCount), nodeInfo.WalletCount)
 			}
 		})
 	}
@@ -188,7 +188,7 @@ func TestPublicDebugAPI_GetAccounts(t *testing.T) {
 				test.setAddressFn(db)
 			}
 
-			fetchedList, err := debugAPI.GetAccounts()
+			fetchedList, err := debugAPI.Accounts()
 
 			require.NoError(t, err)
 			require.ElementsMatch(t, test.expectedList, fetchedList)
@@ -224,7 +224,7 @@ func TestPublicDebugAPI_GetConns(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			connResp := debugAPI.GetConnections()
+			connResp, _ := debugAPI.Connections()
 
 			for i, expectedConn := range test.expectedConns {
 				require.Equal(t, expectedConn.RemotePeer().String(), connResp.Conns[i].PeerID)
@@ -268,7 +268,7 @@ func TestPublicDebugAPI_GetSyncJob(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			resp, err := debugAPI.GetSyncJob(test.args)
+			resp, err := debugAPI.SyncJob(test.args)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 

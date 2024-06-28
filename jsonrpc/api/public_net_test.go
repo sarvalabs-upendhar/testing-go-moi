@@ -10,7 +10,7 @@ import (
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
-// Net Api Testcases
+// Net API Testcases
 
 func TestPublicNetAPI_Peers(t *testing.T) {
 	network := NewMockNetwork(t)

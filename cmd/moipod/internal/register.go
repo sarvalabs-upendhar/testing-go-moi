@@ -1,14 +1,10 @@
 package internal
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math/big"
-	"net/http"
-	"net/url"
 	"os"
 	"time"
 
@@ -16,12 +12,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
@@ -38,7 +32,6 @@ var (
 	walletAddress            string
 	nodePassword             string
 	localRPC                 string
-	watchDogURL              string
 	mnemonicKeystorePath     string
 	mnemonicKeystorePassword string
 )
@@ -68,7 +61,6 @@ func parseRegisterFlags(cmd *cobra.Command) {
 		os.Getenv("MNEMONIC_KEYSTORE_PASSWORD"),
 		"Password to decrypt mnemonic keystore.",
 	)
-	cmd.PersistentFlags().StringVar(&watchDogURL, "watchdog-url", "", "WatchDog service url")
 	cmd.PersistentFlags().StringVar(&nodeDataDir, "data-dir", "", "Path to node data directory.")
 	cmd.PersistentFlags().StringVar(
 		&networkRPC,
@@ -101,7 +93,6 @@ func parseRegisterFlags(cmd *cobra.Command) {
 		"Passcode to encrypt the node keystore.",
 	)
 
-	_ = cmd.MarkPersistentFlagRequired("watchdog-url")
 	_ = cmd.MarkPersistentFlagRequired("data-dir")
 	_ = cmd.MarkPersistentFlagRequired("wallet-address")
 	_ = cmd.MarkPersistentFlagRequired("node-index")
@@ -188,15 +179,13 @@ func registerGuardian(vault *crypto.KramaVault) {
 	}
 
 	// Check if the guardian is already registered
-	if isGuardianRegistered(client, vault.KramaID()) {
-		fmt.Println("guardian already registered, updating details")
+	isRegistered, err := cmdCommon.IsGuardianRegistered(client, vault.KramaID())
+	if err != nil {
+		cmdCommon.Err(err)
+	}
 
-		err = registerWithWatchDog(localRPC, vault)
-		if err != nil {
-			cmdCommon.Err(err)
-		}
-
-		return
+	if isRegistered {
+		cmdCommon.Err(errors.New("guardian already registered"))
 	}
 
 	// Get the operator MOI ID from the vault
@@ -296,100 +285,6 @@ func registerGuardian(vault *crypto.KramaVault) {
 		return
 	}
 
-	if err = registerWithWatchDog(localRPC, vault); err != nil {
-		cmdCommon.Err(err)
-
-		return
-	}
-
 	fmt.Println("Registration successful")
 	fmt.Println("Registered guardian details")
-}
-
-func isGuardianRegistered(client *moiclient.Client, kramaID kramaid.KramaID) bool {
-	// Generate the hash of the krama ID
-	kramaIDEncoded, _ := polo.Polorize(kramaID)
-	kramaIDHashed := common.GetHash(kramaIDEncoded)
-	// Generate the storage key for the guardian with the given krama ID
-	storageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
-
-	// Retrieve the value for the storage key from the
-	_, err := client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
-		LogicID: common.GuardianLogicID, StorageKey: storageKey,
-		Options: rpcargs.TesseractNumberOrHash{
-			TesseractNumber: &rpcargs.LatestTesseractHeight,
-		},
-	})
-	if err == nil {
-		// If no error was returned, the key was found.
-		// This means the guardian is registered
-		return true
-	}
-
-	// If the key is not found, the guardian is NOT registered
-	if err.Error() == common.ErrKeyNotFound.Error() {
-		return false
-	}
-
-	// log error
-	cmdCommon.Err(errors.Wrap(err, "failed to fetch guardian information from the network"))
-
-	return false
-}
-
-func registerWithWatchDog(rpcURL string, vault *crypto.KramaVault) error {
-	if rpcURL == "" {
-		ipAddr, err := cmdCommon.GetIP()
-		if err != nil {
-			return err
-		}
-
-		rpcURL = fmt.Sprintf("%s%s:%d", "http://", ipAddr, config.DefaultJSONRPCPort)
-	}
-
-	parsedURL, err := url.Parse(rpcURL)
-	if err != nil {
-		return errors.Wrap(err, "invalid rpc url")
-	}
-
-	if watchDogURL == "" {
-		return errors.New("invalid watch dog url")
-	}
-
-	reqParams := make(map[string]interface{})
-
-	req := cmdCommon.KramaIDReq{
-		KramaID: string(vault.KramaID()),
-		RPCUrl:  parsedURL.String(),
-	}
-
-	rawData, err := req.Bytes()
-	if err != nil {
-		return nil
-	}
-
-	signature, err := vault.Sign(rawData, mudraCommon.EcdsaSecp256k1, crypto.UsingNetworkKey())
-	if err != nil {
-		return err
-	}
-
-	reqParams["krama_id"] = vault.KramaID()
-	reqParams["rpc_url"] = parsedURL.String()
-	reqParams["signature"] = hex.EncodeToString(signature)
-
-	jsonData, err := json.Marshal(reqParams)
-	if err != nil {
-		return errors.New("failed to marshal request params")
-	}
-
-	httpResponse, err := http.Post(watchDogURL, "application/json", bytes.NewBuffer(jsonData)) //nolint
-	if err != nil {
-		return errors.Wrap(err, "failed to register with watchdog")
-	}
-
-	if httpResponse.StatusCode >= 200 && httpResponse.StatusCode < 300 {
-		return nil
-	}
-
-	return errors.Wrap(err, "failed to register with watchdog")
 }

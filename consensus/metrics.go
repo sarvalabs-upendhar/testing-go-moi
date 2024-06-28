@@ -3,6 +3,8 @@ package consensus
 import (
 	"time"
 
+	"github.com/sarvalabs/go-moi/common"
+
 	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/discard"
 	"github.com/go-kit/kit/metrics/prometheus"
@@ -19,9 +21,12 @@ type Metrics struct {
 	ICSCreationTime              metrics.Histogram
 	ICSCreationFailureCount      metrics.Counter
 	ICSParticipationFailureCount metrics.Counter
+	ICSRequestCount              metrics.Counter
+	OperatorSelectionCount       metrics.Counter
 	GridGenerationTime           metrics.Histogram
 	AgreementTime                metrics.Histogram
 	AgreementFailureCount        metrics.Counter
+	SignatureVerificationTime    metrics.Histogram
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -91,6 +96,18 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "participation_failure_count",
 			Help:      "ICS participation failure count.",
 		}, labels).With(labelsWithValues...),
+		ICSRequestCount: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "ics",
+			Name:      "ix_request_count",
+			Help:      "ICS request received per ix",
+		}, append(labels, []string{"ix_hash", "peer_id"}...)).With(labelsWithValues...),
+		OperatorSelectionCount: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "ics",
+			Name:      "operator_selection_count",
+			Help:      "ICS operator selection count",
+		}, append(labels, []string{"ix_hash", "peer_id"}...)).With(labelsWithValues...),
 		GridGenerationTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "krama",
@@ -111,6 +128,13 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "agreement_failure_count",
 			Help:      "Consensus agreement failure count",
 		}, labels).With(labelsWithValues...),
+		SignatureVerificationTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "kbft",
+			Name:      "signature_verification_time",
+			Help:      "Time taken to verify tesseract signature",
+			Buckets:   []float64{5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 100},
+		}, labels).With(labelsWithValues...),
 	}
 }
 
@@ -125,9 +149,12 @@ func NilMetrics() *Metrics {
 		ICSCreationTime:              discard.NewHistogram(),
 		ICSCreationFailureCount:      discard.NewCounter(),
 		ICSParticipationFailureCount: discard.NewCounter(),
+		ICSRequestCount:              discard.NewCounter(),
+		OperatorSelectionCount:       discard.NewCounter(),
 		GridGenerationTime:           discard.NewHistogram(),
 		AgreementTime:                discard.NewHistogram(),
 		AgreementFailureCount:        discard.NewCounter(),
+		SignatureVerificationTime:    discard.NewHistogram(),
 	}
 }
 
@@ -183,4 +210,17 @@ func (metrics *Metrics) captureAgreementTime(consensusInitTS time.Time) {
 
 func (metrics *Metrics) captureAgreementFailureCount(delta float64) {
 	metrics.AgreementFailureCount.Add(delta)
+}
+
+// methods to capture telemetry metrics
+func (metrics *Metrics) captureSignatureVerificationTime(verificationInitTime time.Time) {
+	metrics.SignatureVerificationTime.Observe(time.Since(verificationInitTime).Seconds())
+}
+
+func (metrics *Metrics) captureOperatorSelectionCount(ixHash common.Hash, peerID string, delta float64) {
+	metrics.OperatorSelectionCount.With("ix_hash", ixHash.Hex(), "peer_id", peerID).Add(delta)
+}
+
+func (metrics *Metrics) captureICSRequestCount(ixHash common.Hash, peerID string, delta float64) {
+	metrics.ICSRequestCount.With("ix_hash", ixHash.Hex(), "peer_id", peerID).Add(delta)
 }

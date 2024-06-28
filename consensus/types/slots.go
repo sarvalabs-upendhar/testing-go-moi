@@ -23,22 +23,21 @@ type SlotType int
 type Slot struct {
 	// TODO: explore using sync pool for slots
 	SlotType                        SlotType
-	clusterState                    *ClusterState
+	cs                              *ClusterState
+	ps                              map[identifiers.Address]common.IxParticipant
 	ICSSuccessChan                  chan bool
 	BftOutboundChan, BftInboundChan chan ConsensusMessage
 	ExecutionResp                   chan ExecutionResponse
-	CloseCh                         chan struct{}
 }
 
-func NewSlot(slotType SlotType, clusterState *ClusterState) *Slot {
+func NewSlot(slotType SlotType, ps map[identifiers.Address]common.IxParticipant) *Slot {
 	return &Slot{
 		SlotType:        slotType,
-		clusterState:    clusterState,
+		ps:              ps,
 		ICSSuccessChan:  make(chan bool),
 		ExecutionResp:   make(chan ExecutionResponse),
 		BftOutboundChan: make(chan ConsensusMessage, 1000),
 		BftInboundChan:  make(chan ConsensusMessage, 1000),
-		CloseCh:         make(chan struct{}),
 	}
 }
 
@@ -57,19 +56,24 @@ func (info *Slot) ForwardMsg(msg ConsensusMessage) {
 }
 
 func (info *Slot) ClusterID() common.ClusterID {
-	return info.clusterState.ClusterID
+	return info.cs.ClusterID
 }
 
 func (info *Slot) ClusterState() *ClusterState {
-	return info.clusterState
+	return info.cs
 }
 
 func (info *Slot) ICSRequestMsg() *CanonicalICSRequest {
-	return info.clusterState.RequestMsg
+	return info.cs.RequestMsg
+}
+
+func (info *Slot) UpdateClusterState(cs *ClusterState) {
+	info.cs = cs
 }
 
 type Slots struct {
 	slots                   map[common.ClusterID]*Slot
+	activeIxns              map[common.Hash]common.ClusterID
 	availableOperatorSlots  int
 	availableValidatorSlots int
 	activeAccounts          map[identifiers.Address]common.ClusterID
@@ -82,6 +86,7 @@ func NewSlots(operatorSlots, validatorSlots int) *Slots {
 		availableOperatorSlots:  operatorSlots,
 		availableValidatorSlots: validatorSlots,
 		activeAccounts:          make(map[identifiers.Address]common.ClusterID, (operatorSlots+validatorSlots)*2),
+		activeIxns:              make(map[common.Hash]common.ClusterID),
 	}
 }
 
@@ -97,36 +102,55 @@ func (s *Slots) areAccountsActive(addrs ...identifiers.Address) bool {
 	return false
 }
 
-func (s *Slots) AreAccountsActive(addrs ...identifiers.Address) bool {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
+func (s *Slots) AddActiveAccount(addr identifiers.Address) bool {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 
-	return s.areAccountsActive(addrs...)
+	if s.areAccountsActive(addr) {
+		return false
+	}
+
+	s.activeAccounts[addr] = ""
+
+	return true
 }
 
-func (s *Slots) AddSlot(slot *Slot) bool {
+func (s *Slots) ClearActiveAccount(addr identifiers.Address) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	delete(s.activeAccounts, addr)
+}
+
+func (s *Slots) CreateSlot(
+	clusterID common.ClusterID,
+	req Request,
+	ps map[identifiers.Address]common.IxParticipant,
+) (*Slot, common.ClusterID) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	// if any one of the accounts are active return false
-	for addr := range slot.clusterState.AccountInfos {
+	for addr := range ps {
 		if s.areAccountsActive(addr) {
-			return false
+			return nil, s.activeIxns[req.Ixs[0].Hash()]
 		}
 	}
 
-	if !s.areSlotsAvailable(slot.SlotType) {
-		return false
+	if !s.areSlotsAvailable(req.SlotType) {
+		return nil, ""
 	}
 
-	s.slots[slot.clusterState.ClusterID] = slot
-	s.decrementSlots(slot.SlotType)
+	s.slots[clusterID] = NewSlot(req.SlotType, ps)
+	s.decrementSlots(req.SlotType)
 
-	for addr := range slot.clusterState.AccountInfos {
-		s.activeAccounts[addr] = slot.clusterState.ClusterID
+	for addr := range ps {
+		s.activeAccounts[addr] = clusterID
 	}
 
-	return true
+	s.activeIxns[req.Ixs[0].Hash()] = clusterID
+
+	return s.slots[clusterID], ""
 }
 
 func (s *Slots) GetSlot(id common.ClusterID) *Slot {
@@ -153,16 +177,24 @@ func (s *Slots) areSlotsAvailable(slotType SlotType) bool {
 
 func (s *Slots) CleanupSlot(id common.ClusterID) {
 	s.mtx.Lock()
-	defer s.mtx.Unlock()
+	defer func() {
+		s.mtx.Unlock()
+	}()
 
 	if slot, ok := s.slots[id]; ok {
-		for addr := range slot.clusterState.AccountInfos {
+		for addr := range slot.ps {
 			delete(s.activeAccounts, addr)
 		}
 
-		close(slot.CloseCh)
 		close(slot.BftInboundChan)
 		delete(s.slots, id)
+
+		for ixHash, clusterID := range s.activeIxns {
+			if clusterID == id {
+				delete(s.activeIxns, ixHash)
+			}
+		}
+
 		s.incrementSlots(slot.SlotType)
 	}
 }

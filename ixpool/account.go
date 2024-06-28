@@ -116,14 +116,6 @@ func (a *account) enqueue(ix *common.Interaction, replace bool) {
 // and the first one has to have nonce less (or equal) to the account's
 // nextNonce.
 func (a *account) promote() (uint64, common.Interactions) {
-	a.promoted.lock(true)
-	a.enqueued.lock(true)
-
-	defer func() {
-		a.enqueued.unlock()
-		a.promoted.unlock()
-	}()
-
 	currentNonce := a.getNonce()
 	if a.enqueued.length() == 0 ||
 		a.enqueued.peek().Nonce() > currentNonce {
@@ -202,9 +194,6 @@ func (m *accountsMap) getWaitPrimaries() *waitQueue {
 
 		account := m.get(addressKey)
 
-		account.promoted.lock(false)
-		defer account.promoted.unlock()
-
 		if !time.Now().After(account.getWaitTime()) {
 			return true
 		}
@@ -231,9 +220,6 @@ func (m *accountsMap) getCostPrimaries() *pricedQueue {
 		}
 
 		account := m.get(addressKey)
-
-		account.promoted.lock(false)
-		defer account.promoted.unlock()
 
 		if !time.Now().After(account.getWaitTime()) {
 			return true
@@ -274,9 +260,6 @@ func (m *accountsMap) promoted() (total uint64) { //nolint:unused
 
 		account := m.get(addressKey)
 
-		account.promoted.lock(false)
-		defer account.promoted.unlock()
-
 		total += account.promoted.length()
 
 		return true
@@ -292,17 +275,11 @@ func (m *accountsMap) getIxs(addr identifiers.Address, includeEnqueued bool) (
 	account := m.get(addr)
 
 	if account != nil {
-		account.promoted.lock(false)
-		defer account.promoted.unlock()
-
 		if account.promoted.length() != 0 {
 			promoted = account.promoted.queue
 		}
 
 		if includeEnqueued {
-			account.enqueued.lock(false)
-			defer account.enqueued.unlock()
-
 			if account.enqueued.length() != 0 {
 				enqueued = account.enqueued.queue
 			}
@@ -323,17 +300,11 @@ func (m *accountsMap) allIxs(includeEnqueued bool) (
 		addr, _ := key.(identifiers.Address)
 		account := m.get(addr)
 
-		account.promoted.lock(false)
-		defer account.promoted.unlock()
-
 		if account.promoted.length() != 0 {
 			allPromoted[addr] = account.promoted.queue
 		}
 
 		if includeEnqueued {
-			account.enqueued.lock(false)
-			defer account.enqueued.unlock()
-
 			if account.enqueued.length() != 0 {
 				allEnqueued[addr] = account.enqueued.queue
 			}
@@ -348,21 +319,12 @@ func (m *accountsMap) allIxs(includeEnqueued bool) (
 // nonceToIXMap stores nonce to ix key value pairs
 type nonceToIXMap struct {
 	mapping map[uint64]*common.Interaction
-	mutex   sync.Mutex
 }
 
 func newNonceToIXMap() *nonceToIXMap {
 	return &nonceToIXMap{
 		mapping: make(map[uint64]*common.Interaction),
 	}
-}
-
-func (m *nonceToIXMap) lock() {
-	m.mutex.Lock()
-}
-
-func (m *nonceToIXMap) unlock() {
-	m.mutex.Unlock()
 }
 
 func (m *nonceToIXMap) get(nonce uint64) *common.Interaction {

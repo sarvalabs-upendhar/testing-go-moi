@@ -64,7 +64,6 @@ func (api *API) getDefaultFuelAmount(c *gin.Context) {
 	c.JSON(http.StatusOK, Success().WithData(DefaultFuel{Fuel: env.CallFuel}))
 }
 
-//nolint:dupl
 func (api *API) setDefaultSender(c *gin.Context) {
 	// Decode the request
 	request := new(DefaultUser)
@@ -151,97 +150,6 @@ func (api *API) wipeDefaultSender(c *gin.Context) {
 
 	// Unset the default sender
 	env.Sender = ""
-
-	c.JSON(http.StatusOK, Success())
-}
-
-//nolint:dupl
-func (api *API) setDefaultReceiver(c *gin.Context) {
-	// Decode the request
-	request := new(DefaultUser)
-	if err := c.ShouldBindJSON(&request); err != nil {
-		c.JSON(http.StatusBadRequest, Error(err))
-		return
-	}
-
-	// Retrieve the environment
-	env, exists, err := api.lab.GetEnvironment(c.GetHeader(HeaderLabEnv))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return
-	}
-
-	// Environment was not found
-	if !exists {
-		c.JSON(http.StatusNotFound, Error(core.ErrEnvironmentNotFound))
-		return
-	}
-
-	// Register the user with the environment
-	if err = env.SetDefaultReceiver(request.Username); err != nil {
-		// User not found -> error with status not found code
-		if errors.Is(err, core.ErrUserNotFound) {
-			c.JSON(http.StatusNotFound, Error(core.ErrUserNotFound))
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return
-	}
-
-	c.JSON(http.StatusOK, Success())
-}
-
-func (api *API) getDefaultReceiver(c *gin.Context) {
-	// Retrieve the environment
-	env, exists, err := api.lab.GetEnvironment(c.GetHeader(HeaderLabEnv))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return
-	}
-
-	// Environment was not found
-	if !exists {
-		c.JSON(http.StatusNotFound, Error(core.ErrEnvironmentNotFound))
-		return
-	}
-
-	if env.Receiver == "" {
-		c.JSON(http.StatusNotFound, Error(core.ErrReceiverNotConf).WithData(User{
-			Username: "",
-			Address:  identifiers.NilAddress,
-		}))
-
-		return
-	}
-
-	// Get the receiver
-	receiver := env.Receiver
-	// Get the receiver address
-	addr := env.Users[receiver]
-
-	c.JSON(http.StatusOK, Success().WithData(User{
-		Username: receiver,
-		Address:  addr,
-	}))
-}
-
-func (api *API) wipeDefaultReceiver(c *gin.Context) {
-	// Retrieve the environment
-	env, exists, err := api.lab.GetEnvironment(c.GetHeader(HeaderLabEnv))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return
-	}
-
-	// Environment was not found
-	if !exists {
-		c.JSON(http.StatusNotFound, Error(core.ErrEnvironmentNotFound))
-		return
-	}
-
-	// Unset the default receiver
-	env.Receiver = ""
 
 	c.JSON(http.StatusOK, Success())
 }

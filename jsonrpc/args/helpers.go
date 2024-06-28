@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/stretchr/testify/require"
 )
 
 // CheckForRPCTesseract validates fields of rpc tesseract
@@ -50,7 +51,7 @@ func CheckForRPCIxn(
 	t *testing.T,
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.Participants,
+	participants common.ParticipantsState,
 	rpcIxn *RPCInteraction,
 ) {
 	t.Helper()
@@ -140,10 +141,7 @@ func CheckForRPCIxn(
 
 		require.Equal(t, expectedPayload, []byte(rpcIxn.Payload))
 
-	case common.IxLogicDeploy:
-		fallthrough
-
-	case common.IxLogicInvoke:
+	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
 		logicPayload := new(common.LogicPayload)
 
 		err := logicPayload.FromBytes(ix.Payload())
@@ -165,7 +163,7 @@ func CheckForRPCIxn(
 	}
 }
 
-func CheckForRPCParticipants(t *testing.T, participants common.Participants, rpcParticipants RPCParticipants) {
+func CheckForRPCParticipants(t *testing.T, participants common.ParticipantsState, rpcParticipants RPCParticipants) {
 	t.Helper()
 
 	if len(participants) == 0 {
@@ -209,7 +207,7 @@ func CheckForRPCPoxtData(t *testing.T, poxt common.PoXtData, rpcPoxt RPCPoXtData
 func CheckForRPCReceipt(
 	t *testing.T,
 	tsHash common.Hash,
-	participants common.Participants,
+	participants common.ParticipantsState,
 	ix *common.Interaction,
 	receipt *common.Receipt,
 	rpcReceipt *RPCReceipt,

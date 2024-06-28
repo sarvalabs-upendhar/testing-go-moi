@@ -33,6 +33,7 @@ var ixTypeToString = map[IxType]string{
 	IxAssetBurn:     "IxAssetBurn",
 	IxLogicDeploy:   "IxLogicDeploy",
 	IxLogicInvoke:   "IxLogicInvoke",
+	IxLogicEnlist:   "IxLogicEnlist",
 }
 
 func (ixtype IxType) String() string {

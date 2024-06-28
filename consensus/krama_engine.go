@@ -2,9 +2,16 @@ package consensus
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"log"
 	"math"
 	"math/big"
+	"os"
+	"sort"
 	"time"
+
+	"github.com/sarvalabs/go-moi/compute"
 
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/consensus/observer"
@@ -13,7 +20,10 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -25,8 +35,6 @@ import (
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/telemetry/tracing"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -56,8 +64,20 @@ type lattice interface {
 		addr identifiers.Address,
 		dirtyStorage map[common.Hash][]byte,
 		ts *common.Tesseract,
+		transition *state.Transition,
 		allParticipants bool,
 	) error
+	AddTesseract(
+		cache bool,
+		addr identifiers.Address,
+		t *common.Tesseract,
+		transition *state.Transition,
+		allParticipants bool,
+	) error
+	GetTesseract(
+		hash common.Hash,
+		withInteractions bool,
+	) (*common.Tesseract, error)
 }
 
 type kramaTransport interface {
@@ -91,20 +111,26 @@ type kramaTransport interface {
 }
 
 type stateManager interface {
-	FetchInteractionContext(
-		ctx context.Context,
-		ix *common.Interaction,
-	) (
-		map[identifiers.Address]common.Hash,
-		[]*common.NodeSet,
-		error,
+	GetICSParticipants(ixns common.Interactions) (map[identifiers.Address]common.IxParticipant, error)
+	LoadTransitionObjects(ps map[identifiers.Address]common.IxParticipant) (*state.Transition, error)
+	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
+	FetchLatestParticipantContext(addr identifiers.Address) (
+		latestContextHash common.Hash,
+		behaviouralSet, randomSet *common.NodeSet,
+		err error,
 	)
 	GetPublicKeys(context context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error)
+	GetICSSeed(addr identifiers.Address) ([32]byte, error)
 	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(addr identifiers.Address) (bool, error)
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
 	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
-	Cleanup(addr identifiers.Address)
+	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
+	IsSealValid(ts *common.Tesseract) (bool, error)
+	RemoveCachedObject(addr identifiers.Address)
+	GetRegisteredGuardiansCount() (int, error)
+	GetGuardianIncentives(id kramaid.KramaID) (uint64, error)
+	GetTotalIncentives() (uint64, error)
 }
 
 type ixPool interface {
@@ -114,36 +140,51 @@ type ixPool interface {
 }
 
 type execution interface {
-	ExecuteInteractions(common.Interactions, *common.ExecutionContext) (common.Receipts, common.AccStateHashes, error)
-	Revert(common.ClusterID) error
-	Cleanup(common.ClusterID)
+	ExecuteInteractions(*state.Transition, common.Interactions, *common.ExecutionContext) (common.AccStateHashes, error)
+}
+
+type store interface {
+	HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool
+}
+
+type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
+
+type vault interface {
+	KramaID() kramaid.KramaID
+	GetConsensusPrivateKey() crypto.PrivateKey
+	Sign(data []byte, sigType mudraCommon.SigType, signOptions ...crypto.SignOption) ([]byte, error)
 }
 
 type Engine struct {
-	ctx          context.Context
-	ctxCancel    context.CancelFunc
-	cfg          *config.ConsensusConfig
-	mux          *utils.TypeMux
-	logger       hclog.Logger
-	selfID       kramaid.KramaID
-	slots        *ktypes.Slots
-	requests     chan ktypes.Request
-	randomizer   *flux.Randomizer
-	transport    kramaTransport
-	exec         execution
-	pool         ixPool
-	state        stateManager
-	executionReq chan common.ClusterID
-	lattice      lattice
-	wal          kbft.WAL
-	vault        *crypto.KramaVault
-	clusterLocks *locker.Locker
-	metrics      *Metrics
-	avgICSTime   time.Duration
-	slotCloseCh  chan common.ClusterID
+	ctx               context.Context
+	ctxCancel         context.CancelFunc
+	cfg               *config.ConsensusConfig
+	mux               *utils.TypeMux
+	logger            hclog.Logger
+	selfID            kramaid.KramaID
+	slots             *ktypes.Slots
+	requests          chan ktypes.Request
+	randomizer        *flux.Randomizer
+	transport         kramaTransport
+	exec              execution
+	pool              ixPool
+	db                store
+	state             stateManager
+	executionReq      chan common.ClusterID
+	lattice           lattice
+	wal               kbft.WAL
+	vault             vault
+	clusterLocks      *locker.Locker
+	metrics           *Metrics
+	avgICSTime        time.Duration
+	slotCloseCh       chan common.ClusterID
+	lottery           *OperatorSelection
+	signatureVerifier AggregatedSignatureVerifier
+	tsTracker         map[common.Hash]*utils.TSTrackerEvent
 }
 
 func NewKramaEngine(
+	db store,
 	cfg *config.ConsensusConfig,
 	logger hclog.Logger,
 	mux *utils.TypeMux,
@@ -151,41 +192,51 @@ func NewKramaEngine(
 	state stateManager,
 	exec execution,
 	ixPool ixPool,
-	val *crypto.KramaVault,
+	val vault,
 	lattice lattice,
 	randomizer *flux.Randomizer,
 	transport kramaTransport,
 	metrics *Metrics,
 	slots *ktypes.Slots,
+	verifier AggregatedSignatureVerifier,
 ) (*Engine, error) {
 	wal, err := kbft.NewWAL(logger, cfg.DirectoryPath)
 	if err != nil {
 		return nil, errors.Wrap(err, "WAL failed")
 	}
 
+	operatorSortition, err := NewOperatorSelection(selfID, val, state)
+	if err != nil {
+		return nil, err
+	}
+
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	k := &Engine{
-		ctx:          ctx,
-		ctxCancel:    ctxCancel,
-		cfg:          cfg,
-		logger:       logger.Named("Krama-Engine"),
-		mux:          mux,
-		selfID:       selfID,
-		state:        state,
-		slots:        slots,
-		requests:     make(chan ktypes.Request),
-		randomizer:   randomizer,
-		transport:    transport,
-		exec:         exec,
-		pool:         ixPool,
-		lattice:      lattice,
-		executionReq: make(chan common.ClusterID),
-		wal:          wal,
-		vault:        val,
-		clusterLocks: locker.New(),
-		metrics:      metrics,
-		avgICSTime:   cfg.AccountWaitTime,
-		slotCloseCh:  make(chan common.ClusterID),
+		ctx:               ctx,
+		ctxCancel:         ctxCancel,
+		cfg:               cfg,
+		logger:            logger.Named("Krama-Engine"),
+		mux:               mux,
+		selfID:            selfID,
+		state:             state,
+		slots:             slots,
+		requests:          make(chan ktypes.Request),
+		randomizer:        randomizer,
+		transport:         transport,
+		exec:              exec,
+		db:                db,
+		pool:              ixPool,
+		lattice:           lattice,
+		executionReq:      make(chan common.ClusterID),
+		wal:               wal,
+		vault:             val,
+		clusterLocks:      locker.New(),
+		metrics:           metrics,
+		avgICSTime:        cfg.AccountWaitTime,
+		slotCloseCh:       make(chan common.ClusterID),
+		signatureVerifier: verifier,
+		lottery:           operatorSortition,
+		tsTracker:         make(map[common.Hash]*utils.TSTrackerEvent),
 	}
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
@@ -198,15 +249,36 @@ func (k *Engine) loadIxnClusterState(
 	ctx context.Context,
 	req ktypes.Request,
 	clusterID common.ClusterID,
+	ixnParticipants map[identifiers.Address]common.IxParticipant,
 ) (*ktypes.ClusterState, error) {
 	var err error
 
-	clusterState := ktypes.NewICS(6, req.Msg, req.Ixs, clusterID, req.Operator, req.ReqTime, k.selfID)
-	// Fetch the committed account info of interaction participants
-	clusterState.AccountInfos, err = k.fetchIxAccounts(ctx, req.Ixs[0])
+	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "loadIxnClusterState")
+	defer span.End()
+
+	participants, nodeSet, err := k.fetchParticipantsAndNodeSet(ctx, ixnParticipants)
 	if err != nil {
 		return nil, err
 	}
+
+	seed, err := k.lottery.computeICSSeed(participants)
+	if err != nil {
+		return nil, err
+	}
+
+	lk := common.NewLotteryKey(req.Ixs[0].Hash(), seed)
+
+	clusterState := ktypes.NewICS(
+		req.Msg,
+		req.Ixs,
+		clusterID,
+		req.Operator,
+		req.ReqTime,
+		k.selfID,
+		participants,
+		nodeSet,
+		lk,
+	)
 
 	return clusterState, nil
 }
@@ -215,22 +287,15 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "acquireContextLock")
 	defer span.End()
 	// Create cluster id using operatorID and IxHash
-	k.logger.Debug("Creating cluster", "cluster-ID", slot.ClusterID())
+	k.logger.Debug("Creating cluster", "cluster-id", slot.ClusterID())
 
 	var (
 		operatorRandomNodes []kramaid.KramaID
 		observerNodes       []kramaid.KramaID
+		err                 error
 	)
 
-	// Fetch the context nodes of interaction participants
-	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, slot.ClusterState().Ixs[0])
-	if err != nil {
-		return err
-	}
-
-	loadContextLockInfo(slot.ClusterState(), contextHashes)
-
-	contextNodes, contextNodesSize, isOperatorIncluded := getDistinctNodes(k.selfID, nodeSets)
+	contextNodes, contextNodesSize, isOperatorIncluded := getDistinctNodes(k.selfID, slot.ClusterState().NodeSet.Sets)
 
 	// Calculate the required number of observer nodes in the cluster based on observer coefficient
 	// value and the actual size of the cluster including the required observer
@@ -295,20 +360,14 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 		return errors.Wrap(err, "Failed to fetch the public key of observer nodes.")
 	}
 
-	slot.ClusterState().UpdateNodeSet(common.SenderBehaviourSet, nodeSets[common.SenderBehaviourSet])
-	slot.ClusterState().UpdateNodeSet(common.SenderRandomSet, nodeSets[common.SenderRandomSet])
-	slot.ClusterState().UpdateNodeSet(common.ReceiverBehaviourSet, nodeSets[common.ReceiverBehaviourSet])
-	slot.ClusterState().UpdateNodeSet(common.ReceiverRandomSet, nodeSets[common.ReceiverRandomSet])
 	slot.ClusterState().UpdateNodeSet(
-		common.RandomSet,
-		common.NewNodeSet(operatorRandomNodes, randomKeys, operatorRandomNodesCount),
+		slot.ClusterState().NodeSet.RandomSetPosition(),
+		common.NewNodeSet(operatorRandomNodes, randomKeys, uint32(operatorRandomNodesCount)),
 	)
 	slot.ClusterState().UpdateNodeSet(
-		common.ObserverSet,
-		common.NewNodeSet(observerNodes, observerKeys, requiredObserverNodes),
+		slot.ClusterState().NodeSet.ObserverSetPosition(),
+		common.NewNodeSet(observerNodes, observerKeys, uint32(requiredObserverNodes)),
 	)
-
-	slot.ClusterState().UpdateClusterSize()
 
 	slot.ClusterState().ICSReqTime = utils.Now()
 	// Construct ICS_Request
@@ -317,7 +376,12 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 		return err
 	}
 
-	failedReqCount := k.sendICSRequest(ctx, reqMsg, slot.ClusterState().NodeSet)
+	slot.ClusterState().RequestMsg = &reqMsg
+
+	failedReqCount, err := k.sendICSRequest(ctx, reqMsg, slot.ClusterState().NodeSet)
+	if err != nil {
+		return err
+	}
 
 	slot.ClusterState().IncrementICSRespCount(failedReqCount)
 
@@ -332,14 +396,28 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 		return nil
 	})
 
-	k.logger.Info("::::::::Res Count:::::::", slot.ClusterState().GetICSRespCount(), len(nodes))
+	k.logger.Info(
+		"::::::::Res Count:::::::",
+		"responded", slot.ClusterState().GetICSRespCount(),
+		"actual", len(nodes)-1,
+		"cluster-id", slot.ClusterID(),
+		"ixHash", slot.ClusterState().IxnHash(),
+	)
+
+	k.logger.Debug("Non responded nodes", "nodes", slot.ClusterState().NodeSet.GetInactiveNodes(),
+		"cluster-id", slot.ClusterID(),
+		"ixHash", slot.ClusterState().IxnHash())
 
 	if !slot.ClusterState().IsContextQuorum() {
 		return errors.New("context quorum failed")
 	}
 
-	if !slot.ClusterState().IsRandomQuorum(operatorRandomNodesCount, requiredObserverNodes) {
+	if !slot.ClusterState().IsRandomQuorum(operatorRandomNodesCount) {
 		return errors.New("random quorum failed")
+	}
+
+	if !slot.ClusterState().IsObserverQuorum(requiredObserverNodes) {
+		return errors.New("observer quorum failed")
 	}
 
 	return nil
@@ -389,6 +467,98 @@ func (k *Engine) verifyICSRequest(
 	return nil
 }
 
+// runLottery performs lottery to select an operator based on the given participants info and
+// returns the computed ICS output and proof.
+func (k *Engine) runLottery(key common.LotteryKey) ([32]byte, []byte, error) {
+	if info, ok := k.lottery.cache.Get(key); ok {
+		if sortitionResult, ok := info.(*LotteryResult); ok {
+			if sortitionResult.isSelected {
+				return sortitionResult.vrfOutput, sortitionResult.vrfProof, nil
+			}
+
+			return [32]byte{}, []byte{}, ErrOperatorNotEligible
+		}
+	}
+
+	icsOutput, icsProof, err := k.lottery.computeVRFOutput(key.Seed())
+	if err != nil {
+		return [32]byte{}, nil, err
+	}
+
+	operatorIncentive, err := k.state.GetGuardianIncentives(k.selfID)
+	if err != nil {
+		return [32]byte{}, nil, err
+	}
+
+	priority, err := k.lottery.Select(operatorIncentive, icsOutput)
+	if err != nil {
+		k.lottery.cache.Add(key, NewLotteryResult(false, [32]byte{}, []byte{}))
+
+		return [32]byte{}, nil, err
+	}
+
+	peerID, err := k.selfID.PeerID()
+	if err != nil {
+		return [32]byte{}, nil, err
+	}
+
+	k.metrics.captureOperatorSelectionCount(key.IxHash(), peerID, 1)
+	k.lottery.cache.Add(key, NewLotteryResult(true, icsOutput, icsProof))
+
+	k.lottery.AddICSOperatorInfo(key, k.selfID, priority)
+
+	if ok := k.lottery.IsEligible(key, k.selfID); !ok {
+		return [32]byte{}, nil, common.ErrOperatorNotEligible
+	}
+
+	return icsOutput, icsProof, nil
+}
+
+// verifyOperatorLottery validates the ICS proof provided by an operator with the computed ICS seed.
+func (k *Engine) verifyOperatorLottery(
+	operator kramaid.KramaID,
+	lk common.LotteryKey,
+	vrfOutput [32]byte,
+	vrfProof []byte,
+) error {
+	priority, err := k.lottery.VerifySelection(operator, lk.Seed(), vrfOutput, vrfProof)
+	if err != nil {
+		return err
+	}
+
+	k.lottery.AddICSOperatorInfo(lk, operator, priority)
+
+	if ok := k.lottery.IsEligible(lk, operator); !ok {
+		for _, v := range k.lottery.GetEligibleOperators(lk) {
+			k.logger.Debug("Eligible Operator", "lottery-key", lk, "krama-id", v.KramaID)
+		}
+
+		return common.ErrOperatorNotEligible
+	}
+
+	return nil
+}
+
+func (k *Engine) checkOperatorEligibility(cs *ktypes.ClusterState, req ktypes.Request) error {
+	if !k.cfg.EnableSortition {
+		return nil
+	}
+
+	if k.selfID == cs.Operator {
+		vrfOutput, vrfProof, err := k.runLottery(cs.LotteryKey)
+		if err != nil {
+			return err
+		}
+
+		cs.VRFProof = vrfProof
+		cs.VRFOutput = vrfOutput
+
+		return nil
+	}
+
+	return k.verifyOperatorLottery(cs.Operator, cs.LotteryKey, req.Msg.VrfOutput, req.Msg.VrfProof)
+}
+
 func (k *Engine) randomNodeDelta(setSize int) int {
 	return int(math.Ceil(RandomNodesDelta * float64(setSize)))
 }
@@ -398,6 +568,9 @@ func (k *Engine) observerNodeDelta(setSize int) int {
 }
 
 func (k *Engine) Start() {
+	eventSub := k.mux.Subscribe(utils.TSTrackerEvent{})
+	go k.handleTSTracker(eventSub)
+
 	go k.minter()
 
 	go k.executionRoutine()
@@ -431,17 +604,19 @@ func (k *Engine) isTimely(reqTime time.Time, currentTime time.Time) bool {
 	return true
 }
 
-func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot, req ktypes.Request) error {
-	ctx, span := tracing.Span(ctx, "Krama.KramaEngine", "joinCluster")
+func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
+	_, span := tracing.Span(ctx, "Krama.KramaEngine", "joinCluster")
 	defer span.End()
 
 	k.logger.Debug(
 		"Received an ICS join request",
 		"from", slot.ClusterState().Operator,
 		"timestamp", slot.ClusterState().RequestMsg.Timestamp,
-		"cluster-ID", slot.ClusterID(),
-		"ix-hash", slot.ClusterState().Ixs[0].Hash(),
+		"cluster-id", slot.ClusterID(),
+		"ix-hash", slot.ClusterState().IxnHash(),
 	)
+
+	reqMsg := slot.ClusterState().RequestMsg
 
 	reqTime := utils.Canonical(time.Unix(0, slot.ICSRequestMsg().Timestamp))
 
@@ -449,19 +624,12 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot, req ktypes.
 		return errors.New("invalid time stamp")
 	}
 
-	slot.ClusterState().CurrentRole = common.IcsSetType(slot.ICSRequestMsg().ContextType)
-
-	contextHashes, nodeSets, err := k.state.FetchInteractionContext(ctx, slot.ClusterState().Ixs[0])
-	if err != nil {
-		return err
-	}
-
-	loadContextLockInfo(slot.ClusterState(), contextHashes)
+	slot.ClusterState().IsObserver = utils.ContainsKramaID(slot.ICSRequestMsg().ObserverSet, k.selfID)
 
 	// Check whether the context hashes matches
 	for addr, info := range slot.ICSRequestMsg().ContextLock {
-		if slot.ClusterState().AccountInfos.GetHeight(addr) < info.Height {
-			if err = k.mux.Post(utils.SyncRequestEvent{
+		if slot.ClusterState().ParticipantHeight(addr) < info.Height {
+			if err := k.mux.Post(utils.SyncRequestEvent{
 				Address:  addr,
 				Height:   info.Height,
 				BestPeer: slot.ClusterState().Operator,
@@ -470,33 +638,32 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot, req ktypes.
 			}
 		}
 
-		if slot.ClusterState().AccountInfos.GetHeight(addr) != info.Height {
+		if slot.ClusterState().ParticipantHeight(addr) != info.Height {
 			return common.ErrHeightMismatch
 		}
 
-		if info.TesseractHash != slot.ClusterState().AccountInfos.GetLatestHash(addr) {
+		if info.TesseractHash != slot.ClusterState().ParticipantTSHash(addr) {
 			return common.ErrHashMismatch
 		}
 	}
 
-	observerPublicKeys, err := k.state.GetPublicKeys(context.Background(), req.Msg.ObserverSet...)
+	observerPublicKeys, err := k.state.GetPublicKeys(ctx, reqMsg.ObserverSet...)
 	if err != nil {
 		return errors.New("failed to retrieve public keys")
 	}
 
-	randomPublicKeys, err := k.state.GetPublicKeys(context.Background(), req.Msg.RandomSet...)
+	randomPublicKeys, err := k.state.GetPublicKeys(ctx, reqMsg.RandomSet...)
 	if err != nil {
 		return errors.New("failed to retrieve public keys")
 	}
 
-	// update the cluster state with the latest node set's
-	slot.ClusterState().UpdateNodeSet(common.SenderBehaviourSet, nodeSets[common.SenderBehaviourSet])
-	slot.ClusterState().UpdateNodeSet(common.SenderRandomSet, nodeSets[common.SenderRandomSet])
-	slot.ClusterState().UpdateNodeSet(common.ReceiverBehaviourSet, nodeSets[common.ReceiverBehaviourSet])
-	slot.ClusterState().UpdateNodeSet(common.ReceiverRandomSet, nodeSets[common.ReceiverRandomSet])
-	slot.ClusterState().UpdateNodeSet(common.ObserverSet, common.NewNodeSet(req.Msg.ObserverSet, observerPublicKeys, 0))
-	slot.ClusterState().UpdateNodeSet(common.RandomSet, common.NewNodeSet(req.Msg.RandomSet, randomPublicKeys, 0))
-	slot.ClusterState().UpdateClusterSize()
+	slot.ClusterState().UpdateNodeSet(
+		slot.ClusterState().NodeSet.ObserverSetPosition(),
+		common.NewNodeSet(slot.ClusterState().RequestMsg.ObserverSet, observerPublicKeys, reqMsg.RequiredObserverSetSize))
+
+	slot.ClusterState().UpdateNodeSet(
+		slot.ClusterState().NodeSet.RandomSetPosition(),
+		common.NewNodeSet(slot.ClusterState().RequestMsg.RandomSet, randomPublicKeys, reqMsg.RequiredRandomSetSize))
 
 	k.logger.Debug("Responding to ICS request", "from", slot.ClusterState().Operator)
 
@@ -506,13 +673,13 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot, req ktypes.
 func (k *Engine) handleReq(req ktypes.Request) {
 	clusterID, err := req.GetClusterID()
 	if err != nil {
-		sendResponse(req, errors.New("failed to decode clusterID"))
+		sendResponse(req, nil, errors.New("failed to decode clusterID"))
 
 		return
 	}
 
 	ctx, span := tracing.Span(
-		k.ctx,
+		req.Ctx,
 		"Krama.KramaEngine",
 		"handleReq",
 		trace.WithAttributes(
@@ -520,35 +687,43 @@ func (k *Engine) handleReq(req ktypes.Request) {
 			attribute.Int("slotType", int(req.SlotType)),
 		),
 	)
-
-	k.logger.Trace("Handling Request", "slot-type", int(req.SlotType), "cluster-ID", clusterID)
-
 	defer span.End()
 
+	if k.cfg.EnableSortition && req.SlotType == ktypes.ValidatorSlot {
+		peerID, err := req.Operator.PeerID()
+		if err != nil {
+			sendResponse(req, nil, errors.New("failed to decode peer id"))
+
+			return
+		}
+
+		k.metrics.captureICSRequestCount(req.Ixs[0].Hash(), peerID, 1)
+	}
+
+	/*
+		1: Check slot availability
+		2: Load ICS participants info and create a slot
+		3: Load cluster state
+		4: Validate Ixns
+		5: Create New ICS or Join
+		6: Start agreement mechanism
+	*/
+
 	if slot := k.slots.GetSlot(clusterID); slot != nil {
-		sendResponse(req, nil)
+		sendResponse(req, nil, nil)
 
 		return
 	}
 
-	if !k.slots.AreSlotsAvailable(req.SlotType) {
-		sendResponse(req, common.ErrSlotsFull)
-
-		return
-	}
-
-	cs, err := k.loadIxnClusterState(ctx, req, clusterID)
+	ps, err := k.state.GetICSParticipants(req.Ixs)
 	if err != nil {
-		sendResponse(req, err)
-
-		return
+		sendResponse(req, nil, err)
 	}
 
-	// create a slot and try adding it
-	newSlot := ktypes.NewSlot(req.SlotType, cs)
-
-	if !k.slots.AddSlot(newSlot) {
-		sendResponse(req, common.ErrSlotsFull)
+	slot, activeClusterID := k.slots.CreateSlot(clusterID, req, ps)
+	if slot == nil {
+		otherEligibleOperators := k.checkOperatorEligibilityForActiveCluster(req, activeClusterID)
+		sendResponse(req, otherEligibleOperators, common.ErrSlotsFull)
 
 		return
 	}
@@ -569,7 +744,6 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		}
 
 		k.slotCloseCh <- clusterID
-		k.exec.Cleanup(clusterID)
 	}()
 
 	if req.SlotType == ktypes.OperatorSlot {
@@ -578,10 +752,26 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		k.metrics.captureAvailableValidatorSlots(-1)
 	}
 
+	cs, err := k.loadIxnClusterState(ctx, req, clusterID, ps)
+	if err != nil {
+		sendResponse(req, nil, err)
+
+		return
+	}
+
+	slot.UpdateClusterState(cs)
+
+	err = k.checkOperatorEligibility(cs, req)
+	if err != nil {
+		sendResponse(req, k.lottery.GetEligibleOperators(cs.LotteryKey), common.ErrOperatorNotEligible)
+
+		return
+	}
+
 	if err = k.validateInteractions(req.Ixs); err != nil {
 		k.logger.Error("Invalid interaction", "err", err)
 
-		sendResponse(req, common.ErrInvalidInteractions)
+		sendResponse(req, nil, common.ErrInvalidInteractions)
 
 		return
 	}
@@ -590,7 +780,7 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		make([]string, 0),
 		cs.NewHeights(),
 		cs,
-		k.logger.With("cluster-ID", clusterID),
+		k.logger.With("cluster-id", clusterID),
 	)
 
 	k.transport.RegisterContextRouter(ctx, cs.Operator, clusterID, cs.NodeSet, voteset)
@@ -599,14 +789,14 @@ func (k *Engine) handleReq(req ktypes.Request) {
 
 	switch req.SlotType {
 	case ktypes.OperatorSlot:
-		err = k.acquireContextLock(ctx, newSlot)
+		err = k.acquireContextLock(ctx, slot)
 
-		sendResponse(req, err)
+		sendResponse(req, nil, err)
 
 		k.metrics.captureICSCreationTime(k.slots.GetSlot(clusterID).ClusterState().ICSReqTime)
 
 		if err != nil {
-			k.logger.Error("Error acquiring context lock", "err", err, "cluster-ID", clusterID)
+			k.logger.Error("Error acquiring context lock", "err", err, "cluster-id", clusterID)
 			k.metrics.captureICSCreationFailureCount(1)
 
 			if err = k.sendICSFailure(ctx, clusterID); err != nil {
@@ -624,17 +814,17 @@ func (k *Engine) handleReq(req ktypes.Request) {
 			return
 		}
 
-		k.logger.Info("Cluster creation successful", "cluster-ID", clusterID)
+		k.logger.Info("Cluster creation successful", "cluster-id", clusterID)
 
 	case ktypes.ValidatorSlot:
 		requestTime := time.Now()
 
-		err = k.joinCluster(ctx, newSlot, req)
+		err = k.joinCluster(ctx, slot)
 
-		sendResponse(req, err)
+		sendResponse(req, k.lottery.GetEligibleOperators(slot.ClusterState().LotteryKey), err)
 
 		if err != nil {
-			k.logger.Info("Error joining cluster", "err", err, "cluster-ID", clusterID)
+			k.logger.Info("Error joining cluster", "err", err, "cluster-id", clusterID)
 			k.metrics.captureICSParticipationFailureCount(1)
 
 			return
@@ -659,7 +849,7 @@ func (k *Engine) handleReq(req ktypes.Request) {
 
 			k.metrics.captureICSJoiningTime(requestTime)
 		case <-time.After(ICSTimeOutDuration):
-			k.logger.Info("ICS success timeout", "cluster-ID", req.Msg.ClusterID)
+			k.logger.Info("ICS success timeout", "cluster-id", req.Msg.ClusterID)
 			k.metrics.captureICSParticipationFailureCount(1)
 
 			return
@@ -667,16 +857,9 @@ func (k *Engine) handleReq(req ktypes.Request) {
 	}
 
 	// Send execution request
-	slot := k.slots.GetSlot(clusterID)
-	if slot == nil {
-		k.logger.Info("Nil slot", "cluster-ID", req.Msg.ClusterID)
-
-		return
-	}
-
 	go k.initOutboundMessageHandler(ctx, slot)
 
-	if cs.CurrentRole == common.ObserverSet {
+	if cs.IsObserver {
 		wg := observer.NewWatchDog(ctx, slot)
 		wg.StartWatchDog()
 
@@ -703,10 +886,11 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		// Wait for execution response
 		execResp := <-slot.ExecutionResp
 		if execResp.Err != nil {
-			k.logger.Error("Error executing interactions", "err", execResp.Err, "cluster-ID", clusterID)
+			k.logger.Error("Error executing interactions", "err", execResp.Err, "cluster-id", clusterID)
 			k.metrics.captureAgreementFailureCount(1)
 
-			for _, interaction := range cs.Ixs {
+			// TODO: We should not drop all interactions.
+			for _, interaction := range cs.Ixns() {
 				k.pool.Drop(interaction)
 			}
 
@@ -720,12 +904,7 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		consensusInitTS := time.Now()
 		k.metrics.captureClusterSize(float64(cs.Size()))
 
-		ixHash, err := cs.Ixs.Hash()
-		if err != nil {
-			return
-		}
-
-		icsEvidence := kbft.NewEvidence(ixHash, cs.Operator, cs.Size())
+		icsEvidence := kbft.NewEvidence(cs.IxnHash(), cs.Operator, cs.Size())
 
 		voteset.Reset(cs.NewHeights(), cs)
 
@@ -742,17 +921,14 @@ func (k *Engine) handleReq(req ktypes.Request) {
 			cs,
 			voteset,
 			k.finalizedTesseractHandler,
-			kbft.WithLogger(k.logger.With("cluster-ID", clusterID)),
-			kbft.WithWal(k.wal),
+			kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
+			kbft.WithWal(kbft.NullWal{}),
 			kbft.WithEvidence(icsEvidence),
 		)
 
 		if err = bft.Start(); err != nil {
-			k.logger.Error("Consensus failed", "err", err, "cluster-ID", cs.ClusterID)
+			k.logger.Error("Consensus failed", "err", err, "cluster-id", cs.ClusterID)
 			k.metrics.captureAgreementFailureCount(1)
-			if err = k.exec.Revert(cs.ClusterID); err != nil {
-				k.logger.Error("Failed to revert the execution changes", "err", err)
-			}
 
 			return
 		}
@@ -760,82 +936,113 @@ func (k *Engine) handleReq(req ktypes.Request) {
 		k.metrics.captureAgreementTime(consensusInitTS)
 	}
 
-	k.logger.Info("Interaction finalized", "cluster-ID", cs.ClusterID)
+	k.logger.Info("Interaction finalized", "cluster-id", cs.ClusterID)
 }
 
-func (k *Engine) fetchIxAccounts(ctx context.Context, ix *common.Interaction) (ktypes.AccountInfos, error) {
+func (k *Engine) fetchParticipantsAndNodeSet(
+	ctx context.Context,
+	ps map[identifiers.Address]common.IxParticipant,
+) (
+	map[identifiers.Address]*common.Participant,
+	*common.ICSNodeSet,
+	error,
+) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "fetchIxAccounts")
 	defer span.End()
 
-	accounts := make(ktypes.AccountInfos)
+	participants := make(map[identifiers.Address]*common.Participant)
+	addrs := make(common.Addresses, 0, len(ps))
 
-	if !ix.Sender().IsNil() {
-		accInfo, err := k.state.GetAccountMetaInfo(ix.Sender())
-		if err != nil {
-			return nil, err
+	nodeSet := common.NewICSNodeSet(2*len(ps) + 2)
+
+	for addr, info := range ps {
+		if _, ok := participants[addr]; ok {
+			continue
 		}
 
-		accounts[ix.Sender()] = ktypes.AccountInfoFromAccMetaInfo(accInfo, false)
-	}
+		addrs = append(addrs, addr)
 
-	if ix.Receiver().IsNil() {
-		return accounts, nil
-	}
+		if !info.IsGenesis {
+			accInfo, err := k.state.GetAccountMetaInfo(addr)
+			if err != nil {
+				return nil, nil, err
+			}
 
-	accountRegistered, err := k.state.IsAccountRegistered(ix.Receiver())
-	if err != nil {
-		return nil, err
-	}
+			participants[addr] = &common.Participant{
+				AccType:       accInfo.Type,
+				Address:       addr,
+				IsGenesis:     info.IsGenesis,
+				Height:        accInfo.Height,
+				TesseractHash: accInfo.TesseractHash,
+				LockType:      info.LockType,
+				IsSigner:      info.IsSigner,
+			}
 
-	if accountRegistered {
-		accInfo, err := k.state.GetAccountMetaInfo(ix.Receiver())
-		if err != nil {
-			return nil, err
+			continue
 		}
 
-		accounts[ix.Receiver()] = ktypes.AccountInfoFromAccMetaInfo(accInfo, false)
-
-		return accounts, nil
+		participants[addr] = &common.Participant{
+			AccType:       info.AccType,
+			Address:       addr,
+			IsGenesis:     info.IsGenesis,
+			Height:        0,
+			TesseractHash: common.NilHash,
+			LockType:      info.LockType,
+			ContextHash:   common.NilHash,
+		}
 	}
 
-	genesisAccInfo, err := k.state.GetAccountMetaInfo(common.SargaAddress)
-	if err != nil {
-		return nil, err
+	sort.Sort(addrs)
+
+	for index, addr := range addrs {
+		position := index * 2 // we multiply with two, as each participant has two sets
+
+		participants[addr].NodeSetPosition = position
+
+		if participants[addr].IsGenesis {
+			continue
+		}
+
+		contextHash, bSet, rSet, err := k.state.FetchLatestParticipantContext(addr)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		nodeSet.UpdateNodeSet(position, bSet)
+		nodeSet.UpdateNodeSet(position+1, rSet)
+
+		participants[addr].ContextHash = contextHash
+
+		participants[addr].ConsensusQuorum = nodeSet.ParticipantQuorum(participants[addr].NodeSetPosition)
 	}
 
-	acc := &ktypes.AccountInfo{
-		Address:       ix.Receiver(),
-		AccType:       common.AccTypeFromIxType(ix.Type()),
-		TesseractHash: common.NilHash,
-		Height:        0,
-		IsGenesis:     true,
-	}
-
-	accounts[common.SargaAddress] = ktypes.AccountInfoFromAccMetaInfo(genesisAccInfo, false)
-	accounts[ix.Receiver()] = acc
-
-	return accounts, nil
+	return participants, nodeSet, nil
 }
 
 func (k *Engine) getCanonicalICSReqMsg(
 	cs *ktypes.ClusterState,
 ) (ktypes.CanonicalICSRequest, error) {
-	canonicalICSReqMsg := new(ktypes.CanonicalICSRequest)
+	msg := new(ktypes.CanonicalICSRequest)
 
-	rawData, err := cs.Ixs.Bytes()
+	rawData, err := cs.Ixns().Bytes()
 	if err != nil {
-		return *canonicalICSReqMsg, err
+		return *msg, err
 	}
 
-	canonicalICSReqMsg.IxData = rawData
-	canonicalICSReqMsg.ClusterID = cs.ClusterID
-	canonicalICSReqMsg.Operator = string(k.selfID)
-	canonicalICSReqMsg.ContextLock = cs.ContextLock()
-	canonicalICSReqMsg.Timestamp = cs.ICSReqTime.UnixNano()
-	canonicalICSReqMsg.RandomSet = cs.NodeSet.Nodes[common.RandomSet].Ids
-	canonicalICSReqMsg.ObserverSet = cs.NodeSet.Nodes[common.ObserverSet].Ids
+	msg.IxData = rawData
+	msg.ClusterID = cs.ClusterID
+	msg.Operator = string(k.selfID)
+	msg.ContextLock = cs.ContextLock()
+	msg.Timestamp = cs.ICSReqTime.UnixNano()
+	msg.RandomSet = cs.NodeSet.RandomSet().Ids
+	msg.ObserverSet = cs.NodeSet.ObserverSet().Ids
+	msg.RequiredRandomSetSize = cs.NodeSet.RandomSet().SetSizeWithOutDelta
+	msg.RequiredObserverSetSize = cs.NodeSet.ObserverSet().SetSizeWithOutDelta
+	msg.VrfOutput = cs.VRFOutput
+	msg.VrfProof = cs.VRFProof
+	msg.ICSSeed = cs.LotteryKey.Seed()
 
-	return *canonicalICSReqMsg, nil
+	return *msg, nil
 }
 
 func (k *Engine) getRandomNodes(
@@ -892,209 +1099,119 @@ func (k *Engine) createProposalTesseract(slot *ktypes.Slot) (*common.Tesseract, 
 		return nil, err
 	}
 
-	receipts, stateHashes, err := k.exec.ExecuteInteractions(
-		clusterState.Ixs,
+	transition, err := k.state.LoadTransitionObjects(clusterState.Participants.IxnParticipants())
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to load state transition objects")
+	}
+
+	stateHashes, err := k.exec.ExecuteInteractions(
+		transition,
+		clusterState.Ixns(),
 		clusterState.ExecutionContext(),
 	)
 	if err != nil {
 		return nil, err
 	}
-	// store the receipts
-	clusterState.SetReceipts(receipts)
-	clusterState.SetPostExecState(stateHashes)
-	k.logger.Debug("Generating tesseracts", "cluster-ID", slot.ClusterID())
 
-	return generateTesseract(clusterState)
+	// store the transition
+	clusterState.SetStateTransition(transition)
+	k.logger.Debug("Generating tesseracts", "cluster-id", slot.ClusterID())
+
+	return generateTesseract(clusterState, stateHashes)
 }
 
-// Updates the context delta for sender and for the receiver depending on whether the
-// receiver account is registered or not
 func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 	if slot == nil {
 		return errors.New("nil slot")
 	}
 
-	// if debug mode is on, partially update the context delta
-	if k.cfg.EnableDebugMode {
-		return k.partiallyUpdateContextDelta(slot)
-	}
+	cs := slot.ClusterState()
 
-	clusterState := slot.ClusterState()
-	seenAccounts := make(map[identifiers.Address]bool)
-	deltaMap := make(common.ContextDelta)
-
-	for _, ix := range clusterState.Ixs {
-		senderAddr := ix.Sender()
-		receiverAddr := ix.Receiver()
-
-		// update context delta for sender
-		if !senderAddr.IsNil() && !seenAccounts[senderAddr] {
-			senderDeltaGroup := new(common.DeltaGroup)
-			senderDeltaGroup.Role = common.Sender
-			senderBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-				common.SenderBehaviourSet,
-			)
-
-			if senderBehaviourDelta != "" {
-				senderDeltaGroup.BehaviouralNodes = append(senderDeltaGroup.BehaviouralNodes, senderBehaviourDelta)
-			}
-
-			if replacedNodes != "" {
-				senderDeltaGroup.ReplacedNodes = append(senderDeltaGroup.ReplacedNodes, replacedNodes)
-			}
-
-			senderRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-				common.SenderRandomSet,
-				1,
-				clusterState.Operator,
-			)
-
-			senderDeltaGroup.RandomNodes = append(senderDeltaGroup.RandomNodes, senderRandomDelta...)
-			senderDeltaGroup.ReplacedNodes = append(senderDeltaGroup.ReplacedNodes, replacedRandomDelta...)
-
-			seenAccounts[senderAddr] = true
-			deltaMap[senderAddr] = senderDeltaGroup
+	for _, ps := range cs.Participants {
+		// Check 1 : We should not update context for accounts with read lock
+		// Check 2 : We should not update context for non signer regular account
+		if ps.LockType < common.WriteLock || !ps.IsContextUpdateRequired() {
+			continue
 		}
 
-		// update context delta for receiver
-		if !receiverAddr.IsNil() && !seenAccounts[receiverAddr] {
-			receiverDeltaGroup := new(common.DeltaGroup)
-			receiverDeltaGroup.Role = common.Receiver
+		//  Check 3: In debug mode, we should only update context for new accounts
+		if k.cfg.EnableDebugMode && !ps.IsGenesis {
+			continue
+		}
 
-			accountRegistered, err := k.state.IsAccountRegistered(receiverAddr)
+		deltaGroup := new(common.DeltaGroup)
+
+		if ps.IsGenesis {
+			// Fetch new nodes for receiver account
+			behaviouralNodes, randomNodes, err := k.GetNodes(
+				cs,
+				RandomContextSize,
+				BehaviouralContextSize,
+			)
 			if err != nil {
 				return err
 			}
 
-			// if receiver account is not registered, update context delta for genesis as well as receiver address
-			if !accountRegistered {
-				// Fetch new nodes for receiver account
-				behaviouralNodes, randomNodes, err := k.GetNodes(
-					clusterState,
-					RandomContextSize,
-					BehaviouralContextSize,
-				)
-				if err != nil {
-					return err
-				}
+			deltaGroup.RandomNodes = append(deltaGroup.RandomNodes, randomNodes...)
+			deltaGroup.BehaviouralNodes = append(deltaGroup.BehaviouralNodes, behaviouralNodes...)
 
-				receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, randomNodes...)
-				receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, behaviouralNodes...)
+			ps.ContextDelta = deltaGroup
 
-				// Fetch sarga account context delta
-				genesisDeltaGroup := new(common.DeltaGroup)
-				genesisDeltaGroup.Role = common.Genesis
-				genesisBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-					common.ReceiverBehaviourSet,
-				)
-
-				if genesisBehaviourDelta != "" {
-					genesisDeltaGroup.BehaviouralNodes = append(genesisDeltaGroup.BehaviouralNodes, genesisBehaviourDelta)
-				}
-
-				if replacedNodes != "" {
-					genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedNodes)
-				}
-
-				genesisRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-					common.ReceiverRandomSet,
-					1,
-					clusterState.Operator,
-				)
-
-				genesisDeltaGroup.RandomNodes = append(genesisDeltaGroup.RandomNodes, genesisRandomDelta...)
-				genesisDeltaGroup.ReplacedNodes = append(genesisDeltaGroup.ReplacedNodes, replacedRandomDelta...)
-
-				seenAccounts[common.SargaAddress] = true
-				deltaMap[common.SargaAddress] = genesisDeltaGroup
-			} else if clusterState.AccountInfos[receiverAddr].AccType == common.LogicAccount ||
-				clusterState.AccountInfos[receiverAddr].AccType == common.AssetAccount {
-				// update context delta for only receiver address if receiver account is registered
-				receiverBehaviourDelta, replacedNodes := clusterState.GetBehaviouralContextDelta(
-					common.ReceiverBehaviourSet,
-				)
-
-				if receiverBehaviourDelta != "" {
-					receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, receiverBehaviourDelta)
-				}
-
-				if replacedNodes != "" {
-					receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedNodes)
-				}
-
-				receiverRandomDelta, replacedRandomDelta := clusterState.GetRandomContextDelta(
-					common.ReceiverRandomSet,
-					1,
-					clusterState.Operator,
-				)
-
-				receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, receiverRandomDelta...)
-				receiverDeltaGroup.ReplacedNodes = append(receiverDeltaGroup.ReplacedNodes, replacedRandomDelta...)
-			}
-
-			seenAccounts[receiverAddr] = true
-			deltaMap[receiverAddr] = receiverDeltaGroup
+			continue
 		}
-	}
 
-	clusterState.UpdateContextDelta(deltaMap)
+		senderBehaviourDelta, replacedNodes := cs.GetBehaviouralContextDelta(
+			ps.NodeSetPosition,
+		)
+
+		if senderBehaviourDelta != "" {
+			deltaGroup.BehaviouralNodes = append(deltaGroup.BehaviouralNodes, senderBehaviourDelta)
+		}
+
+		if replacedNodes != "" {
+			deltaGroup.ReplacedNodes = append(deltaGroup.ReplacedNodes, replacedNodes)
+		}
+
+		senderRandomDelta, replacedRandomDelta := cs.GetRandomContextDelta(
+			ps.NodeSetPosition+1,
+			1,
+			cs.Operator,
+		)
+
+		deltaGroup.RandomNodes = append(deltaGroup.RandomNodes, senderRandomDelta...)
+		deltaGroup.ReplacedNodes = append(deltaGroup.ReplacedNodes, replacedRandomDelta...)
+
+		ps.ContextDelta = deltaGroup
+	}
 
 	return nil
 }
 
-// Updates the context delta for the receiver if the receiver account is not registered, and retains the context
-// of other participants.
-func (k *Engine) partiallyUpdateContextDelta(slot *ktypes.Slot) error {
-	clusterState := slot.ClusterState()
-	seenAccounts := make(map[identifiers.Address]bool)
-	deltaMap := make(common.ContextDelta)
+func (k *Engine) ExecuteAndValidate(
+	ts *common.Tesseract,
+	transition *state.Transition,
+	ps map[identifiers.Address]common.IxParticipant,
+) error {
+	k.logger.Debug(
+		"Executing interactions of grid",
+		"ts-hash", ts.Hash(),
+		"lock", ts.PreviousContext(),
+	)
 
-	for _, ix := range clusterState.Ixs {
-		senderAddr := ix.Sender()
-		receiverAddr := ix.Receiver()
-
-		if !senderAddr.IsNil() && !seenAccounts[senderAddr] {
-			senderDeltaGroup := new(common.DeltaGroup)
-			senderDeltaGroup.Role = common.Sender
-			seenAccounts[senderAddr] = true
-			deltaMap[senderAddr] = senderDeltaGroup
-		}
-
-		if !receiverAddr.IsNil() && !seenAccounts[receiverAddr] {
-			receiverDeltaGroup := new(common.DeltaGroup)
-			receiverDeltaGroup.Role = common.Receiver
-
-			accountRegistered, err := k.state.IsAccountRegistered(receiverAddr)
-			if err != nil {
-				return err
-			}
-
-			if !accountRegistered {
-				// Fetch new nodes for receiver account
-				behaviouralNodes, randomNodes, err := k.GetNodes(
-					clusterState,
-					RandomContextSize,
-					BehaviouralContextSize,
-				)
-				if err != nil {
-					return err
-				}
-
-				receiverDeltaGroup.RandomNodes = append(receiverDeltaGroup.RandomNodes, randomNodes...)
-				receiverDeltaGroup.BehaviouralNodes = append(receiverDeltaGroup.BehaviouralNodes, behaviouralNodes...)
-
-				genesisDeltaGroup := new(common.DeltaGroup)
-				genesisDeltaGroup.Role = common.Genesis
-				seenAccounts[common.SargaAddress] = true
-				deltaMap[common.SargaAddress] = genesisDeltaGroup
-			}
-
-			seenAccounts[receiverAddr] = true
-			deltaMap[receiverAddr] = receiverDeltaGroup
-		}
+	stateHashes, err := k.exec.ExecuteInteractions(
+		transition,
+		ts.Interactions(),
+		ts.ExecutionContext(ps),
+	)
+	if err != nil {
+		return err
 	}
 
-	clusterState.UpdateContextDelta(deltaMap)
+	if !isReceiptsHashValid(ts, transition.Receipts()) || !areStateHashesValid(ts, stateHashes) {
+		return errors.New("failed to validate the tesseract")
+	}
+
+	ts.SetReceipts(transition.Receipts())
 
 	return nil
 }
@@ -1105,7 +1222,7 @@ func (k *Engine) GetNodes(
 	requiredBehaviouralNodes int,
 ) (behaviouralNodes []kramaid.KramaID, randomNodes []kramaid.KramaID, err error) {
 	// TODO: Need to improve this function
-	set := clusterInfo.NodeSet.Nodes[common.RandomSet]
+	set := clusterInfo.NodeSet.RandomSet()
 	count := 0
 
 	for index, kramaID := range set.Ids {
@@ -1148,6 +1265,7 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		identifiers.NilAddress,
 		clusterInfo.GetDirty(),
 		tesseract,
+		clusterInfo.Transition,
 		true,
 	); err != nil {
 		return err
@@ -1172,11 +1290,72 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		return err
 	}
 
-	if err = k.transport.BroadcastTesseract(msg); err != nil {
-		k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-ID", clusterID)
+	// only operator broadcasts the tesseract and other cluster nodes broadcast it if the tesseract isn't received
+	// from operator before expiry time.
+	if tesseract.Operator() == string(k.selfID) {
+		if err = k.transport.BroadcastTesseract(msg); err != nil {
+			k.logger.Error("Failed to broadcast tesseract", "err", err, "cluster-id", clusterID)
+		}
+	} else {
+		if err := k.mux.Post(utils.TSTrackerEvent{
+			TSHash:     tesseract.Hash(),
+			Msg:        msg,
+			ExpiryTime: time.Now().Add(300 * time.Millisecond),
+		}); err != nil {
+			k.logger.Error("Error posting tesseract tracker event", "ts-hash", tesseract.Hash())
+		}
+	}
+
+	for _, addr := range tesseract.Addresses() {
+		k.state.RemoveCachedObject(addr)
 	}
 
 	return nil
+}
+
+// handleTSTracker adds a received event to the map if its pair doesn't exist
+// and removes it if its pair already exists.
+// It wakes up once every 300ms, checks if the event has expired, and removes it from the map if it has.
+// If the event has the tesseract, it will be broadcasted as the operator's broadcasted tesseract didn't reach us.
+func (k *Engine) handleTSTracker(eventSub *utils.Subscription) {
+	for {
+		select {
+		case <-k.ctx.Done():
+			return
+
+		case <-time.After(300 * time.Millisecond):
+			now := time.Now()
+			for _, event := range k.tsTracker {
+				if now.After(event.ExpiryTime) {
+					if event.Msg != nil {
+						if err := k.transport.BroadcastTesseract(event.Msg); err != nil {
+							k.logger.Error("Error broadcasting tesseract", "ts-hash", event.TSHash)
+						}
+					}
+
+					delete(k.tsTracker, event.TSHash)
+				}
+			}
+
+		case msg, ok := <-eventSub.Chan():
+			if ok {
+				event, ok := msg.Data.(utils.TSTrackerEvent)
+				if !ok {
+					log.Println("Error casting event data to TSTrackerEvent")
+
+					continue
+				}
+
+				if _, ok := k.tsTracker[event.TSHash]; ok {
+					delete(k.tsTracker, event.TSHash)
+
+					continue
+				}
+
+				k.tsTracker[event.TSHash] = &event
+			}
+		}
+	}
 }
 
 func generatePoXtData(state *ktypes.ClusterState) common.PoXtData {
@@ -1185,6 +1364,8 @@ func generatePoXtData(state *ktypes.ClusterState) common.PoXtData {
 		BinaryHash:   state.BinaryHash,
 		IdentityHash: state.IdentityHash,
 		ICSHash:      state.ICSHash,
+		ICSSeed:      state.RequestMsg.VrfOutput,
+		ICSProof:     state.RequestMsg.VrfProof,
 		ClusterID:    state.ClusterID,
 		ICSSignature: nil, // TODO calculate and fill this properly
 		ICSVoteset:   state.GetICSVoteset(),
@@ -1196,65 +1377,38 @@ func generatePoXtData(state *ktypes.ClusterState) common.PoXtData {
 	}
 }
 
-func generateParticipantData(state *ktypes.ClusterState) common.Participants {
-	ix := state.Ixs[0] // TODO: Improve this
+func participantStates(cs *ktypes.ClusterState, ps common.AccStateHashes) common.ParticipantsState {
+	participants := make(common.ParticipantsState, len(cs.Participants))
 
-	participants := make(common.Participants)
-
-	if !ix.Sender().IsNil() {
-		addr := ix.Sender()
-
+	for addr, p := range cs.Participants {
 		participants[addr] = common.State{
-			Height:          state.NewHeight(addr),
-			TransitiveLink:  state.AccountInfos.GetLatestHash(addr),
-			PreviousContext: state.GetPreviousContextHash(addr),
-			LatestContext:   state.GetContextHash(addr),
-			ContextDelta:    state.ContextDelta(addr),
-			StateHash:       state.GetStateHash(addr),
-		}
-	}
-
-	if !ix.Receiver().IsNil() {
-		addr := ix.Receiver()
-
-		participants[addr] = common.State{
-			Height:          state.NewHeight(addr),
-			TransitiveLink:  state.AccountInfos.GetLatestHash(addr),
-			PreviousContext: state.GetPreviousContextHash(addr),
-			LatestContext:   state.GetContextHash(addr),
-			ContextDelta:    state.ContextDelta(addr),
-			StateHash:       state.GetStateHash(addr),
-		}
-
-		if state.AccountInfos.IsGenesis(ix.Receiver()) {
-			addr := common.SargaAddress
-
-			participants[addr] = common.State{
-				Height:          state.NewHeight(addr),
-				TransitiveLink:  state.AccountInfos.GetLatestHash(addr),
-				PreviousContext: state.GetPreviousContextHash(addr),
-				LatestContext:   state.GetContextHash(addr),
-				ContextDelta:    state.ContextDelta(addr),
-				StateHash:       state.GetStateHash(addr),
-			}
+			Height:          p.NewHeight(),
+			TransitiveLink:  p.TSHash(),
+			PreviousContext: p.ContextHash,
+			LatestContext:   ps.ContextHash(addr),
+			ContextDelta:    p.ContextDelta,
+			StateHash:       ps.StateHash(addr),
 		}
 	}
 
 	return participants
 }
 
-func generateTesseract(state *ktypes.ClusterState) (*common.Tesseract, error) {
-	participants := generateParticipantData(state)
+func generateTesseract(
+	cs *ktypes.ClusterState,
+	hs common.AccStateHashes,
+) (*common.Tesseract, error) {
+	participants := participantStates(cs, hs)
 
-	fuelUsed := state.GetFuelUsed()
+	fuelUsed := cs.Transition.Receipts().FuelUsed()
 	fuelLimit := uint64(1000)
 
-	ixnsHash, err := state.Ixs.Hash()
+	ixnsHash, err := cs.Ixns().Hash()
 	if err != nil {
 		return nil, err
 	}
 
-	receiptHash, err := state.Receipts.Hash()
+	receiptHash, err := cs.Transition.Receipts().Hash()
 	if err != nil {
 		return nil, err
 	}
@@ -1264,15 +1418,15 @@ func generateTesseract(state *ktypes.ClusterState) (*common.Tesseract, error) {
 		ixnsHash,
 		receiptHash,
 		big.NewInt(0), // TODO pass appropriate value
-		uint64(state.ICSReqTime.Unix()),
-		string(state.Operator),
+		uint64(cs.ICSReqTime.Unix()),
+		string(cs.Operator),
 		fuelUsed,
 		fuelLimit,
-		generatePoXtData(state),
+		generatePoXtData(cs),
 		nil,
-		state.SelfKramaID(),
-		state.Ixs,
-		state.Receipts,
+		cs.SelfKramaID(),
+		cs.Ixns(),
+		cs.Transition.Receipts(),
 	)
 
 	return ts, nil
@@ -1324,7 +1478,7 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 			return common.ErrInvalidNonce
 		}
 
-		if err = k.IsIxValid(ix); err != nil {
+		if err = k.isIxValid(ix); err != nil {
 			return err
 		}
 	}
@@ -1342,8 +1496,8 @@ func (k *Engine) Logger() hclog.Logger {
 	return k.logger
 }
 
-// IsIxValid performs validity checks based on the type of interaction
-func (k *Engine) IsIxValid(ix *common.Interaction) error {
+// isIxValid performs validity checks based on the type of interaction
+func (k *Engine) isIxValid(ix *common.Interaction) error {
 	if ix.Sender().IsNil() {
 		return common.ErrInvalidAddress
 	}
@@ -1412,7 +1566,9 @@ func (k *Engine) IsIxValid(ix *common.Interaction) error {
 			return errors.New("asset already found")
 		}
 
-	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxAssetMint, common.IxAssetBurn:
+	case common.IxAssetMint, common.IxAssetBurn:
+		return nil
+	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
 		return nil
 	default:
 		return common.ErrInvalidInteractionType
@@ -1421,21 +1577,548 @@ func (k *Engine) IsIxValid(ix *common.Interaction) error {
 	return nil
 }
 
-func loadContextLockInfo(
-	cs *ktypes.ClusterState,
-	hashes map[identifiers.Address]common.Hash,
+func (k *Engine) setupSargaAccount(
+	sarga *common.AccountSetupArgs,
+	accounts []common.AccountSetupArgs,
+	assets []common.AssetAccountSetupArgs,
+	logics []common.LogicSetupArgs,
+) (*state.Object, error) {
+	stateObject := k.state.CreateStateObject(common.SargaAddress, common.SargaAccount, true)
+
+	if _, err := stateObject.CreateContext(sarga.BehaviouralContext, sarga.RandomContext); err != nil {
+		return nil, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	if err := stateObject.CreateStorageTreeForLogic(common.SargaLogicID); err != nil {
+		return nil, errors.Wrap(err, "failed to create storage tree")
+	}
+
+	if err := stateObject.AddAccountGenesisInfo(common.SargaAddress, common.GenesisIxHash); err != nil {
+		return nil, err
+	}
+
+	for _, account := range accounts {
+		// Add account to sarga storage tree
+		if err := stateObject.AddAccountGenesisInfo(account.Address, common.GenesisIxHash); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, logic := range logics {
+		// Add logic account to sarga
+		if err := stateObject.AddAccountGenesisInfo(
+			common.CreateAddressFromString(logic.Name),
+			common.GenesisIxHash,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, assetAcc := range assets {
+		if err := stateObject.AddAccountGenesisInfo(
+			common.CreateAddressFromString(assetAcc.AssetInfo.Symbol),
+			common.GenesisIxHash,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	return stateObject, nil
+}
+
+func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, error) {
+	stateObject := k.state.CreateStateObject(info.Address, info.AccType, true)
+
+	if _, err := stateObject.CreateContext(info.BehaviouralContext, info.RandomContext); err != nil {
+		return nil, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	return stateObject, nil
+}
+
+func (k *Engine) setupGenesisLogics(
+	transition map[identifiers.Address]*state.Object,
+	logics []common.LogicSetupArgs,
+) ([]common.Hash, error) {
+	hashes := make([]common.Hash, len(logics))
+
+	for _, logic := range logics {
+		logicAddr := common.CreateAddressFromString(logic.Name)
+
+		if !common.ContainsAddress(common.GenesisLogicAddrs, logicAddr) {
+			k.logger.Error("Mismatch of contract address", "logic-name", logic.Name)
+
+			return nil, errors.New("generated address does not exist in predefined contract address")
+		}
+
+		// Create state object for the logic
+		logicState := k.state.CreateStateObject(logicAddr, common.LogicAccount, true)
+
+		// Create a dummy state object for the deployer
+		// NOTE: This is a dummy object we create at genesis deployment with the 0x00..00 address
+		// to act as a placeholder account for the execution environment's sender state driver.
+		deployerState := k.state.CreateStateObject(identifiers.NilAddress, common.RegularAccount, true)
+
+		behaviouralCtx := logic.BehaviouralContext
+		randomCtx := logic.RandomContext
+
+		_, err := logicState.CreateContext(behaviouralCtx, randomCtx)
+		if err != nil {
+			return nil, errors.Wrap(err, "context initiation failed in genesis")
+		}
+
+		// Create a new execution context
+		ctx := &common.ExecutionContext{
+			CtxDelta: nil,
+			Cluster:  "genesis",
+			Time:     k.cfg.GenesisTimestamp,
+		}
+
+		// Create a new IxLogicDeploy interaction with the logic payload
+		ix, _ := common.NewInteraction(common.IxData{Input: common.IxInput{
+			Type: common.IxLogicDeploy,
+			Payload: func() []byte {
+				payload := &common.LogicPayload{
+					Callsite: logic.Callsite,
+					Calldata: logic.Calldata,
+					Manifest: logic.Manifest.Bytes(),
+				}
+
+				encoded, _ := payload.Bytes()
+
+				return encoded
+			}(),
+		}}, nil)
+
+		// Deploy the genesis logic and check for errors
+		_, receipt, err := compute.DeployLogic(ctx, ix, logicState, deployerState, compute.NewEventStream(ix.LogicID()))
+		if err != nil {
+			k.logger.Error("Unable to deploy logic for", "logic-name", logic.Name)
+
+			return nil, errors.Wrap(err, "deployment failed for logic")
+		}
+
+		if receipt.Error != nil {
+			return nil, errors.Errorf("deployment call failed: %v", receipt.Error)
+		}
+
+		// Update the dirty objects map with the logic state object
+		transition[logicState.Address()] = logicState
+
+		// Obtain the logic ID from the call receipt
+		logicID := receipt.LogicID
+		k.logger.Info("Deployed genesis contract",
+			"logic-name", logic.Name,
+			"logic-ID", logicID.String(),
+		)
+	}
+
+	return hashes, nil
+}
+
+func (k *Engine) setupAssetAccounts(
+	transition map[identifiers.Address]*state.Object,
+	assetAccs []common.AssetAccountSetupArgs,
+) error {
+	for _, assetAccount := range assetAccs {
+		accAddress := common.CreateAddressFromString(assetAccount.AssetInfo.Symbol)
+
+		transition[accAddress] = k.state.CreateStateObject(accAddress, common.AssetAccount, true)
+
+		_, err := transition[accAddress].CreateContext(assetAccount.BehaviouralContext, assetAccount.RandomContext)
+		if err != nil {
+			return err
+		}
+
+		assetID, err := transition[accAddress].CreateAsset(accAddress, assetAccount.AssetInfo.AssetDescriptor())
+		if err != nil {
+			return err
+		}
+
+		if assetAccount.AssetInfo.Operator != identifiers.NilAddress {
+			if _, ok := transition[assetAccount.AssetInfo.Operator]; !ok {
+				return errors.New("operator account not found")
+			}
+
+			_, err = transition[assetAccount.AssetInfo.Operator].CreateAsset(
+				accAddress, assetAccount.AssetInfo.AssetDescriptor())
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, allocation := range assetAccount.AssetInfo.Allocations {
+			if _, ok := transition[allocation.Address]; !ok {
+				return errors.New("allocation address not found in state objects")
+			}
+
+			transition[allocation.Address].AddBalance(assetID, allocation.Amount.ToInt())
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) validateAccountCreationInfo(accs ...common.AccountSetupArgs) error {
+	for _, acc := range accs {
+		if acc.Address == common.SargaAddress {
+			return common.ErrInvalidAddress
+		}
+		// check for address validity
+		err := utils.ValidateAccountType(acc.AccType)
+		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) validateSargaAccountCreationInfo(acc common.AccountSetupArgs) error {
+	if acc.Address != common.SargaAddress {
+		return common.ErrInvalidAddress
+	}
+
+	return nil
+}
+
+func (k *Engine) validateAssetAccountCreationArgs(assetAccounts ...common.AssetAccountSetupArgs) error {
+	for _, acc := range assetAccounts {
+		if len(acc.AssetInfo.Allocations) == 0 {
+			return errors.New("empty allocations")
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) validateLogicCreationArgs(logicAccounts ...common.LogicSetupArgs) error {
+	for _, acc := range logicAccounts {
+		if len(acc.Manifest) == 0 {
+			return errors.New("invalid manifest")
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) parseGenesisFile() (
+	*common.AccountSetupArgs,
+	[]common.AccountSetupArgs,
+	[]common.AssetAccountSetupArgs,
+	[]common.LogicSetupArgs,
+	error,
 ) {
-	for addr, accInfo := range cs.AccountInfos {
-		accInfo.ContextHash = hashes[addr]
+	genesisData := new(common.GenesisFile)
+
+	data, err := os.ReadFile(k.cfg.GenesisFilePath)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to open genesis file")
+	}
+
+	if err = json.Unmarshal(data, genesisData); err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "failed to parse genesis file")
+	}
+
+	err = k.validateSargaAccountCreationInfo(genesisData.SargaAccount)
+	if err != nil {
+		return nil, nil, nil, nil, errors.Wrap(err, "invalid sarga account info")
+	}
+
+	err = k.validateAccountCreationInfo(genesisData.Accounts...)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	if err = k.validateAssetAccountCreationArgs(genesisData.AssetAccounts...); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	if err = k.validateLogicCreationArgs(genesisData.Logics...); err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	return &genesisData.SargaAccount, genesisData.Accounts, genesisData.AssetAccounts, genesisData.Logics, nil
+}
+
+func (k *Engine) addGenesisTesseract(
+	addresses []identifiers.Address,
+	stateHashes, contextHashes []common.Hash,
+	transition state.ObjectMap,
+) error {
+	tesseract := createGenesisTesseract(
+		addresses,
+		stateHashes,
+		contextHashes,
+		k.cfg.GenesisTimestamp,
+		k.cfg.GenesisSeed,
+		k.cfg.GenesisProof,
+	)
+
+	if err := k.lattice.AddTesseract(
+		true,
+		identifiers.NilAddress,
+		tesseract,
+		state.NewTransition(transition),
+		true,
+	); err != nil {
+		return errors.Wrap(err, "error adding genesis tesseract")
+	}
+
+	return nil
+}
+
+func (k *Engine) SetupGenesis() error {
+	transition := make(state.ObjectMap)
+
+	sargaAccount, genesisAccounts, assetAccounts, logics, err := k.parseGenesisFile()
+	if err != nil {
+		return errors.Wrap(err, "failed to parse genesis file")
+	}
+
+	if _, err = k.state.GetAccountMetaInfo(sargaAccount.Address); err == nil {
+		k.logger.Info("!!!!!!....Skipping Genesis....!!!!!!")
+
+		return nil
+	}
+
+	sargaObject, err := k.setupSargaAccount(sargaAccount, genesisAccounts, assetAccounts, logics)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup sarga account")
+	}
+
+	transition[sargaObject.Address()] = sargaObject
+
+	for _, v := range genesisAccounts {
+		if transition[v.Address], err = k.setupNewAccount(v); err != nil {
+			return errors.Wrap(err, "failed to setup genesis account")
+		}
+	}
+
+	if _, err = k.setupGenesisLogics(transition, logics); err != nil {
+		return errors.Wrap(err, "failed to setup genesis logic")
+	}
+
+	if err = k.setupAssetAccounts(transition, assetAccounts); err != nil {
+		return errors.Wrap(err, "failed to setup asset accounts")
+	}
+
+	count := len(transition)
+	addresses := make([]identifiers.Address, 0, count)
+	stateHashes := make([]common.Hash, 0, count)
+	contextHashes := make([]common.Hash, 0, count)
+
+	for _, stateObject := range transition {
+		stateHash, err := stateObject.Commit()
+		if err != nil {
+			return err
+		}
+
+		addresses = append(addresses, stateObject.Address())
+		stateHashes = append(stateHashes, stateHash)
+		contextHashes = append(contextHashes, stateObject.ContextHash())
+	}
+
+	if err = k.addGenesisTesseract(addresses, stateHashes, contextHashes, transition); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (k *Engine) verifySignatures(ts *common.Tesseract, ics *common.ICSNodeSet) (bool, error) {
+	var (
+		verificationInitTime = time.Now()
+		consensusInfo        = ts.ConsensusInfo()
+		publicKeys           = make([][]byte, 0, consensusInfo.BFTVoteSet.TrueIndicesSize())
+		votesCounter         = make([]uint32, ts.ParticipantCount()+1)
+	)
+
+	for _, valIndex := range ts.BFTVoteSet().GetTrueIndices() {
+		nodeSetIndices, _, _, publicKey := ics.GetKramaID(int32(valIndex))
+		if nodeSetIndices != nil { // ts.Header.Extra.VoteSet.GetIndex(index)
+			publicKeys = append(publicKeys, publicKey)
+
+			for _, index := range nodeSetIndices {
+				votesCounter[index/2]++
+			}
+		} else {
+			k.logger.Debug("Error fetching validator address", "index", valIndex)
+		}
+	}
+
+	for index := range ts.Addresses() {
+		if votesCounter[index] < ics.ParticipantQuorum(index*2) {
+			return false, common.ErrQuorumFailed
+		}
+	}
+
+	if votesCounter[len(ts.Addresses())] < ics.RandomQuorumSize() {
+		return false, common.ErrQuorumFailed
+	}
+
+	vote := ktypes.CanonicalVote{
+		Type:   ktypes.PRECOMMIT,
+		Round:  consensusInfo.Round,
+		TSHash: ts.Hash(),
+	}
+
+	rawData, err := vote.Bytes()
+	if err != nil {
+		return false, err
+	}
+
+	verified, err := k.signatureVerifier(rawData, consensusInfo.CommitSignature, publicKeys)
+	if err != nil {
+		return false, err
+	}
+
+	k.metrics.captureSignatureVerificationTime(verificationInitTime)
+
+	return verified, nil
+}
+
+func (k *Engine) verifyTransitions(
+	addr identifiers.Address,
+	ts *common.Tesseract,
+	allParticipants bool,
+) error {
+	if ts.ClusterID() == "genesis" {
+		return nil
+	}
+
+	addresses := make([]identifiers.Address, 0)
+
+	if allParticipants {
+		addresses = ts.Addresses()
+	} else {
+		addresses = append(addresses, addr)
+	}
+
+	for _, addr := range addresses {
+		initial, err := k.state.IsInitialTesseract(ts, addr)
+		if err != nil {
+			return errors.Wrap(err, "Sarga account not found")
+		}
+
+		if !initial {
+			parent, err := k.lattice.GetTesseract(ts.TransitiveLink(addr), false)
+			if err != nil {
+				k.logger.Error("Failed to fetch parent tesseract", "err", err, "addr", addr)
+
+				return common.ErrPreviousTesseractNotFound
+			}
+
+			// Check Heights
+			if parent.Height(addr) != ts.Height(addr)-1 {
+				return common.ErrInvalidHeight
+			}
+			// TODO: Add more checks
+			// Check time stamp
+			if ts.Timestamp() < parent.Timestamp() {
+				return common.ErrInvalidBlockTime
+			}
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) ValidateTesseract(
+	addr identifiers.Address,
+	ts *common.Tesseract,
+	ics *common.ICSNodeSet,
+	allParticipants bool,
+) error {
+	if k.db.HasAccMetaInfoAt(addr, ts.Height(addr)) {
+		return common.ErrAlreadyKnown
+	}
+
+	validSeal, err := k.state.IsSealValid(ts)
+	if !validSeal {
+		k.logger.Error("Error validating tesseract seal", "err", err)
+
+		return common.ErrInvalidSeal
+	}
+
+	if err = k.verifyTransitions(addr, ts, allParticipants); err != nil {
+		return err
+	}
+
+	verified, err := k.verifySignatures(ts, ics)
+	if !verified || err != nil {
+		return errors.Wrap(err, fmt.Sprintf("failed to verify signatures %v %v", addr, ts.Height(addr)))
+	}
+
+	return nil
+}
+
+func (k *Engine) checkOperatorEligibilityForActiveCluster(
+	req ktypes.Request,
+	activeClusterID common.ClusterID,
+) []ktypes.ICSOperatorInfo {
+	if !k.cfg.EnableSortition || activeClusterID == "" || k.selfID == req.Operator {
+		return nil
+	}
+
+	slot := k.slots.GetSlot(activeClusterID)
+	if slot == nil {
+		k.logger.Error("Failed to load slot", "cluster-id", activeClusterID)
+
+		return nil
+	}
+
+	if slot.ClusterState() == nil {
+		return nil
+	}
+
+	icsSeed, err := k.lottery.computeICSSeed(slot.ClusterState().Participants)
+	if err != nil {
+		k.logger.Error("Failed to compute ICS Seed", "error", err)
+
+		return nil
+	}
+
+	if req.Msg.ICSSeed != icsSeed {
+		k.logger.Error("Invalid ICS seed")
+
+		return nil
+	}
+
+	lk := common.NewLotteryKey(req.Ixs[0].Hash(), icsSeed)
+
+	if err = k.verifyOperatorLottery(
+		req.Operator,
+		lk,
+		req.Msg.VrfOutput,
+		req.Msg.VrfProof,
+	); err != nil && !errors.Is(err, common.ErrOperatorNotEligible) {
+		return nil
+	}
+
+	return k.lottery.GetEligibleOperators(lk)
+}
+
+func sendResponse(req ktypes.Request, data any, err error) {
+	req.ResponseChan <- ktypes.Response{
+		Err:  err,
+		Data: data,
 	}
 }
 
-func sendResponse(req ktypes.Request, err error) {
-	req.ResponseChan <- err
+func (k *Engine) AddActiveAccount(addr identifiers.Address) bool {
+	return k.slots.AddActiveAccount(addr)
+}
+
+func (k *Engine) ClearActiveAccount(addr identifiers.Address) {
+	k.slots.ClearActiveAccount(addr)
+
+	k.logger.Trace("removed from active accounts", "address", addr)
 }
 
 func getDistinctNodes(operator kramaid.KramaID, nodeSets []*common.NodeSet) ([]kramaid.KramaID, int, bool) {
 	nodes := make(map[kramaid.KramaID]struct{})
+	isOperatorIncluded := false
 
 	for _, nodeSet := range nodeSets {
 		if nodeSet == nil {
@@ -1447,20 +2130,42 @@ func getDistinctNodes(operator kramaid.KramaID, nodeSets []*common.NodeSet) ([]k
 				continue
 			}
 
+			if kramaID == operator {
+				isOperatorIncluded = true
+			}
+
 			nodes[kramaID] = struct{}{}
 		}
 	}
 
-	isOperatorIncluded := false
 	distinctNodes := make([]kramaid.KramaID, 0, len(nodes))
 
 	for kramaID := range nodes {
-		if kramaID == operator {
-			isOperatorIncluded = true
-		}
-
 		distinctNodes = append(distinctNodes, kramaID)
 	}
 
 	return distinctNodes, len(distinctNodes), isOperatorIncluded
+}
+
+func areStateHashesValid(ts *common.Tesseract, postExecState common.AccStateHashes) bool {
+	for addr, participantState := range ts.Participants() {
+		if postExecState.StateHash(addr) != participantState.StateHash {
+			return false
+		}
+	}
+
+	return true
+}
+
+func isReceiptsHashValid(ts *common.Tesseract, receipts common.Receipts) bool {
+	receiptsHash, err := receipts.Hash()
+	if err != nil {
+		return false
+	}
+
+	if ts.ReceiptsHash() != receiptsHash {
+		return false
+	}
+
+	return true
 }

@@ -2,8 +2,6 @@ package ixpool
 
 import (
 	"container/heap"
-	"sync"
-	"sync/atomic"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -22,8 +20,6 @@ type WaitInteractions struct {
 // A thread-safe wrapper of a minNonceQueue.
 // All methods assume the (correct) lock is held.
 type accountQueue struct {
-	sync.RWMutex
-	wLock uint32
 	queue minNonceQueue
 }
 
@@ -35,25 +31,6 @@ func newAccountQueue() *accountQueue {
 	heap.Init(&q.queue)
 
 	return &q
-}
-
-func (q *accountQueue) lock(write bool) {
-	switch write {
-	case true:
-		q.Lock()
-		atomic.StoreUint32(&q.wLock, 1)
-	case false:
-		q.RLock()
-		atomic.StoreUint32(&q.wLock, 0)
-	}
-}
-
-func (q *accountQueue) unlock() {
-	if atomic.SwapUint32(&q.wLock, 0) == 1 {
-		q.Unlock()
-	} else {
-		q.RUnlock()
-	}
 }
 
 // prune removes all Interactions from the queue

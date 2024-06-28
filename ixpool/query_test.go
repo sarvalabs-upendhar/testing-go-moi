@@ -20,7 +20,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 	addr1 := tests.RandomAddress(t)
 	addr2 := tests.RandomAddress(t)
 
-	sm.setTestMOIBalance(addr1, addr2)
+	sm.setTestMOIBalance(t, addr1, addr2)
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
@@ -36,7 +36,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 			name:    "IxPool accounts without interaction sender state",
 			address: tests.RandomAddress(t),
 			testFn: func(addr identifiers.Address) {
-				sm.setLatestNonce(addr, 4)
+				sm.setLatestNonce(t, addr, 4)
 			},
 			expectedNonce: 4,
 		},
@@ -294,7 +294,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 			accounts: map[identifiers.Address]int{
 				addressList[0]: 1,
 				addressList[1]: 5,
-				addressList[2]: 10,
+				addressList[2]: 4,
 				addressList[3]: MaxWaitCounter + 1,
 			},
 		},

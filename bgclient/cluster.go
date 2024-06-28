@@ -7,11 +7,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 
@@ -21,7 +23,7 @@ import (
 	"github.com/pkg/errors"
 
 	bgcommon "github.com/sarvalabs/battleground/common"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -37,7 +39,7 @@ const (
 	genesisFile     = "genesis.json"
 	bootnodeFileKey = "file.key"
 
-	guardianManifest = "./../corelogics/guardianregistry/guardians.json"
+	guardianManifest = "./../corelogics/guardianregistry/guardians.yaml"
 )
 
 var startTime int64
@@ -75,6 +77,22 @@ type Cluster struct {
 	executionErr error
 }
 
+func removeDirectory(dirPath string) error {
+	// Check if the directory exists
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		// Directory does not exist, no need to remove
+		return nil
+	}
+
+	// Remove the directory and all its contents
+	err := os.RemoveAll(dirPath)
+	if err != nil {
+		return fmt.Errorf("failed to remove directory %s: %w", dirPath, err)
+	}
+
+	return nil
+}
+
 func NewTestCluster(clusterConfig *ClusterConfig, serverConfigs []*ServerConfig) (*Cluster, error) {
 	cluster := &Cluster{
 		Config:        clusterConfig,
@@ -82,6 +100,12 @@ func NewTestCluster(clusterConfig *ClusterConfig, serverConfigs []*ServerConfig)
 		Servers:       make(map[string]*Server),
 		failCh:        make(chan struct{}),
 		once:          sync.Once{},
+	}
+
+	if !clusterConfig.OldState {
+		if err := removeDirectory(clusterConfig.TempDir); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := bgcommon.CreateDirSafe(clusterConfig.TempDir, os.ModePerm); err != nil {
@@ -92,24 +116,26 @@ func NewTestCluster(clusterConfig *ClusterConfig, serverConfigs []*ServerConfig)
 		return nil, errors.Wrap(err, "failed to start bootnode")
 	}
 
-	if err := cluster.generateDataDir(); err != nil {
-		return nil, errors.Wrap(err, "failed to generate data directories")
-	}
+	if !clusterConfig.OldState {
+		if err := cluster.generateDataDir(); err != nil {
+			return nil, errors.Wrap(err, "failed to generate data directories")
+		}
 
-	if err := cluster.generateAccounts(); err != nil {
-		return nil, errors.Wrap(err, "failed to generate accounts file")
-	}
+		if err := cluster.generateAccounts(); err != nil {
+			return nil, errors.Wrap(err, "failed to generate accounts file")
+		}
 
-	if err := cluster.generateArtifact(); err != nil {
-		return nil, errors.Wrap(err, "failed to generate artifact file")
-	}
+		if err := cluster.generateArtifact(); err != nil {
+			return nil, errors.Wrap(err, "failed to generate artifact file")
+		}
 
-	if err := cluster.generateGenesis(); err != nil {
-		return nil, errors.Wrap(err, "failed to generate genesis file")
-	}
+		if err := cluster.generateGenesis(); err != nil {
+			return nil, errors.Wrap(err, "failed to generate genesis file")
+		}
 
-	if err := cluster.updateGenesisWithAssets(); err != nil {
-		return nil, errors.Wrap(err, "failed to update genesis with assets")
+		if err := cluster.updateGenesisWithAssets(); err != nil {
+			return nil, errors.Wrap(err, "failed to update genesis with assets")
+		}
 	}
 
 	for i := 0; i < clusterConfig.ValidatorCount; i++ {
@@ -146,11 +172,15 @@ func (c *Cluster) generateArtifact() error {
 		return err
 	}
 
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	guardians := make([]string, 0)
 	pubKeys := make([][]byte, 0)
+	incentives := make([]uint64, 0)
 
 	for _, instance := range instances {
 		guardians = append(guardians, instance.KramaID)
+		incentives = append(incentives, uint64(r.Intn(1000)))
 		pubKeys = append(pubKeys, must(hex.DecodeString(instance.ConsensusKey)))
 	}
 
@@ -166,6 +196,7 @@ func (c *Cluster) generateArtifact() error {
 		Master      guardianregistry.Master `polo:"master"`
 		Guardians   []string                `polo:"guardians"`
 		PubKeys     [][]byte                `polo:"pubkeys"`
+		Incentives  []uint64                `polo:"incentives"`
 		Admins      [][32]byte              `polo:"admins"`
 		PreApproved []string                `polo:"preApproved"`
 		LimitKYC    uint64                  `polo:"limitKYC"`
@@ -176,8 +207,9 @@ func (c *Cluster) generateArtifact() error {
 			MOIID:  masterMoiID,
 			Wallet: masterAddress,
 		},
-		Guardians: guardians,
-		PubKeys:   pubKeys,
+		Guardians:  guardians,
+		PubKeys:    pubKeys,
+		Incentives: incentives,
 		Admins: [][32]byte{
 			must(identifiers.NewAddressFromHex("0x53e9ec9f78f0397cd611bf0a0793c07673cbbf51cb172ae7d6ccf0efa5803f94")),
 			must(identifiers.NewAddressFromHex("0x898ca25ac7a51a36894b9c9f55ec6212500dd8e0c01f6591f0eb9f5b0bc84655")),
@@ -222,18 +254,37 @@ func (c *Cluster) Accounts() []tests.AccountWithMnemonic {
 func (c *Cluster) startBootNode() error {
 	fileKey := c.Config.Dir(bootnodeFileKey)
 
-	privKey, err := generateAndStoreNewKey(fileKey)
-	if err != nil {
+	var (
+		ip      string
+		id      peer.ID
+		privKey crypto.PrivKey
+		err     error
+	)
+
+	if !c.Config.OldState {
+		if privKey, err = generateAndStoreNewKey(fileKey); err != nil {
+			return err
+		}
+	} else {
+		if err := c.readAccounts(); err != nil {
+			return err
+		}
+
+		data, err := os.ReadFile(fileKey)
+		if err != nil {
+			return err
+		}
+
+		if privKey, err = crypto.UnmarshalPrivateKey(data); err != nil {
+			return err
+		}
+	}
+
+	if id, err = peer.IDFromPublicKey(privKey.GetPublic()); err != nil {
 		return err
 	}
 
-	id, err := peer.IDFromPublicKey(privKey.GetPublic())
-	if err != nil {
-		return err
-	}
-
-	ip, err := getBindedIP()
-	if err != nil {
+	if ip, err = getBindedIP(); err != nil {
 		return err
 	}
 
@@ -278,6 +329,9 @@ func (c *Cluster) generateDataDir() error {
 		"--jsonrpcPort", fmt.Sprintf("%d", c.Config.JSONRPCPort),
 		"--bootnode", c.Config.BootstrapID,
 		"--instances-path", c.Config.Dir(instancesFile),
+		"--directory-path", c.Config.TempDir,
+		fmt.Sprintf("--shouldExecute=%v", c.Config.ShouldExecute),
+		fmt.Sprintf("--enable-sortition=%v", c.Config.EnableSortition),
 	}
 
 	return runCommand(c.Config.McutilsBinary, args, c.Config.GetStdout("init"))
@@ -407,18 +461,23 @@ func (c *Cluster) initTestServer(i int) {
 	cfg := &ServerConfig{
 		Name:              fmt.Sprintf("test_%d", i),
 		LogLevel:          c.Config.LogLevel,
-		DataDir:           "./test_" + strconv.Itoa(i),
-		CleanDB:           "true",
+		DataDir:           "./" + c.Config.TempDir + "/test_" + strconv.Itoa(i),
+		CleanDB:           "false",
 		DiscoveryInterval: "1s",
-		ConfigPath:        fmt.Sprintf("./test_%d/config.json", i),
+		ConfigPath:        "./" + c.Config.TempDir + fmt.Sprintf("/test_%d/config.json", i),
 		GenesisPath:       c.Config.Dir(genesisFile),
 		OperatorSlots:     -1,
 		ValidatorSlots:    3,
 	}
 
+	if c.Config.EnableSortition {
+		cfg.OperatorSlots = 1
+	} else if i == 0 {
+		cfg.OperatorSlots = 1
+	}
+
 	// make the first node as operator
 	if i == 0 {
-		cfg.OperatorSlots = 1
 		cfg.JSONRPCPort = c.Config.JSONRPCPort // use the give port number as it is without incrementing it
 	} else {
 		cfg.JSONRPCPort = c.Config.GetOpenPortForServer() // get incremented port number from second node onwards

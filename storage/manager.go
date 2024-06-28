@@ -142,6 +142,8 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 	id identifiers.Address,
 	height uint64,
 	tesseractHash common.Hash,
+	stateHash common.Hash,
+	contextHash common.Hash,
 	accType common.AccountType,
 ) (int32, bool, error) {
 	if id.IsNil() {
@@ -167,6 +169,8 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 
 		if height >= accMetaInfo.Height {
 			accMetaInfo.TesseractHash = tesseractHash
+			accMetaInfo.StateHash = stateHash
+			accMetaInfo.ContextHash = contextHash
 			accMetaInfo.Address = id
 			accMetaInfo.Height = height
 		}
@@ -180,6 +184,8 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 	} else if errors.Is(err, common.ErrKeyNotFound) {
 		msg := common.AccountMetaInfo{
 			TesseractHash: tesseractHash,
+			StateHash:     stateHash,
+			ContextHash:   contextHash,
 			Type:          accType,
 			Address:       id,
 			Height:        height,
@@ -313,26 +319,6 @@ func (p *PersistenceManager) Cleanup() error {
 	return p.db.CleanUp()
 }
 
-// UpdatePeerCount updates the total number of peer available in the senatus store
-func (p *PersistenceManager) UpdatePeerCount(count uint64) error {
-	rawCount := make([]byte, 8)
-
-	data, err := p.ReadEntry(SenatusPeerCountKey())
-	if err == nil {
-		count = binary.BigEndian.Uint64(data) + count
-
-		binary.BigEndian.PutUint64(rawCount, count)
-
-		return p.UpdateEntry(SenatusPeerCountKey(), rawCount)
-	} else if errors.Is(err, common.ErrKeyNotFound) {
-		binary.BigEndian.PutUint64(rawCount, count)
-
-		return p.CreateEntry(SenatusPeerCountKey(), rawCount)
-	}
-
-	return err
-}
-
 func (p *PersistenceManager) DropSenatusEntries() error {
 	if err := p.db.DropWithPrefix(SenatusPrefix()); err != nil {
 		return errors.Wrap(err, "failed to drop senatus entries")
@@ -343,16 +329,6 @@ func (p *PersistenceManager) DropSenatusEntries() error {
 	}
 
 	return nil
-}
-
-// TotalPeersCount fetches the total number of peers available in the senatus store
-func (p *PersistenceManager) TotalPeersCount() (uint64, error) {
-	val, err := p.ReadEntry(SenatusPeerCountKey())
-	if err != nil {
-		return 0, err
-	}
-
-	return binary.BigEndian.Uint64(val), nil
 }
 
 // GetEntriesWithPrefix fetches array of k,v pairs with the given prefix
@@ -664,6 +640,54 @@ func (p *PersistenceManager) GetAccountsSyncStatus() ([]*common.AccountSyncStatu
 	}
 
 	return syncInfos, nil
+}
+
+func (p *PersistenceManager) FetchTesseractFromDB(
+	hash common.Hash,
+	withInteractions bool,
+) (*common.Tesseract, error) {
+	// Fetch Tesseract from DB
+	rawTesseract, err := p.GetTesseract(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
+	canonicalTesseract := new(common.CanonicalTesseract)
+
+	if err = canonicalTesseract.FromBytes(rawTesseract); err != nil {
+		return nil, err
+	}
+
+	interactions := new(common.Interactions)
+	receipts := new(common.Receipts)
+
+	// Fetch interactions for non-genesis tesseracts from DB
+	if withInteractions && canonicalTesseract.ConsensusInfo.ClusterID != common.GenesisIdentifier {
+		rawIxns, err := p.GetInteractions(hash)
+		if err != nil {
+			return nil, errors.Wrap(err, common.ErrFetchingInteractions.Error())
+		}
+
+		if err := interactions.FromBytes(rawIxns); err != nil {
+			return nil, err
+		}
+
+		rawReceipts, err := p.GetReceipts(hash)
+		if err != nil {
+			return nil, errors.Wrap(err, common.ErrReceiptNotFound.Error())
+		}
+
+		if rawReceipts != nil {
+			if err = receipts.FromBytes(rawReceipts); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	ts := canonicalTesseract.ToTesseract(*interactions, *receipts)
+
+	return ts, nil
 }
 
 func (p *PersistenceManager) GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error) {

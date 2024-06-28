@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
@@ -20,31 +21,29 @@ const (
 )
 
 type Log struct {
-	Addresses []identifiers.Address
-	LogicID   identifiers.LogicID
-	Topics    []Hash
-	Data      []byte
+	Address identifiers.Address
+	LogicID identifiers.LogicID
+	Topics  []Hash
+	Data    []byte
 }
 
-func (l *Log) Copy() *Log {
-	log := *l
-
-	if len(l.Addresses) > 0 {
-		log.Addresses = make([]identifiers.Address, len(l.Addresses))
-		copy(log.Addresses, l.Addresses)
+func (log Log) Copy() Log {
+	clone := Log{
+		Address: log.Address,
+		LogicID: log.LogicID,
 	}
 
-	if len(l.Topics) > 0 {
-		log.Topics = make([]Hash, len(l.Topics))
-		copy(log.Topics, l.Topics)
+	if len(log.Topics) > 0 {
+		clone.Topics = make([]Hash, len(log.Topics))
+		copy(clone.Topics, log.Topics)
 	}
 
-	if len(l.Data) > 0 {
-		log.Data = make([]byte, len(l.Data))
-		copy(log.Data, l.Data)
+	if len(log.Data) > 0 {
+		clone.Data = make([]byte, len(log.Data))
+		copy(clone.Data, log.Data)
 	}
 
-	return &log
+	return clone
 }
 
 type StateAndContextHash struct {
@@ -118,7 +117,7 @@ type Receipt struct {
 	Status    ReceiptStatus   `json:"status"`
 	FuelUsed  uint64          `json:"fuel_used"`
 	ExtraData json.RawMessage `json:"extra_data"`
-	Logs      []*Log          `polo:"-" json:"logs"`
+	Logs      []Log           `json:"logs"`
 }
 
 func NewReceipt(ix *Interaction) *Receipt {
@@ -140,12 +139,10 @@ func (r *Receipt) Copy() *Receipt {
 	}
 
 	if len(r.Logs) > 0 {
-		receipt.Logs = make([]*Log, len(r.Logs))
+		receipt.Logs = make([]Log, len(r.Logs))
 
 		for i, log := range r.Logs {
-			if log != nil {
-				receipt.Logs[i] = log.Copy()
-			}
+			receipt.Logs[i] = log.Copy()
 		}
 	}
 
@@ -154,6 +151,16 @@ func (r *Receipt) Copy() *Receipt {
 
 func (r *Receipt) SetFuelUsed(fuel uint64) {
 	r.FuelUsed = fuel
+}
+
+func (r *Receipt) SetLogs(logs []Log) {
+	copies := make([]Log, len(logs))
+
+	for i, log := range logs {
+		copies[i] = log.Copy()
+	}
+
+	r.Logs = copies
 }
 
 func SetReceiptExtraData[Payload ReceiptPayload](r *Receipt, payload Payload) {
@@ -211,8 +218,16 @@ func (rs *Receipts) FromBytes(bytes []byte) error {
 	return nil
 }
 
+func (rs Receipts) FuelUsed() (fuelUsed uint64) {
+	for _, receipt := range rs {
+		fuelUsed += receipt.FuelUsed
+	}
+
+	return fuelUsed
+}
+
 type ReceiptPayload interface {
-	AssetCreationReceipt | AssetMintOrBurnReceipt | LogicDeployReceipt | LogicInvokeReceipt
+	AssetCreationReceipt | AssetMintOrBurnReceipt | LogicDeployReceipt | LogicInvokeReceipt | LogicEnlistReceipt
 }
 
 type AssetCreationReceipt struct {
@@ -230,6 +245,11 @@ type LogicDeployReceipt struct {
 }
 
 type LogicInvokeReceipt struct {
+	Outputs hexutil.Bytes `json:"outputs"`
+	Error   hexutil.Bytes `json:"error"`
+}
+
+type LogicEnlistReceipt struct {
 	Outputs hexutil.Bytes `json:"outputs"`
 	Error   hexutil.Bytes `json:"error"`
 }

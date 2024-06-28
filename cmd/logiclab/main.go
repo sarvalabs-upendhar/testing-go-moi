@@ -72,10 +72,10 @@ func (cli *CliCommand) RegisterSubCommands() {
 }
 
 func parseflags(cmd *cobra.Command) {
-	// -r | --root [string]
+	// -d | --dir [string]
 	cmd.PersistentFlags().StringP(
-		"root", "r", core.DefaultRootPath,
-		fmt.Sprintf("root directory path for logiclab. defaults to '%v'", core.DefaultRootPath),
+		"dir", "d", "",
+		fmt.Sprintf("root directory path for logiclab. defaults to '%v'", core.DefaultDirPath),
 	)
 
 	// -s | --suppress [bool]
@@ -94,6 +94,12 @@ func parseflags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP(
 		"env", "e", core.DefaultEnvironment,
 		fmt.Sprintf("logiclab environment to activate. only applicable in REPL mode. defaults to '%v'", core.DefaultEnvironment), //nolint:lll
+	)
+
+	// -p | --port [int]
+	cmd.PersistentFlags().IntP(
+		"port", "p", core.DefaultPort,
+		fmt.Sprintf("port to run logiclab. only applicable in API mode. defaults to '%v'", core.DefaultPort),
 	)
 }
 
@@ -129,11 +135,20 @@ being used to start it. New environment can be initialized with 'logiclab init'
 `,
 	Run: func(command *cobra.Command, args []string) {
 		// Get the lab root dirpath from the input flags (defaults if not provided)
-		root, _ := command.Flags().GetString("root")
-		root, _ = filepath.Abs(root)
+		dir, _ := command.Flags().GetString("dir")
+		if dir == "" {
+			labdir, exists := os.LookupEnv("LABDIR")
+			if exists {
+				dir = labdir
+			} else {
+				dir = core.DefaultDirPath
+			}
+		}
+
+		dir, _ = filepath.Abs(dir)
 
 		// Create a logiclab instance
-		lab, err := core.NewLab(root)
+		lab, err := core.NewLab(dir)
 		if err != nil {
 			fmt.Println(err)
 			return //nolint:nlreturn
@@ -146,9 +161,21 @@ being used to start it. New environment can be initialized with 'logiclab init'
 		// Get the mode for starting the logiclab environment (REPL/API)
 		mode, _ := command.Flags().GetString("mode")
 
+		// Get the port number for the logiclab environment (API)
+		port, _ := command.Flags().GetInt("port")
+
+		// Validate port number
+		if port < 0 || port > 65535 {
+			fmt.Printf("invalid port number: %d", port)
+		}
+
 		// Print logiclab launch text if not suppressed
 		if suppressed, _ := command.Flags().GetBool("suppress"); !suppressed {
-			fmt.Println(fmt.Sprintf(core.LAUNCH, root, core.DOCS, mode))
+			if mode == "API" {
+				fmt.Println(fmt.Sprintf(core.LAUNCHAPI, dir, core.DOCS, mode, port))
+			} else {
+				fmt.Println(fmt.Sprintf(core.LAUNCHREPL, dir, core.DOCS, mode))
+			}
 		} else {
 			fmt.Println(core.DIVIDE) // print just the divider if suppressed
 		}
@@ -157,7 +184,11 @@ being used to start it. New environment can be initialized with 'logiclab init'
 		case "API":
 			// Create a new API instance and start it
 			api := api.NewAPI(lab)
-			_ = api.Start()
+			err := api.Start(port)
+			if err != nil {
+				fmt.Printf("Cannot start Logiclab API, can't listen to port %d: %v\n", port, err)
+				os.Exit(1)
+			}
 
 		case "REPL":
 			// Get the environment to use in the REPL

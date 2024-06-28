@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/core/connmgr"
-
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-msgio"
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
@@ -248,18 +248,23 @@ func (cm *ConnectionManager) ConnectPeerByKramaID(ctx context.Context, kramaID k
 		return err
 	}
 
+	// check if the host is already connected to the peer
+	if cm.isConnectedToPeer(peerID) {
+		return common.ErrConnectionExists
+	}
+
 	// get the peer info from peer store
 	peerInfo, err := cm.GetPeerInfo(peerID)
-	if err != nil {
-		return err
+	if err == nil {
+		return cm.connectPeer(ctx, *peerInfo)
 	}
 
-	err = cm.connectPeer(ctx, *peerInfo)
-	if err != nil {
-		return err
+	// If peer info is not available in senatus discover the peer info using kdht
+	if postErr := cm.server.mux.Post(DiscoverPeerEvent{ID: peerID}); postErr != nil {
+		return postErr
 	}
 
-	return nil
+	return err
 }
 
 // connectToMaddr connects to a peer using a Multiaddr.
@@ -318,21 +323,23 @@ func (cm *ConnectionManager) connectToTrustedNodes() {
 	cm.server.logger.Info("Connecting to trusted nodes")
 
 	for _, trustedPeer := range cm.server.cfg.TrustedPeers {
-		peerInfo, err := peer.AddrInfoFromP2pAddr(trustedPeer.Address)
+		peerAddrInfo, err := peer.AddrInfoFromP2pAddr(trustedPeer.Address)
 		if err != nil {
 			cm.server.logger.Error("Invalid trusted peer address", "err", err)
 
 			continue
 		}
 
-		kramaID, rtt, err := cm.retrieveRTTAndRefreshSenatus(*peerInfo)
+		kramaID, rtt, err := cm.retrieveRTTAndRefreshSenatus(*peerAddrInfo)
 		if err != nil {
 			cm.server.logger.Error("Failed to retrieve rtt and refresh senatus", "err", err)
 
 			continue
 		}
 
-		if err := cm.ConnectAndRegisterPeer(cm.server.ctx, *peerInfo, kramaID, rtt); err != nil {
+		if err = cm.ConnectAndRegisterPeer(
+			cm.server.ctx,
+			PeerInfo{IsInboundPeer: false, AddrInfo: *peerAddrInfo}, kramaID, rtt); err != nil {
 			cm.server.logger.Error("Failed to establish connection with trusted peer", "err", err)
 		}
 	}
@@ -342,7 +349,7 @@ func (cm *ConnectionManager) connectToTrustedNodes() {
 // handler working set.
 func (cm *ConnectionManager) ConnectAndRegisterPeer(
 	ctx context.Context,
-	peerInfo peer.AddrInfo,
+	peerInfo PeerInfo,
 	kramaID kramaid.KramaID,
 	rtt int64,
 ) error {
@@ -355,16 +362,16 @@ func (cm *ConnectionManager) ConnectAndRegisterPeer(
 	timedCtx, cancel := context.WithTimeout(ctx, connectionTimeout)
 	defer cancel()
 
-	if !cm.server.cfg.NoDiscovery && cm.isOutboundConnLimitReachedForRange(cm.getConnRTTRange(rtt)) {
+	if !peerInfo.IsInboundPeer && (cm.isOutboundConnLimitReachedForRange(cm.getConnRTTRange(rtt))) {
 		return common.ErrOutboundConnLimit
 	}
 
-	if err = cm.connectPeer(timedCtx, peerInfo); err != nil && !errors.Is(err, common.ErrConnectionExists) {
+	if err = cm.connectPeer(timedCtx, peerInfo.AddrInfo); err != nil && !errors.Is(err, common.ErrConnectionExists) {
 		return err
 	}
 
 	// create a new stream to the kPeer over the MOI protocol
-	stream, err = cm.NewStream(timedCtx, peerInfo.ID, config.MOIProtocolStream, MOIStreamTag)
+	stream, err = cm.NewStream(timedCtx, peerInfo.AddrInfo.ID, config.MOIProtocolStream, MOIStreamTag)
 	if err != nil {
 		cm.server.logger.Error("Failed to open new stream", "err", err)
 		// return error if stream setup fails
@@ -375,7 +382,7 @@ func (cm *ConnectionManager) ConnectAndRegisterPeer(
 
 	if err = kPeer.InitHandshake(cm.server); err != nil {
 		if !errors.Is(err, network.ErrReset) {
-			cm.server.logger.Error("Handshake failed", "krama-ID", peerInfo.ID, "err", err)
+			cm.server.logger.Error("Handshake failed", "krama-id", peerInfo.AddrInfo.ID, "err", err)
 		}
 
 		_ = cm.ResetStream(stream, MOIStreamTag)
@@ -384,25 +391,20 @@ func (cm *ConnectionManager) ConnectAndRegisterPeer(
 	}
 
 	// Register the kPeer to the handler working set
-	if err := cm.server.Peers.Register(kPeer); err != nil {
-		cm.server.logger.Error("Failed to register", "krama-ID", peerInfo.ID, "err", err)
+	if err = cm.server.Peers.Register(kPeer); err != nil {
+		cm.server.logger.Error("Failed to register", "krama-id", peerInfo.AddrInfo.ID, "err", err)
 
 		_ = cm.ResetStream(stream, MOIStreamTag)
 
 		return err
 	}
 
-	// Post the event to the registered receivers for NewPeerEvents
-	if err = cm.postNewPeerEvent(kPeer); err != nil {
-		cm.server.logger.Error("Failed to post new peer event", "err", err)
-
-		return err
-	}
+	cm.server.logger.Info("Peer Connected", "krama-id", kPeer.kramaID)
 
 	// Update the outbound connection count
 	cm.updateConnCount(network.DirOutbound, rtt, 1)
 
-	cm.server.logger.Info("Peer Connected", "krama-ID", kPeer.kramaID)
+	go cm.handleOutboundPeer(kPeer)
 
 	// Return a nil error
 	return nil
@@ -475,13 +477,38 @@ func (cm *ConnectionManager) setStreamHandler() {
 
 // streamHandler handles incoming network streams.
 func (cm *ConnectionManager) streamHandler(stream network.Stream) {
-	if cm.isInboundConnLimitReached() {
+	peerID := stream.Conn().RemotePeer()
+
+	cm.server.inboundStreamsMx.Lock()
+
+	other, dup := cm.server.inboundStreams[peerID]
+	if dup {
+		cm.server.logger.Debug("duplicate inbound stream from %s; resetting other stream", peerID)
+		other.Reset()
+	}
+
+	if !dup && cm.isInboundConnLimitReached() {
 		if err := cm.ResetStream(stream, ""); err != nil {
 			cm.server.logger.Error("Failed to reset stream", "err", err)
 		}
 
+		cm.server.inboundStreamsMx.Unlock()
+
 		return
 	}
+	// Update the inbound connection count
+	cm.updateConnCount(network.DirInbound, 0, 1)
+
+	cm.server.inboundStreams[peerID] = stream
+	cm.server.inboundStreamsMx.Unlock()
+
+	defer func() {
+		cm.server.inboundStreamsMx.Lock()
+		if cm.server.inboundStreams[peerID] == stream {
+			delete(cm.server.inboundStreams, peerID)
+		}
+		cm.server.inboundStreamsMx.Unlock()
+	}()
 
 	cm.server.logger.Trace(
 		"Handling new stream",
@@ -509,17 +536,13 @@ func (cm *ConnectionManager) streamHandler(stream network.Stream) {
 		return
 	}
 
-	// Post the event to the registered receivers for NewPeerEvents
-	if err := cm.postNewPeerEvent(kPeer); err != nil {
-		cm.server.logger.Error("Stream handler function", "err", err)
+	addrInfo := cm.server.host.Peerstore().PeerInfo(stream.Conn().RemotePeer())
 
-		return
-	}
+	cm.server.ds.peerChan <- PeerInfo{IsInboundPeer: true, AddrInfo: addrInfo}
 
-	// Update the inbound connection count
-	cm.updateConnCount(network.DirInbound, 0, 1)
+	cm.server.logger.Info("Handled stream, connected and registered", "krama-id", kPeer.kramaID)
 
-	cm.server.logger.Info("Handled stream, connected and registered", "krama-ID", kPeer.kramaID)
+	cm.handleInboundPeer(kPeer)
 }
 
 // pingPeer pings the specified peer using the pingService and returns the KramaID, round-trip time (RTT), and
@@ -623,15 +646,6 @@ func (cm *ConnectionManager) GetPeerInfo(peerID peer.ID) (*peer.AddrInfo, error)
 	return peerInfo, nil
 }
 
-// postNewPeerEvent sends a new peer event to the event multiplexer.
-func (cm *ConnectionManager) postNewPeerEvent(peer *Peer) error {
-	if err := cm.server.mux.Post(NewPeerEvent{peer}); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // Start initiates the connection manager.
 func (cm *ConnectionManager) Start() error {
 	cm.setStreamHandler()
@@ -660,4 +674,60 @@ func compareMultiaddrs(existingAddrs []maddr.Multiaddr, newAddrs []maddr.Multiad
 	}
 
 	return false
+}
+
+// handleInboundPeer handles inbound peer connection and messages.
+func (cm *ConnectionManager) handleInboundPeer(peer *Peer) {
+	defer func() {
+		if err := cm.ResetStream(peer.stream, ""); err != nil {
+			cm.server.logger.Trace("Failed to reset connection", "err", err)
+		}
+
+		// Update inbound connection count based on the peer stream's direction
+		cm.updateConnCount(network.DirInbound, 0, -1)
+
+		cm.server.logger.Info("Inbound Peer Disconnected", "krama-id", peer.kramaID)
+	}()
+
+	// Handle messages from the peer
+	for {
+		if err := cm.server.handlePeerMessage(peer); err != nil {
+			cm.server.logger.Error("Error handling inbound peer message", "err", err)
+
+			return
+		}
+	}
+}
+
+// handleOutboundPeer handles the outbound peer connection.
+func (cm *ConnectionManager) handleOutboundPeer(peer *Peer) {
+	// Defer the peer unregister from the handler working set
+	defer func() {
+		// Update outbound connection count based on the peer stream's direction
+		cm.updateConnCount(network.DirOutbound, peer.GetRTT(), -1)
+
+		if err := cm.server.Peers.Unregister(peer); err != nil {
+			cm.server.logger.Error("Error unregistering peer", "err", err)
+
+			return
+		}
+
+		if err := cm.ResetStream(peer.stream, MOIStreamTag); err != nil {
+			cm.server.logger.Trace("Failed to reset connection", "err", err)
+		}
+
+		cm.server.logger.Info("Outbound Peer Disconnected", "krama-id", peer.kramaID)
+	}()
+
+	// Handle messages from the peer
+	for {
+		reader := msgio.NewReader(peer.rw.Reader)
+
+		_, err := reader.ReadMsg()
+		if err != nil {
+			cm.server.logger.Error("Error handling outbound peer message", "err", err)
+
+			return
+		}
+	}
 }

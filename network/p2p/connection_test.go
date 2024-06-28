@@ -401,10 +401,10 @@ func TestConnectPeerByKramaID(t *testing.T) {
 			for i, destinations := range test.newConnections {
 				for _, destination := range destinations {
 					// get peer info of node we connect to
-					info := getPeerInfo(t, destination)
+					info := getPeerInfo(t, destination, false)
 
 					// add peer info to peer store
-					servers[i].AddPeerInfo(info)
+					servers[i].AddPeerInfo(info.AddrInfo)
 
 					err := servers[i].ConnManager.ConnectPeerByKramaID(context.Background(), test.kramaID)
 
@@ -412,7 +412,7 @@ func TestConnectPeerByKramaID(t *testing.T) {
 						require.EqualError(t, err, test.expectedError.Error())
 					} else {
 						require.NoError(t, err)
-						checkConnection(t, servers[i], info.ID, true)
+						checkConnection(t, servers[i], info.AddrInfo.ID, true)
 					}
 				}
 			}
@@ -481,10 +481,10 @@ func TestConnectToTrustedNodes(t *testing.T) {
 			for i, destinations := range test.newConnections {
 				for _, destination := range destinations {
 					// get peer info of node we connect to
-					info := getPeerInfo(t, destination)
+					info := getPeerInfo(t, destination, false)
 
 					// add peer info to peer store
-					servers[i].AddPeerInfo(info)
+					servers[i].AddPeerInfo(info.AddrInfo)
 
 					servers[i].cfg.TrustedPeers = append(servers[i].cfg.TrustedPeers, config.NodeInfo{
 						ID:      destination.id,
@@ -497,9 +497,9 @@ func TestConnectToTrustedNodes(t *testing.T) {
 
 				for _, destination := range destinations {
 					// get peer info of the node that we have connected to
-					info := getPeerInfo(t, destination)
+					info := getPeerInfo(t, destination, false)
 
-					checkConnection(t, servers[i], info.ID, true)
+					checkConnection(t, servers[i], info.AddrInfo.ID, true)
 				}
 			}
 		})
@@ -723,9 +723,9 @@ func TestConnectAndRegisterPeer_Connection_Failure(t *testing.T) {
 				test.testFn()
 			}
 
-			info := getPeerInfo(t, test.destination)
+			info := getPeerInfo(t, test.destination, false)
 
-			err := test.source.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, test.destination.id, test.rtt)
+			err := test.source.ConnManager.ConnectAndRegisterPeer(context.Background(), info, test.destination.id, test.rtt)
 
 			if test.expectedErr {
 				require.Error(t, err)
@@ -736,7 +736,7 @@ func TestConnectAndRegisterPeer_Connection_Failure(t *testing.T) {
 			require.NoError(t, err)
 
 			// check whether the outbound connection is protected
-			checkConnectionProtection(t, test.source, info.ID, true)
+			checkConnectionProtection(t, test.source, info.AddrInfo.ID, true)
 		})
 	}
 }
@@ -806,11 +806,11 @@ func TestConnectAndRegisterPeer_Connection_Limit(t *testing.T) {
 				test.testFn()
 			}
 
-			info := getPeerInfo(t, test.destination)
+			info := getPeerInfo(t, test.destination, false)
 
-			test.source.AddPeerInfo(info)
+			test.source.AddPeerInfo(info.AddrInfo)
 
-			err := test.source.ConnManager.ConnectAndRegisterPeer(context.Background(), *info, test.destination.id, test.rtt)
+			err := test.source.ConnManager.ConnectAndRegisterPeer(context.Background(), info, test.destination.id, test.rtt)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
@@ -823,7 +823,7 @@ func TestConnectAndRegisterPeer_Connection_Limit(t *testing.T) {
 			require.True(t, test.source.Peers.ContainsPeer(test.destination.host.ID()))
 
 			// check whether the oubound connection is protected
-			checkConnectionProtection(t, test.source, info.ID, true)
+			checkConnectionProtection(t, test.source, info.AddrInfo.ID, true)
 		})
 	}
 }
@@ -1087,19 +1087,23 @@ func TestStreamHandler_Valid_HandshakeMsg(t *testing.T) {
 
 	registerStreamHandler(servers[1])
 
-	newPeerSub := servers[1].mux.Subscribe(NewPeerEvent{}) // subscribe to server-1 events
-	kPeer := openStream(t, servers[0], servers[1])         // connect to peer-1 and get peer
+	kPeer := openStream(t, servers[0], servers[1]) // connect peer-0 to peer-1 and return peer-1
 
-	// send handshake message
+	// peer-0 sends a handshake msg to peer-1
 	err := kPeer.SendHandshakeMessage(servers[0])
 	require.NoError(t, err)
 
-	// get the message from stream
+	// peer-1 sends a response back
 	msg := readMessageFromBuffer(t, kPeer, false)
 
 	// validate handshake message
 	validateHandShakeMsg(t, servers[1], msg)
-	validateNewPeerEvent(t, newPeerSub, servers[0]) // server-1 sends the peer-id of server-0 to subscribers
+
+	peerID, err := servers[0].id.DecodedPeerID()
+	require.NoError(t, err)
+
+	_, ok := servers[1].inboundStreams[peerID]
+	require.True(t, ok)
 }
 
 func TestStreamHandler_Invalid_HandshakeMsgPayload(t *testing.T) {

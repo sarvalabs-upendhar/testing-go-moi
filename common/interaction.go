@@ -1,11 +1,11 @@
 package common
 
 import (
-	"crypto/rand"
 	"math/big"
 	"sync/atomic"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
@@ -215,7 +215,7 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 			},
 		}
 
-	case IxLogicDeploy, IxLogicInvoke:
+	case IxLogicDeploy, IxLogicInvoke, IxLogicEnlist:
 		logicPayload := new(LogicPayload)
 		if err = logicPayload.FromBytes(ixData.Input.Payload); err != nil {
 			return nil, err
@@ -226,25 +226,13 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 		}
 
 	default:
-		return nil, errors.New("invalid interaction type")
+		return nil, ErrInvalidInteractionType
 	}
 
 	ix.hash.Store(GetHash(data))
 	ix.size.Store(uint64(len(data) + len(signature)))
 
 	return ix, nil
-}
-
-func NewRandomHashInteraction() *Interaction {
-	hash := make([]byte, 32)
-	if _, err := rand.Read(hash); err != nil {
-		return nil
-	}
-
-	v := atomic.Value{}
-	v.Store(BytesToHash(hash))
-
-	return &Interaction{hash: v}
 }
 
 func (ix Interaction) IXData() IxData {
@@ -302,7 +290,7 @@ func (ix Interaction) Receiver() identifiers.Address {
 		return payload.Mint.Asset.Address()
 	case IxLogicDeploy:
 		return NewAccountAddress(ix.Nonce(), ix.Sender())
-	case IxLogicInvoke:
+	case IxLogicInvoke, IxLogicEnlist:
 		payload, err := ix.GetLogicPayload()
 		if err != nil {
 			panic(err)

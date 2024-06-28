@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
+	github.com/algorand/sortition v1.0.0
 	github.com/btcsuite/btcd v0.23.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.3
@@ -20,9 +21,6 @@ require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/go-kit/kit v0.13.0
 	github.com/google/uuid v1.3.1
-	github.com/gorilla/handlers v1.5.1
-	github.com/gorilla/mux v1.8.0
-	github.com/gorilla/rpc v1.2.0
 	github.com/gorilla/websocket v1.5.0
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/go-immutable-radix v1.3.1
@@ -49,7 +47,7 @@ require (
 	github.com/sarvalabs/battleground v0.3.0
 	github.com/sarvalabs/go-legacy-kramaid v0.1.0
 	github.com/sarvalabs/go-moi-identifiers v0.1.0
-	github.com/sarvalabs/go-pisa v0.2.2
+	github.com/sarvalabs/go-pisa v0.3.0
 	github.com/sarvalabs/go-polo v0.4.3
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.9.0
@@ -84,7 +82,6 @@ require (
 	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
 	github.com/fatih/color v1.15.0 // indirect
-	github.com/felixge/httpsnoop v1.0.1 // indirect
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect

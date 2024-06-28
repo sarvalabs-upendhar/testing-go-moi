@@ -24,7 +24,6 @@ const (
 
 	TokenDesignated
 	TokenSender
-	TokenReceiver
 
 	TokenBig
 	TokenManifest
@@ -75,7 +74,6 @@ var keywords = map[string]symbolizer.TokenKind{
 
 	"designated": TokenDesignated,
 	"sender":     TokenSender,
-	"receiver":   TokenReceiver,
 
 	"big":      TokenBig,
 	"manifest": TokenManifest,
@@ -157,9 +155,9 @@ func Parse(cmd string) Command {
 		return parseStorageKeyCommand(parser)
 
 	case TokenDeploy:
-		return parseLogicCall(parser, engineio.CallsiteDeployer)
+		return parseLogicCall(parser, engineio.CallsiteDeploy)
 	case TokenInvoke:
-		return parseLogicCall(parser, engineio.CallsiteInvokable)
+		return parseLogicCall(parser, engineio.CallsiteInvoke)
 
 	default:
 		return InvalidCommandError("")

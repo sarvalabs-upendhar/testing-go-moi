@@ -24,7 +24,6 @@ import (
 	"github.com/sarvalabs/go-moi/lattice"
 	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/senatus"
-	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/syncer/forage"
 )
@@ -42,7 +41,6 @@ type Node struct {
 	cfg                 *config.Config
 	eventMux            *utils.TypeMux
 	network             *p2p.Server
-	state               *state.StateManager
 	chain               *lattice.ChainManager
 	senatus             *senatus.ReputationEngine
 	exec                *compute.Manager
@@ -98,13 +96,11 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		return nil, err
 	}
 
-	if err = n.setupStateManager(); err != nil {
-		return nil, err
-	}
-
 	n.setupExecEngine()
 
-	n.setupIxPool()
+	if err = n.setupIxPool(); err != nil {
+		return nil, err
+	}
 
 	if err = n.setupSenatusToNetwork(); err != nil {
 		return nil, err
@@ -116,11 +112,18 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		return nil, err
 	}
 
-	if err = n.setupKramaEngine(); err != nil {
+	n.setupChainManagerToSenatus()
+
+	sm, err := n.newStateManager(true)
+	if err != nil {
 		return nil, err
 	}
 
-	if err = n.setupSyncer(); err != nil {
+	if err = n.setupKramaEngine(sm); err != nil {
+		return nil, err
+	}
+
+	if err = n.setupSyncer(sm); err != nil {
 		return nil, errors.New("unable to create and setup syncer")
 	}
 
@@ -172,10 +175,6 @@ func (n *Node) Start() (err error) {
 
 	// starting JSON-RPC server
 	go n.startJSONRPCServer()
-
-	if err := n.chain.Start(); err != nil {
-		return errors.Wrap(err, "failed to start chain manager")
-	}
 
 	return nil
 }

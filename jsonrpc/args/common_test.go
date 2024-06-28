@@ -95,7 +95,7 @@ func TestCreateRPCInteraction(t *testing.T) {
 func TestCreateRPCParticipants(t *testing.T) {
 	testcases := []struct {
 		name         string
-		participants common.Participants
+		participants common.ParticipantsState
 	}{
 		{
 			name:         "create rpc participants",
@@ -218,7 +218,7 @@ func TestCreateRPCReceipt(t *testing.T) {
 		tsHash       common.Hash
 		receipt      *common.Receipt
 		ix           *common.Interaction
-		participants common.Participants
+		participants common.ParticipantsState
 		ixIndex      int
 	}{
 		{

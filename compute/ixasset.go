@@ -18,7 +18,7 @@ func RunAssetTransfer(
 	ix *common.Interaction,
 	_ *common.ExecutionContext,
 	tank *FuelTank,
-	objects state.ObjectMap,
+	objects *state.Transition,
 ) *common.Receipt {
 	// Obtain the sender and receiver state objects
 	sender := objects.GetObject(ix.Sender())
@@ -63,7 +63,7 @@ func RunAssetCreate(
 	ix *common.Interaction,
 	_ *common.ExecutionContext,
 	tank *FuelTank,
-	objects state.ObjectMap,
+	objects *state.Transition,
 ) *common.Receipt {
 	// Obtain the Asset Payload from the Interaction
 	payload, _ := ix.GetAssetPayload()
@@ -119,7 +119,7 @@ func RunAssetMint(
 	ix *common.Interaction,
 	_ *common.ExecutionContext,
 	tank *FuelTank,
-	objects state.ObjectMap,
+	objects *state.Transition,
 ) *common.Receipt {
 	// Obtain the Asset Payload from the Interaction
 	assetPayload, _ := ix.GetAssetPayload()
@@ -175,7 +175,7 @@ func RunAssetBurn(
 	ix *common.Interaction,
 	_ *common.ExecutionContext,
 	tank *FuelTank,
-	objects state.ObjectMap,
+	objects *state.Transition,
 ) *common.Receipt {
 	// Obtain the Asset Payload from the Interaction
 	assetPayload, _ := ix.GetAssetPayload()

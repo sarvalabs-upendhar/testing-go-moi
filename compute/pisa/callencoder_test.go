@@ -3,8 +3,9 @@ package pisa
 import (
 	"testing"
 
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-pisa/datatypes"
 	"github.com/sarvalabs/go-pisa/logic"
@@ -183,12 +184,4 @@ func TestCallEncoder_DecodeOutputs(t *testing.T) {
 			require.EqualError(t, err, test.err)
 		}
 	}
-}
-
-func must[T any](t T, err error) T {
-	if err != nil {
-		panic(err)
-	}
-
-	return t
 }

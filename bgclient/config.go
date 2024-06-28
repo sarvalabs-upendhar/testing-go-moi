@@ -62,6 +62,9 @@ type ClusterConfig struct {
 	logsDirOnce         sync.Once
 	WithStdout          bool
 	GuardianPath        string
+	ShouldExecute       bool
+	OldState            bool
+	EnableSortition     bool
 }
 
 func DefaultClusterConfig() *ClusterConfig {
@@ -85,6 +88,8 @@ func DefaultClusterConfig() *ClusterConfig {
 		WithLogs:            true,
 		WithStdout:          true,
 		GuardianPath:        "./",
+		ShouldExecute:       true,
+		EnableSortition:     false,
 	}
 }
 

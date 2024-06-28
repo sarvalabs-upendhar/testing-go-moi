@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -26,11 +27,10 @@ func NewAPI(lab *core.Lab) *API {
 	}
 }
 
-func (api *API) Start() error {
+func (api *API) Start(port int) error {
 	// Basic API Primitives
 	api.router.GET("/", api.getAPIMetadata)
 	api.router.DELETE("/", api.resetLabDB)
-	api.router.GET("/engines", api.getEngineRuntimes)
 
 	// Environment APIs
 	api.router.GET("/environments", api.getAllEnvironments)
@@ -44,9 +44,6 @@ func (api *API) Start() error {
 	api.router.POST("/defaults/sender", api.setDefaultSender)
 	api.router.GET("/defaults/sender", api.getDefaultSender)
 	api.router.DELETE("/defaults/sender", api.wipeDefaultSender)
-	api.router.POST("/defaults/receiver", api.setDefaultReceiver)
-	api.router.GET("/defaults/receiver", api.getDefaultReceiver)
-	api.router.DELETE("/defaults/receiver", api.wipeDefaultReceiver)
 
 	// User Management APIs
 	api.router.GET("/users", api.getAllUsers)
@@ -62,35 +59,32 @@ func (api *API) Start() error {
 	api.router.GET("/logics/:name", api.getLogic)
 	api.router.DELETE("/logics/:name", api.wipeLogic)
 	api.router.GET("/logics/:name/manifest", api.getLogicManifest)
+	api.router.GET("/logics/:name/manifest/:encoding", api.getEncodedLogicManifest)
+	api.router.GET("/logics/:name/storage/:storekey", api.getLogicStorage)
 
-	// Logic & Engine Utilities APIs
-	api.router.GET("/errdecode/:engine", api.decodeErrorData)
-	api.router.POST("/storagekey/:engine", api.generateStorageKey)
-	api.router.POST("/convert/codeform", api.convertManifestCodeform)
-	api.router.POST("/convert/fileform", api.convertManifestFileform)
+	// Interact APIs
+	api.router.POST("/interact/logic/deploy", api.InteractLogicDeploy)
+	api.router.POST("/interact/logic/invoke", api.InteractLogicInvoke)
+	api.router.POST("/interact/logic/enlist", api.InteractLogicEnlist)
 
-	// Logic APIs
-	api.router.GET("/logics/:name/state/:storekey", api.getLogicStorage)
-	api.router.POST("/logics/:name/call/:endpoint", api.callLogicEndpoint)
+	// Account APIs
+	api.router.GET("/accounts/:addr", api.getAccount)
+	api.router.GET("/accounts/:addr/storage/:logicID/:storekey", api.getAccountStorage)
 
-	return api.router.Run()
+	// Event APIs
+	api.router.GET("/events", api.getEvents)
+
+	// Start the server on the specified port
+	return api.router.Run(fmt.Sprintf(":%d", port))
 }
 
 type VersionResponse struct {
-	Version string `json:"version"`
-	Website string `json:"website"`
+	Version string            `json:"version"`
+	Engines map[string]string `json:"engines"`
+	Website string            `json:"website"`
 }
 
 func (api *API) getAPIMetadata(c *gin.Context) {
-	version := VersionResponse{
-		Version: config.ProtocolVersion,
-		Website: core.DOCS,
-	}
-
-	c.JSON(http.StatusOK, Success().WithData(version))
-}
-
-func (api *API) getEngineRuntimes(c *gin.Context) {
 	engines := make(map[string]string)
 
 	for _, engine := range core.Engines {
@@ -103,7 +97,13 @@ func (api *API) getEngineRuntimes(c *gin.Context) {
 		engines[engine.String()] = "v" + runtime.Version()
 	}
 
-	c.JSON(http.StatusOK, Success().WithData(engines))
+	version := VersionResponse{
+		Version: config.ProtocolVersion,
+		Engines: engines,
+		Website: core.DOCS,
+	}
+
+	c.JSON(http.StatusOK, Success().WithData(version))
 }
 
 func (api *API) resetLabDB(c *gin.Context) {

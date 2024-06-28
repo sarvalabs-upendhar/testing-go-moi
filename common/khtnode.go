@@ -13,7 +13,7 @@ type RootNode struct {
 // Hash returns the blake256 hash of the RootNode
 func (r *RootNode) Hash() (Hash, error) {
 	if r == nil {
-		return NilHash, errors.New("invalid root node")
+		return NilHash, ErrInvalidRootNode
 	}
 
 	rawData, err := r.Bytes()
@@ -27,7 +27,7 @@ func (r *RootNode) Hash() (Hash, error) {
 // Bytes serialises the root node
 func (r *RootNode) Bytes() ([]byte, error) {
 	if r == nil {
-		return nil, errors.New("invalid root node")
+		return nil, ErrInvalidRootNode
 	}
 
 	rawData, err := polo.Polorize(r)
@@ -40,7 +40,7 @@ func (r *RootNode) Bytes() ([]byte, error) {
 
 func (r *RootNode) FromBytes(bytes []byte) error {
 	if r == nil {
-		return errors.New("invalid root node")
+		return ErrInvalidRootNode
 	}
 
 	if err := polo.Depolorize(r, bytes); err != nil {

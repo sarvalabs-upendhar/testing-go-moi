@@ -6,7 +6,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -27,8 +27,8 @@ type NodeMetaInfo struct {
 	NTQ           float32
 	RTT           int64
 	WalletCount   int32
-	PublicKey     []byte
 	PeerSignature []byte
+	Registered    bool `polo:"-"`
 }
 
 func (mi *NodeMetaInfo) UpdateNTQ(ntq float32) {
@@ -45,11 +45,8 @@ func (mi *NodeMetaInfo) UpdateWalletCount(delta int32) {
 	mi.WalletCount += delta
 }
 
-func (mi *NodeMetaInfo) UpdatePublicKey(publicKey []byte) {
-	mi.mtx.Lock()
-	defer mi.mtx.Unlock()
-
-	mi.PublicKey = publicKey
+func (mi *NodeMetaInfo) GetKramaID() kramaid.KramaID {
+	return mi.KramaID
 }
 
 func (mi *NodeMetaInfo) GetNTQ() float32 {
@@ -64,13 +61,6 @@ func (mi *NodeMetaInfo) GetWalletCount() int32 {
 	defer mi.mtx.RUnlock()
 
 	return mi.WalletCount
-}
-
-func (mi *NodeMetaInfo) GetPublicKey() []byte {
-	mi.mtx.RLock()
-	defer mi.mtx.RUnlock()
-
-	return append([]byte(nil), mi.PublicKey...)
 }
 
 func (mi *NodeMetaInfo) GetMultiAddress() ([]multiaddr.Multiaddr, error) {

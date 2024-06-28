@@ -2,6 +2,7 @@ package config
 
 import (
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/sarvalabs/go-moi/crypto"
@@ -30,14 +31,16 @@ const (
 	DefaultWatchDogURL        = "https://babylon-watchdog.moi.techbology/add"
 	DefaultICSRequestTimeout  = 800 * time.Millisecond
 	DefaultDiscoveryInterval  = 60 * time.Second
-	LocalID                   = 111
-	DevnetID                  = 112
-	BabylonID                 = 113
 )
 
 // Chain defaults
 const (
-	DefaultGenesisTime = 1688741089 // time when the Babylon testnet started
+	DefaultGenesisTime  = 1688741089 // time when the Babylon testnet started
+	DefaultGenesisSeed  = "30df386a7dd9eb09f2522d6d299f68e1fd657e75ba4fc3163064d9c995ab9626"
+	DefaultGenesisProof = "06eab156cf8ecf0d77fcc24c2e065e5a13180718e3022275e395b2fa22c6b4c5c83ac787f8622e6af" +
+		"2a1651216ff547303726987af751cff7dc38e4a4c63e26063bf12ff2e89e5930f78c246ca89f69ec6cb8303c694d02803" +
+		"f253b23dcd476319e1094df5a8c926ff65a52a6e47059762ebc34c0e825698bffc397b8bbf58878e0ce8e3f578ed8f85870be" +
+		"9a2ab97a116dce3eb2abb8320df9b09ba365d2fc66cb9df6e36f2f27284a70f87ef71d4722abd0aee46d025e726a3f1a1ade285ea"
 )
 
 // IxPool defaults
@@ -60,10 +63,31 @@ const (
 
 // Subscription defaults
 const (
+	// DefaultTesseractRangeLimit is the maximum tesseract range allowed for json_rpc
+	// requests with fromTesseract/toTesseract values (e.g. moi_getLogs)
 	DefaultTesseractRangeLimit = 10
+
+	// DefaultBatchLengthLimit is the maximum length allowed for json_rpc batch requests
+	DefaultBatchLengthLimit = 20
 )
 
 // Tree defaults
 const (
 	DefaultTreeCacheSize = 1024 * 1024 * 200
 )
+
+type NetworkID int
+
+const (
+	Local NetworkID = iota + 111
+	Devnet
+	Babylon
+)
+
+func (n NetworkID) String() string {
+	return strconv.Itoa(int(n))
+}
+
+func (n NetworkID) IsTestnet() bool {
+	return n != Local && n != Devnet
+}

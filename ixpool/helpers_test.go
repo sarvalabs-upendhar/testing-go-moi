@@ -5,9 +5,12 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/state"
+
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -20,15 +23,17 @@ type expectedResult struct {
 	nonce            uint64
 	enqueued         uint64
 	promoted         uint64
-	promotedAccounts int
+	promotedAccounts uint64
 }
 
 type MockStateManager struct {
-	nonce               map[identifiers.Address]uint64
-	balance             map[identifiers.Address]map[identifiers.AssetID]*big.Int
-	assetInfo           map[identifiers.AssetID]*common.AssetDescriptor
-	accountRegistration map[identifiers.Address]bool
-	logicRegistration   map[identifiers.LogicID]bool
+	nonce                    map[identifiers.Address]uint64
+	balance                  map[identifiers.Address]map[identifiers.AssetID]*big.Int
+	assetInfo                map[identifiers.AssetID]*common.AssetDescriptor
+	accountRegistration      map[identifiers.Address]bool
+	logicRegistration        map[identifiers.LogicID]bool
+	removedCacheStateObjects map[identifiers.Address]struct{}
+	latestStateObjects       map[identifiers.Address]*state.Object
 }
 
 // NewMockStateManager returns a new instance of MockStateManager
@@ -36,17 +41,38 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
 	return &MockStateManager{
-		nonce:               make(map[identifiers.Address]uint64),
-		balance:             map[identifiers.Address]map[identifiers.AssetID]*big.Int{},
-		assetInfo:           map[identifiers.AssetID]*common.AssetDescriptor{},
-		accountRegistration: make(map[identifiers.Address]bool),
-		logicRegistration:   make(map[identifiers.LogicID]bool),
+		nonce:                    make(map[identifiers.Address]uint64),
+		balance:                  map[identifiers.Address]map[identifiers.AssetID]*big.Int{},
+		assetInfo:                map[identifiers.AssetID]*common.AssetDescriptor{},
+		accountRegistration:      make(map[identifiers.Address]bool),
+		logicRegistration:        make(map[identifiers.LogicID]bool),
+		removedCacheStateObjects: make(map[identifiers.Address]struct{}),
+		latestStateObjects:       make(map[identifiers.Address]*state.Object),
 	}
 }
 
-func (ms *MockStateManager) setTestMOIBalance(addrs ...identifiers.Address) {
+func (ms *MockStateManager) setLatestStateObject(addr identifiers.Address, obj *state.Object) {
+	ms.latestStateObjects[addr] = obj
+}
+
+func (ms *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
+	s, ok := ms.latestStateObjects[addr]
+	if !ok {
+		return nil, errors.New("state object not found")
+	}
+
+	return s, nil
+}
+
+func (ms *MockStateManager) RemoveCachedObject(addr identifiers.Address) {
+	ms.removedCacheStateObjects[addr] = struct{}{}
+}
+
+func (ms *MockStateManager) setTestMOIBalance(t *testing.T, addrs ...identifiers.Address) {
+	t.Helper()
+
 	for _, addr := range addrs {
-		ms.setBalance(addr, common.KMOITokenAssetID, big.NewInt(1000))
+		ms.setBalance(t, addr, common.KMOITokenAssetID, big.NewInt(1000))
 	}
 }
 
@@ -62,7 +88,9 @@ func (ms *MockStateManager) GetAssetInfo(
 	return info, nil
 }
 
-func (ms *MockStateManager) setAssetInfo(assetID identifiers.AssetID, info *common.AssetDescriptor) {
+func (ms *MockStateManager) setAssetInfo(t *testing.T, assetID identifiers.AssetID, info *common.AssetDescriptor) {
+	t.Helper()
+
 	ms.assetInfo[assetID] = info
 }
 
@@ -85,10 +113,13 @@ func (ms *MockStateManager) GetBalance(
 }
 
 func (ms *MockStateManager) setBalance(
+	t *testing.T,
 	addrs identifiers.Address,
 	assetID identifiers.AssetID,
 	amount *big.Int,
 ) {
+	t.Helper()
+
 	if _, ok := ms.balance[addrs]; !ok {
 		ms.balance[addrs] = make(map[identifiers.AssetID]*big.Int)
 	}
@@ -157,18 +188,35 @@ func (ms *MockStateManager) IsLogicRegistered(logicID identifiers.LogicID) error
 	return nil
 }
 
-func (ms *MockStateManager) registerLogicID(logicID identifiers.LogicID) {
+func (ms *MockStateManager) registerLogicID(t *testing.T, logicID identifiers.LogicID) {
+	t.Helper()
+
 	ms.logicRegistration[logicID] = true
 }
 
 // setLatestNonce updates the mock account with the latest nonce
-func (ms *MockStateManager) setLatestNonce(addr identifiers.Address, nonce uint64) {
+func (ms *MockStateManager) setLatestNonce(t *testing.T, addr identifiers.Address, nonce uint64) {
+	t.Helper()
+
 	ms.nonce[addr] = nonce
 }
 
 type MockExecutionManager struct {
 	validateLogicDeployHook func() error
 	validateLogicInvokeHook func() error
+}
+
+func (ms *MockExecutionManager) ValidateLogicInvoke(ix *common.Interaction, calleracc, logicacc *state.Object) error {
+	if ms.validateLogicInvokeHook != nil {
+		return ms.validateLogicInvokeHook()
+	}
+
+	return nil
+}
+
+func (ms *MockExecutionManager) ValidateLogicEnlist(ix *common.Interaction, calleracc, logicacc *state.Object) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
@@ -179,17 +227,9 @@ func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
 	return exec
 }
 
-func (ms *MockExecutionManager) ValidateLogicDeploy(ix *common.Interaction, data []byte) error {
+func (ms *MockExecutionManager) ValidateLogicDeploy(ix *common.Interaction) error {
 	if ms.validateLogicDeployHook != nil {
 		return ms.validateLogicDeployHook()
-	}
-
-	return nil
-}
-
-func (ms *MockExecutionManager) ValidateLogicInvoke(ix *common.Interaction) error {
-	if ms.validateLogicInvokeHook != nil {
-		return ms.validateLogicInvokeHook()
 	}
 
 	return nil
@@ -331,74 +371,16 @@ func newIxWithPayload(
 	})
 }
 
-// addAndPromoteIxs adds, enqueues and promotes ixs
-func addAndPromoteIxs(t *testing.T, ixPool *IxPool, ixs common.Interactions, senderAddr identifiers.Address) {
-	t.Helper()
-
-	errs := ixPool.AddInteractions(ixs)
-	require.Len(t, errs, 0)
-
-	// checks whether the ixs are enqueued
-	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
-	require.Equal(t, uint64(0), ixPool.accounts.get(senderAddr).promoted.length())
-
-	ixPool.handlePromoteRequest(<-ixPool.promoteReqCh)
-
-	// checks whether the ixs are promoted
-	require.Equal(t, uint64(0), ixPool.accounts.get(senderAddr).enqueued.length())
-	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).promoted.length())
-}
-
 // addAndProcessIxs enqueues and promotes the ixs based on nonce
 func addAndProcessIxs(t *testing.T, sm *MockStateManager, ixPool *IxPool, ixs common.Interactions) {
 	t.Helper()
 
 	for _, v := range ixs {
-		sm.setTestMOIBalance(v.Sender())
+		sm.setTestMOIBalance(t, v.Sender())
 	}
 
 	errs := ixPool.AddInteractions(ixs)
 	require.Len(t, errs, 0)
-
-	ixPool.handlePromoteRequest(<-ixPool.promoteReqCh)
-}
-
-// addAndEnqueueIxsWithoutPromoting adds and enqueues the ixs but won't promote it
-func addAndEnqueueIxsWithoutPromoting(
-	t *testing.T,
-	ixPool *IxPool,
-	ixs common.Interactions,
-	senderAddr identifiers.Address,
-) {
-	t.Helper()
-
-	errs := ixPool.AddInteractions(ixs)
-	require.Len(t, errs, 0)
-
-	require.Equal(t, uint64(len(ixs)), ixPool.accounts.get(senderAddr).enqueued.length())
-}
-
-// getPromotedAccounts adds the interactions and returns the promoted accounts after enqueuing
-func getPromotedAccounts(
-	t *testing.T,
-	ixPool *IxPool,
-	ixs common.Interactions,
-	expectedAccounts int,
-	expectedErrors int,
-) map[identifiers.Address]interface{} {
-	t.Helper()
-
-	promotedAccounts := make(map[identifiers.Address]interface{})
-
-	errs := ixPool.AddInteractions(ixs)
-	require.Equal(t, expectedErrors, len(errs))
-
-	for expectedAccounts > 0 {
-		promotedAccounts[(<-ixPool.promoteReqCh).address] = struct{}{}
-		expectedAccounts--
-	}
-
-	return promotedAccounts
 }
 
 // mintIxs mints and returns the interactions from the interactionQueue

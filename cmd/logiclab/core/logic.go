@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
@@ -31,6 +32,11 @@ type LogicCallsite struct {
 	Sign string `json:"sign"`
 }
 
+type LogicMetadata struct {
+	LogicID  identifiers.LogicID `json:"logicID"`
+	Manifest common.Hash         `json:"manifest"`
+}
+
 // NewLogic reads and compiles a manifest file at the given path into a Logic with the given name.
 func NewLogic(name string, manifest engineio.Manifest, fuel engineio.EngineFuel) (*Logic, engineio.EngineFuel, error) {
 	// Obtain the runtime for the logic engine in the header
@@ -50,7 +56,7 @@ func NewLogic(name string, manifest engineio.Manifest, fuel engineio.EngineFuel)
 	logicObject := state.NewLogicObject(identifiers.NewRandomAddress(), descriptor)
 
 	// If the logic ID has no persistent state, it can be marked
-	// as ready, otherwise it requires a deploy to occur first
+	// as ready, otherwise it requires a deployment to occur first
 	id, _ := logicObject.ID.Identifier()
 	ready := !id.HasPersistentState()
 
@@ -129,13 +135,13 @@ func (env *Environment) FetchLogic(name string) (*Logic, error) {
 	}
 
 	// Check if a logic with the given name exists
-	logicID, ok := env.Logics[name]
+	logicMetaData, ok := env.Logics[name]
 	if !ok {
 		return nil, ErrLogicNotFound
 	}
 
 	// Retrieve the logic from the database
-	raw, err := env.database.Get(db.LogicEntityKey(env.ID, logicID))
+	raw, err := env.database.Get(db.LogicAccountKey(env.ID, logicMetaData.LogicID))
 	if err != nil {
 		// This should never happen, It means something is
 		// seriously wrong with the environment handling
@@ -146,9 +152,15 @@ func (env *Environment) FetchLogic(name string) (*Logic, error) {
 		return nil, err
 	}
 
-	// Decode the value into a Logic
+	// Decode the value into an Account
+	account := new(Account)
+	if err = account.Decode(raw); err != nil {
+		return nil, err
+	}
+
+	// Decode the account data into Logic
 	logic := new(Logic)
-	if err = logic.Decode(raw); err != nil {
+	if err = logic.Decode(account.Data); err != nil {
 		return nil, err
 	}
 
@@ -162,22 +174,42 @@ func (env *Environment) FetchLogic(name string) (*Logic, error) {
 // RegisterLogic adds a Logic object to the Environment.
 // The logic is indexed by its name.
 func (env *Environment) RegisterLogic(logic *Logic, manifest engineio.Manifest) error {
-	// Check if user with the given name already exists
+	// Check if logic with the given name already exists
 	if env.LogicExists(logic.Name) {
 		return ErrLogicAlreadyExists
 	}
 
 	logicID := logic.Object.ID
 
+	// Check if the logic address already exists
+	if env.AddrExists(logicID.Address()) {
+		return ErrAddrAlreadyExists
+	}
+
+	env.Addrs[logicID.Address()] = struct{}{}
 	env.lcache[logic.Name] = logic
-	env.Logics[logic.Name] = logicID
+	env.Logics[logic.Name] = LogicMetadata{
+		LogicID:  logicID,
+		Manifest: manifest.Hash(),
+	}
 
 	encoded, err := logic.Encode()
 	if err != nil {
 		return err
 	}
 
-	if err = env.database.Set(db.LogicEntityKey(env.ID, logicID), encoded); err != nil {
+	account := &Account{
+		Kind: LogicAccount,
+		Name: logic.Name,
+		Data: encoded,
+	}
+
+	rawAccount, err := account.Encode()
+	if err != nil {
+		return err
+	}
+
+	if err = env.database.Set(db.LogicAccountKey(env.ID, logicID), rawAccount); err != nil {
 		return err
 	}
 
@@ -195,7 +227,7 @@ func (env *Environment) RegisterLogic(logic *Logic, manifest engineio.Manifest) 
 
 // RemoveLogic removes a logic from the Environment with a given name.
 func (env *Environment) RemoveLogic(name string) error {
-	logicID, ok := env.Logics[name]
+	logicMetaData, ok := env.Logics[name]
 	if !ok {
 		return ErrLogicNotFound
 	}
@@ -206,7 +238,7 @@ func (env *Environment) RemoveLogic(name string) error {
 	// Delete all keys in logic's address subspace
 	// This includes the logic entity, the logic manifest
 	// as well as any persistent state storage of the logic
-	if err := env.database.PrefixDelete(db.AddressPrefix(env.ID, logicID.Address())); err != nil {
+	if err := env.database.PrefixDelete(db.AccountPrefix(env.ID, logicMetaData.LogicID.Address())); err != nil {
 		return err
 	}
 
@@ -226,7 +258,7 @@ func (env *Environment) RemoveAllLogics() error {
 	}
 
 	// Reset the logic registry and cache
-	env.Logics = make(map[string]identifiers.LogicID)
+	env.Logics = make(map[string]LogicMetadata)
 	env.lcache = make(map[string]*Logic)
 
 	return nil
@@ -254,21 +286,4 @@ func generateSignatures(manifest engineio.Manifest, callsite engineio.Callsite) 
 	signature := fmt.Sprintf("(%v) -> (%v)", strings.Join(inputs, ", "), strings.Join(outputs, ", "))
 
 	return signature
-}
-
-func EndpointFromString(endpoint string) engineio.CallsiteKind {
-	switch endpoint {
-	case "DEPLOY":
-		return engineio.CallsiteDeployer
-	case "INVOKE":
-		return engineio.CallsiteInvokable
-	case "ENLISTER":
-		return engineio.CallsiteEnlister
-	case "INTERACTABLE":
-		return engineio.CallsiteInteractable
-	case "LOCAL":
-		return engineio.CallsiteInternal
-	default:
-		panic("unhandled logic call case")
-	}
 }

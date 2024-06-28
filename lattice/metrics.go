@@ -10,7 +10,6 @@ import (
 )
 
 type Metrics struct {
-	SignatureVerificationTime     metrics.Histogram
 	StatefulTesseractAdditionTime metrics.Histogram
 	StatefulTesseractCounter      metrics.Counter
 }
@@ -23,13 +22,6 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 	}
 
 	return &Metrics{
-		SignatureVerificationTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
-			Namespace: namespace,
-			Subsystem: "chain_manager",
-			Name:      "signature_verification_time",
-			Help:      "Time taken to verify tesseract signature",
-			Buckets:   []float64{5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 100},
-		}, labels).With(labelsWithValues...),
 		StatefulTesseractAdditionTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "chain_manager",
@@ -48,15 +40,9 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 
 func NilMetrics() *Metrics {
 	return &Metrics{
-		SignatureVerificationTime:     discard.NewHistogram(),
 		StatefulTesseractAdditionTime: discard.NewHistogram(),
 		StatefulTesseractCounter:      discard.NewCounter(),
 	}
-}
-
-// methods to capture telemetry metrics
-func (metrics *Metrics) captureSignatureVerificationTime(verificationInitTime time.Time) {
-	metrics.SignatureVerificationTime.Observe(time.Since(verificationInitTime).Seconds())
 }
 
 func (metrics *Metrics) captureStatefulTesseractAdditionTime(tsAdditionInitTime time.Time) {

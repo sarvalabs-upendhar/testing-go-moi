@@ -1,5 +1,5 @@
 [coco]
-version = "0.3.1"
+version = "0.5.0"
 
 [module]
 name = "GuardianRegistry"
@@ -18,3 +18,11 @@ output = "guardians"
 
 [target.pisa]
 format = "ASM"
+
+[lab.render]
+big_int_as_hex = true
+bytes_as_hex = false
+
+[lab.config.default]
+url = "http://127.0.0.1:6060"
+env = "main"

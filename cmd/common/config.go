@@ -10,27 +10,25 @@ import (
 )
 
 type Config struct {
-	Genesis        string          `json:"genesis"`
-	NodeType       int             `json:"node_type"`
-	KramaIDVersion int             `json:"ḭd_version"`
-	Vault          VaultConfig     `json:"vault"`
-	Network        NetworkConfig   `json:"network"`
-	Syncer         SyncerConfig    `json:"syncer"`
-	IxPool         IxPoolConfig    `json:"ixpool"`
-	Consensus      ConsensusConfig `json:"consensus"`
-	Execution      ExecutionConfig `json:"execution"`
-	DB             DBConfig        `json:"database"`
-	Telemetry      Telemetry       `json:"telemetry"`
-	LogFilePath    string          `json:"logfile"`
-	JSONRPC        JSONRPCConfig   `json:"jsonrpc"`
-	NetworkID      string          `json:"network_id"`
-	State          StateConfig     `json:"state"`
-	GenesisTime    uint64          `json:"genesis_time"`
+	NodeType       int              `json:"node_type"`
+	KramaIDVersion int              `json:"ḭd_version"`
+	Vault          VaultConfig      `json:"vault"`
+	Network        NetworkConfig    `json:"network"`
+	Syncer         SyncerConfig     `json:"syncer"`
+	IxPool         IxPoolConfig     `json:"ixpool"`
+	Consensus      ConsensusConfig  `json:"consensus"`
+	Execution      ExecutionConfig  `json:"execution"`
+	DB             DBConfig         `json:"database"`
+	Telemetry      Telemetry        `json:"telemetry"`
+	LogFilePath    string           `json:"logfile"`
+	JSONRPC        JSONRPCConfig    `json:"jsonrpc"`
+	NetworkID      config.NetworkID `json:"network_id"`
+	State          StateConfig      `json:"state"`
+	GenesisTime    uint64           `json:"genesis_time"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
 	return &Config{
-		Genesis:        path + "/genesis.json",
 		NodeType:       7,
 		KramaIDVersion: 1,
 		Vault: VaultConfig{
@@ -319,10 +317,15 @@ func DefaultBabylonConfig(path string) *Config {
 			Precision:             1000,
 			MessageDelay:          5500,
 			AccountWaitTime:       1500,
-			OperatorSlots:         -1,
+			OperatorSlots:         1,
 			ValidatorSlots:        5,
 			MaxGossipPeers:        5,
 			MinGossipPeers:        3,
+			EnableSortition:       true,
+			GenesisTime:           config.DefaultGenesisTime,
+			GenesisPath:           path + "/genesis.json",
+			GenesisSeed:           config.DefaultGenesisSeed,
+			GenesisProof:          config.DefaultGenesisProof,
 		},
 		DB: DBConfig{
 			CleanDB:     false,
@@ -345,18 +348,17 @@ func DefaultBabylonConfig(path string) *Config {
 		LogFilePath: path + config.DefaultLogDirectory,
 		JSONRPC: JSONRPCConfig{
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
-		NetworkID: strconv.Itoa(config.BabylonID),
+		NetworkID: config.Babylon,
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
-		GenesisTime: config.DefaultGenesisTime,
 	}
 }
 
 func DefaultDevnetConfig(path string) *Config {
 	return &Config{
-		Genesis:        path + "/genesis.json",
 		NodeType:       7,
 		KramaIDVersion: 1,
 		Vault: VaultConfig{
@@ -401,6 +403,11 @@ func DefaultDevnetConfig(path string) *Config {
 			AccountWaitTime:       1500,
 			OperatorSlots:         -1,
 			ValidatorSlots:        3,
+			EnableSortition:       false,
+			GenesisSeed:           config.DefaultGenesisSeed,
+			GenesisProof:          config.DefaultGenesisProof,
+			GenesisTime:           0,
+			GenesisPath:           path + "/genesis.json",
 		},
 		DB: DBConfig{
 			CleanDB:     false,
@@ -423,12 +430,12 @@ func DefaultDevnetConfig(path string) *Config {
 		LogFilePath: path + config.DefaultLogDirectory,
 		JSONRPC: JSONRPCConfig{
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
-		NetworkID: strconv.Itoa(config.DevnetID),
+		NetworkID: config.Devnet,
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
-		GenesisTime: 0,
 	}
 }
 
@@ -482,22 +489,27 @@ type Telemetry struct {
 }
 
 type ConsensusConfig struct {
-	TimeoutPropose        int64 `json:"timeout_propose"`
-	TimeoutProposeDelta   int64 `json:"timeout_propose_delta"`
-	TimeoutPrevote        int64 `json:"timeout_prevote"`
-	TimeoutPrevoteDelta   int64 `json:"timeout_prevote_delta"`
-	TimeoutPrecommit      int64 `json:"timeout_precommit"`
-	TimeoutPrecommitDelta int64 `json:"timeout_precommit_delta"`
-	TimeoutCommit         int64 `json:"timeout_commit"`
-	SkipTimeoutCommit     bool  `json:"skip_timeout_commit"`
-	AccountWaitTime       int   `json:"wait_time"`
-	MessageDelay          int64 `json:"message_delay"`
-	Precision             int64 `json:"precision"`
-	OperatorSlots         int   `json:"operator_slots"`
-	ValidatorSlots        int   `json:"validator_slots"`
-	EnableDebugMode       bool  `json:"enable_debug_mode"`
-	MaxGossipPeers        int   `json:"max_gossip_peers"`
-	MinGossipPeers        int   `json:"min_gossip_peers"`
+	TimeoutPropose        int64  `json:"timeout_propose"`
+	TimeoutProposeDelta   int64  `json:"timeout_propose_delta"`
+	TimeoutPrevote        int64  `json:"timeout_prevote"`
+	TimeoutPrevoteDelta   int64  `json:"timeout_prevote_delta"`
+	TimeoutPrecommit      int64  `json:"timeout_precommit"`
+	TimeoutPrecommitDelta int64  `json:"timeout_precommit_delta"`
+	TimeoutCommit         int64  `json:"timeout_commit"`
+	SkipTimeoutCommit     bool   `json:"skip_timeout_commit"`
+	AccountWaitTime       int    `json:"wait_time"`
+	MessageDelay          int64  `json:"message_delay"`
+	Precision             int64  `json:"precision"`
+	OperatorSlots         int    `json:"operator_slots"`
+	ValidatorSlots        int    `json:"validator_slots"`
+	EnableDebugMode       bool   `json:"enable_debug_mode"`
+	MaxGossipPeers        int    `json:"max_gossip_peers"`
+	MinGossipPeers        int    `json:"min_gossip_peers"`
+	GenesisTime           uint64 `json:"genesis_time"`
+	GenesisPath           string `json:"genesis_path"`
+	EnableSortition       bool   `json:"enable_sortition"`
+	GenesisSeed           string `json:"genesis_seed"`
+	GenesisProof          string `json:"genesis_proof"`
 }
 
 type ExecutionConfig struct {
@@ -514,7 +526,8 @@ type VaultConfig struct {
 }
 
 type JSONRPCConfig struct {
-	TesseractRangeLimit uint8 `json:"tesseract_range_limit"`
+	TesseractRangeLimit uint8  `json:"tesseract_range_limit"`
+	BatchLengthLimit    uint64 `json:"batch_length_limit"`
 }
 
 type StateConfig struct {

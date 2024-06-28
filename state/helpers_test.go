@@ -5,8 +5,12 @@ import (
 	"math/big"
 	"math/rand"
 	"reflect"
-	"sync"
 	"testing"
+
+	"golang.org/x/crypto/blake2b"
+
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 
 	"github.com/sarvalabs/go-moi/common/config"
 
@@ -18,11 +22,12 @@ import (
 	"github.com/manishmeganathan/depgraph"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -56,11 +61,10 @@ func (m *MockServer) Subscribe(
 }
 
 type MockDB struct {
-	tesseracts          map[common.Hash][]byte
+	tesseracts          map[common.Hash]*common.Tesseract
 	latestTesseractHash map[identifiers.Address]common.Hash
 	accounts            map[common.Hash][]byte
 	context             map[common.Hash][]byte
-	interactions        map[common.Hash][]byte
 	balances            map[common.Hash][]byte
 	assetRegistry       map[common.Hash][]byte
 	merkleTreeEntries   map[string][]byte
@@ -70,14 +74,27 @@ type MockDB struct {
 	createEntryHook     func() error
 }
 
+func (m *MockDB) FetchTesseractFromDB(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+	ts, ok := m.tesseracts[hash]
+	if !ok {
+		return nil, common.ErrFetchingTesseract
+	}
+
+	if !withInteractions {
+		ts = ts.Copy()
+		ts.SetIxns(nil)
+	}
+
+	return ts, nil
+}
+
 func mockDB() *MockDB {
 	return &MockDB{
-		tesseracts:          make(map[common.Hash][]byte),
+		tesseracts:          make(map[common.Hash]*common.Tesseract),
 		latestTesseractHash: make(map[identifiers.Address]common.Hash),
 		accounts:            make(map[common.Hash][]byte),
 		assetRegistry:       make(map[common.Hash][]byte),
 		context:             make(map[common.Hash][]byte),
-		interactions:        make(map[common.Hash][]byte),
 		balances:            make(map[common.Hash][]byte),
 		merkleTreeEntries:   make(map[string][]byte),
 		preImages:           make(map[common.Hash][]byte),
@@ -163,24 +180,6 @@ func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMeta
 	}
 
 	return accMetaInfo, nil
-}
-
-func (m *MockDB) insertTesseract(t *testing.T, ts *common.Tesseract) {
-	t.Helper()
-
-	bytes, err := ts.Canonical().Bytes()
-	require.NoError(t, err)
-
-	m.tesseracts[ts.Hash()] = bytes
-}
-
-func (m *MockDB) insertIxns(t *testing.T, hash common.Hash, ixns common.Interactions) {
-	t.Helper()
-
-	bytes, err := ixns.Bytes()
-	require.NoError(t, err)
-
-	m.interactions[hash] = bytes
 }
 
 func (m *MockDB) setAccountMetaInfo(acc *common.AccountMetaInfo) {
@@ -282,24 +281,6 @@ func (m *MockDB) GetContext(addr identifiers.Address, hash common.Hash) ([]byte,
 	return tsContext, nil
 }
 
-func (m *MockDB) GetInteractions(hash common.Hash) ([]byte, error) {
-	interactions, ok := m.interactions[hash]
-	if !ok {
-		return nil, common.ErrFetchingInteractions
-	}
-
-	return interactions, nil
-}
-
-func (m *MockDB) GetTesseract(hash common.Hash) ([]byte, error) {
-	tesseracts, ok := m.tesseracts[hash]
-	if !ok {
-		return nil, common.ErrFetchingTesseract
-	}
-
-	return tesseracts, nil
-}
-
 func (m *MockDB) GetBalance(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	balance, ok := m.balances[hash]
 	if !ok {
@@ -335,27 +316,12 @@ func getMockDB(t *testing.T, db Store) *MockDB {
 	return nil
 }
 
-func insertTesseractsAndIxnsInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
+func insertTesseractsInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
 	t.Helper()
-
 	mDB := getMockDB(t, db)
 
 	for _, ts := range tesseracts {
-		mDB.insertTesseract(t, ts)
-
-		if ts.Interactions() != nil {
-			mDB.insertIxns(t, ts.Hash(), ts.Interactions())
-		}
-	}
-}
-
-func insertTesseractInDB(t *testing.T, db Store, tesseracts ...*common.Tesseract) {
-	t.Helper()
-
-	mDB := getMockDB(t, db)
-
-	for _, ts := range tesseracts {
-		mDB.insertTesseract(t, ts)
+		mDB.tesseracts[ts.Hash()] = ts
 	}
 }
 
@@ -653,66 +619,6 @@ func getRoot(t *testing.T, m *MockMerkleTree) common.Hash {
 	return common.GetHash(bytes)
 }
 
-type MockSenatus struct {
-	lock       sync.RWMutex
-	publicKeys map[kramaid.KramaID][]byte
-}
-
-func mockSenatus(t *testing.T) *MockSenatus {
-	t.Helper()
-
-	return &MockSenatus{
-		lock:       sync.RWMutex{},
-		publicKeys: make(map[kramaid.KramaID][]byte),
-	}
-}
-
-func (m *MockSenatus) AddPublicKeys(ids []kramaid.KramaID, publicKeys [][]byte) error {
-	for index, kramaID := range ids {
-		m.publicKeys[kramaID] = publicKeys[index]
-	}
-
-	return nil
-}
-
-func (m *MockSenatus) UpdatePublicKey(key kramaid.KramaID, pk []byte) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	m.publicKeys[key] = pk
-
-	return nil
-}
-
-func (m *MockSenatus) GetPublicKey(kramaID kramaid.KramaID) ([]byte, error) {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-
-	val, ok := m.publicKeys[kramaID]
-	if !ok {
-		return nil, common.ErrKramaIDNotFound
-	}
-
-	return val, nil
-}
-
-type MockContract struct {
-	publicKeys map[kramaid.KramaID][]byte
-}
-
-func NewMockContract(t *testing.T, kramaIDs []kramaid.KramaID, publicKeys [][]byte) *MockContract {
-	t.Helper()
-
-	mockContract := new(MockContract)
-	mockContract.publicKeys = make(map[kramaid.KramaID][]byte)
-
-	for i := 0; i < len(kramaIDs); i++ {
-		mockContract.publicKeys[kramaIDs[i]] = publicKeys[i]
-	}
-
-	return mockContract
-}
-
 type createLogicObjectParams struct {
 	id            identifiers.LogicID
 	logicCallback func(object *LogicObject)
@@ -745,7 +651,7 @@ func getLogicObjectParamsWithLogicID(logicID identifiers.LogicID) *createLogicOb
 func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
 		Addresses: []identifiers.Address{address},
-		Participants: common.Participants{
+		Participants: common.ParticipantsState{
 			address: {
 				StateHash: hash,
 			},
@@ -756,7 +662,7 @@ func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Ha
 func getTesseractParamsWithContextHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
 		Addresses: []identifiers.Address{address},
-		Participants: common.Participants{
+		Participants: common.ParticipantsState{
 			address: {
 				LatestContext: hash,
 			},
@@ -819,10 +725,10 @@ func createTestStateManager(t *testing.T, params *createStateManagerParams) *Sta
 		hclog.NewNullLogger(),
 		mockCache(t),
 		NilMetrics(),
-		mockSenatus(t),
 		&config.StateConfig{
 			TreeCacheSize: 22,
 		},
+		true,
 	)
 	require.NoError(t, err)
 
@@ -837,14 +743,37 @@ func insertContextHash(so *Object, hash common.Hash) {
 	so.data.ContextHash = hash
 }
 
-func insertDirtyObject(sm *StateManager, objects ...*Object) {
-	for _, obj := range objects {
-		sm.dirtyObjects[obj.address] = obj
+func storeInSmCache(sm *StateManager, k, v interface{}) {
+	sm.cache.Add(k, v)
+}
+
+func setGuardianPublicKeys(t *testing.T, state *Object, ids []kramaid.KramaID, publicKeys [][]byte) {
+	t.Helper()
+
+	for i, id := range ids {
+		// Encode and hash the krama ID
+		encoded, _ := polo.Polorize(id)
+		hashed := blake2b.Sum256(encoded)
+
+		// Generate a storage access key for Registry.Guardians[kramaID].PubKey
+		key := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(hashed), pisa.ClsFld(3))
+
+		pk, err := polo.Polorize(publicKeys[i])
+		require.NoError(t, err)
+
+		// Retrieve the value for the storage key
+		err = state.SetStorageEntry(common.GuardianLogicID, key, pk)
+		require.NoError(t, err)
 	}
 }
 
-func storeInSmCache(sm *StateManager, k, v interface{}) {
-	sm.cache.Add(k, v)
+func createGuardianLogic(t *testing.T, sm *StateManager, kramaIDs []kramaid.KramaID, publicKeys [][]byte) {
+	t.Helper()
+
+	so := sm.CreateStateObject(common.GuardianLogicAddr, common.RegularAccount, true)
+	so.storageTreeTxns[common.GuardianLogicID] = iradix.New().Txn()
+	sm.objectCache.Add(common.GuardianLogicAddr, so)
+	setGuardianPublicKeys(t, so, kramaIDs, publicKeys)
 }
 
 type createStateObjectParams struct {
@@ -892,7 +821,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 		data = params.account
 	}
 
-	so := NewStateObject(addr, cache, tests.NewTestTreeCache(), mDB, *data, NilMetrics())
+	so := NewStateObject(addr, cache, tests.NewTestTreeCache(), mDB, *data, NilMetrics(), false)
 	so.metaStorageTree = mockMerkleTreeWithDB()
 	so.logicTree = mockMerkleTreeWithDB()
 
@@ -1123,6 +1052,7 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 				acc.ContextHash = tests.RandomHash(t)
 			})
 
+			s.isGenesis = true
 			s.data = *acc
 			s.balance, _ = getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
 			s.approvals.PrvHash = tests.RandomHash(t) // initialize any one field in asset approvals object
@@ -1272,17 +1202,6 @@ func getTestAccounts(t *testing.T, balanceHash []common.Hash, count int) ([]*com
 	return accounts, hashes
 }
 
-func getAccMetaInfos(t *testing.T, count int) []*common.AccountMetaInfo {
-	t.Helper()
-
-	accMetaInfo := make([]*common.AccountMetaInfo, count)
-	for i := 0; i < count; i++ {
-		accMetaInfo[i] = tests.GetRandomAccMetaInfo(t, 8)
-	}
-
-	return accMetaInfo
-}
-
 func getMetaContextObject(
 	t *testing.T,
 	behHash common.Hash,
@@ -1363,27 +1282,6 @@ func getStateHashes(t *testing.T, so []*Object) []common.Hash {
 	return stateHashes
 }
 
-type ICSNodes struct {
-	senderBeh    *common.NodeSet
-	senderRand   *common.NodeSet
-	receiverBeh  *common.NodeSet
-	receiverRand *common.NodeSet
-}
-
-func getICSNodes(
-	senderBeh *common.NodeSet,
-	senderRand *common.NodeSet,
-	receiverBeh *common.NodeSet,
-	receiverRand *common.NodeSet,
-) *ICSNodes {
-	return &ICSNodes{
-		senderBeh:    senderBeh,
-		senderRand:   senderRand,
-		receiverBeh:  receiverBeh,
-		receiverRand: receiverRand,
-	}
-}
-
 func getTestAssetDescriptor(t *testing.T, operator identifiers.Address, symbol string) *common.AssetDescriptor {
 	t.Helper()
 
@@ -1458,7 +1356,7 @@ func getTesseractParams(
 	return &tests.CreateTesseractParams{
 		Addresses: []identifiers.Address{address},
 		Ixns:      ixns,
-		Participants: common.Participants{
+		Participants: common.ParticipantsState{
 			address: {
 				PreviousContext: hash,
 			},
@@ -1640,20 +1538,6 @@ func checkForTesseractInSMCache(t *testing.T, sm *StateManager, ts *common.Tesse
 	require.Equal(t, ts, cachedTS) // make sure cached tesseract matches
 }
 
-func checkForDirtyObject(t *testing.T, sm *StateManager, address identifiers.Address, exists bool) {
-	t.Helper()
-
-	_, ok := sm.dirtyObjects[address]
-	require.Equal(t, exists, ok)
-}
-
-func checkForCache(t *testing.T, sm *StateManager, address identifiers.Address) {
-	t.Helper()
-
-	_, isCached := sm.cache.Get(address) // check if added to cache
-	require.True(t, isCached)
-}
-
 func checkIfContextMatches(
 	t *testing.T,
 	expectedBeh *ContextObject,
@@ -1708,11 +1592,14 @@ func checkIfTxnsAreEqual(t *testing.T, oldTxn, newTxn *iradix.Txn) {
 	require.Equal(t, oldTxn.CommitOnly().Len(), newTxn.CommitOnly().Len())
 }
 
-func validateStateObject(t *testing.T, so *Object, accType common.AccountType, address identifiers.Address) {
+func validateStateObject(t *testing.T, so *Object, accType common.AccountType, address identifiers.Address,
+	isGenesis bool,
+) {
 	t.Helper()
 
 	require.Equal(t, address, so.address)
 	require.Equal(t, accType, so.accType)
+	require.Equal(t, isGenesis, so.isGenesis)
 	require.NotNil(t, so.db)
 	require.NotNil(t, so.data)
 	require.NotNil(t, so.cache)
@@ -1742,6 +1629,7 @@ func checkIfStateObjectAreEqual(
 	require.Equal(t, oldObj.dirtyEntries, newObj.dirtyEntries)
 	require.Equal(t, oldObj.data, newObj.data)
 	require.Equal(t, oldObj.files, newObj.files)
+	require.Equal(t, oldObj.isGenesis, newObj.isGenesis)
 
 	if oldObj.logicTree != nil {
 		checkIfTreesAreEqual(t, oldObj.logicTree, newObj.logicTree)
@@ -2109,10 +1997,10 @@ func getEntries(t *testing.T, count int) ([][]byte, [][]byte) {
 	return getRandomBytes(t, count), getRandomBytes(t, count)
 }
 
-func getDirtyEntries(t *testing.T, count int) LogicStorageObject {
+func getDirtyEntries(t *testing.T, count int) Storage {
 	t.Helper()
 
-	d := make(LogicStorageObject, count)
+	d := make(Storage, count)
 
 	for i := 0; i < count; i++ {
 		d[tests.RandomHash(t).Hex()] = tests.RandomAddress(t).Bytes()

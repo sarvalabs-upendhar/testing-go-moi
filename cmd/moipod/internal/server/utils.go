@@ -182,7 +182,7 @@ func (p *Params) assignNetworkJSONRPCAddr() (err error) {
 // if babylon flag is provided genesis file will be downloaded at path/genesis.json and raw config path is set
 func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 	if isGenesisSet(cmd) {
-		p.rawCfg.Genesis = GenesisPath
+		p.rawCfg.Consensus.GenesisPath = GenesisPath
 	}
 
 	if isP2PHostPortSet(cmd) {
@@ -250,8 +250,8 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 	}
 
 	if Babylon {
-		p.rawCfg.Genesis = path + "/genesis.json"
-		if err := downloadFile(p.rawCfg.Genesis, genesisURL); err != nil {
+		p.rawCfg.Consensus.GenesisPath = path + "/genesis.json"
+		if err := downloadFile(p.rawCfg.Consensus.GenesisPath, genesisURL); err != nil {
 			return err
 		}
 
@@ -317,6 +317,11 @@ func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
 		EnableDebugMode:       p.rawCfg.Consensus.EnableDebugMode,
 		MinGossipPeers:        p.rawCfg.Consensus.MinGossipPeers,
 		MaxGossipPeers:        p.rawCfg.Consensus.MinGossipPeers,
+		EnableSortition:       p.rawCfg.Consensus.EnableSortition,
+		GenesisTimestamp:      p.rawCfg.Consensus.GenesisTime,
+		GenesisFilePath:       p.rawCfg.Consensus.GenesisPath,
+		GenesisSeed:           p.rawCfg.Consensus.GenesisSeed,
+		GenesisProof:          p.rawCfg.Consensus.GenesisProof,
 	}
 }
 
@@ -326,13 +331,6 @@ func (p *Params) getSyncerConfig() *config.SyncerConfig {
 		TrustedPeers:   p.SyncerTrustedPeers,
 		EnableSnapSync: p.rawCfg.Syncer.EnableSnapSync,
 		SyncMode:       common.SyncMode(p.rawCfg.Syncer.SyncMode),
-	}
-}
-
-func (p *Params) getChainConfig() *config.ChainConfig {
-	return &config.ChainConfig{
-		GenesisFilePath:  p.rawCfg.Genesis,
-		GenesisTimestamp: p.rawCfg.GenesisTime,
 	}
 }
 
@@ -369,6 +367,7 @@ func (p *Params) getTelemetryConfig() *config.Telemetry {
 func (p *Params) getJSONRPCConfig() *config.JSONRPCConfig {
 	return &config.JSONRPCConfig{
 		TesseractRangeLimit: config.DefaultTesseractRangeLimit,
+		BatchLengthLimit:    config.DefaultBatchLengthLimit,
 	}
 }
 
@@ -416,7 +415,6 @@ func (p *Params) generateNodeConfig(dataDir string) *config.Config {
 		KramaIDVersion: p.rawCfg.KramaIDVersion,
 		Vault:          p.getVaultConfig(),
 		Network:        p.getNetworkConfig(),
-		Chain:          p.getChainConfig(),
 		Consensus:      p.getConsensusConfig(dataDir),
 		DB:             p.getDBConfig(dataDir),
 		Execution:      p.getExecutionConfig(),

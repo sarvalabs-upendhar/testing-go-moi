@@ -436,7 +436,7 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 			filterQueryArgs: &rpcargs.FilterArgs{
 				FilterID: "hello",
 			},
-			expectedError: errors.New("filter not found"),
+			expectedError: errors.New("unknown subscription type"),
 		},
 	}
 

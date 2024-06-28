@@ -111,7 +111,6 @@ func NewClient(
 			if !ok {
 				c.logger.Error("Type assertion failed")
 			}
-			c.logger.Trace("Evicted", "key", key, "stream", s, "protocol", s.Protocol())
 			// closing the stream
 
 			s.Close()
@@ -191,7 +190,7 @@ func (c *Client) MoiCall(
 	// if we find this, add it to peerstore and  make the rpc call.
 	destPeerID, err := kramaID.PeerID()
 	if err != nil {
-		c.logger.Error("Failed to get peer ID from krama ID", "krama-ID", kramaID, "err", err)
+		c.logger.Error("Failed to get peer ID from krama ID", "krama-id", kramaID, "err", err)
 
 		return common.ErrInvalidKramaID
 	}

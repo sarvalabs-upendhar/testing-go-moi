@@ -4,38 +4,38 @@ import (
 	"context"
 	"encoding/hex"
 	"math/big"
-	"net/http"
-	"sync"
+
+	"github.com/moby/locker"
+
+	"github.com/sarvalabs/go-moi/crypto"
 
 	"github.com/sarvalabs/go-moi/common/config"
 
 	"github.com/VictoriaMetrics/fastcache"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
-	"github.com/sarvalabs/go-moi/telemetry/tracing"
 )
 
 const (
 	MinimumContextSize = 1
+	StateObjectLRUSize = 500
 )
 
 type Store interface {
 	GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error)
 	GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error)
 	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
-	GetInteractions(tsHash common.Hash) ([]byte, error)
-	GetTesseract(tsHash common.Hash) ([]byte, error)
 	GetBalance(addr identifiers.Address, balanceHash common.Hash) ([]byte, error)
 	GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error)
 	GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error)
@@ -49,27 +49,24 @@ type Store interface {
 	Contains(key []byte) (bool, error)
 	UpdateEntry(key []byte, newValue []byte) error
 	NewBatchWriter() db.BatchWriter
-}
-
-type senatus interface {
-	GetPublicKey(kramaID kramaid.KramaID) ([]byte, error)
-	UpdatePublicKey(kramaID kramaid.KramaID, pk []byte) error
+	FetchTesseractFromDB(
+		hash common.Hash,
+		withInteractions bool,
+	) (*common.Tesseract, error)
 }
 
 type StateManager struct {
-	cfg       *config.StateConfig
-	logger    hclog.Logger
-	cache     *lru.Cache
-	treeCache *fastcache.Cache
+	cfg    *config.StateConfig
+	logger hclog.Logger
 
-	db Store
+	cache       *lru.Cache
+	objectCache *lru.Cache
+	treeCache   *fastcache.Cache
 
-	senatus senatus
-	client  *http.Client
+	objectLocks *locker.Locker
+	sysLocks    *locker.Locker
 
-	dirtyObjectsLock sync.Mutex
-	dirtyObjects     map[identifiers.Address]*Object
-
+	db      Store
 	metrics *Metrics
 }
 
@@ -78,23 +75,27 @@ func NewStateManager(
 	logger hclog.Logger,
 	cache *lru.Cache,
 	metrics *Metrics,
-	senatus senatus,
 	cfg *config.StateConfig,
+	cacheStateObjects bool,
 ) (*StateManager, error) {
 	sm := &StateManager{
-		cfg:     cfg,
-		cache:   cache,
-		db:      db,
-		senatus: senatus,
-		client: &http.Client{Transport: &http.Transport{
-			MaxIdleConns:    1024,
-			MaxConnsPerHost: 1000,
-		}},
-		dirtyObjects: make(map[identifiers.Address]*Object),
-		treeCache:    fastcache.New(int(cfg.TreeCacheSize)),
+		cfg:         cfg,
+		cache:       cache,
+		db:          db,
+		treeCache:   fastcache.New(int(cfg.TreeCacheSize)),
+		objectLocks: locker.New(),
+		sysLocks:    locker.New(),
 
 		logger:  logger.Named("State-Manager"),
 		metrics: metrics,
+	}
+
+	if cacheStateObjects {
+		var err error
+
+		if sm.objectCache, err = lru.New(StateObjectLRUSize); err != nil {
+			return nil, err
+		}
 	}
 
 	sm.metrics.InitMetrics()
@@ -102,60 +103,13 @@ func NewStateManager(
 	return sm, nil
 }
 
-func (sm *StateManager) CreateStateObject(addr identifiers.Address, accType common.AccountType) *Object {
-	stateObject := NewStateObject(addr, sm.cache, sm.treeCache, sm.db, common.Account{AccType: accType}, sm.metrics)
+func (sm *StateManager) CreateStateObject(addr identifiers.Address,
+	accType common.AccountType, isGenesis bool,
+) *Object {
+	stateObject := NewStateObject(addr, sm.cache, sm.treeCache, sm.db,
+		common.Account{AccType: accType}, sm.metrics, isGenesis)
 
 	return stateObject
-}
-
-func (sm *StateManager) cleanupDirtyObject(addr identifiers.Address) {
-	sm.dirtyObjectsLock.Lock()
-	defer sm.dirtyObjectsLock.Unlock()
-
-	delete(sm.dirtyObjects, addr)
-	sm.metrics.CaptureActiveStateObjects(float64(len(sm.dirtyObjects)))
-}
-
-func (sm *StateManager) CreateDirtyObject(addr identifiers.Address, accType common.AccountType) *Object {
-	sm.dirtyObjectsLock.Lock()
-	defer sm.dirtyObjectsLock.Unlock()
-
-	obj := sm.CreateStateObject(addr, accType)
-
-	sm.dirtyObjects[addr] = obj.Copy()
-	sm.metrics.CaptureActiveStateObjects(float64(len(sm.dirtyObjects)))
-
-	return sm.dirtyObjects[addr]
-}
-
-func (sm *StateManager) FlushDirtyObject(addrs identifiers.Address) error {
-	so, err := sm.GetDirtyObject(addrs)
-	if err != nil {
-		return errors.Wrap(err, "failed to fetch state object")
-	}
-
-	return so.flush()
-}
-
-func (sm *StateManager) GetDirtyObject(addr identifiers.Address) (*Object, error) {
-	sm.dirtyObjectsLock.Lock()
-	defer sm.dirtyObjectsLock.Unlock()
-
-	object, ok := sm.dirtyObjects[addr]
-	if ok {
-		return object, nil
-	}
-
-	dirtyObject, err := sm.GetLatestStateObject(addr)
-	if err != nil {
-		return nil, err
-	}
-
-	sm.dirtyObjects[addr] = dirtyObject.Copy()
-
-	sm.metrics.CaptureActiveStateObjects(float64(len(sm.dirtyObjects)))
-
-	return sm.dirtyObjects[addr], nil
 }
 
 func (sm *StateManager) HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool {
@@ -174,19 +128,58 @@ func (sm *StateManager) getStateObject(addr identifiers.Address, stateHash commo
 	return sm.GetStateObjectByHash(addr, stateHash)
 }
 
-func (sm *StateManager) GetEmptyStateObject() *Object {
-	addr := identifiers.NewAddressFromBytes(identifiers.NilAddress.Bytes())
+func (sm *StateManager) RemoveCachedObject(addr identifiers.Address) {
+	sm.logger.Trace("removing cached state object", addr)
+	sm.objectLocks.Lock(addr.Hex())
 
-	return NewStateObject(addr, sm.cache, sm.treeCache, sm.db, common.Account{}, sm.metrics)
+	defer func() {
+		if err := sm.objectLocks.Unlock(addr.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", addr)
+		}
+	}()
+
+	sm.objectCache.Remove(addr)
 }
 
 func (sm *StateManager) GetLatestStateObject(addr identifiers.Address) (*Object, error) {
-	t, err := sm.GetLatestTesseract(addr, false)
+	if sm.objectCache != nil {
+		sm.objectLocks.Lock(addr.Hex())
+
+		defer func() {
+			if err := sm.objectLocks.Unlock(addr.Hex()); err != nil {
+				sm.logger.Error("failed to unlock object", "err", err, "addr", addr)
+			}
+		}()
+
+		data, isCached := sm.objectCache.Get(addr)
+		if isCached {
+			so, ok := data.(*Object)
+			if !ok {
+				return nil, common.ErrInterfaceConversion
+			}
+
+			sm.metrics.AddObjectCacheHitCount(1)
+
+			return so, nil
+		}
+	}
+
+	accMetaInfo, err := sm.GetAccountMetaInfo(addr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch acc meta info")
+	}
+
+	so, err := sm.GetStateObjectByHash(addr, accMetaInfo.StateHash)
 	if err != nil {
 		return nil, err
 	}
 
-	return sm.GetStateObjectByHash(addr, t.StateHash(addr))
+	if sm.objectCache != nil {
+		sm.objectCache.Add(addr, so)
+		sm.metrics.AddObjectCacheMissCount(1)
+	}
+
+	return so, err
 }
 
 func (sm *StateManager) GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*Object, error) {
@@ -201,18 +194,9 @@ func (sm *StateManager) GetStateObjectByHash(addr identifiers.Address, hash comm
 		return nil, err
 	}
 
-	sObj := NewStateObject(addr, sm.cache, sm.treeCache, sm.db, *acc, sm.metrics)
+	sObj := NewStateObject(addr, sm.cache, sm.treeCache, sm.db, *acc, sm.metrics, false)
 
 	return sObj, nil
-}
-
-func (sm *StateManager) GetLatestTesseract(addr identifiers.Address, withInteractions bool) (*common.Tesseract, error) {
-	tesseractHash, err := sm.getLatestTesseractHash(addr)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to fetch latest tesseract hash")
-	}
-
-	return sm.getTesseractByHash(tesseractHash, withInteractions)
 }
 
 func (sm *StateManager) GetLogicIDs(addr identifiers.Address, stateHash common.Hash) ([]identifiers.LogicID, error) {
@@ -244,67 +228,6 @@ func (sm *StateManager) GetLogicIDs(addr identifiers.Address, stateHash common.H
 	return logicIDs, nil
 }
 
-func (sm *StateManager) FetchTesseractFromDB(
-	hash common.Hash,
-	withInteractions bool,
-) (*common.Tesseract, error) {
-	// Fetch Tesseract from DB
-	rawTesseract, err := sm.db.GetTesseract(hash)
-	if err != nil {
-		return nil, err
-	}
-
-	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
-	canonicalTesseract := new(common.CanonicalTesseract)
-
-	if err = canonicalTesseract.FromBytes(rawTesseract); err != nil {
-		return nil, err
-	}
-
-	interactions := new(common.Interactions)
-
-	// Fetch interactions for non-genesis tesseracts from DB
-	if withInteractions && canonicalTesseract.ConsensusInfo.ClusterID != common.GenesisIdentifier {
-		rawIxns, err := sm.db.GetInteractions(hash)
-		if err != nil {
-			return nil, errors.Wrap(err, common.ErrFetchingInteractions.Error())
-		}
-
-		if err := interactions.FromBytes(rawIxns); err != nil {
-			return nil, err
-		}
-	}
-
-	ts := canonicalTesseract.ToTesseract(*interactions, nil)
-
-	return ts, nil
-}
-
-func (sm *StateManager) getLatestTesseractHash(addr identifiers.Address) (common.Hash, error) {
-	if addr.IsNil() {
-		return common.NilHash, common.ErrInvalidAddress
-	}
-
-	hash, isCached := sm.cache.Get(addr)
-	if isCached {
-		tesseractID, ok := hash.(common.Hash)
-		if !ok {
-			return common.NilHash, common.ErrInterfaceConversion
-		}
-
-		return tesseractID, nil
-	}
-
-	accMetaInfo, err := sm.db.GetAccountMetaInfo(addr)
-	if err != nil {
-		return common.NilHash, errors.Wrap(err, "account meta info fetch failed")
-	}
-
-	sm.cache.Add(addr, accMetaInfo.TesseractHash)
-
-	return accMetaInfo.TesseractHash, nil
-}
-
 // getTesseractByHash returns tesseract with/without interactions
 // - with interactions always fetches from db
 // - without interactions fetches from cache or db
@@ -313,12 +236,12 @@ func (sm *StateManager) getTesseractByHash(
 	withInteractions bool,
 ) (*common.Tesseract, error) {
 	if withInteractions {
-		return sm.FetchTesseractFromDB(hash, withInteractions)
+		return sm.db.FetchTesseractFromDB(hash, withInteractions)
 	}
 
 	object, isCached := sm.cache.Get(hash)
 	if !isCached {
-		ts, err := sm.FetchTesseractFromDB(hash, withInteractions)
+		ts, err := sm.db.FetchTesseractFromDB(hash, withInteractions)
 		if err != nil {
 			return nil, err
 		}
@@ -348,25 +271,6 @@ func (sm *StateManager) getTesseractByHash(
 		nil,
 		nil,
 	), nil
-}
-
-func (sm *StateManager) Cleanup(address identifiers.Address) {
-	sm.cleanupDirtyObject(address)
-}
-
-func (sm *StateManager) UpdateStateObjects(objs ObjectMap) error {
-	sm.dirtyObjectsLock.Lock()
-	defer sm.dirtyObjectsLock.Unlock()
-
-	for addr, obj := range objs {
-		if _, ok := sm.dirtyObjects[addr]; ok {
-			return errors.New("dirty object already exists")
-		}
-
-		sm.dirtyObjects[addr] = obj
-	}
-
-	return nil
 }
 
 func (sm *StateManager) getContextObject(addr identifiers.Address, hash common.Hash) (*ContextObject, error) {
@@ -431,13 +335,13 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 ) {
 	behaviouralContext, randomContext, err := sm.getContext(addr, hash)
 	if err != nil {
-		sm.logger.Error("Failed to retrieve the sender context nodes", "err", err)
+		sm.logger.Error("Failed to retrieve context nodes", "err", err, "addr", addr)
 
 		return nil, nil, err
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, 0)
+		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, uint32(len(behaviouralContext)))
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), behaviouralContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
@@ -447,7 +351,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = common.NewNodeSet(randomContext, nil, 0)
+		randomSet = common.NewNodeSet(randomContext, nil, uint32(len(randomContext)))
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), randomContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
@@ -459,7 +363,7 @@ func (sm *StateManager) fetchParticipantContextByHash(addr identifiers.Address, 
 	return behaviouralSet, randomSet, nil
 }
 
-func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) (
+func (sm *StateManager) FetchLatestParticipantContext(addr identifiers.Address) (
 	latestContextHash common.Hash,
 	behaviouralSet, randomSet *common.NodeSet,
 	err error,
@@ -475,7 +379,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) 
 	}
 
 	if len(behaviouralContext) > 0 {
-		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, 0)
+		behaviouralSet = common.NewNodeSet(behaviouralContext, nil, uint32(len(behaviouralContext)))
 
 		if behaviouralSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), behaviouralContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of behavioural set", "err", err)
@@ -485,7 +389,7 @@ func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) 
 	}
 
 	if len(randomContext) > 0 {
-		randomSet = common.NewNodeSet(randomContext, nil, 0)
+		randomSet = common.NewNodeSet(randomContext, nil, uint32(len(randomContext)))
 
 		if randomSet.PublicKeys, err = sm.GetPublicKeys(context.Background(), randomContext...); err != nil {
 			sm.logger.Error("Failed to retrieve the public key of random set", "err", err)
@@ -498,12 +402,26 @@ func (sm *StateManager) fetchLatestParticipantContext(addr identifiers.Address) 
 }
 
 func (sm *StateManager) GetCommittedContextHash(addr identifiers.Address) (common.Hash, error) {
-	tesseract, err := sm.GetLatestTesseract(addr, false)
+	accMetaInfo, err := sm.GetAccountMetaInfo(addr)
+	if err != nil {
+		return common.NilHash, errors.Wrap(err, "failed to fetch account meta info")
+	}
+
+	return accMetaInfo.ContextHash, nil
+}
+
+func (sm *StateManager) GetICSSeed(addr identifiers.Address) ([32]byte, error) {
+	metaInfo, err := sm.GetAccountMetaInfo(addr)
 	if err != nil {
 		return common.NilHash, err
 	}
 
-	return tesseract.LatestContextHash(addr), nil
+	ts, err := sm.getTesseractByHash(metaInfo.TesseractHash, false)
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	return ts.ICSSeed(), nil
 }
 
 func (sm *StateManager) getContext(
@@ -571,141 +489,134 @@ func (sm *StateManager) GetParticipantContextRaw(
 	return nil
 }
 
-func (sm *StateManager) GetNodeSet(ids []kramaid.KramaID) (*common.NodeSet, error) {
+func (sm *StateManager) NodeSet(ids []kramaid.KramaID, setSizeWithoutDelta uint32) (*common.NodeSet, error) {
 	var (
 		publicKeys [][]byte
 		err        error
 	)
 
-	if len(ids) > 0 {
-		publicKeys, err = sm.GetPublicKeys(context.Background(), ids...)
-		if err != nil {
-			return nil, err
-		}
+	if len(ids) == 0 {
+		return nil, err
 	}
 
-	return common.NewNodeSet(ids, publicKeys, 0), nil
+	publicKeys, err = sm.GetPublicKeys(context.Background(), ids...)
+	if err != nil {
+		return nil, err
+	}
+
+	return common.NewNodeSet(ids, publicKeys, setSizeWithoutDelta), nil
+}
+
+func (sm *StateManager) NodeSetFromRawContextObject(raw []byte) (*common.NodeSet, error) {
+	obj := new(ContextObject)
+	if err := obj.FromBytes(raw); err != nil {
+		return nil, err
+	}
+
+	return sm.NodeSet(obj.Ids, uint32(len(obj.Ids)))
 }
 
 func (sm *StateManager) FetchICSNodeSet(
 	ts *common.Tesseract,
 	info *common.ICSClusterInfo,
 ) (*common.ICSNodeSet, error) {
-	icsNodeSets, err := sm.FetchContextLock(ts)
-	if err != nil {
-		return nil, err
-	}
-
 	if info.Responses == nil {
 		return nil, errors.New("nil responses slice")
 	}
 
-	randomSet, err := sm.GetNodeSet(info.RandomSet)
-	if err != nil {
-		return nil, err
-	}
+	addrs := ts.Addresses()
+	ps := ts.Participants()
 
-	icsNodeSets.UpdateNodeSet(common.RandomSet, randomSet)
+	ics := common.NewICSNodeSet(2*len(addrs) + 2)
 
-	observerSet, err := sm.GetNodeSet(info.ObserverSet)
-	if err != nil {
-		return nil, err
-	}
+	for index, addr := range addrs {
+		if ps[addr].PreviousContext == common.NilHash {
+			continue
+		}
 
-	icsNodeSets.UpdateNodeSet(common.ObserverSet, observerSet)
+		position := index * 2
 
-	for index, set := range icsNodeSets.Nodes {
-		if set != nil && info.Responses[index] != nil {
-			set.Responses = info.Responses[index]
+		behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(addr, ps[addr].PreviousContext)
+		if err != nil {
+			return nil, err
+		}
+
+		if behaviourSet != nil {
+			ics.UpdateNodeSet(position, behaviourSet)
+			ics.UpdateNodeSetResponses(position, info.Responses[position])
+		}
+
+		if randomSet != nil {
+			ics.UpdateNodeSet(position+1, randomSet)
+			ics.UpdateNodeSetResponses(position+1, info.Responses[position+1])
 		}
 	}
 
-	return icsNodeSets, nil
+	randomSet, err := sm.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
+	if err != nil {
+		return nil, err
+	}
+
+	ics.UpdateNodeSet(ics.RandomSetPosition(), randomSet)
+	ics.UpdateNodeSetResponses(ics.RandomSetPosition(), info.Responses[ics.RandomSetPosition()])
+
+	observerSet, err := sm.NodeSet(info.ObserverSet, uint32(len(info.ObserverSet)))
+	if err != nil {
+		return nil, err
+	}
+
+	ics.UpdateNodeSet(ics.ObserverSetPosition(), observerSet)
+	ics.UpdateNodeSetResponses(ics.ObserverSetPosition(), info.Responses[ics.ObserverSetPosition()])
+
+	return ics, nil
 }
 
 func (sm *StateManager) GetICSNodeSetFromRawContext(
 	ts *common.Tesseract,
 	rawContext map[string][]byte,
-	clusterInfo *common.ICSClusterInfo,
+	info *common.ICSClusterInfo,
 ) (*common.ICSNodeSet, error) {
-	ix := ts.Interactions()[0]
-	ics := common.NewICSNodeSet(6)
-
 	contextHashes := make([]common.Hash, 0)
+	addrs := ts.Addresses()
+	ps := ts.Participants()
 
-	for address, state := range ts.Participants() {
-		if state.PreviousContext == common.NilHash {
+	ics := common.NewICSNodeSet(2*len(addrs) + 2)
+
+	for index, addr := range addrs {
+		position := index * 2
+
+		if ps[addr].PreviousContext == common.NilHash {
 			continue
 		}
 
 		metaObject := new(MetaContextObject)
-		if err := metaObject.FromBytes(rawContext[state.PreviousContext.String()]); err != nil {
+		if err := metaObject.FromBytes(rawContext[ps[addr].PreviousContext.String()]); err != nil {
 			return nil, err
 		}
 
-		if address == ix.Sender() {
-			rawBytes, ok := rawContext[metaObject.BehaviouralContext.String()]
-			if ok {
-				behaviourObject := new(ContextObject)
-				if err := behaviourObject.FromBytes(rawBytes); err != nil {
-					return nil, err
-				}
-
-				nodeSet, err := sm.GetNodeSet(behaviourObject.Ids)
-				if err != nil {
-					return nil, err
-				}
-
-				ics.UpdateNodeSet(common.SenderBehaviourSet, nodeSet)
+		rawBytes, ok := rawContext[metaObject.BehaviouralContext.String()]
+		if ok {
+			nodeSet, err := sm.NodeSetFromRawContextObject(rawBytes)
+			if err != nil {
+				return nil, err
 			}
 
-			rawBytes, ok = rawContext[metaObject.RandomContext.String()]
-			if ok {
-				randomObject := new(ContextObject)
-				if err := randomObject.FromBytes(rawBytes); err != nil {
-					return nil, err
-				}
-
-				nodeSet, err := sm.GetNodeSet(randomObject.Ids)
-				if err != nil {
-					return nil, err
-				}
-
-				ics.UpdateNodeSet(common.SenderRandomSet, nodeSet)
-			}
-		} else if address == ix.Receiver() || address == common.SargaAddress {
-			rawBytes, ok := rawContext[metaObject.BehaviouralContext.String()]
-			if ok {
-				behaviourObject := new(ContextObject)
-				if err := behaviourObject.FromBytes(rawBytes); err != nil {
-					return nil, err
-				}
-
-				nodeSet, err := sm.GetNodeSet(behaviourObject.Ids)
-				if err != nil {
-					return nil, err
-				}
-
-				ics.UpdateNodeSet(common.ReceiverBehaviourSet, nodeSet)
-			}
-
-			rawBytes, ok = rawContext[metaObject.RandomContext.String()]
-			if ok {
-				randomObject := new(ContextObject)
-				if err := randomObject.FromBytes(rawBytes); err != nil {
-					return nil, err
-				}
-
-				nodeSet, err := sm.GetNodeSet(randomObject.Ids)
-				if err != nil {
-					return nil, err
-				}
-
-				ics.UpdateNodeSet(common.ReceiverRandomSet, nodeSet)
-			}
+			ics.UpdateNodeSet(position, nodeSet)
+			ics.UpdateNodeSetResponses(position, info.Responses[position])
 		}
 
-		contextHashes = append(contextHashes, state.PreviousContext)
+		rawBytes, ok = rawContext[metaObject.RandomContext.String()]
+		if ok {
+			nodeSet, err := sm.NodeSetFromRawContextObject(rawBytes)
+			if err != nil {
+				return nil, err
+			}
+
+			ics.UpdateNodeSet(position+1, nodeSet)
+			ics.UpdateNodeSetResponses(position+1, info.Responses[position+1])
+		}
+
+		contextHashes = append(contextHashes, ps[addr].PreviousContext)
 		contextHashes = append(contextHashes, metaObject.BehaviouralContext)
 		contextHashes = append(contextHashes, metaObject.RandomContext)
 	}
@@ -717,25 +628,21 @@ func (sm *StateManager) GetICSNodeSetFromRawContext(
 		delete(rawContext, hash.String())
 	}
 
-	randomSet, err := sm.GetNodeSet(clusterInfo.RandomSet)
+	randomSet, err := sm.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
 	if err != nil {
 		return nil, err
 	}
 
-	ics.UpdateNodeSet(common.RandomSet, randomSet)
+	ics.UpdateNodeSet(ics.RandomSetPosition(), randomSet)
+	ics.UpdateNodeSetResponses(ics.RandomSetPosition(), info.Responses[ics.RandomSetPosition()])
 
-	observerSet, err := sm.GetNodeSet(clusterInfo.ObserverSet)
+	observerSet, err := sm.NodeSet(info.ObserverSet, uint32(len(info.ObserverSet)))
 	if err != nil {
 		return nil, err
 	}
 
-	ics.UpdateNodeSet(common.ObserverSet, observerSet)
-
-	for index, set := range ics.Nodes {
-		if set != nil && clusterInfo.Responses[index] != nil {
-			set.Responses = clusterInfo.Responses[index]
-		}
-	}
+	ics.UpdateNodeSet(ics.ObserverSetPosition(), observerSet)
+	ics.UpdateNodeSetResponses(ics.ObserverSetPosition(), info.Responses[ics.ObserverSetPosition()])
 
 	return ics, nil
 }
@@ -757,117 +664,39 @@ func (sm *StateManager) GetContextByHash(
 	return hash, behaviourSet, randomSet, nil
 }
 
-func (sm *StateManager) FetchContextLock(ts *common.Tesseract) (*common.ICSNodeSet, error) {
-	ix := ts.Interactions()[0]
-	ics := common.NewICSNodeSet(6)
-
-	for address, info := range ts.Participants() {
-		if address == ix.Sender() {
-			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(address, info.PreviousContext)
-			if err != nil {
-				return nil, err
-			}
-
-			ics.UpdateNodeSet(common.SenderBehaviourSet, behaviourSet)
-			ics.UpdateNodeSet(common.SenderRandomSet, randomSet)
-		} else if address == ix.Receiver() || address == common.SargaAddress {
-			if info.PreviousContext.IsNil() {
-				continue
-			}
-
-			behaviourSet, randomSet, err := sm.fetchParticipantContextByHash(address, info.PreviousContext)
-			if err != nil {
-				return nil, err
-			}
-
-			ics.UpdateNodeSet(common.ReceiverBehaviourSet, behaviourSet)
-			ics.UpdateNodeSet(common.ReceiverRandomSet, randomSet)
-		}
-	}
-
-	return ics, nil
-}
-
-// FetchInteractionContext returns a nodeSet which holds the latest context info of the interaction participants
-func (sm *StateManager) FetchInteractionContext(ctx context.Context, ix *common.Interaction) (
-	map[identifiers.Address]common.Hash,
-	[]*common.NodeSet,
-	error,
-) {
-	_, span := tracing.Span(ctx, "guna.StateManger", "FetchInteractionContext")
-	defer span.End()
-
+func (sm *StateManager) IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error) {
 	var (
-		behaviourSet  *common.NodeSet
-		randomSet     *common.NodeSet
-		contextHash   common.Hash
-		err           error
-		contextHashes = make(map[identifiers.Address]common.Hash)
-		nodeSet       = make([]*common.NodeSet, 6)
+		accountRegistered bool
+		err               error
 	)
 
-	if !ix.Sender().IsNil() {
-		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Sender())
-		if err != nil {
-			return nil, nil, err
-		}
-
-		contextHashes[ix.Sender()] = contextHash
-		nodeSet[common.SenderBehaviourSet] = behaviourSet
-		nodeSet[common.SenderRandomSet] = randomSet
-	}
-
-	if !ix.Receiver().IsNil() {
-		if err = sm.getReceiverContext(ix, nodeSet, contextHashes); err != nil {
-			return nil, nil, err
-		}
-	}
-
-	return contextHashes, nodeSet, err
-}
-
-func (sm *StateManager) getReceiverContext(
-	ix *common.Interaction,
-	nodeSet []*common.NodeSet,
-	contextHashes map[identifiers.Address]common.Hash,
-) error {
-	var (
-		behaviourSet *common.NodeSet
-		randomSet    *common.NodeSet
-		contextHash  common.Hash
-	)
-
-	accountRegistered, err := sm.IsAccountRegistered(ix.Receiver())
-	if err != nil {
-		return err
-	}
-
-	if !accountRegistered {
-		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(common.SargaAddress)
-		if err != nil {
-			return err
-		}
-
-		contextHashes[common.SargaAddress] = contextHash
+	if info, ok := ts.State(common.SargaAddress); !ok {
+		accountRegistered, err = sm.IsAccountRegistered(addr)
 	} else {
-		contextHash, behaviourSet, randomSet, err = sm.fetchLatestParticipantContext(ix.Receiver())
-		if err != nil {
-			return err
-		}
-
-		contextHashes[ix.Receiver()] = contextHash
+		sm.logger.Debug(
+			"Checking for new account",
+			"addr", addr,
+			"height", info.Height,
+			"ts-hash", info.TransitiveLink,
+		)
+		accountRegistered, err = sm.IsAccountRegisteredAt(addr, info.TransitiveLink)
 	}
 
-	nodeSet[common.ReceiverBehaviourSet] = behaviourSet
-	nodeSet[common.ReceiverRandomSet] = randomSet
-
-	return nil
+	return !accountRegistered && ts.Height(addr) == 0, err
 }
 
 func (sm *StateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
 	if addr.IsNil() {
 		return true, nil
 	}
+
+	sm.sysLocks.Lock(common.SargaAddress.Hex())
+
+	defer func() {
+		if err := sm.sysLocks.Unlock(common.SargaAddress.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", common.SargaAddress.Hex())
+		}
+	}()
 
 	sargaObject, err := sm.GetLatestStateObject(common.SargaAddress)
 	if err != nil {
@@ -975,15 +804,6 @@ func (sm *StateManager) GetAssetInfo(assetID identifiers.AssetID, state common.H
 	return ad, nil
 }
 
-func (sm *StateManager) GetAccTypeUsingStateObject(address identifiers.Address) (common.AccountType, error) {
-	so, err := sm.GetDirtyObject(address)
-	if err != nil {
-		return 0, err
-	}
-
-	return so.accType, nil
-}
-
 func (sm *StateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
 	return sm.db.GetAccountMetaInfo(addr)
 }
@@ -1003,67 +823,84 @@ func (sm *StateManager) GetAccountState(addr identifiers.Address, stateHash comm
 	return accInfo, nil
 }
 
-type Response struct {
-	Data []string `json:"data"`
-}
-type Request struct {
-	Ids []string `json:"kramaIDs"`
-}
-
 func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaID) ([][]byte, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("Empty Ids")
 	}
 
-	publicKeys := make([][]byte, len(ids))
+	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
 
-	g, _ := errgroup.WithContext(ctx)
+	defer func() {
+		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		}
+	}()
 
-	for index, kramaID := range ids {
-		i, k := index, kramaID
-
-		g.Go(
-			func() error {
-				return func(id kramaid.KramaID, index int) error {
-					pk, err := sm.senatus.GetPublicKey(id)
-					if err != nil {
-						object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
-						if err != nil {
-							return err
-						}
-
-						keys, err := guardianregistry.GetGuardianPublicKeys(object, id)
-						if err != nil {
-							sm.logger.Error("Failed to fetch the public key", "krama-ID", id)
-
-							return err
-						}
-
-						if len(keys) == 0 {
-							return nil
-						}
-
-						pk = keys[0]
-
-						if err := sm.senatus.UpdatePublicKey(id, pk); err != nil {
-							sm.logger.Error("Error updating the public key", "err", err)
-
-							return err
-						}
-					}
-
-					publicKeys[index] = pk
-
-					return nil
-				}(k, i)
-			})
-	}
-
-	if err := g.Wait(); err != nil {
+	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	if err != nil {
 		return nil, err
 	}
 
-	return publicKeys, nil
+	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
+
+	return guardianregistry.GetGuardianPublicKeys(storageReader, ids...)
+}
+
+func (sm *StateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error) {
+	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+
+	defer func() {
+		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		}
+	}()
+
+	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	if err != nil {
+		return 0, err
+	}
+
+	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
+
+	return guardianregistry.GetGuardianIncentive(storageReader, id)
+}
+
+func (sm *StateManager) GetRegisteredGuardiansCount() (int, error) {
+	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+
+	defer func() {
+		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		}
+	}()
+
+	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	if err != nil {
+		return 0, err
+	}
+
+	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
+
+	return guardianregistry.GetGuardiansCount(storageReader)
+}
+
+func (sm *StateManager) GetTotalIncentives() (uint64, error) {
+	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+
+	defer func() {
+		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		}
+	}()
+
+	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	if err != nil {
+		return 0, err
+	}
+
+	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
+
+	return guardianregistry.GetTotalIncentives(storageReader)
 }
 
 // IsLogicRegistered checks if the logicID is registered with the account.
@@ -1079,20 +916,10 @@ func (sm *StateManager) IsLogicRegistered(logicID identifiers.LogicID) error {
 
 func (sm *StateManager) SyncStorageTrees(
 	ctx context.Context,
-	address identifiers.Address,
 	newRoot *common.RootNode,
 	logicStorageTreeRoots map[string]*common.RootNode,
+	so *Object,
 ) error {
-	var (
-		so  *Object
-		err error
-	)
-
-	so, err = sm.GetDirtyObject(address)
-	if err != nil {
-		return err
-	}
-
 	metaStorageTree, err := so.getMetaStorageTree()
 	if err != nil {
 		return err
@@ -1188,19 +1015,9 @@ func (sm *StateManager) syncTree(
 }
 
 func (sm *StateManager) SyncLogicTree(
-	address identifiers.Address,
 	newRoot *common.RootNode,
+	so *Object,
 ) error {
-	var (
-		so  *Object
-		err error
-	)
-
-	so, err = sm.GetDirtyObject(address)
-	if err != nil {
-		return err
-	}
-
 	logicTree, err := so.getLogicTree()
 	if err != nil {
 		return err
@@ -1209,9 +1026,26 @@ func (sm *StateManager) SyncLogicTree(
 	return sm.syncTree(logicTree, newRoot)
 }
 
-// GetStorageEntry returns the storage data associated with the given slot and logicID
-func (sm *StateManager) GetStorageEntry(logicID identifiers.LogicID, slot []byte, state common.Hash) ([]byte, error) {
+// GetPersistentStorageEntry returns the storage data associated with the given slot and logicID
+func (sm *StateManager) GetPersistentStorageEntry(
+	logicID identifiers.LogicID, slot []byte, state common.Hash,
+) ([]byte, error) {
 	so, err := sm.getStateObject(logicID.Address(), state)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	return so.GetStorageEntry(logicID, slot)
+}
+
+// GetEphemeralStorageEntry returns the storage data associated with the given slot and logicID
+func (sm *StateManager) GetEphemeralStorageEntry(
+	addr identifiers.Address,
+	logicID identifiers.LogicID,
+	slot []byte,
+	state common.Hash,
+) ([]byte, error) {
+	so, err := sm.getStateObject(addr, state)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -1237,6 +1071,124 @@ func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash 
 	}
 
 	return logicManifest, nil
+}
+
+func (sm *StateManager) GetICSParticipants(ixns common.Interactions) (
+	map[identifiers.Address]common.IxParticipant, error,
+) {
+	participants := make(map[identifiers.Address]common.IxParticipant)
+
+	for _, ixn := range ixns {
+		// FIXME: check lock precedence
+		if _, ok := participants[ixn.Sender()]; !ok {
+			participants[ixn.Sender()] = common.IxParticipant{
+				AccType:  common.RegularAccount,
+				LockType: common.WriteLock,
+				IsSigner: true,
+			}
+		}
+
+		if ixn.Receiver().IsNil() {
+			continue
+		}
+
+		if _, ok := participants[ixn.Receiver()]; ok {
+			continue
+		}
+
+		isRegistered, err := sm.IsAccountRegistered(ixn.Receiver())
+		if err != nil {
+			return nil, err
+		}
+
+		if _, ok := participants[common.SargaAddress]; !isRegistered && !ok {
+			participants[common.SargaAddress] = common.IxParticipant{
+				AccType:  common.SargaAccount,
+				LockType: common.WriteLock,
+			}
+		}
+
+		participants[ixn.Receiver()] = common.IxParticipant{
+			AccType:   common.AccTypeFromIxType(ixn.Type()),
+			LockType:  common.WriteLock,
+			IsGenesis: !isRegistered,
+		}
+	}
+
+	return participants, nil
+}
+
+func (sm *StateManager) LoadTransitionObjects(ps map[identifiers.Address]common.IxParticipant) (*Transition, error) {
+	// Create a new objects map
+	objects := make(ObjectMap)
+
+	for addr, p := range ps {
+		if p.IsGenesis {
+			objects[addr] = sm.CreateStateObject(addr, p.AccType, true)
+
+			continue
+		}
+
+		obj, err := sm.GetLatestStateObject(addr)
+		if err != nil {
+			return nil, errors.Wrap(err, "state object fetch failed")
+		}
+
+		// copy inorder to avoid modifications to cached object
+
+		objects[addr] = obj.Copy()
+	}
+
+	return NewTransition(objects), nil
+}
+
+func (sm *StateManager) FetchIxStateObjects(
+	ixns common.Interactions,
+	hashes map[identifiers.Address]common.Hash,
+) (
+	*Transition, error,
+) {
+	ps, err := sm.GetICSParticipants(ixns)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create a new objects map
+	objects := make(ObjectMap)
+
+	for addr, p := range ps {
+		if p.IsGenesis {
+			objects[addr] = sm.CreateStateObject(addr, p.AccType, true)
+
+			continue
+		}
+
+		if stateHash, ok := hashes[addr]; !ok {
+			if objects[addr], err = sm.GetLatestStateObject(addr); err != nil {
+				return nil, errors.Wrap(err, "state object fetch failed")
+			}
+		} else if objects[addr], err = sm.GetStateObjectByHash(addr, stateHash); err != nil {
+			return nil, errors.Wrap(err, "state object fetch failed")
+		}
+	}
+
+	return NewTransition(objects), nil
+}
+
+func (sm *StateManager) IsSealValid(ts *common.Tesseract) (bool, error) {
+	publicKey, err := sm.GetPublicKeys(context.Background(), ts.SealBy())
+	if err != nil {
+		sm.logger.Error("Error fetching the public key", "err", err)
+
+		return false, err
+	}
+
+	rawData, err := ts.Bytes()
+	if err != nil {
+		return false, err
+	}
+
+	return crypto.Verify(rawData, ts.Seal(), publicKey[0])
 }
 
 func doesRootMatch(root1 common.RootNode, root2 common.RootNode) (bool, error) {

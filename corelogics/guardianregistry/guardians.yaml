@@ -102,7 +102,7 @@ elements:
   deps:
   - 28
   kind: typedef
-  data: map[string]Guardian
+  data: map[string]class.Guardian
 - ptr: 20
   kind: typedef
   data: '[]string'
@@ -110,7 +110,7 @@ elements:
   deps:
   - 26
   kind: typedef
-  data: map[string]Operator
+  data: map[string]class.Operator
 - ptr: 22
   kind: typedef
   data: map[string]bool
@@ -147,7 +147,7 @@ elements:
       type: string
     - slot: 1
       label: Verification
-      type: VerifyProof
+      type: class.VerifyProof
     - slot: 2
       label: Guardians
       type: '[]string'
@@ -179,7 +179,7 @@ elements:
       type: string
     - slot: 2
       label: Incentive
-      type: Incentive
+      type: class.Incentive
     - slot: 3
       label: PublicKey
       type: bytes
@@ -216,13 +216,13 @@ elements:
     fields:
     - slot: 0
       label: Guardians
-      type: map[string]Guardian
+      type: map[string]class.Guardian
     - slot: 1
       label: KnownGuardians
       type: '[]string'
     - slot: 2
       label: Operators
-      type: map[string]Operator
+      type: map[string]class.Operator
     - slot: 3
       label: KnownOperators
       type: '[]string'
@@ -240,10 +240,13 @@ elements:
       type: u64
     - slot: 8
       label: MasterOperator
-      type: Master
+      type: class.Master
     - slot: 9
       label: Administrators
       type: map[address]bool
+    - slot: 10
+      label: TotalIncentives
+      type: u64
 - ptr: 31
   deps:
   - 0
@@ -255,20 +258,20 @@ elements:
   data:
     name: Import
     mode: persistent
-    kind: deployer
+    kind: deploy
     accepts:
     - slot: 0
       label: master
-      type: Master
+      type: class.Master
     - slot: 1
       label: admins
       type: '[]address'
     - slot: 2
       label: guardians
-      type: '[]Guardian'
+      type: '[]class.Guardian'
     - slot: 3
       label: operators
-      type: '[]Operator'
+      type: '[]class.Operator'
     - slot: 4
       label: approved
       type: '[]string'
@@ -316,25 +319,33 @@ elements:
       - JUMP $5
       - DEST
       - PSAVE $0
-      - PLOAD $0 &0
-      - OBTAIN $1 &2
-      - PMAKE $2 &5
-      - SIZEOF $3 $1
+      - PLOAD $0 &a
+      - GATHER $1 $0
+      - PLOAD $2 &0
+      - OBTAIN $3 &2
+      - PMAKE $4 &5
+      - SIZEOF $5 $3
       - DEST
-      - LT $4 $2 $3
-      - NOT $4 $4
-      - LDPTR1 $5 0x29
-      - JUMPI $5 $4
-      - GETIDX $4 $1 $2
-      - GETFLD $6 $4 &0
-      - GENKEY $7 $0 $6
-      - DISPERSE $7 $4
-      - SETKEY $0 $6 $7
+      - LT $6 $4 $5
+      - NOT $6 $6
+      - LDPTR1 $7 0x2f
+      - JUMPI $7 $6
+      - GETIDX $6 $3 $4
+      - GETFLD $8 $6 &0
+      - GENKEY $9 $2 $8
+      - DISPERSE $9 $6
+      - SETKEY $2 $8 $9
+      - GETFLD $8 $6 &2
+      - GETFLD $8 $8 &0
+      - ADD $8 $1 $8
+      - COPY $1 $8
       - DEST
-      - INCR $2
-      - LDPTR1 $5 0x1b
-      - JUMP $5
+      - INCR $4
+      - LDPTR1 $7 0x1d
+      - JUMP $7
       - DEST
+      - PSAVE $2
+      - DISPERSE $0 $1
       - PSAVE $0
       - PLOAD $0 &2
       - OBTAIN $1 &3
@@ -343,7 +354,7 @@ elements:
       - DEST
       - LT $4 $2 $3
       - NOT $4 $4
-      - LDPTR1 $5 0x3d
+      - LDPTR1 $5 0x45
       - JUMPI $5 $4
       - GETIDX $4 $1 $2
       - GETFLD $6 $4 &0
@@ -352,7 +363,7 @@ elements:
       - SETKEY $0 $6 $7
       - DEST
       - INCR $2
-      - LDPTR1 $5 0x2f
+      - LDPTR1 $5 0x37
       - JUMP $5
       - DEST
       - PSAVE $0
@@ -363,7 +374,7 @@ elements:
       - DEST
       - LT $4 $2 $3
       - NOT $4 $4
-      - LDPTR1 $5 0x50
+      - LDPTR1 $5 0x58
       - JUMPI $5 $4
       - GETIDX $4 $1 $2
       - PMAKE $6 &1
@@ -371,7 +382,7 @@ elements:
       - SETKEY $0 $4 $6
       - DEST
       - INCR $2
-      - LDPTR1 $5 0x43
+      - LDPTR1 $5 0x4b
       - JUMP $5
       - DEST
       - PSAVE $0
@@ -380,7 +391,7 @@ elements:
       - OBTAIN $2 &6
       - SIZEOF $3 $2
       - EQ $1 $1 $3
-      - LDPTR1 $3 0x5c
+      - LDPTR1 $3 0x64
       - JUMPI $3 $1
       - LDPTR1 $1 0x0
       - CONST $1 $1
@@ -392,14 +403,14 @@ elements:
       - DEST
       - LT $5 $3 $4
       - NOT $5 $5
-      - LDPTR1 $6 0x6c
+      - LDPTR1 $6 0x74
       - JUMPI $6 $5
       - GETIDX $5 $0 $3
       - GETIDX $7 $2 $3
       - SETKEY $1 $5 $7
       - DEST
       - INCR $3
-      - LDPTR1 $6 0x60
+      - LDPTR1 $6 0x68
       - JUMP $6
       - DEST
       - PSAVE $1
@@ -410,13 +421,13 @@ elements:
       - DEST
       - LT $6 $4 $5
       - NOT $6 $6
-      - LDPTR1 $7 0x7d
+      - LDPTR1 $7 0x85
       - JUMPI $7 $6
       - GETIDX $6 $3 $4
       - APPEND $1 $6
       - DEST
       - INCR $4
-      - LDPTR1 $7 0x72
+      - LDPTR1 $7 0x7a
       - JUMP $7
       - DEST
       - PSAVE $1
@@ -427,13 +438,13 @@ elements:
       - DEST
       - LT $6 $4 $5
       - NOT $6 $6
-      - LDPTR1 $7 0x8e
+      - LDPTR1 $7 0x96
       - JUMPI $7 $6
       - GETIDX $6 $3 $4
       - APPEND $1 $6
       - DEST
       - INCR $4
-      - LDPTR1 $7 0x83
+      - LDPTR1 $7 0x8b
       - JUMP $7
       - DEST
       - PSAVE $1
@@ -460,11 +471,11 @@ elements:
   data:
     name: Setup
     mode: persistent
-    kind: deployer
+    kind: deploy
     accepts:
     - slot: 0
       label: master
-      type: Master
+      type: class.Master
     - slot: 1
       label: guardians
       type: '[]string'
@@ -472,138 +483,163 @@ elements:
       label: pubkeys
       type: '[]bytes'
     - slot: 3
+      label: incentives
+      type: '[]u64'
+    - slot: 4
       label: admins
       type: '[]address'
-    - slot: 4
+    - slot: 5
       label: preApproved
       type: '[]string'
-    - slot: 5
+    - slot: 6
       label: limitKYC
       type: u64
-    - slot: 6
+    - slot: 7
       label: limitKYB
       type: u64
     returns: []
     executes:
       asm:
-      - OBTAIN $0 &1
-      - SIZEOF $1 $0
-      - OBTAIN $2 &2
-      - SIZEOF $3 $2
-      - EQ $1 $1 $3
-      - LDPTR1 $3 0xa
-      - JUMPI $3 $1
-      - LDPTR1 $1 0x1
-      - CONST $1 $1
-      - THROW $1
-      - DEST
-      - PLOAD $1 &8
-      - OBTAIN $3 &0
-      - DISPERSE $1 $3
-      - PSAVE $1
-      - PLOAD $1 &3
-      - OBTAIN $3 &0
-      - GETFLD $3 $3 &0
-      - APPEND $1 $3
-      - PSAVE $1
-      - PLOAD $1 &2
-      - LDPTR1 $3 0x1a
-      - MAKE $3 $3
-      - OBTAIN $4 &0
-      - GETFLD $5 $4 &0
-      - SETFLD $3 &0 $5
-      - LDPTR1 $5 0x1b
-      - MAKE $5 $5
-      - SETFLD $3 &1 $5
-      - LDPTR1 $5 0x14
-      - MAKE $5 $5
-      - SETFLD $3 &2 $5
-      - GETFLD $4 $4 &0
-      - GENKEY $5 $1 $4
-      - DISPERSE $5 $3
-      - SETKEY $1 $4 $5
-      - PSAVE $1
-      - PLOAD $1 &6
-      - OBTAIN $3 &5
-      - DISPERSE $1 $3
-      - PSAVE $1
-      - PLOAD $1 &7
-      - OBTAIN $4 &6
-      - DISPERSE $1 $4
-      - PSAVE $1
-      - PLOAD $1 &9
+      - PMAKE $0 &1
+      - OBTAIN $1 &1
+      - SIZEOF $2 $1
+      - OBTAIN $3 &2
+      - SIZEOF $4 $3
+      - EQ $2 $2 $4
+      - NOT $2 $2
+      - OR $0 $0 $2
+      - LDPTR1 $2 0x12
+      - JUMPI $2 $0
+      - SIZEOF $4 $1
       - OBTAIN $5 &3
-      - PMAKE $6 &5
-      - SIZEOF $7 $5
+      - SIZEOF $6 $5
+      - EQ $4 $4 $6
+      - NOT $4 $4
+      - OR $0 $0 $4
+      - LDPTR1 $2 0x12
+      - JUMPI $2 $0
       - DEST
-      - LT $8 $6 $7
+      - NOT $0 $0
+      - LDPTR1 $2 0x19
+      - JUMPI $2 $0
+      - LDPTR1 $0 0x1
+      - CONST $0 $0
+      - THROW $0
+      - DEST
+      - PLOAD $0 &8
+      - OBTAIN $2 &0
+      - DISPERSE $0 $2
+      - PSAVE $0
+      - PLOAD $0 &3
+      - OBTAIN $2 &0
+      - GETFLD $2 $2 &0
+      - APPEND $0 $2
+      - PSAVE $0
+      - PLOAD $0 &2
+      - LDPTR1 $2 0x1a
+      - MAKE $2 $2
+      - OBTAIN $4 &0
+      - GETFLD $6 $4 &0
+      - SETFLD $2 &0 $6
+      - LDPTR1 $6 0x1b
+      - MAKE $6 $6
+      - SETFLD $2 &1 $6
+      - LDPTR1 $6 0x14
+      - MAKE $6 $6
+      - SETFLD $2 &2 $6
+      - GETFLD $4 $4 &0
+      - GENKEY $6 $0 $4
+      - DISPERSE $6 $2
+      - SETKEY $0 $4 $6
+      - PSAVE $0
+      - PLOAD $0 &6
+      - OBTAIN $2 &6
+      - DISPERSE $0 $2
+      - PSAVE $0
+      - PLOAD $0 &7
+      - OBTAIN $4 &7
+      - DISPERSE $0 $4
+      - PSAVE $0
+      - PLOAD $0 &9
+      - OBTAIN $6 &4
+      - PMAKE $7 &5
+      - SIZEOF $8 $6
+      - DEST
+      - LT $9 $7 $8
+      - NOT $9 $9
+      - LDPTR1 $a 0x4d
+      - JUMPI $a $9
+      - GETIDX $9 $6 $7
+      - PMAKE $b &1
+      - NOT $b $b
+      - SETKEY $0 $9 $b
+      - DEST
+      - INCR $7
+      - LDPTR1 $a 0x40
+      - JUMP $a
+      - DEST
+      - PSAVE $0
+      - CARGS $0
+      - OBTAIN $6 &5
+      - SETFLD $0 &0 $6
+      - LDPTR1 $7 0x2b
+      - CALLR $0 $7 $0
+      - PMAKE $0 &5
+      - SIZEOF $7 $1
+      - DEST
+      - LT $8 $0 $7
       - NOT $8 $8
-      - LDPTR1 $9 0x3e
+      - LDPTR1 $9 0x8c
       - JUMPI $9 $8
-      - GETIDX $8 $5 $6
-      - PMAKE $a &1
-      - NOT $a $a
-      - SETKEY $1 $8 $a
-      - DEST
-      - INCR $6
-      - LDPTR1 $9 0x31
-      - JUMP $9
-      - DEST
-      - PSAVE $1
-      - CARGS $1
-      - OBTAIN $5 &4
-      - SETFLD $1 &0 $5
-      - LDPTR1 $6 0x2b
-      - CALLR $1 $6 $1
-      - PMAKE $1 &5
-      - SIZEOF $6 $0
-      - DEST
-      - LT $7 $1 $6
-      - NOT $7 $7
-      - LDPTR1 $8 0x76
-      - JUMPI $8 $7
-      - GETIDX $7 $0 $1
-      - PLOAD $9 &4
-      - PMAKE $a &1
-      - NOT $a $a
-      - SETKEY $9 $7 $a
-      - PSAVE $9
-      - PLOAD $9 &2
-      - OBTAIN $a &0
-      - GETFLD $a $a &0
-      - GENKEY $b $9 $a
-      - GETFLD $c $b &2
-      - APPEND $c $7
-      - SETFLD $b &2 $c
-      - SETKEY $9 $a $b
-      - PSAVE $9
-      - PLOAD $9 &0
-      - LDPTR1 $a 0x1c
-      - MAKE $a $a
-      - SETFLD $a &0 $7
+      - GETIDX $8 $1 $0
+      - PLOAD $a &4
+      - PMAKE $b &1
+      - NOT $b $b
+      - SETKEY $a $8 $b
+      - PSAVE $a
+      - PLOAD $a &2
       - OBTAIN $b &0
-      - GETFLD $c $b &0
-      - SETFLD $a &1 $c
-      - LDPTR1 $c 0x1d
-      - MAKE $c $c
-      - PMAKE $d &5
-      - SETFLD $c &0 $d
-      - GETFLD $b $b &1
-      - SETFLD $c &1 $b
-      - SETFLD $a &2 $c
-      - GETIDX $b $2 $1
-      - SETFLD $a &3 $b
-      - GENKEY $b $9 $7
-      - DISPERSE $b $a
-      - SETKEY $9 $7 $b
-      - PSAVE $9
-      - PLOAD $9 &1
-      - APPEND $9 $7
-      - PSAVE $9
+      - GETFLD $b $b &0
+      - GETKEY $c $a $b
+      - GETFLD $d $c &2
+      - APPEND $d $8
+      - SETFLD $c &2 $d
+      - SETKEY $a $b $c
+      - PSAVE $a
+      - PLOAD $a &a
+      - GATHER $b $a
+      - PLOAD $c &0
+      - LDPTR1 $d 0x1c
+      - MAKE $d $d
+      - SETFLD $d &0 $8
+      - OBTAIN $e &0
+      - GETFLD $f $e &0
+      - SETFLD $d &1 $f
+      - LDPTR1 $f 0x1d
+      - MAKE $f $f
+      - GETIDX $10 $5 $0
+      - SETFLD $f &0 $10
+      - GETFLD $e $e &1
+      - SETFLD $f &1 $e
+      - SETFLD $d &2 $f
+      - GETIDX $e $3 $0
+      - SETFLD $d &3 $e
+      - GENKEY $e $c $8
+      - DISPERSE $e $d
+      - SETKEY $c $8 $e
+      - GETIDX $d $5 $0
+      - ADD $d $b $d
+      - COPY $b $d
+      - PSAVE $c
+      - DISPERSE $a $b
+      - PSAVE $a
+      - PLOAD $a &1
+      - APPEND $a $8
+      - PSAVE $a
       - DEST
-      - INCR $1
-      - LDPTR1 $8 0x47
-      - JUMP $8
+      - INCR $0
+      - LDPTR1 $9 0x56
+      - JUMP $9
       - DEST
     catches: []
 - ptr: 33
@@ -615,7 +651,7 @@ elements:
   data:
     name: Approve
     mode: persistent
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: kramaIDs
@@ -639,7 +675,7 @@ elements:
   data:
     name: IsApproved
     mode: readonly
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: kramaID
@@ -672,7 +708,7 @@ elements:
   data:
     name: IsVerified
     mode: readonly
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: moiID
@@ -710,14 +746,14 @@ elements:
   data:
     name: RegisterOperator
     mode: persistent
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: moiID
       type: string
     - slot: 1
       label: verification
-      type: VerifyProof
+      type: class.VerifyProof
     returns: []
     executes:
       asm:
@@ -775,11 +811,11 @@ elements:
   data:
     name: RegisterGuardian
     mode: persistent
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: guardian
-      type: Guardian
+      type: class.Guardian
     returns: []
     executes:
       asm:
@@ -792,13 +828,12 @@ elements:
       - CONST $3 $3
       - LEN $4 $1
       - CARGS $5
-      - SETFLD $5 &0 $1
-      - SETFLD $5 &1 $3
-      - SETFLD $5 &2 $4
-      - CALLM $3 &1a $5
+      - SETFLD $5 &0 $3
+      - SETFLD $5 &1 $4
+      - CALLM $3 $1 &1a $5
       - GETFLD $3 $3 &0
       - EQ $2 $2 $3
-      - LDPTR1 $3 0x14
+      - LDPTR1 $3 0x13
       - JUMPI $3 $2
       - LDPTR1 $2 0x4
       - CONST $2 $2
@@ -809,38 +844,38 @@ elements:
       - PLOAD $3 &2
       - HASKEY $4 $3 $1
       - NOT $4 $4
-      - LDPTR1 $5 0x1f
+      - LDPTR1 $5 0x1e
       - JUMPI $5 $4
       - NOT $4 $4
-      - LDPTR1 $5 0x21
+      - LDPTR1 $5 0x20
       - JUMP $5
       - DEST
       - NOT $4 $4
       - DEST
-      - LDPTR1 $5 0x28
+      - LDPTR1 $5 0x27
       - JUMPI $5 $4
       - LDPTR1 $4 0x5
       - CONST $4 $4
       - JOIN $4 $4 $1
       - THROW $4
       - DEST
-      - GENKEY $4 $3 $1
+      - GETKEY $4 $3 $1
       - SWAP $2 $4
       - PFREE $3
       - GETFLD $3 $0 &0
       - PLOAD $4 &0
       - HASKEY $5 $4 $3
       - NOT $5 $5
-      - LDPTR1 $6 0x35
+      - LDPTR1 $6 0x34
       - JUMPI $6 $5
       - NOT $5 $5
-      - LDPTR1 $6 0x37
+      - LDPTR1 $6 0x36
       - JUMP $6
       - DEST
       - NOT $5 $5
       - DEST
       - NOT $5 $5
-      - LDPTR1 $6 0x3e
+      - LDPTR1 $6 0x3d
       - JUMPI $6 $5
       - LDPTR1 $5 0x6
       - CONST $5 $5
@@ -852,7 +887,7 @@ elements:
       - LDPTR1 $5 0x2c
       - CALLR $4 $5 $4
       - GETFLD $4 $4 &0
-      - LDPTR1 $5 0x4c
+      - LDPTR1 $5 0x4b
       - JUMPI $5 $4
       - CARGS $4
       - SETFLD $4 &0 $2
@@ -895,10 +930,10 @@ elements:
     accepts:
     - slot: 0
       label: operator
-      type: Operator
+      type: class.Operator
     - slot: 1
       label: guardian
-      type: Guardian
+      type: class.Guardian
     returns: []
     executes:
       asm:
@@ -990,7 +1025,7 @@ elements:
   data:
     name: GetIncentives
     mode: readonly
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: kramaID
@@ -1003,7 +1038,7 @@ elements:
       asm:
       - PLOAD $0 &0
       - OBTAIN $1 &0
-      - GENKEY $1 $0 $1
+      - GETKEY $1 $0 $1
       - GETFLD $1 $1 &2
       - GETFLD $1 $1 &0
       - YIELD $1 &0
@@ -1016,7 +1051,7 @@ elements:
   data:
     name: GetReferralRewards
     mode: readonly
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: addr
@@ -1029,7 +1064,7 @@ elements:
       asm:
       - PLOAD $0 &5
       - OBTAIN $1 &0
-      - GENKEY $1 $0 $1
+      - GETKEY $1 $0 $1
       - YIELD $1 &0
       - PFREE $0
     catches: []
@@ -1044,7 +1079,7 @@ elements:
   data:
     name: AddIncentives
     mode: persistent
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: incentiveIDs
@@ -1069,75 +1104,103 @@ elements:
       - CONST $1 $1
       - THROW $1
       - DEST
-      - PLOAD $1 &0
-      - PMAKE $3 &5
-      - SIZEOF $4 $0
+      - PLOAD $1 &a
+      - GATHER $3 $1
+      - PLOAD $4 &0
+      - PMAKE $5 &5
+      - SIZEOF $6 $0
       - DEST
-      - LT $5 $3 $4
-      - NOT $5 $5
-      - LDPTR1 $6 0x52
-      - JUMPI $6 $5
-      - GETIDX $5 $0 $3
-      - HASKEY $7 $1 $5
+      - LT $7 $5 $6
       - NOT $7 $7
-      - LDPTR1 $8 0x1e
+      - LDPTR1 $8 0x6c
       - JUMPI $8 $7
-      - NOT $7 $7
-      - LDPTR1 $8 0x20
+      - GETIDX $7 $0 $5
+      - HASKEY $9 $4 $7
+      - NOT $9 $9
+      - LDPTR1 $a 0x20
+      - JUMPI $a $9
+      - NOT $9 $9
+      - LDPTR1 $a 0x22
+      - JUMP $a
+      - DEST
+      - NOT $9 $9
+      - DEST
+      - LDPTR1 $a 0x28
+      - JUMPI $a $9
+      - LDPTR1 $9 0xf
+      - CONST $9 $9
+      - REVERT $9
+      - DEST
+      - GETKEY $9 $4 $7
+      - GETIDX $a $2 $5
+      - PMAKE $b &5
+      - GETFLD $c $9 &2
+      - GETFLD $c $c &2
+      - GATHER $c $c
+      - PMAKE $d &5
+      - EQ $d $c $d
+      - LDPTR1 $e 0x38
+      - JUMPI $e $d
+      - MUL $d $a $c
+      - LDPTR1 $e 0xc
+      - CONST $e $e
+      - DIV $d $d $e
+      - COPY $b $d
+      - DEST
+      - SUB $d $a $b
+      - COPY $a $d
+      - GETFLD $d $9 &2
+      - GETFLD $e $d &0
+      - ADD $f $e $a
+      - DISPERSE $e $f
+      - SETFLD $d &0 $e
+      - SETFLD $9 &2 $d
+      - ADD $a $3 $a
+      - COPY $3 $a
+      - PMAKE $a &5
+      - EQ $a $c $a
+      - LDPTR1 $c 0x66
+      - JUMPI $c $a
+      - PLOAD $a &5
+      - GETFLD $c $9 &2
+      - GETFLD $c $c &3
+      - HASKEY $c $a $c
+      - NOT $c $c
+      - LDPTR1 $d 0x51
+      - JUMPI $d $c
+      - NOT $c $c
+      - LDPTR1 $d 0x53
+      - JUMP $d
+      - DEST
+      - NOT $c $c
+      - DEST
+      - NOT $c $c
+      - LDPTR1 $d 0x60
+      - JUMPI $d $c
+      - GETFLD $c $9 &2
+      - GETFLD $c $c &3
+      - GETKEY $c $a $c
+      - ADD $c $c $b
+      - GETFLD $e $9 &2
+      - GETFLD $e $e &3
+      - SETKEY $a $e $c
+      - LDPTR1 $d 0x64
+      - JUMP $d
+      - DEST
+      - GETFLD $c $9 &2
+      - GETFLD $c $c &3
+      - SETKEY $a $c $b
+      - DEST
+      - PSAVE $a
+      - DEST
+      - SETKEY $4 $7 $9
+      - DEST
+      - INCR $5
+      - LDPTR1 $8 0x13
       - JUMP $8
       - DEST
-      - NOT $7 $7
-      - DEST
-      - LDPTR1 $8 0x26
-      - JUMPI $8 $7
-      - LDPTR1 $7 0xf
-      - CONST $7 $7
-      - REVERT $7
-      - DEST
-      - GENKEY $7 $1 $5
-      - GETIDX $8 $2 $3
-      - PMAKE $9 &5
-      - GETFLD $a $7 &2
-      - GETFLD $a $a &2
-      - GATHER $a $a
-      - PMAKE $b &5
-      - EQ $b $a $b
-      - LDPTR1 $c 0x36
-      - JUMPI $c $b
-      - MUL $b $8 $a
-      - LDPTR1 $c 0xc
-      - CONST $c $c
-      - DIV $b $b $c
-      - COPY $9 $b
-      - DEST
-      - SUB $b $8 $9
-      - COPY $8 $b
-      - GETFLD $b $7 &2
-      - GETFLD $c $b &0
-      - ADD $8 $c $8
-      - DISPERSE $c $8
-      - SETFLD $b &0 $c
-      - SETFLD $7 &2 $b
-      - PMAKE $8 &5
-      - EQ $8 $a $8
-      - LDPTR1 $a 0x4c
-      - JUMPI $a $8
-      - PLOAD $8 &5
-      - GETFLD $a $7 &2
-      - GETFLD $a $a &3
-      - GENKEY $a $8 $a
-      - ADD $9 $a $9
-      - GETFLD $a $7 &2
-      - GETFLD $a $a &3
-      - SETKEY $8 $a $9
-      - PSAVE $8
-      - DEST
-      - SETKEY $1 $5 $7
-      - DEST
-      - INCR $3
-      - LDPTR1 $6 0x11
-      - JUMP $6
-      - DEST
+      - PSAVE $4
+      - DISPERSE $1 $3
       - PSAVE $1
     catches: []
 - ptr: 42
@@ -1152,7 +1215,7 @@ elements:
   data:
     name: ChangeNodeLimit
     mode: persistent
-    kind: invokable
+    kind: invoke
     accepts:
     - slot: 0
       label: kind

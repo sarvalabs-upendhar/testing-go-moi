@@ -28,8 +28,8 @@ func (p *PublicNetAPI) Version() (string, error) {
 }
 
 // Info returns krama id of the node
-func (p *PublicNetAPI) Info() (rpcargs.NodeInfoResponse, error) {
-	return rpcargs.NodeInfoResponse{
+func (p *PublicNetAPI) Info() (*rpcargs.NodeInfoResponse, error) {
+	return &rpcargs.NodeInfoResponse{
 		KramaID: p.network.GetKramaID(),
 	}, nil
 }

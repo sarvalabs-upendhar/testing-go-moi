@@ -8,8 +8,9 @@ import (
 )
 
 type Metrics struct {
-	ActiveRouters metrics.Gauge
-	ActivePeers   metrics.Gauge
+	ActiveRouters     metrics.Gauge
+	ActiveMeshPeers   metrics.Gauge
+	ActiveDirectPeers metrics.Gauge
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -26,19 +27,26 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "active_routers",
 			Help:      "Number of active context routers",
 		}, labels).With(labelsWithValues...),
-		ActivePeers: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+		ActiveMeshPeers: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: "transport",
-			Name:      "active_peers",
-			Help:      "Number of active peers in peer set",
+			Name:      "active_mesh_peers",
+			Help:      "Number of active mesh peers",
+		}, labels).With(labelsWithValues...),
+		ActiveDirectPeers: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "transport",
+			Name:      "active_direct_peers",
+			Help:      "Number of active direct peers",
 		}, labels).With(labelsWithValues...),
 	}
 }
 
 func NilMetrics() *Metrics {
 	return &Metrics{
-		ActiveRouters: discard.NewGauge(),
-		ActivePeers:   discard.NewGauge(),
+		ActiveRouters:     discard.NewGauge(),
+		ActiveMeshPeers:   discard.NewGauge(),
+		ActiveDirectPeers: discard.NewGauge(),
 	}
 }
 
@@ -46,6 +54,10 @@ func (metrics *Metrics) captureActiveRouters(delta float64) {
 	metrics.ActiveRouters.Add(delta)
 }
 
-func (metrics *Metrics) captureActivePeers(delta float64) {
-	metrics.ActivePeers.Add(delta)
+func (metrics *Metrics) captureActiveMeshPeers(delta float64) {
+	metrics.ActiveMeshPeers.Add(delta)
+}
+
+func (metrics *Metrics) captureActiveDirectPeers(delta float64) {
+	metrics.ActiveDirectPeers.Add(delta)
 }

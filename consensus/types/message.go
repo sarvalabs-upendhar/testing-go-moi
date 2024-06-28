@@ -16,8 +16,28 @@ const (
 	InvalidHash
 	InvalidInteractions
 	InternalError
+	NotEligible
 	Success
 )
+
+func (rc ICSResponseCode) String() string {
+	switch rc {
+	case SlotsFull:
+		return "SlotsFull"
+	case InvalidHash:
+		return "InvalidHash"
+	case InvalidInteractions:
+		return "InvalidInteractions"
+	case InternalError:
+		return "InternalError"
+	case NotEligible:
+		return "NotEligible"
+	case Success:
+		return "Success"
+	}
+
+	return "Invalid Status Code"
+}
 
 type ICSPayload interface {
 	Bytes() ([]byte, error)
@@ -60,16 +80,19 @@ func (im *ICSMSG) FromBytes(bytes []byte) error {
 }
 
 type CanonicalICSRequest struct {
-	ClusterID            common.ClusterID
-	Operator             string
-	ContextLock          map[identifiers.Address]common.ContextLockInfo
-	IxData               []byte
-	Ntq                  int32
-	Timestamp            int64
-	StakingContractState common.Hash
-	ContextType          int32
-	RandomSet            []id.KramaID
-	ObserverSet          []id.KramaID
+	ClusterID               common.ClusterID
+	Operator                string
+	ContextLock             map[identifiers.Address]common.ContextLockInfo
+	IxData                  []byte
+	Timestamp               int64
+	StakingContractState    common.Hash
+	RandomSet               []id.KramaID
+	ObserverSet             []id.KramaID
+	RequiredRandomSetSize   uint32
+	RequiredObserverSetSize uint32
+	VrfOutput               [32]byte
+	VrfProof                []byte
+	ICSSeed                 [32]byte
 }
 
 func (ics CanonicalICSRequest) Bytes() ([]byte, error) {
@@ -119,14 +142,14 @@ func (ir *ICSRequest) FromBytes(bytes []byte) error {
 }
 
 type ICSResponse struct {
-	ContextType int32
-	StatusCode  ICSResponseCode
+	StatusCode    ICSResponseCode
+	OperatorsInfo []ICSOperatorInfo
 }
 
-func NewICSResponse(contextType int32, statusCode ICSResponseCode) *ICSResponse {
+func NewICSResponse(statusCode ICSResponseCode, operators []ICSOperatorInfo) *ICSResponse {
 	return &ICSResponse{
-		ContextType: contextType,
-		StatusCode:  statusCode,
+		StatusCode:    statusCode,
+		OperatorsInfo: operators,
 	}
 }
 
@@ -148,17 +171,15 @@ func (ir *ICSResponse) FromBytes(bytes []byte) error {
 }
 
 type ICSSuccess struct {
-	ClusterID   common.ClusterID
-	Responses   []*common.ArrayOfBits
-	Signature   []byte
-	QuorumSizes []int
+	ClusterID common.ClusterID
+	Responses []*common.ArrayOfBits
+	Signature []byte
 }
 
-func NewICSSuccess(responses []*common.ArrayOfBits, signature []byte, quorumSizes []int) *ICSSuccess {
+func NewICSSuccess(responses []*common.ArrayOfBits, signature []byte) *ICSSuccess {
 	return &ICSSuccess{
-		Responses:   responses,
-		Signature:   signature,
-		QuorumSizes: quorumSizes,
+		Responses: responses,
+		Signature: signature,
 	}
 }
 

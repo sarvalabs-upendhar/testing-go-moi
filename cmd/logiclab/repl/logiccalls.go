@@ -12,6 +12,7 @@ import (
 
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
@@ -116,9 +117,9 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		// Perform deploy gating
 		// Only allow to deploy, if logic is not ready.
 		// Only allow to invoke, if logic is ready.
-		if kind == engineio.CallsiteInvokable && !logic.Ready {
+		if kind == engineio.CallsiteInvoke && !logic.Ready {
 			return fmt.Sprintf("logic '%v' is not ready for invoke. deploy to initialize persistent state", name)
-		} else if kind == engineio.CallsiteDeployer && logic.Ready {
+		} else if kind == engineio.CallsiteDeploy && logic.Ready {
 			return fmt.Sprintf("logic '%v' is already deployed", name)
 		}
 
@@ -145,12 +146,15 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		}
 
 		logicID := logic.Object.ID
+		eventstream := compute.NewEventStream(logicID)
+
 		// Spawn an engine for the runtime
 		instance, err := engine.SpawnInstance(
 			logic.Object,
 			repl.env.CallFuel,
-			core.NewContextDriver(repl.env.ID, repl.lab.Database, logicID.Address(), logicID),
+			core.NewStorageDriver(repl.env.ID, repl.lab.Database, logicID.Address(), logicID),
 			repl.lab,
+			eventstream,
 		)
 		if err != nil {
 			return fmt.Sprintf("failed to bootstrap engine: %v", err)
@@ -163,20 +167,21 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 		}
 
 		// Generate the context object for the sender
-		senderContext := core.NewContextDriver(repl.env.ID, repl.lab.Database, sender, logicID)
+		senderContext := core.NewStorageDriver(repl.env.ID, repl.lab.Database, sender, logicID)
 
 		// Generate an interaction from the kind, callsite, calldata and manifest
 		ixn := core.LogicInteraction{
 			Kind: func() common.IxType {
 				switch kind {
-				case engineio.CallsiteDeployer:
+				case engineio.CallsiteDeploy:
 					return common.IxLogicDeploy
-				case engineio.CallsiteInvokable:
+				case engineio.CallsiteInvoke:
 					return common.IxLogicInvoke
 				default:
 					panic("unhandled logic call case")
 				}
 			}(),
+			Nonce: repl.env.Nonce,
 			Price: new(big.Int).SetUint64(core.LabFuelPrice),
 			Limit: repl.env.CallFuel,
 			Site:  site,
@@ -189,17 +194,27 @@ func parseLogicCall(parser *symbolizer.Parser, kind engineio.CallsiteKind) Comma
 			return fmt.Sprintf("failed to perform logic call: %v", err)
 		}
 
-		if kind == engineio.CallsiteDeployer && result.Ok() {
+		if kind == engineio.CallsiteDeploy && result.Ok() {
 			logic.Ready = true
 		}
 
-		return repl.formatResult(result, encoder)
+		ixnHash, err := ixn.Hash()
+		if err != nil {
+			return fmt.Sprintf("failed to hash logic call: %v", err)
+		}
+
+		return repl.formatResult(ixnHash, result, eventstream, encoder)
 	}
 }
 
 // formatResult FormatResults formats an engineio.CallResult object into a string.
 // It accepts a CallEncoder object to decode any outputs returned with the result
-func (repl *Repl) formatResult(result engineio.CallResult, encoder engineio.CallEncoder) string {
+func (repl *Repl) formatResult(
+	hash common.Hash,
+	result engineio.CallResult,
+	stream *compute.EventStream,
+	encoder engineio.CallEncoder,
+) string {
 	var str strings.Builder
 
 	if !result.Ok() {
@@ -210,6 +225,11 @@ func (repl *Repl) formatResult(result engineio.CallResult, encoder engineio.Call
 	}
 
 	str.WriteString(fmt.Sprintf("Execution Complete! [%v FUEL]\n", result.Fuel()))
+	str.WriteString(fmt.Sprintf("Interaction Hash: %v\n", hash.String()))
+
+	if len(result.Outputs()) == 0 {
+		return str.String()
+	}
 
 	outputs, err := encoder.DecodeOutputs(result.Outputs())
 	if err != nil {
@@ -218,15 +238,21 @@ func (repl *Repl) formatResult(result engineio.CallResult, encoder engineio.Call
 		return str.String()
 	}
 
-	if len(outputs) == 0 {
-		return str.String()
-	}
-
 	str.WriteString("Execution Outputs |||\n")
 
 	for name, object := range outputs {
 		formatted := repl.FormatValue(object)
 		str.WriteString(fmt.Sprintf("%v: %v\n", name, formatted))
+	}
+
+	if stream.Count() == 0 {
+		return str.String()
+	}
+
+	str.WriteString("Execution Logs:\n")
+
+	for event := range stream.Iterate() {
+		str.WriteString(fmt.Sprintf(">> [%#x] %#x", event.Address, event.Data))
 	}
 
 	return str.String()

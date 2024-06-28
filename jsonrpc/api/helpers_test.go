@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/jsonrpc"
+
 	"github.com/google/uuid"
 	libp2pCrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -22,11 +24,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2pTest "github.com/libp2p/go-libp2p/core/test"
 	"github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -34,7 +37,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
-	"github.com/sarvalabs/go-moi/jsonrpc/websocket"
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
@@ -48,7 +50,7 @@ type Context struct {
 type ixData struct {
 	ix           *common.Interaction
 	tsHash       common.Hash
-	participants common.Participants
+	participants common.ParticipantsState
 	ixIndex      int
 }
 
@@ -81,7 +83,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 
 func (c *MockChainManager) GetInteractionAndParticipantsByIxHash(
 	ixHash common.Hash,
-) (*common.Interaction, common.Hash, common.Participants, int, error) {
+) (*common.Interaction, common.Hash, common.ParticipantsState, int, error) {
 	if c.GetInteractionByIxHashHook != nil {
 		return nil, common.NilHash, nil, 0, c.GetInteractionByIxHashHook()
 	}
@@ -97,7 +99,7 @@ func (c *MockChainManager) GetInteractionAndParticipantsByIxHash(
 func (c *MockChainManager) GetInteractionAndParticipantsByTSHash(
 	tsHash common.Hash,
 	ixIndex int,
-) (*common.Interaction, common.Participants, error) {
+) (*common.Interaction, common.ParticipantsState, error) {
 	data, ok := c.ixByTesseract[tsHash]
 	if !ok {
 		return nil, nil, common.ErrFetchingInteraction
@@ -125,7 +127,7 @@ func (c *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, 
 func (c *MockChainManager) SetInteractionDataByTSHash(
 	tsHash common.Hash,
 	ix *common.Interaction,
-	participants common.Participants,
+	participants common.ParticipantsState,
 ) {
 	c.ixByTesseract[tsHash] = ixData{
 		ix:           ix,
@@ -137,7 +139,7 @@ func (c *MockChainManager) SetInteractionDataByTSHash(
 func (c *MockChainManager) SetInteractionDataByIxHash(
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.Participants,
+	participants common.ParticipantsState,
 	ixIndex int,
 ) {
 	c.ixByHash[ix.Hash()] = ixData{
@@ -204,16 +206,44 @@ func (c *MockChainManager) setTesseractByHash(
 }
 
 type MockStateManager struct {
-	storage        map[common.Hash][]byte
-	balances       map[identifiers.Address]*state.BalanceObject
-	accounts       map[identifiers.Address]*common.Account
-	context        map[identifiers.Address]*Context
-	assetRegistry  map[identifiers.AssetID]*common.AssetDescriptor
-	logicManifests map[string][]byte
-	logicStorage   map[string]map[string]string // first key denotes logic id, second key denotes storage key
-	accMetaInfo    map[identifiers.Address]*common.AccountMetaInfo
-	logicIDs       map[identifiers.Address][]identifiers.LogicID
-	registry       map[identifiers.Address]map[string][]byte
+	storage                 map[common.Hash][]byte
+	balances                map[identifiers.Address]*state.BalanceObject
+	accounts                map[identifiers.Address]*common.Account
+	context                 map[identifiers.Address]*Context
+	assetRegistry           map[identifiers.AssetID]*common.AssetDescriptor
+	logicManifests          map[string][]byte
+	logicStorage            map[string]map[string]string // first key denotes logic id, second key denotes storage key
+	accMetaInfo             map[identifiers.Address]*common.AccountMetaInfo
+	logicIDs                map[identifiers.Address][]identifiers.LogicID
+	registry                map[identifiers.Address]map[string][]byte
+	fetchIxStateObjectsHook func() error
+}
+
+func (s *MockStateManager) FetchIxStateObjects(ixns common.Interactions,
+	hashes map[identifiers.Address]common.Hash,
+) (*state.Transition, error) {
+	if s.fetchIxStateObjectsHook != nil {
+		return nil, s.fetchIxStateObjectsHook()
+	}
+
+	return nil, nil
+}
+
+func (s *MockStateManager) CreateStateObject(address identifiers.Address,
+	accountType common.AccountType, isGenesis bool,
+) *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *MockStateManager) GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *MockStateManager) IsAccountRegistered(address identifiers.Address) (bool, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewMockStateManager(t *testing.T) *MockStateManager {
@@ -243,7 +273,7 @@ func (s *MockStateManager) setRegistry(t *testing.T, addr identifiers.Address, r
 func (s *MockStateManager) GetRegistry(addr identifiers.Address, stateHash common.Hash) (map[string][]byte, error) {
 	registry, ok := s.registry[addr]
 	if !ok {
-		return nil, errors.New("registry not found")
+		return nil, common.ErrRegistryNotFound
 	}
 
 	return registry, nil
@@ -312,17 +342,44 @@ func (s *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common
 	return accMetaInfo, nil
 }
 
-func (s *MockStateManager) SetStorageEntry(logicID identifiers.LogicID, storage map[string]string) {
+func (s *MockStateManager) setStorageEntry(t *testing.T, logicID identifiers.LogicID, storage map[string]string) {
+	t.Helper()
+
 	s.logicStorage[string(logicID)] = storage
 }
 
-func (s *MockStateManager) GetStorageEntry(logicID identifiers.LogicID, slot []byte, _ common.Hash) ([]byte, error) {
-	storage, ok := s.logicStorage[string(logicID)]
+func (s *MockStateManager) GetPersistentStorageEntry(
+	logicID identifiers.LogicID,
+	key []byte, _ common.Hash,
+) (
+	[]byte, error,
+) {
+	logicStorage, ok := s.logicStorage[string(logicID)]
 	if !ok {
 		return nil, common.ErrLogicStorageTreeNotFound
 	}
 
-	value, ok := storage[string(slot)]
+	value, ok := logicStorage[string(key)]
+	if !ok {
+		return nil, common.ErrKeyNotFound
+	}
+
+	return []byte(value), nil
+}
+
+func (s *MockStateManager) GetEphemeralStorageEntry(
+	addr identifiers.Address,
+	logicID identifiers.LogicID,
+	key []byte, _ common.Hash,
+) (
+	[]byte, error,
+) {
+	logicStorage, ok := s.logicStorage[string(logicID)]
+	if !ok {
+		return nil, common.ErrLogicStorageTreeNotFound
+	}
+
+	value, ok := logicStorage[string(key)]
 	if !ok {
 		return nil, common.ErrKeyNotFound
 	}
@@ -442,7 +499,7 @@ func (exec *MockExecutionManager) setInteractionCall(ix *common.Interaction, rec
 func (exec *MockExecutionManager) InteractionCall(
 	ctx *common.ExecutionContext,
 	ix *common.Interaction,
-	stateHashes map[identifiers.Address]common.Hash,
+	transition *state.Transition,
 ) (*common.Receipt, error) {
 	receipt, ok := exec.call[ix.Hash()]
 	if !ok {
@@ -1047,28 +1104,6 @@ func getRegistry(
 	return registryMap, registryEntries
 }
 
-func getStorageMap(keys []string, values []string) map[string]string {
-	storage := make(map[string]string)
-
-	for i, key := range keys {
-		storage[string(common.FromHex(key))] = values[i] // each hex character should be a byte
-	}
-
-	return storage
-}
-
-func getHexEntries(t *testing.T, count int) []string {
-	t.Helper()
-
-	entries := make([]string, count)
-
-	for i := 0; i < count; i++ {
-		entries[i] = tests.RandomHash(t).Hex()
-	}
-
-	return entries
-}
-
 func getContext(t *testing.T, count int) *Context {
 	t.Helper()
 
@@ -1185,7 +1220,7 @@ func (f *MockFilterManager) getTSFilter(id string) bool {
 	return exists
 }
 
-func (f *MockFilterManager) NewTesseractFilter(ws websocket.ConnManager) string {
+func (f *MockFilterManager) NewTesseractFilter(ws jsonrpc.ConnManager) string {
 	filterID := uuid.New().String()
 
 	f.setTSFilter(filterID)
@@ -1208,7 +1243,7 @@ func (f *MockFilterManager) getTSByAccFilter(id string) (tsByAccFilter, bool) {
 	return resp, exists
 }
 
-func (f *MockFilterManager) NewTesseractsByAccountFilter(ws websocket.ConnManager, addr identifiers.Address) string {
+func (f *MockFilterManager) NewTesseractsByAccountFilter(ws jsonrpc.ConnManager, addr identifiers.Address) string {
 	filterID := uuid.New().String()
 
 	f.setTSByAccFilter(filterID, addr)
@@ -1216,7 +1251,7 @@ func (f *MockFilterManager) NewTesseractsByAccountFilter(ws websocket.ConnManage
 	return filterID
 }
 
-func (f *MockFilterManager) setLogFilter(id string, logQuery *websocket.LogQuery) {
+func (f *MockFilterManager) setLogFilter(id string, logQuery *jsonrpc.LogQuery) {
 	// use hash of logQuery as key to set and get logs
 	hash, err := common.PoloHash(*logQuery)
 	if err != nil {
@@ -1235,7 +1270,7 @@ func (f *MockFilterManager) getLogFilter(id string) (common.Hash, bool) {
 	return resp, exists
 }
 
-func (f *MockFilterManager) NewLogFilter(ws websocket.ConnManager, logQuery *websocket.LogQuery) string {
+func (f *MockFilterManager) NewLogFilter(ws jsonrpc.ConnManager, logQuery *jsonrpc.LogQuery) string {
 	filterID := uuid.New().String()
 
 	f.setLogFilter(filterID, logQuery)
@@ -1255,7 +1290,7 @@ func (f *MockFilterManager) getIxnsFilter(id string) bool {
 	return exists
 }
 
-func (f *MockFilterManager) PendingIxnsFilter(ws websocket.ConnManager) string {
+func (f *MockFilterManager) PendingIxnsFilter(ws jsonrpc.ConnManager) string {
 	filterID := uuid.New().String()
 
 	f.setIxnsFilter(filterID)
@@ -1293,7 +1328,7 @@ func (f *MockFilterManager) setLogs(id string, logs []*rpcargs.RPCLog) {
 	f.logs[f.logFilter[id]] = logs
 }
 
-func (f *MockFilterManager) GetLogsForQuery(query websocket.LogQuery) ([]*rpcargs.RPCLog, error) {
+func (f *MockFilterManager) GetLogsForQuery(query jsonrpc.LogQuery) ([]*rpcargs.RPCLog, error) {
 	// use hash of logQuery as key to set and get logs
 	hash, err := common.PoloHash(query)
 	if err != nil {

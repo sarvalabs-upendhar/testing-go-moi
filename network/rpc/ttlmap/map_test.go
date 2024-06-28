@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"testing"
 	"time"
+
+	"github.com/sarvalabs/go-moi/common"
 )
 
 type testItem struct {
@@ -101,7 +103,7 @@ func TestMapSetNXGet(t *testing.T) {
 
 	bar2 := NewItem("world2", WithTTL(1*time.Second))
 
-	if err := m.Set("bar", bar2, nx); !errors.Is(err, ErrExist) {
+	if err := m.Set("bar", bar2, nx); !errors.Is(err, common.ErrKeyExists) {
 		t.Fatal(err)
 	}
 
@@ -658,7 +660,7 @@ func BenchmarkMapSetNX1(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		if err := m.Set("foo", value, nx); !errors.Is(err, ErrExist) {
+		if err := m.Set("foo", value, nx); !errors.Is(err, common.ErrKeyExists) {
 			b.Fatal("Expecting already exists")
 		}
 	}

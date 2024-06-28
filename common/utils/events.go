@@ -1,8 +1,11 @@
 package utils
 
 import (
+	"time"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -25,7 +28,16 @@ type TesseractAddedEvent struct {
 	Tesseract *common.Tesseract
 }
 
-// TesseractSyncEvent is fired when a new tesseract received and needs to be synced up.
+// TSTrackerEvent is triggered when a new tesseract is added to the lattice via consensus
+// or when a tesseract is received from another node
+// Msg distinguishes whether the the tesseract is added or received
+type TSTrackerEvent struct {
+	TSHash     common.Hash
+	Msg        *networkmsg.TesseractMsg
+	ExpiryTime time.Time
+}
+
+// TesseractSyncEvent is fired when a new tesseract received and needs to be synced up
 type TesseractSyncEvent struct {
 	Tesseract   *common.Tesseract
 	ClusterInfo *common.ICSClusterInfo
@@ -70,3 +82,6 @@ type PrunedPromotedInteractionEvent struct {
 type DroppedInteractionEvent struct {
 	Ixs common.Interactions
 }
+
+// SystemAccountsSyncedEvent signals system account's syncing done
+type SystemAccountsSyncedEvent struct{}

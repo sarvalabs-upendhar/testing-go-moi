@@ -3,6 +3,7 @@ package common
 import (
 	"bytes"
 	"math/big"
+	"sort"
 	"sync/atomic"
 
 	"github.com/pkg/errors"
@@ -16,26 +17,28 @@ type State struct {
 	TransitiveLink  Hash // transitive link is made up of multiple accounts data in previous grid formation
 	PreviousContext Hash
 	LatestContext   Hash
-	ContextDelta    DeltaGroup
+	ContextDelta    *DeltaGroup
 	StateHash       Hash
 }
 
 func (s *State) Copy() State {
 	state := *s
 
-	state.ContextDelta = *(s.ContextDelta.Copy())
+	if state.ContextDelta != nil {
+		state.ContextDelta = s.ContextDelta.Copy()
+	}
 
 	return state
 }
 
-type Participants map[identifiers.Address]State
+type ParticipantsState map[identifiers.Address]State
 
-func (p Participants) Copy() Participants {
+func (p ParticipantsState) Copy() ParticipantsState {
 	if len(p) == 0 {
 		return nil
 	}
 
-	participants := make(Participants)
+	participants := make(ParticipantsState)
 
 	for key, value := range p {
 		participants[key] = value.Copy()
@@ -48,6 +51,8 @@ type PoXtData struct {
 	BinaryHash   Hash         `json:"binary_hash"`
 	IdentityHash Hash         `json:"identity_hash"`
 	ICSHash      Hash         `json:"ics_hash"`
+	ICSSeed      [32]byte     `json:"ics_seed"`
+	ICSProof     []byte       `json:"ics_proof"`
 	ClusterID    ClusterID    `json:"cluster_id"`
 	ICSSignature []byte       `json:"ics_signature"`
 	ICSVoteset   *ArrayOfBits `json:"ics_vote_set"`
@@ -86,7 +91,7 @@ func (p *PoXtData) Copy() PoXtData {
 }
 
 type Tesseract struct {
-	participants     Participants
+	participants     ParticipantsState
 	interactionsHash Hash
 	receiptsHash     Hash
 	epoch            *big.Int
@@ -107,7 +112,7 @@ type Tesseract struct {
 }
 
 func NewTesseract(
-	participants Participants,
+	participants ParticipantsState,
 	interactionsHash Hash,
 	receiptHash Hash,
 	epoch *big.Int,
@@ -223,12 +228,14 @@ func (t *Tesseract) HasParticipant(target identifiers.Address) bool {
 	return false
 }
 
-func (t *Tesseract) Addresses() []identifiers.Address {
-	addrs := make([]identifiers.Address, 0, t.ParticipantCount())
+func (t *Tesseract) Addresses() Addresses {
+	addrs := make(Addresses, 0, t.ParticipantCount())
 
 	for addr := range t.participants {
 		addrs = append(addrs, addr)
 	}
+
+	sort.Sort(addrs)
 
 	return addrs
 }
@@ -241,7 +248,7 @@ func (t *Tesseract) AnyAddress() identifiers.Address {
 	return identifiers.NilAddress
 }
 
-func (t *Tesseract) Participants() Participants {
+func (t *Tesseract) Participants() ParticipantsState {
 	return t.participants
 }
 
@@ -302,11 +309,12 @@ func (t *Tesseract) SealBy() kramaid.KramaID {
 	return t.sealBy
 }
 
-func (t *Tesseract) ExecutionContext() *ExecutionContext {
+func (t *Tesseract) ExecutionContext(participants map[identifiers.Address]IxParticipant) *ExecutionContext {
 	return &ExecutionContext{
-		CtxDelta: t.ContextDelta(),
-		Cluster:  t.ClusterID(),
-		Time:     t.Timestamp(),
+		Participants: participants,
+		CtxDelta:     t.ContextDelta(),
+		Cluster:      t.ClusterID(),
+		Time:         t.Timestamp(),
 	}
 }
 
@@ -360,17 +368,18 @@ func (t *Tesseract) ContextDelta() ContextDelta {
 	ctxDelta := make(ContextDelta)
 
 	for addr, participant := range t.participants {
-		participant := participant
-		ctxDelta[addr] = &(participant.ContextDelta)
+		if participant.ContextDelta != nil {
+			ctxDelta[addr] = participant.ContextDelta
+		}
 	}
 
 	return ctxDelta
 }
 
-func (t *Tesseract) GetContextDelta(address identifiers.Address) (DeltaGroup, bool) {
+func (t *Tesseract) GetContextDelta(address identifiers.Address) (*DeltaGroup, bool) {
 	state, ok := t.participants[address]
 	if !ok {
-		return DeltaGroup{}, ok
+		return nil, ok
 	}
 
 	return state.ContextDelta, true
@@ -382,6 +391,14 @@ func (t *Tesseract) ClusterID() ClusterID {
 
 func (t *Tesseract) ICSHash() Hash {
 	return t.consensusInfo.ICSHash
+}
+
+func (t *Tesseract) ICSSeed() [32]byte {
+	return t.consensusInfo.ICSSeed
+}
+
+func (t *Tesseract) ICSProof() []byte {
+	return t.consensusInfo.ICSProof
 }
 
 func (t *Tesseract) SetRound(round int32) {
@@ -492,7 +509,7 @@ type CanonicalTesseractWithoutSeal struct {
 }
 
 type CanonicalTesseract struct {
-	Participants     Participants
+	Participants     ParticipantsState
 	InteractionsHash Hash
 	ReceiptsHash     Hash
 	Epoch            *big.Int
@@ -523,7 +540,7 @@ func (c *CanonicalTesseract) FromBytes(bytes []byte) error {
 	return nil
 }
 
-// TODO WRITE TEST
+// TODO: WRITE TEST
 func (c *CanonicalTesseract) ToTesseract(ixns Interactions, receipts Receipts) *Tesseract {
 	return &Tesseract{
 		participants:     c.Participants,

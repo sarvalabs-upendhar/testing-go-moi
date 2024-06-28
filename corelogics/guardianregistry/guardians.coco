@@ -35,6 +35,9 @@ state persistent:
     // new Guardians, register new Operators, change limit rules and add incentives
     Administrators Map[Address]Bool
 
+    // TotalIncentives is the sum of rewards distributed to operators
+    TotalIncentives U64
+
 class Master:
     field MOIID String
     field Wallet Address
@@ -64,7 +67,7 @@ class Incentive:
 
 // Import is a deployer for setting up the registry from some existing data.
 // It does not perform any consistency checks. NOT RECOMMENDED FOR GENERAL USE
-endpoint deployer Import(
+endpoint deploy Import(
     master Master,
     admins []Address,
     guardians []Guardian,
@@ -76,42 +79,44 @@ endpoint deployer Import(
     knownOs []String,
     nodeLimitKYC, nodeLimitKYB U64,
 ):
-    mutate MasterOp <- GuardianRegistry.State.MasterOperator:
+    mutate MasterOp <- GuardianRegistry.MasterOperator:
         disperse master -> MasterOp
 
-    mutate Admins <- GuardianRegistry.State.Administrators:
+    mutate Admins <- GuardianRegistry.Administrators:
         for _, admin in admins:
             Admins[admin] = true
 
-    mutate Guardians <- GuardianRegistry.State.Guardians:
-        for _, guardian in guardians:
-            disperse guardian -> Guardians[guardian.KramaID]
+    mutate TotalIncentives <- GuardianRegistry.TotalIncentives:
+        mutate Guardians <- GuardianRegistry.Guardians:
+            for _, guardian in guardians:
+                disperse guardian -> Guardians[guardian.KramaID]
+                TotalIncentives += guardian.Incentive.Amount
 
-    mutate Operators <- GuardianRegistry.State.Operators:
+    mutate Operators <- GuardianRegistry.Operators:
         for _, operator in operators:
             disperse operator -> Operators[operator.Identifier]
 
-    mutate Approved <- GuardianRegistry.State.Approved:
+    mutate Approved <- GuardianRegistry.Approved:
         for _, approvedID in approved:
             Approved[approvedID] = true
 
     if len(referralAddrs) != len(referralAmounts):
         throw "invalid referrals inputs: mismatched size"
 
-    mutate Referrals <- GuardianRegistry.State.ReferralRewards:
+    mutate Referrals <- GuardianRegistry.ReferralRewards:
         for idx, addr in referralAddrs:
             Referrals[addr] = referralAmounts[idx]
 
-    mutate KnownGs <- GuardianRegistry.State.KnownGuardians:
+    mutate KnownGs <- GuardianRegistry.KnownGuardians:
         for _, kramaID in knownGs:
             append(KnownGs, kramaID)
 
-    mutate KnownOs <- GuardianRegistry.State.KnownOperators:
+    mutate KnownOs <- GuardianRegistry.KnownOperators:
         for _, moiID in knownOs:
             append(KnownOs, moiID)
 
-    mutate nodeLimitKYC -> GuardianRegistry.State.NodeLimitKYC
-    mutate nodeLimitKYB -> GuardianRegistry.State.NodeLimitKYB
+    mutate nodeLimitKYC -> GuardianRegistry.NodeLimitKYC
+    mutate nodeLimitKYB -> GuardianRegistry.NodeLimitKYB
 
 // Setup is a deployer for setting up the registry with new data.
 // - master: master operator for the logic
@@ -119,28 +124,29 @@ endpoint deployer Import(
 // - admins: list of addresses to grant admin priveleges to
 // - preApproved: list of pre-approved Krama IDs
 // - limitKYC, limitKYB: max node limits for kyc and kyb verified operators (0 to not enforce limits)
-endpoint deployer Setup(
+endpoint deploy Setup(
     master Master,
     guardians []String,
     pubkeys []Bytes,
+    incentives []U64,
     admins []Address,
     preApproved []String,
     limitKYC, limitKYB U64,
 ):
     // Check that the guardians and pubkeys lists are equal sized
-    if len(guardians) != len(pubkeys):
+    if (len(guardians) != len(pubkeys)) || (len(guardians) != len(incentives)):
         throw "invalid guardian inputs: mismatched size"
 
     // Set the master operator
-    mutate MasterOp <- GuardianRegistry.State.MasterOperator:
+    mutate MasterOp <- GuardianRegistry.MasterOperator:
         disperse master -> MasterOp
 
     // Add the master operator to the set of known operators
-    mutate knownOps <- GuardianRegistry.State.KnownOperators:
+    mutate knownOps <- GuardianRegistry.KnownOperators:
         append(knownOps, master.MOIID)
 
     // Add the master operator to the Operator registry
-    mutate operators <- GuardianRegistry.State.Operators:
+    mutate operators <- GuardianRegistry.Operators:
         disperse operators[master.MOIID] <- Operator{
             Identifier: master.MOIID,
             Verification: make(VerifyProof),
@@ -148,11 +154,11 @@ endpoint deployer Setup(
         }
 
     // Set the node limits
-    mutate limitKYC -> GuardianRegistry.State.NodeLimitKYC
-    mutate limitKYB -> GuardianRegistry.State.NodeLimitKYB
+    mutate limitKYC -> GuardianRegistry.NodeLimitKYC
+    mutate limitKYB -> GuardianRegistry.NodeLimitKYB
 
     // Add all the admins to the admin set
-    mutate administrators <- GuardianRegistry.State.Administrators:
+    mutate administrators <- GuardianRegistry.Administrators:
         for _, admin in admins:
             administrators[admin] = true
 
@@ -162,55 +168,58 @@ endpoint deployer Setup(
     // Iterate over the master guardians
     for idx, kramaID in guardians:
         // Add the krama ID to the approved set
-        mutate approved <- GuardianRegistry.State.Approved:
+        mutate approved <- GuardianRegistry.Approved:
             approved[kramaID] = true
 
         // Add the guardian krama ID to the master operator
-        mutate operators <- GuardianRegistry.State.Operators:
+        mutate operators <- GuardianRegistry.Operators:
             append(operators[master.MOIID].Guardians, kramaID)
 
         // Create and add the Guardian object to the Guardians registry
-        mutate Guardians <- GuardianRegistry.State.Guardians:
-            disperse Guardians[kramaID] <- Guardian{
-                KramaID: kramaID,
-                OperatorID: master.MOIID,
-                Incentive: Incentive{
-                    Amount: 0,
-                    Wallet: master.Wallet,
-                },
-                PublicKey: pubkeys[idx],
-            }
+        mutate TotalIncentives <- GuardianRegistry.TotalIncentives:
+            mutate Guardians <- GuardianRegistry.Guardians:
+                disperse Guardians[kramaID] <- Guardian{
+                    KramaID: kramaID,
+                    OperatorID: master.MOIID,
+                    Incentive: Incentive{
+                        Amount: incentives[idx],
+                        Wallet: master.Wallet,
+                    },
+                    PublicKey: pubkeys[idx],
+                }
+
+                TotalIncentives += incentives[idx]
 
         // Add the krama ID to the known guardians set
-        mutate knownGs <- GuardianRegistry.State.KnownGuardians:
+        mutate knownGs <- GuardianRegistry.KnownGuardians:
             append(knownGs, kramaID)
 
 // Approve accepts a list of Krama IDs to be approved.
 // This operation is idempotent.
-endpoint invokable persistent Approve(kramaIDs []String):
+endpoint invoke persistent Approve(kramaIDs []String):
     // Authenticate the sender as an admin
     AuthenticateAdmin()
     // Approve the given krama IDs
     ApproveKramaIDs(kramaIDs)
 
 // IsApproved checks if the given Krama ID exists
-endpoint invokable readonly IsApproved(kramaID String) -> (ok Bool):
-    observe approved <- GuardianRegistry.State.Approved:
+endpoint invoke readonly IsApproved(kramaID String) -> (ok Bool):
+    observe approved <- GuardianRegistry.Approved:
         yield ok approved[kramaID]?
 
 // IsVerified checks if the given operator MOI ID is verified
-endpoint invokable readonly IsVerified(moiID String) -> (ok Bool):
+endpoint invoke readonly IsVerified(moiID String) -> (ok Bool):
     // Check the operator registry
-    observe operators <- GuardianRegistry.State.Operators:
+    observe operators <- GuardianRegistry.Operators:
         yield ok operators[moiID]?
 
 // RegisterOperator registers a new Operator with the registry.
 // The sender must be an administrator for this operation and the operator must not already exist.
-endpoint invokable persistent RegisterOperator(moiID String, verification VerifyProof):
+endpoint invoke persistent RegisterOperator(moiID String, verification VerifyProof):
     // Authenticate the sender as an admin
     AuthenticateAdmin()
 
-    mutate operators <- GuardianRegistry.State.Operators:
+    mutate operators <- GuardianRegistry.Operators:
         // Check if the operator already exists
         if operators[moiID]?: revert "operator already exists"
 
@@ -222,10 +231,10 @@ endpoint invokable persistent RegisterOperator(moiID String, verification Verify
         }
 
     // Add the operator MOI ID to the list of known operators
-    mutate knownOps <- GuardianRegistry.State.KnownOperators:
+    mutate knownOps <- GuardianRegistry.KnownOperators:
         append(knownOps, moiID)
 
-endpoint invokable persistent RegisterGuardian(guardian Guardian):
+endpoint invoke persistent RegisterGuardian(guardian Guardian):
     // Determine the operator ID from the given guardian object
     memory operatorID = guardian.OperatorID
 
@@ -240,7 +249,7 @@ endpoint invokable persistent RegisterGuardian(guardian Guardian):
     storage operator Operator
 
     // Check if the operator exists and obtain it
-    observe operators <- GuardianRegistry.State.Operators:
+    observe operators <- GuardianRegistry.Operators:
         if !operators[operatorID]?:
             throw f"sender is not a verified operator: {operatorID}"
 
@@ -250,7 +259,7 @@ endpoint invokable persistent RegisterGuardian(guardian Guardian):
     // Obtain the guardian KramaID
     memory kramaID = guardian.KramaID
     // Check if the guardian already exists and throw an exception
-    observe guardians <- GuardianRegistry.State.Guardians:
+    observe guardians <- GuardianRegistry.Guardians:
         if guardians[kramaID]?: throw "guardian already exists"
 
     // Check if the operator is the master
@@ -260,23 +269,23 @@ endpoint invokable persistent RegisterGuardian(guardian Guardian):
         // This check is not applied for the master
         CanRegisterGuardian(operator, guardian)
 
-    mutate operators <- GuardianRegistry.State.Operators:
+    mutate operators <- GuardianRegistry.Operators:
         // Add the guardian krama ID to the operator
         append(operator.Guardians, kramaID)
         // Update the operator object to the registry
         operators[operatorID] = operator
 
     // Add the guardian to the registry
-    mutate guardians <- GuardianRegistry.State.Guardians:
+    mutate guardians <- GuardianRegistry.Guardians:
         disperse guardians[kramaID] <- guardian
 
      // Add the guardian Krama ID to the list of known guardians
-    mutate knownGs <- GuardianRegistry.State.KnownGuardians:
+    mutate knownGs <- GuardianRegistry.KnownGuardians:
         append(knownGs, kramaID)
 
 func readonly CanRegisterGuardian(operator Operator, guardian Guardian):
     // Check if the krama ID has been approved
-    observe approved <- GuardianRegistry.State.Approved:
+    observe approved <- GuardianRegistry.Approved:
         if !approved[guardian.KramaID]?:
             throw "guardian krama id is not approved"
 
@@ -285,9 +294,9 @@ func readonly CanRegisterGuardian(operator Operator, guardian Guardian):
 
     // Obtain the node limit based on the operator's verification kind
     if verification == "kyc":
-        observe nodelimit <- GuardianRegistry.State.NodeLimitKYC
+        observe nodelimit <- GuardianRegistry.NodeLimitKYC
     else if verification == "kyb":
-        observe nodelimit <- GuardianRegistry.State.NodeLimitKYB
+        observe nodelimit <- GuardianRegistry.NodeLimitKYB
     else:
         throw "unexpected verification kind encountered"
 
@@ -301,61 +310,67 @@ func readonly CanRegisterGuardian(operator Operator, guardian Guardian):
         throw "invalid referral percentage"
 
 // GetIncentives retrieves the incentives for the given guardian Krama ID
-endpoint invokable readonly GetIncentives(kramaID String) -> (incentive U64):
-    observe guardians <- GuardianRegistry.State.Guardians:
+endpoint invoke readonly GetIncentives(kramaID String) -> (incentive U64):
+    observe guardians <- GuardianRegistry.Guardians:
         yield incentive guardians[kramaID].Incentive.Amount
 
 // GetReferralRewards retrieves the incentives for the given referral address
-endpoint invokable readonly GetReferralRewards(addr Address) -> (incentive U64):
-    observe referrals <- GuardianRegistry.State.ReferralRewards:
+endpoint invoke readonly GetReferralRewards(addr Address) -> (incentive U64):
+    observe referrals <- GuardianRegistry.ReferralRewards:
         yield incentive referrals[addr]
 
 // AddIncentives adds some incentives to the given kramaIDs.
 // The sender must be an admin for this operation.
-endpoint invokable persistent AddIncentives(incentiveIDs []String, incentiveAmounts []U64):
+endpoint invoke persistent AddIncentives(incentiveIDs []String, incentiveAmounts []U64):
     // Authenticate the sender as an admin
     AuthenticateAdmin()
 
     if len(incentiveIDs) != len(incentiveAmounts):
         throw "invalid incentive inputs: mismatched size"
 
-    mutate guardians <- GuardianRegistry.State.Guardians:
-        for idx, kramaID in incentiveIDs:
-            // Check that guardian exists
-            if !guardians[kramaID]?: revert "guardian does not exist"
+    mutate totalIncentives <- GuardianRegistry.TotalIncentives:
+        mutate guardians <- GuardianRegistry.Guardians:
+            for idx, kramaID in incentiveIDs:
+                // Check that guardian exists
+                if !guardians[kramaID]?: revert "guardian does not exist"
 
-            // Retrieve the guardian
-            storage guardian = guardians[kramaID]
-            memory incentive = incentiveAmounts[idx]
+                // Retrieve the guardian
+                storage guardian = guardians[kramaID]
+                memory incentive = incentiveAmounts[idx]
 
-            memory refCut U64
-            memory refPercent = guardian.Incentive.ReferralPercent
+                memory refCut U64
+                memory refPercent = guardian.Incentive.ReferralPercent
 
-            // If the referral percentage is non-zero, calculate referral reward
-            if refPercent != 0:
-                refCut = (incentive * refPercent) / 100
+                // If the referral percentage is non-zero, calculate referral reward
+                if refPercent != 0:
+                    refCut = (incentive * refPercent) / 100
 
-            // Subtract the referral reward from the incentive for the guardian
-            incentive = incentive - refCut
-            // Add the incentive to the guardian object
-            guardian.Incentive.Amount += incentive
+                // Subtract the referral reward from the incentive for the guardian
+                incentive = incentive - refCut
+                // Add the incentive to the guardian object
+                guardian.Incentive.Amount += incentive
 
-            if refPercent != 0:
-                // Add the referral reward to the registry
-                mutate referrals <- GuardianRegistry.State.ReferralRewards:
-                    referrals[guardian.Incentive.ReferralWallet] += refCut
+                totalIncentives += incentive
 
-            // Update the guardian object
-            guardians[kramaID] = guardian
+                if refPercent != 0:
+                    // Add the referral reward to the registry
+                    mutate referrals <- GuardianRegistry.ReferralRewards:
+                         if referrals[guardian.Incentive.ReferralWallet]?:
+                            referrals[guardian.Incentive.ReferralWallet] += refCut
+                         else:
+                            referrals[guardian.Incentive.ReferralWallet] = refCut
+
+                // Update the guardian object
+                guardians[kramaID] = guardian
 
 // ChangeNodeLimit changes the node limit for a verification kind ("KYC" or "KYB").
 // The sender must be an admin for this operation.
-endpoint invokable persistent ChangeNodeLimit(kind String, updated U64):
+endpoint invoke persistent ChangeNodeLimit(kind String, updated U64):
     // Authenticate the sender as an admin
     AuthenticateAdmin()
 
     if kind == "kyc":
-        mutate limitKYC <- GuardianRegistry.State.NodeLimitKYC:
+        mutate limitKYC <- GuardianRegistry.NodeLimitKYC:
             if updated < limitKYC:
                 revert f"updated limit cannot be be less than existing"
 
@@ -363,7 +378,7 @@ endpoint invokable persistent ChangeNodeLimit(kind String, updated U64):
             limitKYC = updated
 
     else if kind == "kyb":
-        mutate limitKYB <- GuardianRegistry.State.NodeLimitKYB:
+        mutate limitKYB <- GuardianRegistry.NodeLimitKYB:
             if updated < limitKYB:
                 revert "updated limit cannot be be less than existing"
 
@@ -374,20 +389,20 @@ endpoint invokable persistent ChangeNodeLimit(kind String, updated U64):
 
 // ApproveKramaIDs adds the given kramaIDs to the approved set
 func persistent ApproveKramaIDs(kramaIDs []String):
-    mutate approved <- GuardianRegistry.State.Approved:
+    mutate approved <- GuardianRegistry.Approved:
         // Approve each of the given Krama IDs
         for _, kramaID in kramaIDs:
             approved[kramaID] = true
 
 // IsMaster checks if the the given MOI ID is the master
 func readonly IsMaster(moiID String) -> (ok Bool):
-    observe master <- GuardianRegistry.State.MasterOperator:
+    observe master <- GuardianRegistry.MasterOperator:
         yield ok master.MOIID == moiID
 
 // AuthenticateAdmin authenticates that Sender is one of the admins
 func readonly AuthenticateAdmin():
     // Observe the approver set from the registry state
-    observe admins <- GuardianRegistry.State.Administrators:
+    observe admins <- GuardianRegistry.Administrators:
         // Check if the sender address has an entry in the approver set
         memory exists = admins[Address(Sender)]?
 

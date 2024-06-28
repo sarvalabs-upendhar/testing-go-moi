@@ -19,11 +19,11 @@ import (
 	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -173,7 +173,7 @@ func RetryUntilTimeout(ctx context.Context, delay time.Duration, f func() (inter
 		for {
 			select {
 			case <-ctx.Done():
-				resCh <- result{nil, errors.New("timeout")}
+				resCh <- result{nil, common.ErrTimeOut}
 
 				return
 			default:
@@ -456,6 +456,8 @@ func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 		Type:          common.AccountType(1),
 		Height:        height,
 		TesseractHash: RandomHash(t),
+		StateHash:     RandomHash(t),
+		ContextHash:   RandomHash(t),
 	}
 }
 
@@ -497,13 +499,15 @@ func GetRandomAddressList(t *testing.T, count int) []identifiers.Address {
 }
 
 type CreateTesseractParams struct {
-	Addresses      []identifiers.Address
-	Heights        []uint64
-	Participants   common.Participants
-	TSDataCallback func(ts *TesseractData)
+	Addresses            []identifiers.Address
+	Heights              []uint64
+	Participants         common.ParticipantsState
+	TSDataCallback       func(ts *TesseractData)
+	ParticipantsCallback func(participants common.ParticipantsState)
 
 	Ixns     common.Interactions
 	Receipts common.Receipts
+	Seed     [32]byte
 }
 
 type TesseractData struct {
@@ -552,7 +556,7 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 	}
 
 	if params.Participants == nil {
-		params.Participants = make(common.Participants)
+		params.Participants = make(common.ParticipantsState)
 	}
 
 	// A tesseract should have at least one participant
@@ -583,6 +587,10 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 
 	if params.TSDataCallback != nil {
 		params.TSDataCallback(tsData)
+	}
+
+	if params.ParticipantsCallback != nil {
+		params.ParticipantsCallback(params.Participants)
 	}
 
 	return common.NewTesseract(
@@ -650,6 +658,25 @@ func GetHashes(t *testing.T, count int) []common.Hash {
 	}
 
 	return hashes
+}
+
+func XORBytes(t *testing.T, arrays ...[32]byte) [32]byte {
+	t.Helper()
+
+	var result [32]byte
+	if len(arrays) == 0 {
+		return result
+	}
+
+	result = arrays[0]
+
+	for _, array := range arrays[1:] {
+		for i := 0; i < 32; i++ {
+			result[i] ^= array[i]
+		}
+	}
+
+	return result
 }
 
 type CreateIxParams struct {
@@ -733,12 +760,14 @@ func GetIxParamsMapWithAddresses(
 	return ixParams
 }
 
-// GetTesseractParamsMapWithIxns returns tsCount no.of tesseracts and each one will have ixnCount interactions
-func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]*CreateTesseractParams {
+// GetTesseractParamsMapWithIxnsAndReceipts returns tsCount (no.of tesseracts)
+// and each one will have ixnCount interactions
+func GetTesseractParamsMapWithIxnsAndReceipts(t *testing.T, tsCount, ixnCount int) map[int]*CreateTesseractParams {
 	t.Helper()
 
 	tesseractParams := make(map[int]*CreateTesseractParams, tsCount)
 	addresses := GetAddresses(t, 2*(tsCount-1)*ixnCount) // for each interaction, sender and receiver addresses needed
+	receipts := CreateReceiptsWithTestData(t, RandomHash(t))
 	ixns := CreateIxns(
 		t,
 		(tsCount-1)*ixnCount,
@@ -755,6 +784,8 @@ func GetTesseractParamsMapWithIxns(t *testing.T, tsCount, ixnCount int) map[int]
 			// allocate two interactions per tesseract
 			tesseractParams[i].Ixns = ixns[(i-1)*ixnCount : (i-1)*ixnCount+ixnCount]
 		}
+
+		tesseractParams[i].Receipts = receipts
 	}
 
 	return tesseractParams
@@ -882,17 +913,17 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 	t.Helper()
 
 	// create dummy logs
-	logs := &common.Log{
-		Addresses: GetAddresses(t, 1),
-		LogicID:   GetLogicID(t, RandomAddress(t)),
-		Topics:    GetHashes(t, 1),
-		Data:      []byte{1},
+	log := common.Log{
+		Address: RandomAddress(t),
+		LogicID: GetLogicID(t, RandomAddress(t)),
+		Topics:  GetHashes(t, 1),
+		Data:    []byte{1},
 	}
 
 	receipt := &common.Receipt{
 		IxType:    2,
 		IxHash:    RandomHash(t),
-		Logs:      []*common.Log{logs},
+		Logs:      []common.Log{log},
 		Status:    common.ReceiptStateReverted,
 		FuelUsed:  99,
 		ExtraData: []byte{1, 2},
@@ -910,8 +941,7 @@ func CreateStateWithTestData(t *testing.T) common.State {
 		PreviousContext: RandomHash(t),
 		LatestContext:   RandomHash(t),
 		StateHash:       RandomHash(t),
-		ContextDelta: common.DeltaGroup{
-			Role:             common.Receiver,
+		ContextDelta: &common.DeltaGroup{
 			BehaviouralNodes: RandomKramaIDs(t, 2),
 			RandomNodes:      RandomKramaIDs(t, 2),
 			ReplacedNodes:    RandomKramaIDs(t, 2),
@@ -942,10 +972,10 @@ func CreatePoXtWithTestData(t *testing.T) common.PoXtData {
 	}
 }
 
-func CreateParticipantWithTestData(t *testing.T, count int) common.Participants {
+func CreateParticipantWithTestData(t *testing.T, count int) common.ParticipantsState {
 	t.Helper()
 
-	p := make(common.Participants)
+	p := make(common.ParticipantsState)
 
 	for i := 0; i < count; i++ {
 		p[RandomAddress(t)] = CreateStateWithTestData(t)
@@ -1038,6 +1068,31 @@ func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID
 	return kramaID, networkKey
 }
 
+// GetKramaIDAndConsensusKey returns kramaID and consensus key
+func GetKramaIDAndConsensusKey(t *testing.T, nthValidator uint32) (kramaid.KramaID, []byte) {
+	t.Helper()
+
+	var signKey [32]byte
+
+	_, err := rand.Read(signKey[:]) // fill sign key with random bytes
+	require.NoError(t, err)
+
+	// get private key and public key
+	privKeyBytes, moiPubBytes, err := GetPrivKeysForTest(t, signKey[:])
+	require.NoError(t, err)
+
+	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
+		1,
+		privKeyBytes[32:],
+		nthValidator,
+		hex.EncodeToString(moiPubBytes),
+		true,
+	)
+	require.NoError(t, err)
+
+	return kramaID, privKeyBytes[:32]
+}
+
 func GetRandomNumber(t *testing.T, max int) int {
 	t.Helper()
 
@@ -1067,4 +1122,60 @@ type Result struct {
 
 func NewTestTreeCache() *fastcache.Cache {
 	return fastcache.New(200)
+}
+
+// CreateTestIxParticipants creates a list of address and a map of IxParticipants with default values
+func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
+	[]identifiers.Address,
+	map[identifiers.Address]common.IxParticipant,
+) {
+	t.Helper()
+
+	addrs := make([]identifiers.Address, count)
+
+	ps := make(map[identifiers.Address]common.IxParticipant, 0)
+
+	for i := 0; i < count; i++ {
+		addrs[i] = RandomAddress(t)
+		ps[addrs[i]] = common.IxParticipant{
+			AccType:   common.RegularAccount,
+			IsSigner:  true,
+			LockType:  common.WriteLock,
+			IsGenesis: false,
+		}
+	}
+
+	for i := 0; i < genesisAccCount; i++ {
+		addrs[i] = RandomAddress(t)
+		ps[addrs[i]] = common.IxParticipant{
+			AccType:   common.RegularAccount,
+			IsSigner:  true,
+			LockType:  common.WriteLock,
+			IsGenesis: true,
+		}
+	}
+
+	return addrs, ps
+}
+
+func GetStorageMap(keys []string, values []string) map[string]string {
+	storage := make(map[string]string)
+
+	for i, key := range keys {
+		storage[string(common.FromHex(key))] = values[i] // each hex character should be a byte
+	}
+
+	return storage
+}
+
+func GetHexEntries(t *testing.T, count int) []string {
+	t.Helper()
+
+	entries := make([]string, count)
+
+	for i := 0; i < count; i++ {
+		entries[i] = RandomHash(t).Hex()
+	}
+
+	return entries
 }

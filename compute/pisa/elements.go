@@ -17,6 +17,7 @@ var (
 	ClassElement    = logic.ClassElement.String()
 	MethodElement   = logic.MethodElement.String()
 	StateElement    = logic.StateElement.String()
+	EventElement    = logic.EventElement.String()
 )
 
 var ElementMetadata = map[engineio.ElementKind]struct {
@@ -29,6 +30,7 @@ var ElementMetadata = map[engineio.ElementKind]struct {
 	ClassElement:    {logic.ClassElement, func() any { return new(ClassSchema) }},
 	MethodElement:   {logic.MethodElement, func() any { return new(MethodSchema) }},
 	StateElement:    {logic.StateElement, func() any { return new(StateSchema) }},
+	EventElement:    {logic.EventElement, func() any { return new(EventSchema) }},
 }
 
 type ConstantSchema struct {
@@ -63,6 +65,7 @@ type MethodSchema struct {
 	Name  string `json:"name" yaml:"name"`
 	Class string `json:"class" yaml:"class"`
 
+	Mutable bool              `json:"mutable" yaml:"mutable"`
 	Accepts []TypefieldSchema `json:"accepts" yaml:"accepts"`
 	Returns []TypefieldSchema `json:"returns" yaml:"returns"`
 
@@ -72,6 +75,12 @@ type MethodSchema struct {
 
 type StateSchema struct {
 	Mode   state.Mode        `json:"mode" yaml:"mode"`
+	Fields []TypefieldSchema `json:"fields" yaml:"fields"`
+}
+
+type EventSchema struct {
+	Name   string            `json:"name" yaml:"name"`
+	Topics uint8             `json:"topics" yaml:"topics"`
 	Fields []TypefieldSchema `json:"fields" yaml:"fields"`
 }
 

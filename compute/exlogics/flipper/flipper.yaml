@@ -1,0 +1,127 @@
+syntax: 1
+engine:
+  kind: PISA
+  flags: []
+elements:
+- ptr: 0
+  kind: state
+  data:
+    mode: persistent
+    fields:
+    - slot: 0
+      label: value
+      type: bool
+- ptr: 1
+  deps:
+  - 0
+  kind: routine
+  data:
+    name: Init
+    mode: persistent
+    kind: deploy
+    accepts: []
+    returns: []
+    executes:
+      bin: []
+    catches: []
+- ptr: 2
+  deps:
+  - 6
+  - 0
+  kind: routine
+  data:
+    name: Seed
+    mode: persistent
+    kind: deploy
+    accepts:
+    - slot: 0
+      label: initial
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - SETFLD $0 &0 $1
+      - LDPTR1 $1 0x6
+      - CALLR $0 $1 $0
+    catches: []
+- ptr: 3
+  deps:
+  - 0
+  kind: routine
+  data:
+    name: Get
+    mode: readonly
+    kind: invoke
+    accepts: []
+    returns:
+    - slot: 0
+      label: value
+      type: bool
+    executes:
+      asm:
+      - PLOAD $0 &0
+      - YIELD $0 &0
+      - PFREE $0
+    catches: []
+- ptr: 4
+  deps:
+  - 6
+  - 0
+  kind: routine
+  data:
+    name: Set
+    mode: persistent
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: value
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - SETFLD $0 &0 $1
+      - LDPTR1 $1 0x6
+      - CALLR $0 $1 $0
+    catches: []
+- ptr: 5
+  deps:
+  - 0
+  kind: routine
+  data:
+    name: Toggle
+    mode: persistent
+    kind: invoke
+    accepts: []
+    returns: []
+    executes:
+      asm:
+      - PLOAD $0 &0
+      - GATHER $1 $0
+      - NOT $1 $1
+      - DISPERSE $0 $1
+      - PSAVE $0
+    catches: []
+- ptr: 6
+  deps:
+  - 0
+  kind: routine
+  data:
+    name: set
+    mode: persistent
+    kind: internal
+    accepts:
+    - slot: 0
+      label: value
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - PLOAD $0 &0
+      - OBTAIN $1 &0
+      - DISPERSE $0 $1
+      - PSAVE $0
+    catches: []

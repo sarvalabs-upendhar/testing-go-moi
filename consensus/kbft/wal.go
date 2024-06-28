@@ -257,7 +257,7 @@ func (wal *BaseWAL) SearchForClusterID(
 	// NOTE: starting from the last file in the group because we're usually
 	// searching for the last height. See replay.go
 	min, max := wal.group.MinIndex(), wal.group.MaxIndex()
-	wal.logger.Info("Searching for cluster ID", "cluster-ID", clusterID, "min", min, "max", max)
+	wal.logger.Info("Searching for cluster ID", "cluster-id", clusterID, "min", min, "max", max)
 
 	for index := max; index >= min; index-- {
 		gr, err = wal.group.NewReader(index)
@@ -293,7 +293,7 @@ func (wal *BaseWAL) SearchForClusterID(
 			}
 
 			if string(msg.ClusterID) == clusterID { // found
-				wal.logger.Info("Found", "cluster-ID", clusterID, "index", index)
+				wal.logger.Info("Found", "cluster-id", clusterID, "index", index)
 
 				return gr, true, nil
 			}

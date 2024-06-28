@@ -16,7 +16,7 @@ type tesseractVoteSet struct {
 	// Represents the tesseract votes of each validator by index
 	votes []*ktypes.Vote
 	// Represents the sum of voting powers
-	sum []int32
+	sum []uint32
 
 	votingPowerSum []int32
 }
@@ -28,7 +28,7 @@ func newTesseractVoteSet(size int, peermaj23 bool, valcount int) *tesseractVoteS
 		peermaj23:      peermaj23,
 		bitarray:       common.NewArrayOfBits(valcount),
 		votes:          make([]*ktypes.Vote, valcount),
-		sum:            make([]int32, size),
+		sum:            make([]uint32, size),
 		votingPowerSum: make([]int32, size),
 	}
 }
@@ -57,7 +57,7 @@ func (tv *tesseractVoteSet) addVerifiedVote(sumIndexs []int32, vote *ktypes.Vote
 		tv.votes[valindex] = vote
 
 		for _, index := range sumIndexs {
-			tv.sum[index] += votingpower
+			tv.sum[index] += 1
 			tv.votingPowerSum[index] += votingpower
 		}
 	}

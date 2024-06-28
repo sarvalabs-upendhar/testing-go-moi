@@ -105,7 +105,7 @@ func createTestNodeSet(t *testing.T, n int) (*common.NodeSet, []*crypto.KramaVau
 		valset[i].SetConsensusPrivateKey(privateKey)
 	}
 
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys, n)
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, uint32(n))
 
 	for i := 0; i < n; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -114,6 +114,7 @@ func createTestNodeSet(t *testing.T, n int) (*common.NodeSet, []*crypto.KramaVau
 	return nodeset, valset
 }
 
+/*
 // createTestRandomSet return nodeset and vaults
 // nodeset has nodes info like krama ID and public key
 // vaults has node info like krama ID and private key which can be used to sign votes during consensus
@@ -136,7 +137,7 @@ func createTestRandomSet(t *testing.T, total, actual int) (*common.NodeSet, []*c
 		valset[i].SetConsensusPrivateKey(privateKey)
 	}
 
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys, actual)
+	nodeset := common.NewNodeSet(kramaIDs, publicKeys, uint32(actual))
 
 	for i := 0; i < actual; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -144,50 +145,63 @@ func createTestRandomSet(t *testing.T, total, actual int) (*common.NodeSet, []*c
 
 	return nodeset, valset
 }
+*/
 
 // createICSNodes returns ICSNodes and vaults of given count of specific nodes
 func createICSNodes(
 	t *testing.T,
-	senderBehaviourSetCount int,
-	senderRandomSetCount int,
-	receiverBehaviourSetCount int,
-	receiverRandomSetCount int,
-	randomSetCount int,
-	observerSetCount int,
-) (*common.ICSNodeSet, [][]*crypto.KramaVault) {
+	participants int,
+	nodesPerSet int,
+	randomNodes, observerNodes int,
+) (*common.ICSNodeSet, TestVaults) {
 	t.Helper()
 
-	senderBehaviourSet, senderBehaviouralValSet := createTestNodeSet(t, senderBehaviourSetCount)
-	senderRandomSet, senderRandomValSet := createTestNodeSet(t, senderRandomSetCount)
-	receiverBehaviourSet, receiverBehaviourValSet := createTestNodeSet(t, receiverBehaviourSetCount)
-	receiverRandomSet, receiverRandomValSet := createTestNodeSet(t, receiverRandomSetCount)
-	// create some grace nodes for random set but quorum field will have nodes that are only part of ICS
-	randomSet, randomValSet := createTestRandomSet(t, 2*randomSetCount, randomSetCount)
-	observerSet, observerValSet := createTestNodeSet(t, observerSetCount)
+	vaults := make([][]*crypto.KramaVault, 0, 2*participants+2)
 
-	testNodeSets := []*common.NodeSet{
-		senderBehaviourSet,
-		senderRandomSet,
-		receiverBehaviourSet,
-		receiverRandomSet,
-		randomSet,
-		observerSet,
+	ics := common.NewICSNodeSet(2*participants + 2)
+
+	for i := 0; i < 2*participants; i++ {
+		ns, vals := createTestNodeSet(t, nodesPerSet)
+		ics.UpdateNodeSet(i, ns)
+
+		vaults = append(vaults, vals)
 	}
 
-	valset := [][]*crypto.KramaVault{
-		senderBehaviouralValSet,
-		senderRandomValSet,
-		receiverBehaviourValSet,
-		receiverRandomValSet,
-		randomValSet,
-		observerValSet,
+	randomNs, randomVals := createTestNodeSet(t, randomNodes)
+	ics.UpdateNodeSet(ics.RandomSetPosition(), randomNs)
+
+	vaults = append(vaults, randomVals)
+
+	if observerNodes > 0 {
+		observerNs, observerVals := createTestNodeSet(t, observerNodes)
+		ics.UpdateNodeSet(ics.ObserverSetPosition(), observerNs)
+
+		vaults = append(vaults, observerVals)
 	}
 
-	return &common.ICSNodeSet{
-		Nodes: testNodeSets,
-		Size: senderBehaviourSetCount + senderRandomSetCount + receiverBehaviourSetCount +
-			receiverRandomSetCount + randomSetCount + observerSetCount,
-	}, valset
+	return ics, vaults
+}
+
+type TestVaults [][]*crypto.KramaVault
+
+func (ts TestVaults) GetVaults(participantIndex int, count int, exclude ...kramaid.KramaID) []*crypto.KramaVault {
+	vals := make([]*crypto.KramaVault, 0, count)
+
+	for i := participantIndex; i <= participantIndex+1; i++ {
+		for _, v := range ts[i] {
+			if utils.ContainsKramaID(exclude, v.KramaID()) {
+				continue
+			}
+
+			vals = append(vals, v)
+
+			if len(vals) == count {
+				return vals
+			}
+		}
+	}
+
+	return vals
 }
 
 func startTestRound(state *KBFT, heights map[identifiers.Address]uint64, round int32, err chan<- error) {
@@ -354,7 +368,6 @@ func sendAndEnsurePreVote(
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
-
 	sendAndEnsureVotes(t, kbft, round, ktypes.PREVOTE, tsHash, heights, voteSub, expectedRound, kramaVault...)
 }
 
@@ -394,79 +407,66 @@ func createTestClusterInfo(
 	icsNodes *common.ICSNodeSet,
 	newHeights map[identifiers.Address]uint64,
 	ixs common.Interactions,
-	nonRegisteredReceiver bool,
 ) *ktypes.ClusterState {
 	t.Helper()
 
+	ps := make(map[identifiers.Address]*common.Participant)
+	pStates := make(common.ParticipantsState)
+
+	ps[ixs[0].Sender()] = &common.Participant{
+		Address:         ixs[0].Sender(),
+		IsSigner:        true,
+		Height:          newHeights[ixs[0].Sender()] - 1,
+		NodeSetPosition: 0,
+		LockType:        common.WriteLock,
+		ConsensusQuorum: 6,
+	}
+
+	pStates[ixs[0].Sender()] = common.State{
+		Height: newHeights[ixs[0].Sender()],
+	}
+
+	if !ixs[0].Receiver().IsNil() {
+		ps[ixs[0].Receiver()] = &common.Participant{
+			Address:         ixs[0].Receiver(),
+			Height:          newHeights[ixs[0].Receiver()] - 1,
+			NodeSetPosition: 2,
+			LockType:        common.WriteLock,
+			ConsensusQuorum: 6,
+		}
+
+		pStates[ixs[0].Receiver()] = common.State{
+			Height: newHeights[ixs[0].Receiver()],
+		}
+	}
+
 	clusterInfo := ktypes.NewICS(
-		0,
 		nil,
 		ixs,
 		"cluster1",
 		tests.RandomKramaIDs(t, 2)[0],
 		time.Now(),
 		tests.RandomKramaIDs(t, 2)[1],
+		ps,
+		icsNodes,
+		common.LotteryKey{},
 	)
 
-	func(clusterInfo *ktypes.ClusterState) {
-		clusterInfo.NodeSet = icsNodes
-
-		clusterInfo.AccountInfos = make(map[identifiers.Address]*ktypes.AccountInfo)
-		clusterInfo.AccountInfos[ixs[0].Sender()] = &ktypes.AccountInfo{
-			Height: newHeights[ixs[0].Sender()] - 1,
-		}
-
-		if nonRegisteredReceiver && !ixs[0].Receiver().IsNil() {
-			clusterInfo.AccountInfos[common.SargaAddress] = &ktypes.AccountInfo{
-				Height: newHeights[common.SargaAddress] - 1,
-			}
-			clusterInfo.AccountInfos[ixs[0].Receiver()] = &ktypes.AccountInfo{
-				Address:       ixs[0].Receiver(),
-				AccType:       common.AccTypeFromIxType(ixs[0].Type()),
-				TesseractHash: common.NilHash,
-				IsGenesis:     true,
-				Height:        0,
-			}
-		} else if !ixs[0].Receiver().IsNil() {
-			clusterInfo.AccountInfos[ixs[0].Receiver()] = &ktypes.AccountInfo{
-				Height: newHeights[ixs[0].Receiver()] - 1,
-			}
-		}
-
-		p := make(common.Participants)
-
-		p[ixs[0].Sender()] = common.State{
-			Height: newHeights[ixs[0].Sender()],
-		}
-
-		if !ixs[0].Receiver().IsNil() {
-			p[ixs[0].Receiver()] = common.State{
-				Height: newHeights[ixs[0].Receiver()],
-			}
-		}
-
-		if nonRegisteredReceiver {
-			p[common.SargaAddress] = common.State{
-				Height: newHeights[common.SargaAddress],
-			}
-		}
-
-		clusterInfo.Tesseract = common.NewTesseract(
-			p,
-			common.NilHash,
-			common.NilHash,
-			big.NewInt(0),
-			0,
-			"operator",
-			4,
-			6,
-			common.PoXtData{},
-			nil,
-			clusterInfo.SelfKramaID(),
-			nil,
-			nil,
-		)
-	}(clusterInfo)
+	clusterInfo.Tesseract = common.NewTesseract(
+		pStates,
+		common.NilHash,
+		common.NilHash,
+		big.NewInt(0),
+		0,
+		"operator",
+		4,
+		6,
+		common.PoXtData{},
+		nil,
+		clusterInfo.SelfKramaID(),
+		nil,
+		nil,
+	)
 
 	return clusterInfo
 }
@@ -685,7 +685,7 @@ func ensureNoVoteReceived(t *testing.T, voteSub *utils.Subscription, message str
 func ensureNoPrecommitReceived(t *testing.T, voteSub *utils.Subscription) {
 	t.Helper()
 
-	ensureNoVoteReceived(t, voteSub, "node shouln't send precommit")
+	ensureNoVoteReceived(t, voteSub, "node shouldn't send precommit")
 }
 
 // validatePrevote fetches the prevote of validator in the current round and

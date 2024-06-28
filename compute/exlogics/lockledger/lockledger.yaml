@@ -1,0 +1,176 @@
+syntax: 1
+engine:
+  kind: PISA
+  flags: []
+elements:
+- ptr: 0
+  kind: constant
+  data:
+    type: string
+    value: 0x06696e73756666696369656e742062616c616e6365
+- ptr: 1
+  kind: state
+  data:
+    mode: ephemeral
+    fields:
+    - slot: 0
+      label: Spendable
+      type: u256
+    - slot: 1
+      label: Lockedup
+      type: u256
+- ptr: 2
+  kind: state
+  data:
+    mode: persistent
+    fields:
+    - slot: 0
+      label: Name
+      type: string
+    - slot: 1
+      label: Symbol
+      type: string
+    - slot: 2
+      label: Supply
+      type: u256
+    - slot: 3
+      label: Owner
+      type: address
+- ptr: 3
+  deps:
+  - 2
+  - 1
+  kind: routine
+  data:
+    name: Seed
+    mode: persistent
+    kind: deploy
+    accepts:
+    - slot: 0
+      label: name
+      type: string
+    - slot: 1
+      label: symbol
+      type: string
+    - slot: 2
+      label: supply
+      type: u256
+    returns: []
+    executes:
+      asm:
+      - PLOAD $0 &0
+      - OBTAIN $1 &0
+      - DISPERSE $0 $1
+      - PSAVE $0
+      - PLOAD $0 &1
+      - OBTAIN $1 &1
+      - DISPERSE $0 $1
+      - PSAVE $0
+      - PLOAD $0 &2
+      - OBTAIN $1 &2
+      - DISPERSE $0 $1
+      - PSAVE $0
+      - PLOAD $0 &3
+      - SENDER $2
+      - ADDR $2 $2
+      - DISPERSE $0 $2
+      - PSAVE $0
+      - SENDER $0
+      - ELOAD $2 &0 $0
+      - DISPERSE $2 $1
+      - ESAVE $2 $0
+    catches: []
+- ptr: 4
+  deps:
+  - 1
+  kind: routine
+  data:
+    name: Register
+    mode: ephemeral
+    kind: enlist
+    accepts: []
+    returns: []
+    executes:
+      asm:
+      - SENDER $0
+      - ELOAD $1 &0 $0
+      - PMAKE $2 &7
+      - DISPERSE $1 $2
+      - ESAVE $1 $0
+      - SENDER $0
+      - ELOAD $1 &1 $0
+      - PMAKE $2 &7
+      - DISPERSE $1 $2
+      - ESAVE $1 $0
+    catches: []
+- ptr: 5
+  deps:
+  - 0
+  - 1
+  kind: routine
+  data:
+    name: Lockup
+    mode: ephemeral
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: amount
+      type: u256
+    returns: []
+    executes:
+      asm:
+      - SENDER $0
+      - ELOAD $1 &0 $0
+      - GATHER $2 $1
+      - OBTAIN $3 &0
+      - LT $4 $2 $3
+      - NOT $4 $4
+      - LDPTR1 $5 0xb
+      - JUMPI $5 $4
+      - LDPTR1 $4 0x0
+      - CONST $4 $4
+      - THROW $4
+      - DEST
+      - SUB $3 $2 $3
+      - COPY $2 $3
+      - DISPERSE $1 $2
+      - ESAVE $1 $0
+      - SENDER $0
+      - ELOAD $1 &1 $0
+      - GATHER $2 $1
+      - OBTAIN $3 &0
+      - ADD $3 $2 $3
+      - COPY $2 $3
+      - DISPERSE $1 $2
+      - ESAVE $1 $0
+    catches: []
+- ptr: 6
+  deps:
+  - 2
+  - 1
+  kind: routine
+  data:
+    name: Mint
+    mode: persistent
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: amount
+      type: u256
+    returns: []
+    executes:
+      asm:
+      - PLOAD $0 &2
+      - GATHER $1 $0
+      - OBTAIN $2 &0
+      - ADD $1 $1 $2
+      - DISPERSE $0 $1
+      - PSAVE $0
+      - SENDER $0
+      - ELOAD $1 &0 $0
+      - GATHER $2 $1
+      - OBTAIN $3 &0
+      - ADD $2 $2 $3
+      - DISPERSE $1 $2
+      - ESAVE $1 $0
+    catches: []

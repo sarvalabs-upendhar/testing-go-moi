@@ -24,6 +24,7 @@ var (
 	ErrUserNotFound         = errors.New("user not found")
 	ErrLogicNotFound        = errors.New("logic not found")
 	ErrEnvironmentNotFound  = errors.New("environment not found")
+	ErrAddrNotFound         = errors.New("address not found")
 	ErrStorageValueNotFound = errors.New("storage value not found")
 
 	ErrSenderNotConf       = errors.New("sender not configured for environment")
@@ -37,8 +38,9 @@ var Engines = []engineio.EngineKind{
 }
 
 const (
-	DefaultRootPath    = "./.logiclab"
+	DefaultDirPath     = "./.logiclab"
 	DefaultEnvironment = "main"
+	DefaultPort        = 6060
 )
 
 type Lab struct {
@@ -128,6 +130,15 @@ func (lab *Lab) GetEnvironment(env string) (*Environment, bool, error) {
 	// Cache the environment
 	lab.envcache[env] = environment
 
+	// Load the event db from the db
+	eventDB, err := loadEventDB(environment.ID, environment.database)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// Attach the event db to the environment
+	environment.eventDB = eventDB
+
 	return environment, true, nil
 }
 
@@ -160,24 +171,31 @@ func (lab *Lab) GetAllEnvironments() ([]string, error) {
 
 func (lab *Lab) DelEnvironment(env string) error {
 	// Check if the environment exists in envcache
-	delete(lab.envcache, env)
+	if _, ok := lab.envcache[env]; ok {
+		// Environment found in envcache, delete it
+		delete(lab.envcache, env)
 
-	// Check if the environment exists
+		return nil
+	}
+
+	// Check if the environment exists in the database
 	exists, err := lab.Database.Has(db.EnvironmentKey(env))
 	if err != nil {
 		return err
 	}
 
-	if exists {
-		// Delete the environment key from the database
-		if err = lab.Database.Del(db.EnvironmentKey(env)); err != nil {
-			return err
-		}
+	if !exists {
+		return ErrEnvironmentNotFound
+	}
 
-		// Delete all keys from the database with prefix of the environment name
-		if err = lab.Database.PrefixDelete(db.EnvironmentPrefix(env)); err != nil {
-			return err
-		}
+	// Delete the environment key from the database
+	if err = lab.Database.Del(db.EnvironmentKey(env)); err != nil {
+		return err
+	}
+
+	// Delete all keys from the database with prefix of the environment name
+	if err = lab.Database.PrefixDelete(db.EnvironmentPrefix(env)); err != nil {
+		return err
 	}
 
 	return nil
@@ -211,6 +229,10 @@ func (lab *Lab) HandleInterrupt() func() {
 // Close exits the logiclab environment
 func (lab *Lab) Close() error {
 	for id, env := range lab.envcache {
+		if err := saveEventDB(env); err != nil {
+			return err
+		}
+
 		encoded, err := env.Encode()
 		if err != nil {
 			return errors.Wrap(err, "unable to encode environment")

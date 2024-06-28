@@ -47,7 +47,7 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Subsystem: "ixpool",
 			Name:      "account_wait_time",
 			Help:      "Time taken by an interaction associated with an account to process and complete",
-			Buckets:   []float64{500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000},
+			Buckets:   []float64{2, 4, 8, 10, 20, 30, 60, 120, 180, 240},
 		}, labels).With(labelsWithValues...),
 	}
 }

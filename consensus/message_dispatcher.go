@@ -41,7 +41,7 @@ func (k *Engine) sendICSRequest(
 	ctx context.Context,
 	canonicalReq types.CanonicalICSRequest,
 	nodeset *common.ICSNodeSet,
-) int {
+) (int, error) {
 	var (
 		requestTS      = time.Now()
 		failedReqCount = new(atomic.Int32)
@@ -51,24 +51,21 @@ func (k *Engine) sendICSRequest(
 
 	defer k.metrics.captureRequestTurnaroundTime(requestTS)
 
-	for icsSetType, ns := range nodeset.Nodes {
+	payload, err := k.signICSRequest(canonicalReq)
+	if err != nil {
+		k.logger.Error("Failed to sign canonical ics request", err)
+
+		return 0, err
+	}
+
+	for icsSetType, ns := range nodeset.Sets {
 		if ns == nil {
-			continue
-		}
-
-		canonicalReq.ContextType = int32(icsSetType)
-
-		payload, err := k.signICSRequest(canonicalReq)
-		if err != nil {
-			k.logger.Error("Failed to sign canonical ics request", err)
-
 			continue
 		}
 
 		for index, kramaID := range ns.Ids {
 			if k.selfID == kramaID {
-				ns.Responses.SetIndex(index, true)
-				ns.UpdateRespCount()
+				ns.UpdateResponse(index, true)
 
 				continue
 			}
@@ -113,15 +110,15 @@ func (k *Engine) sendICSRequest(
 
 	waitGroup.Wait()
 
-	return int(failedReqCount.Load())
+	return int(failedReqCount.Load()), nil
 }
 
 // SendICSResponse sends an ICS response to a specific KramaID with the given context type and status code
 func (k *Engine) SendICSResponse(
 	kramaID id.KramaID,
 	clusterID common.ClusterID,
-	contextType int32,
 	statusCode types.ICSResponseCode,
+	operators []types.ICSOperatorInfo,
 ) error {
 	k.logger.Trace("Sending ICS Response", "cluster-id", clusterID, "to", kramaID, "status-code", statusCode)
 
@@ -130,7 +127,7 @@ func (k *Engine) SendICSResponse(
 		k.selfID,
 		clusterID,
 		networkmsg.ICSRESPONSE,
-		types.NewICSResponse(contextType, statusCode)); err != nil {
+		types.NewICSResponse(statusCode, operators)); err != nil {
 		k.logger.Error("Failed to send ics response", "krama-id", kramaID, "err", err)
 
 		return err
