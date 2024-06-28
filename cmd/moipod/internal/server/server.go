@@ -31,26 +31,27 @@ import (
 var ErrReadingConfig = errors.New("error reading config file")
 
 var (
-	GenesisPath        string
-	Directory          string
-	ConfigPath         string
-	LogDirPath         string
-	OperatorSlots      int
-	ValidatorSlots     int
-	EnableTracing      bool
-	LogLevel           string
-	CleanDB            bool
-	CorsAllowedOrigins []string
-	Babylon            bool
-	Bootnodes          []string
-	NodePassword       string
-	PublicP2PAddresses []string
-	AllowIPv6Addresses bool
-	NetworkRPCUrl      string
-	LocalRPCUrl        string
-	WatchdogURL        string
-	DiscoveryInterval  time.Duration
-	enableDebugMode    bool
+	GenesisPath         string
+	Directory           string
+	ConfigPath          string
+	LogDirPath          string
+	OperatorSlots       int
+	ValidatorSlots      int
+	EnableTracing       bool
+	LogLevel            string
+	CleanDB             bool
+	CorsAllowedOrigins  []string
+	Babylon             bool
+	Bootnodes           []string
+	NodePassword        string
+	PublicP2PAddresses  []string
+	AllowIPv6Addresses  bool
+	NetworkRPCUrl       string
+	LocalRPCUrl         string
+	WatchdogURL         string
+	DiscoveryInterval   time.Duration
+	enableDebugMode     bool
+	DisableRegistration bool
 )
 
 const (
@@ -74,6 +75,7 @@ const (
 	watchdogURLFlag        = "watchdog-url"
 	discoveryIntervalFlag  = "discovery-interval"
 	enableDebugModeFlag    = "enable-debug-mode"
+	disableRegistration    = "disable-registration"
 )
 
 func GetServerCommand() *cobra.Command {
@@ -107,6 +109,8 @@ func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&Directory, dataDirFlag, "", "Data directory location.")
 	cmd.PersistentFlags().BoolVar(&CleanDB, cleanDBFlag, false, "Deletes the data stored in database.")
 	cmd.PersistentFlags().BoolVar(&EnableTracing, enableTracingFlag, false, "Enables tracing.")
+	cmd.PersistentFlags().BoolVar(&DisableRegistration, disableRegistration, false, "Disable moipod registration")
+
 	cmd.PersistentFlags().StringVar(&LogLevel, logLevelFlag, "INFO", "Logger level.")
 	cmd.PersistentFlags().BoolVar(
 		&AllowIPv6Addresses,
@@ -223,7 +227,7 @@ func SetupNode(cmd *cobra.Command) {
 		cmdCommon.Err(err)
 	}
 
-	if cfg.NetworkID.IsTestnet() {
+	if cfg.NetworkID.IsTestnet() && !cfg.DisableRegistration {
 		updateGuardianInfo(cfg.Vault)
 	}
 

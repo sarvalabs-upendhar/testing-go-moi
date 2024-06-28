@@ -10,21 +10,21 @@ import (
 )
 
 type Config struct {
-	NodeType       int              `json:"node_type"`
-	KramaIDVersion int              `json:"ḭd_version"`
-	Vault          VaultConfig      `json:"vault"`
-	Network        NetworkConfig    `json:"network"`
-	Syncer         SyncerConfig     `json:"syncer"`
-	IxPool         IxPoolConfig     `json:"ixpool"`
-	Consensus      ConsensusConfig  `json:"consensus"`
-	Execution      ExecutionConfig  `json:"execution"`
-	DB             DBConfig         `json:"database"`
-	Telemetry      Telemetry        `json:"telemetry"`
-	LogFilePath    string           `json:"logfile"`
-	JSONRPC        JSONRPCConfig    `json:"jsonrpc"`
-	NetworkID      config.NetworkID `json:"network_id"`
-	State          StateConfig      `json:"state"`
-	GenesisTime    uint64           `json:"genesis_time"`
+	NodeType            int              `json:"node_type"`
+	KramaIDVersion      int              `json:"ḭd_version"`
+	Vault               VaultConfig      `json:"vault"`
+	Network             NetworkConfig    `json:"network"`
+	Syncer              SyncerConfig     `json:"syncer"`
+	IxPool              IxPoolConfig     `json:"ixpool"`
+	Consensus           ConsensusConfig  `json:"consensus"`
+	Execution           ExecutionConfig  `json:"execution"`
+	DB                  DBConfig         `json:"database"`
+	Telemetry           Telemetry        `json:"telemetry"`
+	LogFilePath         string           `json:"logfile"`
+	JSONRPC             JSONRPCConfig    `json:"jsonrpc"`
+	NetworkID           config.NetworkID `json:"network_id"`
+	State               StateConfig      `json:"state"`
+	DisableRegistration bool             `json:"disable_registration"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
@@ -355,7 +355,8 @@ func DefaultBabylonConfig(path string) *Config {
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
-		NetworkID: config.Babylon,
+		NetworkID:           config.Babylon,
+		DisableRegistration: false,
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},

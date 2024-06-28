@@ -13,20 +13,21 @@ import (
 )
 
 type Config struct {
-	NodeType       int
-	KramaIDVersion int
-	Vault          *crypto.VaultConfig
-	Network        *NetworkConfig
-	Consensus      *ConsensusConfig
-	DB             *DBConfig
-	Execution      *ExecutionConfig
-	IxPool         *IxPoolConfig
-	Syncer         *SyncerConfig
-	Metrics        Telemetry
-	LogFilePath    string
-	JSONRPC        *JSONRPCConfig
-	NetworkID      NetworkID
-	State          *StateConfig
+	NodeType            int
+	KramaIDVersion      int
+	Vault               *crypto.VaultConfig
+	Network             *NetworkConfig
+	Consensus           *ConsensusConfig
+	DB                  *DBConfig
+	Execution           *ExecutionConfig
+	IxPool              *IxPoolConfig
+	Syncer              *SyncerConfig
+	Metrics             Telemetry
+	LogFilePath         string
+	JSONRPC             *JSONRPCConfig
+	NetworkID           NetworkID
+	DisableRegistration bool
+	State               *StateConfig
 }
 
 type Telemetry struct {

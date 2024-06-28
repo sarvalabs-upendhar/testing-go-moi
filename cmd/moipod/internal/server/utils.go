@@ -215,6 +215,10 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 		p.rawCfg.DB.CleanDB = CleanDB
 	}
 
+	if isDisableRegistrationSet(cmd) {
+		p.rawCfg.DisableRegistration = DisableRegistration
+	}
+
 	if isAllowOriginsSet(cmd) {
 		p.rawCfg.Network.CorsAllowedOrigins = CorsAllowedOrigins
 	}
@@ -409,20 +413,21 @@ func (p *Params) processRawParams() error {
 // generateNodeConfig generates node config using params
 func (p *Params) generateNodeConfig(dataDir string) *config.Config {
 	return &config.Config{
-		NodeType:       p.rawCfg.NodeType,
-		KramaIDVersion: p.rawCfg.KramaIDVersion,
-		Vault:          p.getVaultConfig(),
-		Network:        p.getNetworkConfig(),
-		Consensus:      p.getConsensusConfig(dataDir),
-		DB:             p.getDBConfig(dataDir),
-		Execution:      p.getExecutionConfig(),
-		IxPool:         p.getIXPoolConfig(),
-		Syncer:         p.getSyncerConfig(),
-		Metrics:        *p.getTelemetryConfig(),
-		LogFilePath:    p.rawCfg.LogFilePath,
-		JSONRPC:        p.getJSONRPCConfig(),
-		NetworkID:      p.rawCfg.NetworkID,
-		State:          p.getStateConfig(),
+		NodeType:            p.rawCfg.NodeType,
+		KramaIDVersion:      p.rawCfg.KramaIDVersion,
+		Vault:               p.getVaultConfig(),
+		Network:             p.getNetworkConfig(),
+		Consensus:           p.getConsensusConfig(dataDir),
+		DB:                  p.getDBConfig(dataDir),
+		Execution:           p.getExecutionConfig(),
+		IxPool:              p.getIXPoolConfig(),
+		Syncer:              p.getSyncerConfig(),
+		Metrics:             *p.getTelemetryConfig(),
+		LogFilePath:         p.rawCfg.LogFilePath,
+		JSONRPC:             p.getJSONRPCConfig(),
+		NetworkID:           p.rawCfg.NetworkID,
+		State:               p.getStateConfig(),
+		DisableRegistration: p.rawCfg.DisableRegistration,
 	}
 }
 
@@ -477,6 +482,10 @@ func isEnableDebugModeSet(cmd *cobra.Command) bool {
 
 func isCleanDBSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(cleanDBFlag)
+}
+
+func isDisableRegistrationSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(disableRegistration)
 }
 
 func isAllowOriginsSet(cmd *cobra.Command) bool {
