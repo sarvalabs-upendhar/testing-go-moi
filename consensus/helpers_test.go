@@ -1039,8 +1039,7 @@ func getTestGenesisLogics(t *testing.T) []common.LogicSetupArgs {
 	require.NoError(t, err)
 
 	manifest := "0x" + common.BytesToHex(manifestEncoded)
-	calldata := "0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd8ee6a29e" +
-		"c442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"
+	calldata := "0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"
 
 	logic := common.LogicSetupArgs{
 		Name: "staking-contract",

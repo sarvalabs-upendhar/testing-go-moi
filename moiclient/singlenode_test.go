@@ -1231,8 +1231,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
 		Callsite: "Seed",
-		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
-			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
+		Calldata: common.Hex2Bytes("0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"),
 	}
 
 	rawLogicPayload, err := logicPayload.Bytes()
@@ -1326,8 +1325,7 @@ func (tn *TestSingleNode) TestCall() {
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
 		Callsite: "Seed",
-		Calldata: common.Hex2Bytes("0x0def010645e601c502d606b5078608e5086e616d65064d4f492d546f6b656e73656564657206ffcd" +
-			"8ee6a29ec442dbbf9c6124dd3aeb833ef58052237d521654740857716b34737570706c790305f5e10073796d626f6c064d4f49"),
+		Calldata: common.Hex2Bytes("0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"),
 	}
 
 	rawLogicPayload, err := logicPayload.Bytes()

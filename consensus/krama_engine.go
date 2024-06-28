@@ -1699,7 +1699,7 @@ func (k *Engine) setupGenesisLogics(
 		}
 
 		if receipt.Error != nil {
-			return nil, errors.Errorf("deployment call failed: %#x", receipt.Error)
+			return nil, errors.Errorf("deployment call failed: %v", receipt.Error)
 		}
 
 		// Update the dirty objects map with the logic state object
