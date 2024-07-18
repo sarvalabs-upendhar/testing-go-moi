@@ -27,10 +27,8 @@ var (
 	ErrAddrNotFound         = errors.New("address not found")
 	ErrStorageValueNotFound = errors.New("storage value not found")
 
-	ErrSenderNotConf       = errors.New("sender not configured for environment")
-	ErrReceiverNotConf     = errors.New("receiver not configured for environment")
-	ErrSenderAlreadyConf   = errors.New("sender already configured for environment")
-	ErrReceiverAlreadyConf = errors.New("receiver already configured for environment")
+	ErrSenderNotConf     = errors.New("sender not configured for environment")
+	ErrSenderAlreadyConf = errors.New("sender already configured for environment")
 )
 
 var Engines = []engineio.EngineKind{
