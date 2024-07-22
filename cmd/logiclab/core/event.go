@@ -17,6 +17,7 @@ import (
 )
 
 const (
+	MaxTopics         = 4
 	MaxHead           = 10000
 	EventStorageLimit = 1000
 )
@@ -237,5 +238,15 @@ func FilterByName(name string) EventFilter {
 
 	return func(event Event) bool {
 		return event.Topics[0] == eventHash
+	}
+}
+
+func FilterByTopic(index int, topicHash common.Hash) EventFilter {
+	return func(event Event) bool {
+		if index >= 1 && index < len(event.Topics) {
+			return event.Topics[index] == topicHash
+		}
+
+		return false
 	}
 }
