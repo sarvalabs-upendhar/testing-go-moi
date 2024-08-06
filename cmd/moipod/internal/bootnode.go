@@ -35,7 +35,8 @@ import (
 
 var (
 	portNumber    int
-	ipAddress     string
+	ipv4Address   string
+	ipv6Address   string
 	keyFile       string
 	minConnReq    int
 	maxConnReq    int
@@ -56,13 +57,14 @@ func GetBootNodeCommand() *cobra.Command {
 }
 
 func parseBootNodeFlags(cmd *cobra.Command) {
-	ipAddr, err := common.GetIP()
+	ipv4Addr, err := common.GetIP()
 	if err != nil {
 		common.Err(errors.Wrap(err, "failed to fetch IP addr"))
 	}
 
 	cmd.PersistentFlags().IntVar(&portNumber, "port", 4001, "Provide the port number.")
-	cmd.PersistentFlags().StringVar(&ipAddress, "ip-address", ipAddr, "Provide the listener IP address.")
+	cmd.PersistentFlags().StringVar(&ipv6Address, "ipv6-address", "::", "Provide the listener IPV6 address.")
+	cmd.PersistentFlags().StringVar(&ipv4Address, "ipv4-address", ipv4Addr, "Provide the listener IPV4 address.")
 	cmd.PersistentFlags().StringVar(&keyFile, "key-path", "file.key", "Path to keystore file.")
 	cmd.PersistentFlags().IntVar(&minConnReq, "min-conn", 200, "Min number of connections allowed.")
 	cmd.PersistentFlags().IntVar(&maxConnReq, "max-conn", 400, "Max number of connections allowed.")
@@ -85,7 +87,12 @@ func startBootNode() {
 		log.Panic("Failed to get private keys : ", err)
 	}
 
-	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddress, portNumber))
+	sourceMultiAddr4, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipv4Address, portNumber))
+	if err != nil {
+		panic(err)
+	}
+
+	sourceMultiAddr6, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip6/%s/tcp/%d", ipv6Address, portNumber))
 	if err != nil {
 		panic(err)
 	}
@@ -124,8 +131,17 @@ func startBootNode() {
 	}
 
 	addrsFactory := func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
-		if ipAddress != "0.0.0.0" {
-			addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipAddress, portNumber))
+		if ipv4Address != "0.0.0.0" {
+			addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipv4Address, portNumber))
+			if err != nil {
+				panic(err)
+			}
+
+			addrs = append(addrs, addr)
+		}
+
+		if ipv6Address != "::" {
+			addr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip6/%s/tcp/%d", ipv6Address, portNumber))
 			if err != nil {
 				panic(err)
 			}
@@ -139,7 +155,7 @@ func startBootNode() {
 	// libp2p.New constructs a new libp2p Host.
 	// Other options can be added here.
 	p2pHost, err := libp2p.New(
-		libp2p.ListenAddrs(sourceMultiAddr),
+		libp2p.ListenAddrs(sourceMultiAddr4, sourceMultiAddr6),
 		libp2p.ChainOptions(
 			libp2p.Transport(tcp.NewTCPTransport),
 			libp2p.Transport(quic.NewTransport),
@@ -191,7 +207,8 @@ func startBootNode() {
 	go maintainConnections(context.Background(), p2pHost, peerInfoList)
 
 	fmt.Println("")
-	fmt.Printf("[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", ipAddress, portNumber, p2pHost.ID().String())
+	fmt.Printf("[*] Your Bootstrap ID Is: /ip4/%s/tcp/%v/p2p/%s\n", ipv4Address, portNumber, p2pHost.ID().String())
+	fmt.Printf("[*] Your Bootstrap ID Is: /ip6/%s/tcp/%v/p2p/%s\n", ipv6Address, portNumber, p2pHost.ID().String())
 	fmt.Println("")
 
 	sigChan := make(chan os.Signal, 1)

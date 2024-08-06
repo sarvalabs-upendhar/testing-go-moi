@@ -43,8 +43,8 @@ func DefaultBabylonConfig(path string) *Config {
 				"/ip6/::/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
 			},
 			BootStrapPeers: []string{
-				"/ip4/65.109.138.198/tcp/5000/p2p/16Uiu2HAmNPceqBKGNWXGTKTtWDPty4UhncdhB84VbDEPpn1H11Cb",
-				"/ip4/135.181.206.93/tcp/5000/p2p/16Uiu2HAmFXiKHS3GWgdS1V36uUBDUjigf3RZRJCrjDFFMjexR3V8",
+				"/dns/bootnode1.moi.technology/tcp/5000/p2p/16Uiu2HAmNPceqBKGNWXGTKTtWDPty4UhncdhB84VbDEPpn1H11Cb",
+				"/dns/bootnode2.moi.technology/tcp/5000/p2p/16Uiu2HAmFXiKHS3GWgdS1V36uUBDUjigf3RZRJCrjDFFMjexR3V8",
 			},
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   config.DefaultInboundConnLimit,
@@ -446,8 +446,7 @@ type NetworkConfig struct {
 	MaxPeers           uint          `json:"max_peers"`
 	RelayNodeAddr      string        `json:"relay_node_addr"`
 	Libp2pAddr         []string      `json:"libp2p_addr"`
-	PublicP2pAddr      []string      `json:"public_p2p_addr"`
-	P2PHostPort        int           `json:"p2p_host_port"`
+	PublicP2PAddresses []string      `json:"public_p2p_addresses"`
 	JSONRPCAddr        string        `json:"jsonrpc_addr"`
 	MTQ                float64       `json:"mtq"`
 	CorsAllowedOrigins []string      `json:"cors_allowed_origins"`

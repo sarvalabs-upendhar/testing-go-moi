@@ -9,7 +9,6 @@ require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.3
 	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
-	github.com/chzyer/readline v1.5.1
 	github.com/cskr/pubsub v1.0.2
 	github.com/deckarep/golang-set v1.8.0
 	github.com/decred/dcrd/crypto/blake256 v1.0.1
@@ -34,7 +33,6 @@ require (
 	github.com/libp2p/go-libp2p-pubsub v0.10.0
 	github.com/libp2p/go-msgio v0.3.0
 	github.com/manishmeganathan/depgraph v0.1.0
-	github.com/manishmeganathan/symbolizer v0.2.1
 	github.com/minio/highwayhash v1.0.2
 	github.com/moby/locker v1.0.1
 	github.com/mr-tron/base58 v1.2.0
@@ -132,6 +130,7 @@ require (
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/libp2p/go-reuseport v0.4.0 // indirect
 	github.com/libp2p/go-yamux/v4 v4.0.1 // indirect
+	github.com/manishmeganathan/symbolizer v0.2.1 // indirect
 	github.com/marten-seemann/tcp v0.0.0-20210406111302-dfbc87cc63fd // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect

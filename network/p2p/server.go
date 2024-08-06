@@ -224,7 +224,7 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 	}
 
 	// filters out address based on server config flags
-	addrsFactory, err := makeAddrsFactory(s.cfg.DisablePrivateIP, s.cfg.AllowIPv6Addresses, s.cfg.PublicP2pAddresses)
+	addrsFactory, err := makeAddrsFactory(s.cfg.DisablePrivateIP, s.cfg.AllowIPv6Addresses, s.cfg.PublicP2PAddresses)
 	if err != nil {
 		return nil, err
 	}

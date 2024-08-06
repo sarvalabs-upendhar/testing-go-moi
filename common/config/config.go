@@ -71,9 +71,8 @@ type NetworkConfig struct {
 	MaxPeers           uint
 	RelayNodeAddr      string
 	ListenAddresses    []maddr.Multiaddr
-	PublicP2pAddresses []maddr.Multiaddr
+	PublicP2PAddresses []maddr.Multiaddr
 	JSONRPCAddr        *net.TCPAddr
-	P2PHostPort        int
 	MTQ                float64
 	CorsAllowedOrigins []string
 
@@ -135,7 +134,7 @@ func DefaultDevnetConfig(path string) *Config {
 		},
 		Network: &NetworkConfig{
 			ListenAddresses:    make([]maddr.Multiaddr, 0),
-			PublicP2pAddresses: make([]maddr.Multiaddr, 0),
+			PublicP2PAddresses: make([]maddr.Multiaddr, 0),
 			BootstrapPeers:     make([]maddr.Multiaddr, 0),
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   DefaultInboundConnLimit,

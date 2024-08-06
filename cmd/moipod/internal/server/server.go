@@ -44,8 +44,7 @@ var (
 	Babylon            bool
 	Bootnodes          []string
 	NodePassword       string
-	P2pHostIP          string
-	P2PHostPort        int
+	PublicP2PAddresses []string
 	AllowIPv6Addresses bool
 	NetworkRPCUrl      string
 	LocalRPCUrl        string
@@ -57,7 +56,7 @@ var (
 const (
 	genesisFlag            = "genesis-path"
 	configFlag             = "config-path"
-	LogDirPathFlag         = "log-dir"
+	logDirPathFlag         = "log-dir"
 	operatorSlotFlag       = "operator-slots"
 	validatorSlotFlag      = "validator-slots"
 	dataDirFlag            = "data-dir"
@@ -68,8 +67,7 @@ const (
 	babylonFlag            = "babylon"
 	bootNodesFlag          = "bootnodes"
 	nodePasswordFlag       = "node-password"
-	p2pHostIPFlag          = "p2p-host-ip"
-	p2pHostPortFlag        = "p2p-host-port"
+	publicP2PAddrFlag      = "public-p2p-addresses"
 	allowIPv6AddressesFlag = "allow-ipv6-addresses"
 	networkRPCFlag         = "network-rpc-url"
 	localRPCFlag           = "local-rpc-url"
@@ -100,10 +98,10 @@ func runCommand(cmd *cobra.Command, args []string) {
 
 func parseFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&GenesisPath, genesisFlag, "genesis.json", "Path to genesis.json file.")
-	cmd.PersistentFlags().StringVar(&P2pHostIP, p2pHostIPFlag, "0.0.0.0", "The ipv4/ipv6 address for the p2p host.")
-	cmd.PersistentFlags().IntVar(&P2PHostPort, p2pHostPortFlag, config.DefaultP2PPort, "The port for the p2p host.")
+	cmd.PersistentFlags().StringSliceVar(&PublicP2PAddresses, publicP2PAddrFlag,
+		[]string{}, "List of public multi address advertised by libp2p host")
 	cmd.PersistentFlags().StringVar(&ConfigPath, configFlag, "", "Path to config.json file.")
-	cmd.PersistentFlags().StringVar(&LogDirPath, LogDirPathFlag, "", "Path to log directory.")
+	cmd.PersistentFlags().StringVar(&LogDirPath, logDirPathFlag, "", "Path to log directory.")
 	cmd.PersistentFlags().IntVar(&OperatorSlots, operatorSlotFlag, -1, "Maximum number of operator slots.")
 	cmd.PersistentFlags().IntVar(&ValidatorSlots, validatorSlotFlag, -1, "Maximum number of validator slots.")
 	cmd.PersistentFlags().StringVar(&Directory, dataDirFlag, "", "Data directory location.")
