@@ -21,6 +21,19 @@ type Account struct {
 	Data []byte
 }
 
+func (kind AccountKind) String() string {
+	switch kind {
+	case UserAccount:
+		return "user"
+	case LogicAccount:
+		return "logic"
+	case AssetAccount:
+		return "asset"
+	default:
+		panic("unknown account type")
+	}
+}
+
 func (acc *Account) Encode() ([]byte, error) {
 	rawData, err := polo.Polorize(acc)
 	if err != nil {
@@ -36,17 +49,4 @@ func (acc *Account) Decode(bytes []byte) error {
 	}
 
 	return nil
-}
-
-func (kind AccountKind) String() string {
-	switch kind {
-	case UserAccount:
-		return "user"
-	case LogicAccount:
-		return "logic"
-	case AssetAccount:
-		return "asset"
-	default:
-		panic("unknown account type")
-	}
 }

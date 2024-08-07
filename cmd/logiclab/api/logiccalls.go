@@ -159,7 +159,7 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 	}
 
 	// Generate an interaction from the kind, callsite, calldata and manifest
-	ixn := core.LogicInteraction{
+	ixn := core.Interaction{
 		Nonce: env.Nonce,
 		Limit: env.CallFuel,
 		Price: new(big.Int).SetUint64(core.LabFuelPrice),
@@ -314,7 +314,7 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderAddress, logicID)
 
 	// Generate an interaction from the kind, callsite, calldata and manifest
-	ixn := core.LogicInteraction{
+	ixn := core.Interaction{
 		Nonce: env.Nonce,
 		Limit: env.CallFuel,
 		Price: new(big.Int).SetUint64(core.LabFuelPrice),
@@ -469,7 +469,7 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderAddress, logicID)
 
 	// Generate an interaction from the kind, callsite and calldata
-	ixn := core.LogicInteraction{
+	ixn := core.Interaction{
 		Nonce: env.Nonce,
 		Limit: env.CallFuel,
 		Price: new(big.Int).SetUint64(core.LabFuelPrice),

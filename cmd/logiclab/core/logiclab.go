@@ -36,9 +36,9 @@ var Engines = []engineio.EngineKind{
 }
 
 const (
-	DefaultDirPath     = "./.logiclab"
-	DefaultEnvironment = "main"
-	DefaultPort        = 6060
+	DefaultDir  = "./.logiclab"
+	DefaultEnv  = "main"
+	DefaultPort = 6060
 )
 
 type Lab struct {
@@ -61,7 +61,7 @@ func NewLab(dirpath string) (*Lab, error) {
 
 	// Add the default environment to the lab
 	// If the environment already exists, this is a no-op
-	if err = lab.AddEnvironment(DefaultEnvironment); err != nil {
+	if err = lab.AddEnvironment(DefaultEnv); err != nil {
 		if !errors.Is(err, ErrEnvAlreadyExists) {
 			return nil, err
 		}
@@ -119,28 +119,20 @@ func (lab *Lab) GetEnvironment(env string) (*Environment, bool, error) {
 
 	// Decode the value into an Environment
 	environment := new(Environment)
+	// Attach the db client to the environment
+	environment.database = lab.Database
+
 	if err = environment.Decode(raw); err != nil {
 		return nil, true, err
 	}
 
-	// Attach the db client to the environment
-	environment.database = lab.Database
 	// Cache the environment
 	lab.envcache[env] = environment
-
-	// Load the event db from the db
-	eventDB, err := loadEventDB(environment.ID, environment.database)
-	if err != nil {
-		return nil, false, err
-	}
-
-	// Attach the event db to the environment
-	environment.eventDB = eventDB
 
 	return environment, true, nil
 }
 
-func (lab *Lab) GetAllEnvironments() ([]string, error) {
+func (lab *Lab) ListEnvironments() ([]string, error) {
 	// Get all entries in the db with 'environ' prefix
 	entries, err := lab.Database.PrefixCollect(db.TagEnviron)
 	if err != nil {
@@ -227,10 +219,6 @@ func (lab *Lab) HandleInterrupt() func() {
 // Close exits the logiclab environment
 func (lab *Lab) Close() error {
 	for id, env := range lab.envcache {
-		if err := saveEventDB(env); err != nil {
-			return err
-		}
-
 		encoded, err := env.Encode()
 		if err != nil {
 			return errors.Wrap(err, "unable to encode environment")

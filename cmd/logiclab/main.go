@@ -60,7 +60,7 @@ func parseflags(cmd *cobra.Command) {
 		"dir", "d", "",
 		fmt.Sprintf("root directory path for logiclab. if the 'dir' flag is provided, its value is used. otherwise, "+
 			"it defaults to the value of 'LABDIR' environment variable, if set, or to '%v' if "+
-			"neither is specified.", core.DefaultDirPath),
+			"neither is specified.", core.DefaultDir),
 	)
 
 	// -s | --silent [bool]
@@ -98,7 +98,7 @@ func startLogicLab(command *cobra.Command, args []string) {
 		if exists {
 			dir = labdir
 		} else {
-			dir = core.DefaultDirPath
+			dir = core.DefaultDir
 		}
 	}
 
