@@ -229,7 +229,8 @@ func FilterByAddress(address identifiers.Address) EventFilter {
 }
 
 func FilterByName(name string) EventFilter {
-	eventHash := blake2b.Sum256([]byte(name))
+	encoded, _ := polo.Polorize(name)
+	eventHash := blake2b.Sum256(encoded)
 
 	return func(event Event) bool {
 		return event.Topics[0] == eventHash

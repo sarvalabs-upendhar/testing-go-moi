@@ -191,6 +191,12 @@ func (lab *Lab) DelEnvironment(env string) error {
 	return nil
 }
 
+func (lab *Lab) ResetEnvCache() error {
+	lab.envcache = make(map[string]*Environment)
+
+	return nil
+}
+
 // ClusterID implements the engineio.EnvDriver for Environment.
 // Returns the "LogicLab" constant.
 func (lab *Lab) ClusterID() string { return "LogicLab" }
