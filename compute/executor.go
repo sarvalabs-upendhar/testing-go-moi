@@ -4,7 +4,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
@@ -89,7 +89,7 @@ func (executor *IxExecutor) executeInteraction(
 	executor.transition.SetReceipt(ix.Hash(), receipt)
 
 	// Deduct fuel for the ix execution from the sender
-	executor.transition.DeductFuel(ix.Sender(), new(big.Int).SetUint64(receipt.FuelUsed))
+	executor.transition.DeductFuel(ix.Sender(), new(big.Int).Mul(ix.FuelPrice(), new(big.Int).SetUint64(receipt.FuelUsed)))
 
 	// Update Sarga state if the interaction receiver if it is an unregistered (new) account
 	if err := executor.updateSargaState(ix); err != nil {

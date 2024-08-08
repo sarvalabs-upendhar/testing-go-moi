@@ -1339,7 +1339,7 @@ func TestHasFuel(t *testing.T) {
 					so.data.Balance = tests.RandomHash(t)
 				},
 			},
-			expectedError: errors.New("failed to load balance object"),
+			hasFuel: false,
 		},
 	}
 

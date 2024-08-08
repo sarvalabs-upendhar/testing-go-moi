@@ -3,6 +3,7 @@ package state
 import (
 	"context"
 	"errors"
+	"math/big"
 	"testing"
 
 	"github.com/decred/dcrd/crypto/blake256"
@@ -1118,6 +1119,7 @@ func TestStateManager_GetBalance(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			balance, err := sm.GetBalance(test.address, test.assetID, test.stateHash)
 			if test.expectedError != nil {
+				require.Equal(t, big.NewInt(0), balance)
 				require.ErrorContains(t, err, test.expectedError.Error())
 
 				return

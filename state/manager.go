@@ -779,7 +779,7 @@ func (sm *StateManager) GetBalance(
 ) (*big.Int, error) {
 	so, err := sm.getStateObject(addrs, stateHash)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to fetch state object")
+		return big.NewInt(0), errors.Wrap(err, "failed to fetch state object")
 	}
 
 	return so.BalanceOf(assetID)

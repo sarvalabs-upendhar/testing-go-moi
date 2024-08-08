@@ -101,12 +101,12 @@ func (ms *MockStateManager) GetBalance(
 ) (*big.Int, error) {
 	assets, ok := ms.balance[addrs]
 	if !ok {
-		return nil, common.ErrFetchingBalance
+		return big.NewInt(0), common.ErrFetchingBalance
 	}
 
 	va, ok := assets[assetID]
 	if !ok {
-		return nil, common.ErrFetchingBalance
+		return big.NewInt(0), common.ErrFetchingBalance
 	}
 
 	return va, nil

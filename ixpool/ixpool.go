@@ -541,12 +541,7 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 		}
 	*/
 
-	moiBal, err := i.sm.GetBalance(ix.Sender(), common.KMOITokenAssetID, common.NilHash)
-	if err != nil {
-		i.logger.Error("Error fetching balance", "sender", ix.Sender(), "err", err)
-
-		return common.ErrInsufficientFunds
-	}
+	moiBal, _ := i.sm.GetBalance(ix.Sender(), common.KMOITokenAssetID, common.NilHash)
 
 	if moiBal.Cmp(ix.Cost()) < 0 {
 		return common.ErrInsufficientFunds
