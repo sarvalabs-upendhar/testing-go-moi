@@ -7,6 +7,9 @@ import (
 	"sync"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/state"
 
 	"github.com/hashicorp/go-hclog"
@@ -54,6 +57,18 @@ type executionManager interface {
 	ValidateLogicEnlist(ix *common.Interaction, calleracc, logicacc *state.Object) error
 }
 
+type p2pServer interface {
+	Subscribe(
+		ctx context.Context,
+		topicName string,
+		validator utils.WrappedVal,
+		defaultValidator bool,
+		handler func(msg *pubsub.Message) error,
+	) error
+	Broadcast(topicName string, data []byte) error
+	GetKramaID() kramaid.KramaID
+}
+
 type IxConfig struct {
 	Mode       int
 	PriceLimit uint64
@@ -65,6 +80,8 @@ type IxPool struct {
 	mu        sync.RWMutex
 	logger    hclog.Logger
 	cfg       *config.IxPoolConfig
+	msgCache  *ixSaltedCache
+	network   p2pServer
 	sm        stateManager
 	exec      executionManager
 	allIxs    *lookupMap
@@ -81,6 +98,7 @@ type IxPool struct {
 func NewIxPool(
 	logger hclog.Logger,
 	mux *utils.TypeMux,
+	node p2pServer,
 	sm stateManager,
 	exec executionManager,
 	cfg *config.IxPoolConfig,
@@ -93,6 +111,7 @@ func NewIxPool(
 		ctxCancel: ctxCancel,
 		cfg:       cfg,
 		mux:       mux,
+		network:   node,
 		sm:        sm,
 		exec:      exec,
 		allIxs:    NewLookupMap(),
@@ -108,6 +127,10 @@ func NewIxPool(
 		metrics:  metrics,
 		logger:   logger.Named("Ix-Pool"),
 		verifier: verifier,
+	}
+
+	if cfg.EnableRawIxFiltering {
+		i.msgCache = newSaltedCache(int(cfg.IxIncomingFilterMaxSize))
 	}
 
 	return i
@@ -242,12 +265,58 @@ func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
 	return nil
 }
 
-func (i *IxPool) AddInteractions(ixs common.Interactions) []error {
+// AddRemoteInteractions validates and adds interactions broadcasted from other peers.
+// To avoid spamming, the entire Ixn group is rejected if any single ixn is oversize or has an invalid addr/signature.
+// Ixn groups are also ignored if the size of the group is greater than 10 and more than 50% of the ixns are invalid.
+func (i *IxPool) AddRemoteInteractions(ixs common.Interactions) pubsub.ValidationResult {
+	count := 0
+
+	for _, ix := range ixs {
+		if err := i.validateAndEnqueueIx(ix); err != nil {
+			switch {
+			case errors.Is(err, ErrOversizedData),
+				errors.Is(err, common.ErrInvalidAddress),
+				errors.Is(err, common.ErrInvalidIXSignature):
+				i.logger.Error("Rejecting ixns", "ix-hash", ix.Hash(), "error", err)
+
+				return pubsub.ValidationReject
+			}
+
+			count++
+		}
+	}
+
+	if ixnCount := len(ixs); ixnCount > 10 && count > ixnCount/2 {
+		return pubsub.ValidationIgnore
+	}
+
+	return pubsub.ValidationAccept
+}
+
+// AddLocalInteractions validates and adds interactions to the interaction pool.
+// If flooding is disabled, the interactions are broadcast to the network through gossip sub.
+func (i *IxPool) AddLocalInteractions(ixs common.Interactions) []error {
 	errs := make([]error, 0, len(ixs))
+	validIxs := make(common.Interactions, 0)
 
 	for _, ix := range ixs {
 		if err := i.validateAndEnqueueIx(ix); err != nil {
 			errs = append(errs, err)
+		} else {
+			validIxs = append(validIxs, ix)
+		}
+	}
+
+	if !i.cfg.EnableIxFlooding && len(validIxs) > 0 {
+		rawData, err := validIxs.Bytes()
+		if err != nil {
+			i.logger.Error("unable to polorize ixns", "ixns", validIxs)
+
+			return errs
+		}
+
+		if err = i.network.Broadcast(config.IxTopic, rawData); err != nil {
+			i.logger.Error("failed to broadcast ixns", "error", err)
 		}
 	}
 
@@ -829,10 +898,83 @@ func (i *IxPool) Close() {
 	i.ctxCancel()
 }
 
-func (i *IxPool) Start() {
+func (i *IxPool) incomingMsgDupCheck(data []byte) (*common.Hash, bool) {
+	var (
+		msgKey *common.Hash
+		isDup  bool
+	)
+
+	if i.msgCache != nil {
+		// check for duplicate messages
+		// this helps against relaying duplicates
+		if msgKey, isDup = i.msgCache.CheckAndPut(data); isDup {
+			i.metrics.AddIxRawDupCount(1)
+
+			return msgKey, true
+		}
+	}
+
+	return msgKey, false
+}
+
+// IxValidator decides whether to propagate or reject interactions (ixns) based on validation checks.
+// It can forward valid transactions to peers, ignore invalid ones, or punish the sender.
+// Validations include checks for:
+// - Self-originated ixns
+// - Duplicate ixns
+// - Zero ixns
+// - Excess ixns
+// - ixn payload level checks
+func (i *IxPool) IxValidator(
+	ctx context.Context,
+	pid peer.ID,
+	msg *pubsub.Message,
+) (pubsub.ValidationResult, error) {
+	peerID, err := i.network.GetKramaID().DecodedPeerID()
+	if err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	if msg.GetFrom() == peerID {
+		return pubsub.ValidationAccept, nil
+	}
+
+	_, shouldDrop := i.incomingMsgDupCheck(msg.GetData())
+	if shouldDrop {
+		return pubsub.ValidationIgnore, nil
+	}
+
+	var ixns common.Interactions
+
+	if err := ixns.FromBytes(msg.GetData()); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	if ixnCount := len(ixns); ixnCount == 0 || ixnCount > i.cfg.MaxIxGroupSize {
+		i.logger.Error("Rejecting ixns", "peer-id", pid, "count", ixnCount)
+
+		return pubsub.ValidationReject, errors.New("invalid number of ixns")
+	}
+
+	return i.AddRemoteInteractions(ixns), nil
+}
+
+func (i *IxPool) Start() error {
 	i.metrics.initMetrics()
 
 	go i.handlePruning()
+
+	if i.msgCache != nil {
+		go i.msgCache.Start(i.ctx, 60*time.Second)
+	}
+
+	if !i.cfg.EnableIxFlooding {
+		if err := i.network.Subscribe(i.ctx, config.IxTopic, i.IxValidator, false, nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (i *IxPool) post(ev interface{}) error {

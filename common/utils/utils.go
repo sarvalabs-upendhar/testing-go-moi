@@ -5,6 +5,8 @@ This file has all the utility function required for KIP
 */
 import (
 	"context"
+	crand "crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"log"
 	"math"
@@ -29,6 +31,18 @@ const charset = "abcdefghijklmnopqrstuvwxyz" +
 
 func NewUint64(val uint64) *uint64 {
 	return &val
+}
+
+// RandUint64 returns a random 64-bit unsigned integer
+func RandUint64() uint64 {
+	var eightbytes [8]byte
+
+	_, err := crand.Read(eightbytes[:])
+	if err != nil {
+		log.Println("error reading random bytes", err)
+	}
+
+	return binary.LittleEndian.Uint64(eightbytes[:])
 }
 
 var seededRand = rand.New(

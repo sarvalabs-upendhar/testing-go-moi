@@ -158,6 +158,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
 			CorsAllowedOrigins: []string{"*"},
 			RefreshSenatus:     true,
+			EnableIPColocation: false,
 		},
 		Syncer: cmdCommon.SyncerConfig{
 			ShouldExecute:  shouldExecute,
@@ -194,9 +195,13 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
 		IxPool: cmdCommon.IxPoolConfig{
-			Mode:       config.DefaultIxPoolMode,
-			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
-			MaxSlots:   config.DefaultMaxIXPoolSlots,
+			Mode:                    config.DefaultIxPoolMode,
+			PriceLimit:              hexutil.Big(*config.DefaultIxPriceLimit),
+			MaxSlots:                config.DefaultMaxIXPoolSlots,
+			IxIncomingFilterMaxSize: config.DefaultIxIncomingFilterMaxSize,
+			MaxIxGroupSize:          config.DefaultMaxIxGroupSize,
+			EnableIxFlooding:        false,
+			EnableRawIxFiltering:    true,
 		},
 		Telemetry: cmdCommon.Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(config.DefaultPrometheusPort+index),

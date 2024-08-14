@@ -62,7 +62,8 @@ type Server struct {
 
 	id kramaid.KramaID // KramaID of the node
 
-	Peers *peerSet // peerSet of node
+	Peers      *peerSet // peerSet of node
+	peerScores *PeerScores
 
 	ds *DiscoveryService
 
@@ -106,6 +107,7 @@ func NewServer(
 		cfg:                 config,
 		mux:                 mux,
 		Peers:               newPeerSet(),
+		peerScores:          newPeerScores(),
 		rpcServers:          make(map[protocol.ID]*rpc.Server),
 		vault:               vault,
 		metrics:             metrics,
@@ -125,6 +127,10 @@ func (s *Server) Close() error {
 	s.ctxCancel()
 
 	return nil
+}
+
+func (s *Server) GetPeersScores() map[peer.ID]*pubsub.PeerScoreSnapshot {
+	return s.peerScores.Get()
 }
 
 func (s *Server) AddPeerInfo(info peer.AddrInfo) {

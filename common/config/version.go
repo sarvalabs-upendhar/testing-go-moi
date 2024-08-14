@@ -42,4 +42,5 @@ var MOIPingStream = protocol.ID("moi/ping/stream/" + ProtocolVersion)
 var (
 	HelloTopic     = fmt.Sprintf("MOI_PUBSUB_HELLO_%s", ProtocolVersion)
 	TesseractTopic = fmt.Sprintf("MOI_PUBSUB_TESSERACT_%s", ProtocolVersion)
+	IxTopic        = fmt.Sprintf("MOI_PUBSUB_INTERACTION_%s", ProtocolVersion)
 )

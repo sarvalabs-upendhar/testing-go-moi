@@ -5,6 +5,9 @@ import (
 	"math/big"
 	"testing"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-polo"
@@ -236,6 +239,82 @@ func TestCreateRPCReceipt(t *testing.T) {
 			receipt := CreateRPCReceipt(test.receipt, test.ix, test.tsHash, test.participants, test.ixIndex)
 
 			CheckForRPCReceipt(t, test.tsHash, test.participants, test.ix, test.receipt, receipt, test.ixIndex)
+		})
+	}
+}
+
+func TestCreateRPCPeersScore(t *testing.T) {
+	peersScore := map[peer.ID]*pubsub.PeerScoreSnapshot{
+		tests.RandomPeerID(t): {
+			Score: 3,
+			Topics: map[string]*pubsub.TopicScoreSnapshot{
+				tests.GetRandomUpperCaseString(t, 4): {
+					TimeInMesh:               19,
+					FirstMessageDeliveries:   21,
+					MeshMessageDeliveries:    23,
+					InvalidMessageDeliveries: 27,
+				},
+				tests.GetRandomUpperCaseString(t, 4): {
+					TimeInMesh:               31,
+					FirstMessageDeliveries:   33,
+					MeshMessageDeliveries:    37,
+					InvalidMessageDeliveries: 40,
+				},
+			},
+			AppSpecificScore:   22,
+			IPColocationFactor: 12,
+			BehaviourPenalty:   33,
+		},
+		tests.RandomPeerID(t): {
+			Score: 3,
+			Topics: map[string]*pubsub.TopicScoreSnapshot{
+				tests.GetRandomUpperCaseString(t, 4): {
+					TimeInMesh:               81,
+					FirstMessageDeliveries:   83,
+					MeshMessageDeliveries:    84,
+					InvalidMessageDeliveries: 89,
+				},
+				tests.GetRandomUpperCaseString(t, 4): {
+					TimeInMesh:               91,
+					FirstMessageDeliveries:   32,
+					MeshMessageDeliveries:    11,
+					InvalidMessageDeliveries: 31,
+				},
+			},
+			AppSpecificScore:   62,
+			IPColocationFactor: 72,
+			BehaviourPenalty:   88,
+		},
+	}
+
+	testcases := []struct {
+		name  string
+		peers map[peer.ID]*pubsub.PeerScoreSnapshot
+	}{
+		{
+			name:  "create rpc peer scores",
+			peers: peersScore,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			rpcPeersScore := CreateRPCPeersScore(test.peers)
+			require.Equal(t, len(rpcPeersScore), len(peersScore))
+
+			// check peersScore sorted by peer id
+			for i := 1; i < len(rpcPeersScore); i++ {
+				require.True(t, rpcPeersScore[i-1].ID < rpcPeersScore[i].ID)
+			}
+
+			// check if topics are sorted
+			for i := 0; i < len(rpcPeersScore); i++ {
+				for j := 1; j < len(rpcPeersScore[i].TopicScores); j++ {
+					require.True(t, rpcPeersScore[i].TopicScores[j-1].Name < rpcPeersScore[i].TopicScores[j].Name)
+				}
+			}
+
+			checkForRPCPeersScore(t, rpcPeersScore, peersScore)
 		})
 	}
 }

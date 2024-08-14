@@ -1,9 +1,16 @@
 package ixpool
 
 import (
+	"context"
+	crand "crypto/rand"
 	"errors"
 	"math/big"
+	"sync"
 	"testing"
+
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/sarvalabs/go-legacy-kramaid"
+	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/state"
 
@@ -134,6 +141,7 @@ func CreateTestIxpool(
 	skipSignatureVerification bool,
 	sm *MockStateManager,
 	exec *MockExecutionManager,
+	network *mockNetwork,
 ) *IxPool {
 	t.Helper()
 
@@ -157,6 +165,7 @@ func CreateTestIxpool(
 	return NewIxPool(
 		hclog.NewNullLogger(),
 		new(utils.TypeMux),
+		network,
 		sm,
 		exec,
 		cfg,
@@ -215,7 +224,6 @@ func (ms *MockExecutionManager) ValidateLogicInvoke(ix *common.Interaction, call
 }
 
 func (ms *MockExecutionManager) ValidateLogicEnlist(ix *common.Interaction, calleracc, logicacc *state.Object) error {
-	// TODO implement me
 	panic("implement me")
 }
 
@@ -233,6 +241,90 @@ func (ms *MockExecutionManager) ValidateLogicDeploy(ix *common.Interaction) erro
 	}
 
 	return nil
+}
+
+type mockNetwork struct {
+	broadcasted   map[string][]byte
+	subscriptions map[string]struct{}
+	kramaID       kramaid.KramaID
+}
+
+func newMockNetwork(kramaID kramaid.KramaID) *mockNetwork {
+	return &mockNetwork{
+		broadcasted:   make(map[string][]byte),
+		subscriptions: make(map[string]struct{}),
+		kramaID:       kramaID,
+	}
+}
+
+func (m *mockNetwork) Subscribe(ctx context.Context, topicName string,
+	validator utils.WrappedVal, defaultValidator bool, handler func(msg *pubsub.Message) error,
+) error {
+	m.subscriptions[topicName] = struct{}{}
+
+	return nil
+}
+
+func (m *mockNetwork) Broadcast(topicName string, data []byte) error {
+	m.broadcasted[topicName] = data
+
+	return nil
+}
+
+func (m *mockNetwork) GetKramaID() kramaid.KramaID {
+	return m.kramaID
+}
+
+// benchmark abstractions
+type cachePusher interface {
+	push()
+}
+
+type cacheMaker interface {
+	make(size int) cachePusher
+}
+
+type (
+	digestCacheMaker struct{}
+	saltedCacheMaker struct{}
+)
+
+func (m digestCacheMaker) make(size int) cachePusher {
+	return &digestCachePusher{c: newDigestCache(size)}
+}
+
+func (m saltedCacheMaker) make(size int) cachePusher {
+	scp := &saltedCachePusher{c: newSaltedCache(size)}
+	scp.c.Start(context.Background(), 0)
+
+	return scp
+}
+
+type digestCachePusher struct {
+	c *digestCache
+}
+type saltedCachePusher struct {
+	c *ixSaltedCache
+}
+
+func (p *digestCachePusher) push() {
+	var d [common.HashLength]byte
+
+	if _, err := crand.Read(d[:]); err != nil {
+		panic(err)
+	}
+
+	h := common.Hash(blake2b.Sum256(d[:])) // digestCache does not hashes so calculate hash here
+	p.c.CheckAndInsert(&h)
+}
+
+func (p *saltedCachePusher) push() {
+	var d [common.HashLength]byte
+	if _, err := crand.Read(d[:]); err != nil {
+		panic(err)
+	}
+
+	p.c.CheckAndPut(d[:]) // saltedCache hashes inside
 }
 
 func getIXParams(
@@ -379,7 +471,7 @@ func addAndProcessIxs(t *testing.T, sm *MockStateManager, ixPool *IxPool, ixs co
 		sm.setTestMOIBalance(t, v.Sender())
 	}
 
-	errs := ixPool.AddInteractions(ixs)
+	errs := ixPool.AddLocalInteractions(ixs)
 	require.Len(t, errs, 0)
 }
 
@@ -436,4 +528,36 @@ func getIxNonce(t *testing.T, ixs common.Interactions) map[identifiers.Address]u
 	}
 
 	return ixNonce
+}
+
+func calcCacheSize(numIter int) int {
+	size := numIter / 3 // in order to exercise map swaps
+	if size == 0 {
+		size++
+	}
+
+	return size
+}
+
+func benchmarkDigestCache(b *testing.B, m cacheMaker, numThreads int) {
+	b.Helper()
+
+	p := m.make(calcCacheSize(b.N))
+	numHashes := b.N / numThreads // num hashes per goroutine
+	// b.Logf("inserting %d (%d) values in %d threads into cache of size %d", b.N, numHashes,
+	// numThreads, calcCacheSize(b.N))
+	var wg sync.WaitGroup
+
+	wg.Add(numThreads)
+
+	for i := 0; i < numThreads; i++ {
+		go func() {
+			defer wg.Done()
+
+			for j := 0; j < numHashes; j++ {
+				p.push()
+			}
+		}()
+	}
+	wg.Wait()
 }

@@ -57,6 +57,7 @@ func DefaultBabylonConfig(path string) *Config {
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
 			RefreshSenatus:     true,
+			EnableIPColocation: true,
 		},
 		Syncer: SyncerConfig{
 			ShouldExecute: true,
@@ -336,9 +337,13 @@ func DefaultBabylonConfig(path string) *Config {
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
 		IxPool: IxPoolConfig{
-			Mode:       config.DefaultIxPoolMode,
-			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
-			MaxSlots:   config.DefaultMaxIXPoolSlots,
+			Mode:                    config.DefaultIxPoolMode,
+			PriceLimit:              hexutil.Big(*config.DefaultIxPriceLimit),
+			MaxSlots:                config.DefaultMaxIXPoolSlots,
+			IxIncomingFilterMaxSize: config.DefaultIxIncomingFilterMaxSize,
+			MaxIxGroupSize:          config.DefaultMaxIxGroupSize,
+			EnableIxFlooding:        false,
+			EnableRawIxFiltering:    true,
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
@@ -381,6 +386,7 @@ func DefaultDevnetConfig(path string) *Config {
 			AllowIPv6Addresses: false,
 			DisablePrivateIP:   false,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
+			EnableIPColocation: false,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
 			RefreshSenatus:     true,
@@ -418,9 +424,13 @@ func DefaultDevnetConfig(path string) *Config {
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
 		IxPool: IxPoolConfig{
-			Mode:       config.DefaultIxPoolMode,
-			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
-			MaxSlots:   config.DefaultMaxIXPoolSlots,
+			Mode:                    config.DefaultIxPoolMode,
+			PriceLimit:              hexutil.Big(*config.DefaultIxPriceLimit),
+			MaxSlots:                config.DefaultMaxIXPoolSlots,
+			IxIncomingFilterMaxSize: config.DefaultIxIncomingFilterMaxSize,
+			MaxIxGroupSize:          config.DefaultMaxIxGroupSize,
+			EnableIxFlooding:        false,
+			EnableRawIxFiltering:    true,
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
@@ -460,6 +470,7 @@ type NetworkConfig struct {
 	AllowIPv6Addresses bool          `json:"allow_ipv6_addresses"`
 	DisablePrivateIP   bool          `json:"disable_private_ip"`
 	DiscoveryInterval  time.Duration `json:"discovery_interval"`
+	EnableIPColocation bool          `json:"enable_ip_colocation"`
 }
 
 type SyncerConfig struct {
@@ -470,9 +481,13 @@ type SyncerConfig struct {
 }
 
 type IxPoolConfig struct {
-	Mode       int         `json:"mode"`
-	PriceLimit hexutil.Big `json:"price_limit"`
-	MaxSlots   uint64      `json:"max_slots"`
+	Mode                    int         `json:"mode"`
+	PriceLimit              hexutil.Big `json:"price_limit"`
+	MaxSlots                uint64      `json:"max_slots"`
+	IxIncomingFilterMaxSize uint64      `json:"ix_incoming_filter_max_size"`
+	MaxIxGroupSize          int         `json:"max_ix_group_size"`
+	EnableIxFlooding        bool        `json:"enable_ix_flooding"`
+	EnableRawIxFiltering    bool        `json:"enable_raw_ix_filtering"`
 }
 
 type DBConfig struct {

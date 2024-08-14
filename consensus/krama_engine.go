@@ -629,6 +629,8 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 	// Check whether the context hashes matches
 	for addr, info := range slot.ICSRequestMsg().ContextLock {
 		if slot.ClusterState().ParticipantHeight(addr) < info.Height {
+			k.metrics.AddTesseractMissCount(1)
+
 			if err := k.mux.Post(utils.SyncRequestEvent{
 				Address:  addr,
 				Height:   info.Height,
@@ -1329,7 +1331,7 @@ func (k *Engine) handleTSTracker(eventSub *utils.Subscription) {
 				if now.After(event.ExpiryTime) {
 					if event.Msg != nil {
 						if err := k.transport.BroadcastTesseract(event.Msg); err != nil {
-							k.logger.Error("Error broadcasting tesseract", "ts-hash", event.TSHash)
+							k.logger.Error("Error broadcasting tesseract", "ts-hash", event.TSHash, "error", err)
 						}
 					}
 

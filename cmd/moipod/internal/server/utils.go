@@ -288,6 +288,7 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		AllowIPv6Addresses: p.rawCfg.Network.AllowIPv6Addresses,
 		DisablePrivateIP:   p.rawCfg.Network.DisablePrivateIP,
 		DiscoveryInterval:  p.rawCfg.Network.DiscoveryInterval,
+		EnableIPColocation: p.rawCfg.Network.EnableIPColocation,
 	}
 }
 
@@ -343,9 +344,13 @@ func (p *Params) getExecutionConfig() *config.ExecutionConfig {
 
 func (p *Params) getIXPoolConfig() *config.IxPoolConfig {
 	return &config.IxPoolConfig{
-		Mode:       p.rawCfg.IxPool.Mode,
-		PriceLimit: p.rawCfg.IxPool.PriceLimit.ToInt(),
-		MaxSlots:   p.rawCfg.IxPool.MaxSlots,
+		Mode:                    p.rawCfg.IxPool.Mode,
+		PriceLimit:              p.rawCfg.IxPool.PriceLimit.ToInt(),
+		MaxSlots:                p.rawCfg.IxPool.MaxSlots,
+		IxIncomingFilterMaxSize: p.rawCfg.IxPool.IxIncomingFilterMaxSize,
+		MaxIxGroupSize:          p.rawCfg.IxPool.MaxIxGroupSize,
+		EnableIxFlooding:        p.rawCfg.IxPool.EnableIxFlooding,
+		EnableRawIxFiltering:    p.rawCfg.IxPool.EnableRawIxFiltering,
 	}
 }
 

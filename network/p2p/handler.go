@@ -25,7 +25,7 @@ const (
 )
 
 type ixPool interface {
-	AddInteractions(ixs common.Interactions) []error
+	AddLocalInteractions(ixs common.Interactions) []error
 }
 
 type ReputationManager interface {
@@ -59,10 +59,11 @@ func NewSubHandler(
 	mux *utils.TypeMux,
 	pool ixPool,
 	chain *lattice.ChainManager,
+	enableIxFlooding bool,
 ) *SubHandler {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 
-	return &SubHandler{
+	s := &SubHandler{
 		id:                  id,
 		ctx:                 ctx,
 		ctxCancel:           ctxCancel,
@@ -75,14 +76,19 @@ func NewSubHandler(
 		logger:              logger.Named("Sub-Handler"),
 		signalChan:          make(chan struct{}),
 		pendingMessageQueue: NewRequestQueue(MaxQueueSize), // Max message queue limit is 200
-		// Subscribe the TypeMux to AddedInteractionEvent and NewPeerEvent events
-		ixSub: mux.Subscribe(utils.AddedInteractionEvent{}),
 	}
+
+	// Subscribe the TypeMux to AddedInteractionEvent and NewPeerEvent events
+	if enableIxFlooding {
+		s.ixSub = mux.Subscribe(utils.AddedInteractionEvent{})
+	}
+
+	return s
 }
 
 // Start is a method of SubHandler that start the handler.
 // Initializes it TypeMux subscriptions and handler loops.
-func (eh *SubHandler) Start() error {
+func (eh *SubHandler) Start(enableIxFlooding bool) error {
 	if err := eh.server.Subscribe(
 		eh.ctx,
 		config.HelloTopic,
@@ -96,7 +102,10 @@ func (eh *SubHandler) Start() error {
 	go eh.messageWorker()
 	// Start the handler loops for new peers, broadcasting interactions
 	go eh.msgHandler()
-	go eh.ixBroadcastLoop()
+
+	if enableIxFlooding {
+		go eh.ixBroadcastLoop()
+	}
 
 	return nil
 }
@@ -150,7 +159,7 @@ func (eh *SubHandler) handleMsg(msg *networkmsg.Message) error {
 		}
 
 		// Add the interactions to the handler's interaction pool
-		errs := eh.ixpool.AddInteractions(*ixns)
+		errs := eh.ixpool.AddLocalInteractions(*ixns)
 		for index, err := range errs {
 			if err != nil {
 				if errors.Is(err, common.ErrAlreadyKnown) {

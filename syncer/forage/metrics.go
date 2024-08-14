@@ -14,6 +14,7 @@ type Metrics struct {
 	TotalJobs         metrics.Gauge
 	JobProcessingTime metrics.Histogram
 	BucketSyncTime    metrics.Histogram
+	IxMissCount       metrics.Counter
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -50,6 +51,12 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Help:      "Time taken to sync buckets",
 			Buckets:   []float64{5, 10, 15, 20, 25, 30, 60},
 		}, labels).With(labelsWithValues...),
+		IxMissCount: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "syncer",
+			Name:      "ix_miss_count",
+			Help:      "Number of ixns missing in ixpool",
+		}, labels).With(labelsWithValues...),
 	}
 }
 
@@ -59,6 +66,7 @@ func NilMetrics() *Metrics {
 		TotalJobs:         discard.NewGauge(),
 		JobProcessingTime: discard.NewHistogram(),
 		BucketSyncTime:    discard.NewHistogram(),
+		IxMissCount:       discard.NewCounter(),
 	}
 }
 
@@ -76,4 +84,8 @@ func (metrics *Metrics) captureJobProcessingTime(requestTime time.Time) {
 
 func (metrics *Metrics) captureBucketSyncTime(requestTime time.Time) {
 	metrics.BucketSyncTime.Observe(time.Since(requestTime).Minutes())
+}
+
+func (metrics *Metrics) AddIxMissCount(delta float64) {
+	metrics.IxMissCount.Add(delta)
 }

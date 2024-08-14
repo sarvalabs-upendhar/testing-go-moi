@@ -118,6 +118,8 @@ type SyncJobRequest struct {
 	Address identifiers.Address `json:"address"`
 }
 
+type PeerScoreRequest struct{}
+
 // Public ix args
 
 type SendIX struct {

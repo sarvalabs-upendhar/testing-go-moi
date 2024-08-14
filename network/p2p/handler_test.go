@@ -16,7 +16,8 @@ import (
 func TestVerifyHelloMsg(t *testing.T) {
 	kramaID := tests.RandomKramaID(t, 0)
 
-	h := NewSubHandler(kramaID, hclog.NewNullLogger(), nil, nil, nil, &utils.TypeMux{}, nil, nil)
+	h := NewSubHandler(kramaID, hclog.NewNullLogger(), nil, nil, nil,
+		&utils.TypeMux{}, nil, nil, false)
 	helloMsg := createSignedHelloMsg(t)
 
 	testcases := []struct {
@@ -74,6 +75,7 @@ func TestReputationEngine_SenatusHandler(t *testing.T) {
 		&utils.TypeMux{},
 		nil,
 		nil,
+		false,
 	)
 	testcases := []struct {
 		name              string

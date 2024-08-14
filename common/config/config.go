@@ -53,9 +53,13 @@ type ExecutionConfig struct {
 }
 
 type IxPoolConfig struct {
-	Mode       int
-	PriceLimit *big.Int
-	MaxSlots   uint64
+	Mode                    int
+	PriceLimit              *big.Int
+	MaxSlots                uint64
+	IxIncomingFilterMaxSize uint64
+	MaxIxGroupSize          int
+	EnableIxFlooding        bool
+	EnableRawIxFiltering    bool
 }
 
 type NodeInfo struct {
@@ -88,6 +92,7 @@ type NetworkConfig struct {
 	AllowIPv6Addresses bool
 	DisablePrivateIP   bool
 	DiscoveryInterval  time.Duration
+	EnableIPColocation bool
 }
 
 type ConsensusConfig struct {

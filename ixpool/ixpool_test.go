@@ -7,6 +7,9 @@ import (
 	"testing"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+
 	"github.com/pkg/errors"
 	errgroup "golang.org/x/sync/errgroup"
 
@@ -128,7 +131,7 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, nil)
 
 			ixPool.createAccountOnce(sender, 0)
 
@@ -230,7 +233,7 @@ func TestIxPool_validateAndEnqueueIx(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, nil)
 
 			if test.preTestFn != nil {
 				test.preTestFn(ixPool, test.ix)
@@ -246,6 +249,279 @@ func TestIxPool_validateAndEnqueueIx(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, 1, len(ixPool.allIxs.all))
+		})
+	}
+}
+
+func TestIxPool_AddRemoteInteractions(t *testing.T) {
+	sm := NewMockStateManager(t)
+	addrs := tests.GetAddresses(t, 2)
+	sm.setTestMOIBalance(t, addrs[0])
+
+	testcases := []struct {
+		name              string
+		ixns              common.Interactions
+		sigVerification   bool
+		expectedAddedIxns int
+		expectedResult    pubsub.ValidationResult
+	}{
+		{
+			name: "Reject interactions with oversized data",
+			ixns: common.Interactions{
+				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+				newIxWithPayload(t, common.IxValueTransfer, 5, addrs[0], make([]byte, ixMaxSize+2)),
+			},
+			expectedAddedIxns: 1,
+			expectedResult:    pubsub.ValidationReject,
+		},
+		{
+			name: "Reject interactions with invalid address",
+			ixns: common.Interactions{
+				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+				newIxWithoutAddress(t, 5),
+			},
+			expectedAddedIxns: 1,
+			expectedResult:    pubsub.ValidationReject,
+		},
+		{
+			name: "Reject interactions with invalid signature",
+			ixns: common.Interactions{
+				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			},
+			sigVerification: true,
+			expectedResult:  pubsub.ValidationReject,
+		},
+		{
+			name:              "valid ixn group",
+			ixns:              createTestIxs(t, common.IxValueTransfer, 0, 2, addrs[0]),
+			expectedAddedIxns: 2,
+			expectedResult:    pubsub.ValidationAccept,
+		},
+		{
+			name: "Ignore ixns as more than half of them have errors and count greater than 10",
+			ixns: append(
+				createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[0]),
+				createTestIxs(t, common.IxValueTransfer, 0, 6, addrs[1])...,
+			),
+			expectedAddedIxns: 5,
+			expectedResult:    pubsub.ValidationIgnore,
+		},
+		{
+			name: "accept ixns as less than half of them have errors and count greater than 10",
+			ixns: append(
+				createTestIxs(t, common.IxValueTransfer, 0, 6, addrs[0]),
+				createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[1])...,
+			),
+			expectedAddedIxns: 6,
+			expectedResult:    pubsub.ValidationAccept,
+		},
+		{
+			name:           "accept ixns if length of ixns less than or equal to 10 and all ixns have errors",
+			ixns:           createTestIxs(t, common.IxValueTransfer, 0, 10, addrs[1]),
+			expectedResult: pubsub.ValidationAccept,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+				c.Mode = WaitMode
+				c.PriceLimit = defaultIxPriceLimit
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
+			}, !test.sigVerification, sm, nil, nil)
+
+			res := ixPool.AddRemoteInteractions(test.ixns)
+			require.Equal(t, test.expectedResult, res)
+			require.Equal(t, test.expectedAddedIxns, len(ixPool.allIxs.all))
+		})
+	}
+}
+
+func TestIxPool_AddLocalInteractions_Broadcast(t *testing.T) {
+	sm := NewMockStateManager(t)
+	addrs := tests.GetAddresses(t, 2)
+	sm.setTestMOIBalance(t, addrs[0])
+
+	testcases := []struct {
+		name             string
+		ixns             common.Interactions
+		enableIxFlooding bool
+		broadcastedIxns  common.Interactions
+	}{
+		{
+			name: "broadcast only valid ixn group",
+			ixns: common.Interactions{
+				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+				newIxWithoutAddress(t, 5),
+			},
+			broadcastedIxns: common.Interactions{
+				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			},
+		},
+		{
+			name: "do not broadcast zero ixns",
+			ixns: createTestIxs(t, common.IxValueTransfer, 0, 2, addrs[1]),
+		},
+		{
+			name:             "do not broadcast ixns if flooding enabled",
+			enableIxFlooding: true,
+			ixns:             createTestIxs(t, common.IxValueTransfer, 0, 2, addrs[0]),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+				c.Mode = WaitMode
+				c.PriceLimit = defaultIxPriceLimit
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
+				c.EnableIxFlooding = test.enableIxFlooding
+			}, true, sm, nil, newMockNetwork(""))
+
+			ixPool.AddLocalInteractions(test.ixns)
+
+			net, ok := ixPool.network.(*mockNetwork)
+			require.True(t, ok)
+
+			if test.broadcastedIxns != nil {
+				require.Equal(t, len(test.broadcastedIxns), len(net.broadcasted))
+
+				expected, err := test.broadcastedIxns.Bytes()
+				require.NoError(t, err)
+
+				actual, ok := net.broadcasted[config.IxTopic]
+				require.True(t, ok)
+
+				require.Equal(t, expected, actual)
+
+				return
+			}
+
+			require.Equal(t, 0, len(net.broadcasted))
+		})
+	}
+}
+
+func TestIxPool_IxValidator(t *testing.T) {
+	sm := NewMockStateManager(t)
+	addrs := tests.GetAddresses(t, 2)
+	sm.setTestMOIBalance(t, addrs[0])
+
+	validIxns := createTestIxs(t, common.IxValueTransfer, 0, 2, addrs[0])
+	rawData, err := validIxns.Bytes()
+	require.NoError(t, err)
+
+	zeroIxns := common.Interactions{}
+	zeroIxnsRawData, err := zeroIxns.Bytes()
+	require.NoError(t, err)
+
+	excessIxns := createTestIxs(t, common.IxValueTransfer, 0, 3, addrs[0])
+	excessIxnsRawData, err := excessIxns.Bytes()
+	require.NoError(t, err)
+
+	KID := tests.RandomKramaID(t, 0)
+	PID, err := KID.DecodedPeerID()
+	require.NoError(t, err)
+
+	from, err := PID.Marshal()
+	require.NoError(t, err)
+
+	testcases := []struct {
+		name              string
+		msgData           []byte
+		from              []byte
+		createDuplicate   bool
+		expectedAddedIxns int
+		shouldCache       bool
+		expectedResult    pubsub.ValidationResult
+		expectedError     error
+	}{
+		{
+			name:              "accept valid ixn group",
+			msgData:           rawData,
+			expectedAddedIxns: len(validIxns),
+			shouldCache:       true,
+			expectedResult:    pubsub.ValidationAccept,
+		},
+		{
+			name:           "accept ixns if original sender is us ",
+			msgData:        rawData,
+			from:           from,
+			expectedResult: pubsub.ValidationAccept,
+		},
+		{
+			name:              "ignore duplicate ixn group",
+			msgData:           rawData,
+			createDuplicate:   true,
+			expectedAddedIxns: len(validIxns),
+			shouldCache:       true,
+			expectedResult:    pubsub.ValidationIgnore,
+		},
+		{
+			name:           "reject ixns as decoding ixns fails",
+			msgData:        []byte{},
+			shouldCache:    true,
+			expectedResult: pubsub.ValidationReject,
+			expectedError:  errors.New("failed to depolorize interactions"),
+		},
+		{
+			name:           "reject zero ixns",
+			msgData:        zeroIxnsRawData,
+			shouldCache:    true,
+			expectedResult: pubsub.ValidationReject,
+			expectedError:  errors.New("invalid number of ixns"),
+		},
+		{
+			name:           "reject excess ixns",
+			msgData:        excessIxnsRawData,
+			shouldCache:    true,
+			expectedResult: pubsub.ValidationReject,
+			expectedError:  errors.New("invalid number of ixns"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+				c.Mode = WaitMode
+				c.PriceLimit = defaultIxPriceLimit
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
+				c.MaxIxGroupSize = 2
+				c.EnableRawIxFiltering = true
+			}, true, sm, nil, newMockNetwork(KID))
+
+			msg := &pubsub.Message{
+				Message: &pb.Message{
+					Data: test.msgData,
+					From: test.from,
+				},
+			}
+
+			if test.createDuplicate {
+				_, err := ixPool.IxValidator(context.Background(), "", msg)
+				require.NoError(t, err)
+			}
+
+			res, err := ixPool.IxValidator(context.Background(), "", msg)
+
+			// check if raw msg cached
+			_, exists := ixPool.msgCache.innerCheck(test.msgData)
+			if test.shouldCache {
+				require.True(t, exists)
+			} else {
+				require.False(t, exists)
+			}
+
+			require.Equal(t, test.expectedResult, res)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedAddedIxns, len(ixPool.allIxs.all))
 		})
 	}
 }
@@ -271,7 +547,7 @@ func TestIxPool_addedIxnEvent(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, nil)
 
 			ixAddedEventSub := ixPool.mux.Subscribe(utils.AddedInteractionEvent{})
 
@@ -331,7 +607,7 @@ func TestIxPool_validateAndEnqueueIx_HighPressure(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, nil)
 
 			if test.preTestFn != nil {
 				test.preTestFn(ixPool, test.ix)
@@ -430,7 +706,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 			senderAddress := testcase.ixs[0].Sender()
 
 			if testcase.testFn != nil {
@@ -439,7 +715,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 
 			require.Equal(t, uint64(0), ixPool.gauge.read())
 
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Equal(t, testcase.expectedErrors, len(errs))
 
 			require.Equal(t, testcase.expectedResult.enqueued, ixPool.accounts.get(senderAddress).enqueued.length())
@@ -458,7 +734,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm, nil)
+	}, true, sm, nil, newMockNetwork(""))
 
 	testcases := []struct {
 		name     string
@@ -490,7 +766,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			senderAddress := testcase.ixs[0].Sender()
 
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Len(t, errs, 0)
 
 			if testcase.popIx != nil {
@@ -528,7 +804,7 @@ func TestIxPool_promoteIxnEvent(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 
 			ixPromotedEventSub := ixPool.mux.Subscribe(utils.PromotedInteractionEvent{})
 
@@ -554,7 +830,7 @@ func TestIxPool_createAccountOnce(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
-	}, true, sm, nil)
+	}, true, sm, nil, nil)
 
 	testcases := []struct {
 		name          string
@@ -603,7 +879,7 @@ func TestIxPool_ResetWithHeaders_resetWaitTime(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm, nil)
+	}, true, sm, nil, newMockNetwork(""))
 
 	testcases := []struct {
 		name               string
@@ -640,7 +916,7 @@ func TestIxPool_ResetWithHeaders_resetWaitTime(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			senderAddress := testcase.ixs[0].Sender()
 
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Len(t, errs, 0)
 
 			if testcase.incrementCounter != nil {
@@ -701,11 +977,11 @@ func TestIxPool_ResetWithHeaders_enqueued(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 
 			ixPool.createAccountOnce(senderAddress, 0)
 
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Len(t, errs, 0)
 
 			ts := getTesseractWithIxs(t, senderAddress, int(testcase.nonce))
@@ -747,7 +1023,7 @@ func TestIxPool_ResetWithHeaders_prunedEnqueuedIxnEvent(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 			senderAddress := testcase.ixs[0].Sender()
 
 			ixPool.createAccountOnce(senderAddress, 0)
@@ -761,7 +1037,7 @@ func TestIxPool_ResetWithHeaders_prunedEnqueuedIxnEvent(t *testing.T) {
 
 			go utils.HandleMuxEvents(ctx, ixPrunedEnqueueEventSub, ixPrunedEnqueueResp, len(testcase.ixs))
 
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Len(t, errs, 0)
 
 			// ResetWithHeaders should prune the ixs from the enqueue if the nonce is lesser than the given nonce
@@ -788,7 +1064,7 @@ func TestIxPool_ResetWithHeaders_promoted(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm, nil)
+	}, true, sm, nil, newMockNetwork(""))
 
 	testcases := []struct {
 		name               string
@@ -820,7 +1096,7 @@ func TestIxPool_ResetWithHeaders_promoted(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			senderAddress := testcase.ixs[0].Sender()
 
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Len(t, errs, 0)
 
 			ts := getTesseractWithIxs(t, senderAddress, int(testcase.nonce))
@@ -857,7 +1133,7 @@ func TestIxPool_ResetWithHeaders_prunedPromotedIxnEvent(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 
 			ixPrunedPromotedEventSub := ixPool.mux.Subscribe(utils.PrunedPromotedInteractionEvent{})
 
@@ -870,7 +1146,7 @@ func TestIxPool_ResetWithHeaders_prunedPromotedIxnEvent(t *testing.T) {
 
 			senderAddress := testcase.ixs[0].Sender()
 
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Len(t, errs, 0)
 
 			ts := getTesseractWithIxs(t, senderAddress, int(testcase.nonce))
@@ -963,7 +1239,7 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 
 			senderAddress := testcase.ixs[0].Sender()
 			// ixPool.createAccountOnce(senderAddress, 0)
@@ -1001,7 +1277,7 @@ func TestIxPool_Pop(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm, nil)
+	}, true, sm, nil, newMockNetwork(""))
 
 	testcases := []struct {
 		name               string
@@ -1021,7 +1297,7 @@ func TestIxPool_Pop(t *testing.T) {
 
 			require.Equal(t, uint64(0), ixPool.gauge.read())
 
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Len(t, errs, 0)
 
 			require.Equal(t, uint64(len(testcase.ixs)), ixPool.gauge.read())
@@ -1046,7 +1322,7 @@ func TestIxPool_Drop(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm, nil)
+	}, true, sm, nil, newMockNetwork(""))
 
 	testcases := []struct {
 		name string
@@ -1070,7 +1346,7 @@ func TestIxPool_Drop(t *testing.T) {
 			go utils.HandleMuxEvents(ctx, ixDroppedEventSub, ixDroppedResp, len(testcase.ixs))
 
 			senderAddress := testcase.ixs[0].Sender()
-			errs := ixPool.AddInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(testcase.ixs)
 			require.Len(t, errs, 0)
 
 			acc := ixPool.accounts.get(senderAddress)
@@ -1102,7 +1378,7 @@ func TestIxPool_Drop_FinalizedIx(t *testing.T) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
-	}, true, sm, nil)
+	}, true, sm, nil, newMockNetwork(""))
 
 	testcases := []struct {
 		name          string
@@ -1133,7 +1409,7 @@ func TestIxPool_Drop_FinalizedIx(t *testing.T) {
 			go utils.HandleMuxEvents(ctx, ixDroppedEventSub, ixDroppedResp, len(testcase.pendingIxs))
 
 			senderAddress := testcase.pendingIxs[0].Sender()
-			errs := ixPool.AddInteractions(testcase.pendingIxs)
+			errs := ixPool.AddLocalInteractions(testcase.pendingIxs)
 			require.Len(t, errs, 0)
 
 			acc := ixPool.accounts.get(senderAddress)
@@ -1155,7 +1431,7 @@ func TestIxPool_IncrementWaitTime_InvalidAccount(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
-	}, false, sm, nil)
+	}, false, sm, nil, nil)
 
 	err := ixPool.IncrementWaitTime(identifiers.Address{0x0}, 1500*time.Millisecond)
 	require.Error(t, err)
@@ -1197,7 +1473,7 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
-	}, false, sm, nil)
+	}, false, sm, nil, nil)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
@@ -1240,7 +1516,7 @@ func TestIxPool_validateIx(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
-	}, true, sm, nil)
+	}, true, sm, nil, nil)
 
 	testcases := []struct {
 		name        string
@@ -1332,7 +1608,7 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
-	}, false, sm, nil)
+	}, false, sm, nil, nil)
 
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 	addr2 := tests.RandomAddress(t)
@@ -1410,7 +1686,7 @@ func TestIxPool_ValidateAssetCreate(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
-	}, false, nil, nil)
+	}, false, nil, nil, nil)
 
 	address := tests.RandomAddress(t)
 	validAssetPayload := common.AssetCreatePayload{
@@ -1482,7 +1758,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
-	}, false, sm, nil)
+	}, false, sm, nil, nil)
 
 	address := tests.RandomAddress(t)
 	assetID := tests.GetRandomAssetID(t, address)
@@ -1670,7 +1946,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
-			}, false, sm, nil)
+			}, false, sm, nil, nil)
 
 			if testcase.testFn != nil {
 				testcase.testFn(testcase.ix, sm)
@@ -1745,7 +2021,7 @@ func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
 			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
-			}, false, sm, exec)
+			}, false, sm, exec, nil)
 
 			err := ixPool.validateLogicDeployPayload(testcase.ix)
 			if testcase.expectedErr != nil {
@@ -1851,7 +2127,7 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
-			}, false, sm, exec)
+			}, false, sm, exec, nil)
 
 			if testcase.preTestFn != nil {
 				testcase.preTestFn(testcase.ix, sm)
@@ -1952,13 +2228,13 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 
 			ixPool.Start()
 			defer ixPool.Close()
 
 			for _, ixs := range testcase.accounts {
-				errs := ixPool.AddInteractions(ixs)
+				errs := ixPool.AddLocalInteractions(ixs)
 				require.Len(t, errs, 0)
 			}
 
@@ -2060,7 +2336,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 //			defer ixPool.Close()
 //
 //			for _, ixs := range testcase.accounts {
-//				errs := ixPool.AddInteractions(ixs)
+//				errs := ixPool.AddLocalInteractions(ixs)
 //				log.Println(errs)
 //				require.Len(t, errs, 1)
 //			}
@@ -2149,13 +2425,13 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 
 			ixPool.Start()
 			defer ixPool.Close()
 
 			for _, ixs := range testcase.accounts {
-				errs := ixPool.AddInteractions(ixs)
+				errs := ixPool.AddLocalInteractions(ixs)
 				require.Len(t, errs, 0)
 			}
 
@@ -2217,7 +2493,7 @@ func TestIxPool_RemoveNonceHoleAccounts(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, newMockNetwork(""))
 
 			if test.ixPoolCallback != nil {
 				test.ixPoolCallback(ixPool)
@@ -2228,7 +2504,7 @@ func TestIxPool_RemoveNonceHoleAccounts(t *testing.T) {
 			// make sure gauge is zero initially
 			require.Equal(t, uint64(0), ixPool.gauge.read())
 
-			errs := ixPool.AddInteractions(test.ixs)
+			errs := ixPool.AddLocalInteractions(test.ixs)
 			require.Len(t, errs, 0)
 
 			// make sure gauge is increased after ixns enqueued
@@ -2272,7 +2548,7 @@ func TestIxPool_RemoveNonceHoleAccounts_WithEmptyEnqueues(t *testing.T) {
 				c.Mode = WaitMode
 				c.PriceLimit = defaultIxPriceLimit
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil)
+			}, true, sm, nil, nil)
 
 			if test.ixPoolCallback != nil {
 				test.ixPoolCallback(ixPool)

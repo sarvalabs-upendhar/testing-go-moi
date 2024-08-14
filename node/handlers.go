@@ -21,6 +21,7 @@ func (n *Node) setupSubHandler() {
 		n.eventMux,
 		n.ixpool,
 		n.chain,
+		n.cfg.IxPool.EnableIxFlooding,
 	)
 }
 
@@ -30,12 +31,16 @@ func (n *Node) startHandlers() error {
 
 	go n.handlers.flux.Start()
 
-	return n.handlers.core.Start()
+	return n.handlers.core.Start(n.cfg.IxPool.EnableIxFlooding)
 }
 
 // stopHandlers stops syncer, core and flux(randomizer)
 func (n *Node) stopHandlers() {
 	n.logger.Info("Closing Sub-Handlers")
-	n.handlers.core.Close()
+
+	if n.cfg.IxPool.EnableIxFlooding {
+		n.handlers.core.Close()
+	}
+
 	n.handlers.flux.Close()
 }

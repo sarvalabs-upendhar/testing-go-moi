@@ -5,6 +5,8 @@ import (
 	"sort"
 	"time"
 
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/libp2p/go-libp2p/core/protocol"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
@@ -274,6 +276,39 @@ type SyncJobInfo struct {
 	TesseractQueueLen     uint64            `json:"tesseract_queue_length"`
 	BestPeers             []kramaid.KramaID `json:"best_peers"`
 	LatticeSyncInProgress bool              `json:"lattice_sync_in_progress"`
+}
+
+type RPCTopicScore struct {
+	Name                     string  `json:"topic_name"`
+	TimeInMesh               uint64  `json:"time_in_mesh"`
+	FirstMessageDeliveries   float64 `json:"first_message_deliveries"`
+	MeshMessageDeliveries    float64 `json:"mesh_message_deliveries"`
+	InvalidMessageDeliveries float64 `json:"invalid_message_deliveries"`
+}
+
+type RPCTopicScores []RPCTopicScore
+
+func (scores RPCTopicScores) Sort() {
+	sort.Slice(scores, func(i, j int) bool {
+		return scores[i].Name < scores[j].Name
+	})
+}
+
+type RPCPeerScore struct {
+	ID                 peer.ID         `json:"peer_id"`
+	TopicScores        []RPCTopicScore `json:"topic_scores"`
+	AppSpecificScore   float64         `json:"app_specific_score"`
+	GossipScore        float64         `json:"gossip_score"`
+	IPColocationFactor float64         `json:"ip_colocation_factor"`
+	BehaviourPenalty   float64         `json:"behaviour_penalty"`
+}
+
+type RPCPeersScore []RPCPeerScore
+
+func (peers RPCPeersScore) Sort() {
+	sort.Slice(peers, func(i, j int) bool {
+		return peers[i].ID < peers[j].ID
+	})
 }
 
 type DiagnosisResponse struct{}

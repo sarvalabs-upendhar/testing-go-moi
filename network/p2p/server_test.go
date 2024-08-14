@@ -19,7 +19,6 @@ import (
 
 const (
 	hellomessage = "hello world"
-	topic        = "pub-sub"
 )
 
 var testLogger = hclog.NewNullLogger()
@@ -240,10 +239,10 @@ func TestSubscribe_Twice_OnSameTopic(t *testing.T) {
 			closeTestServers(t, servers)
 		})
 
-		registerEmptySubscriptionHandler(t, servers[0], topic, testcase.defaultValidator, false)
+		registerEmptySubscriptionHandler(t, servers[0], config.IxTopic, testcase.defaultValidator, false)
 		err := servers[0].Subscribe(
 			servers[0].ctx,
-			topic,
+			config.IxTopic,
 			nil,
 			testcase.defaultValidator,
 			func(msg *pubsub.Message) error { // subscribing again on same topic
@@ -281,18 +280,18 @@ func TestSubscribe_CheckMsgOnTopic(t *testing.T) {
 	})
 
 	startDiscovery(t, servers...)
-	registerEmptySubscriptionHandler(t, servers[0], topic, true, true) // shouldn't receive self-published message
-	subscribeMessage(t, servers[1], topic, response)
+	registerEmptySubscriptionHandler(t, servers[0], config.IxTopic, true, true) // shouldn't receive self-published message
+	subscribeMessage(t, servers[1], config.IxTopic, response)
 
 	// make sure handlers stored
-	checkForTopicSet(t, servers[0], topic)
-	checkForTopicSet(t, servers[1], topic)
+	checkForTopicSet(t, servers[0], config.IxTopic)
+	checkForTopicSet(t, servers[1], config.IxTopic)
 
 	time.Sleep(time.Second) // wait for subscription to happen
 
 	rawData, err := polo.Polorize(hellomessage)
 	require.NoError(t, err)
-	err = servers[0].pubSubTopics.getTopicSet(topic).topicHandle.Publish(servers[0].ctx, rawData)
+	err = servers[0].pubSubTopics.getTopicSet(config.IxTopic).topicHandle.Publish(servers[0].ctx, rawData)
 	require.NoError(t, err)
 
 	// wait till handler completes
@@ -319,10 +318,10 @@ func TestUnSubscribe_CheckTopic(t *testing.T) {
 		closeTestServer(t, server)
 	})
 
-	registerEmptySubscriptionHandler(t, server, topic, true, false)
-	unsubscribeServers(t, server, topic)
+	registerEmptySubscriptionHandler(t, server, config.IxTopic, true, false)
+	unsubscribeServers(t, server, config.IxTopic)
 	// make sure topic removed
-	checkForTopic(t, server, topic, false)
+	checkForTopic(t, server, config.IxTopic, false)
 }
 
 func TestBroadcast_UnSubscribedTopic(t *testing.T) {
@@ -358,14 +357,14 @@ func TestBroadcast_CheckMsgOnTopic(t *testing.T) {
 	})
 
 	startDiscovery(t, servers...)
-	registerEmptySubscriptionHandler(t, servers[0], topic, true, true)
-	subscribeMessage(t, servers[1], topic, response)
+	registerEmptySubscriptionHandler(t, servers[0], config.IxTopic, true, true)
+	subscribeMessage(t, servers[1], config.IxTopic, response)
 	time.Sleep(1 * time.Second) // wait for discovery and subscription
 
 	rawData, err := polo.Polorize(hellomessage)
 	require.NoError(t, err)
 
-	err = servers[0].Broadcast(topic, rawData)
+	err = servers[0].Broadcast(config.IxTopic, rawData)
 	require.NoError(t, err)
 
 	// wait till handler completes
@@ -397,7 +396,7 @@ func TestJoinPubSubTopic(t *testing.T) {
 		subHandle:   nil,
 	}
 
-	server.pubSubTopics.addTopicSet("topic_1", testTopicSet)
+	server.pubSubTopics.addTopicSet(config.IxTopic, testTopicSet)
 
 	testcases := []struct {
 		name             string
@@ -406,12 +405,12 @@ func TestJoinPubSubTopic(t *testing.T) {
 	}{
 		{
 			name:             "Should return available topicSet for existing topic",
-			topic:            "topic_1",
+			topic:            config.IxTopic,
 			existingTopicSet: testTopicSet,
 		},
 		{
 			name:             "Should return new topicSet for non-existing topic",
-			topic:            "topic_2",
+			topic:            config.TesseractTopic,
 			existingTopicSet: nil,
 		},
 	}
