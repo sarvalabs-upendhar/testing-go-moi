@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/sarvalabs/go-moi/common/config"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
+
+var emptyParamsRegex = regexp.MustCompile(`^\[\s*]$`)
 
 type ConnManager interface {
 	HasConn() bool
@@ -375,6 +378,11 @@ func (d *dispatcher) handleReq(req Request) ([]byte, Error) {
 	}
 
 	if funcData.numParams() > 0 {
+		// Replace empty `[]` with `[{}]` to ensure proper unmarshalling
+		if emptyParamsRegex.MatchString(string(req.Params)) {
+			req.Params = json.RawMessage(`[{}]`)
+		}
+
 		if err := json.Unmarshal(req.Params, &inputs); err != nil {
 			return nil, NewInvalidParamsError("Invalid Params")
 		}
