@@ -19,15 +19,10 @@ const (
 		"\u001b[0m" +
 		DIVIDE + "\n"
 
-	CLOSER    = "\r" + DIVIDE + "\nClosing LogicLab REPL"
-	LAUNCHAPI = FIGLET +
+	CLOSER = "\r" + DIVIDE + "\nClosing LogicLab REPL"
+	LAUNCH = FIGLET +
 		"LogicLab Initialized @ \u001B[32m%v\u001B[0m\n" +
 		"LogicLab Documentation: %v\n" +
-		"\u001B[32mStarting LogicLab in %v Mode (port: %v) ...\u001B[0m (use 'ctrl-c' to stop)\n" +
-		DIVIDE
-	LAUNCHREPL = FIGLET +
-		"LogicLab Initialized @ \u001B[32m%v\u001B[0m\n" +
-		"LogicLab Documentation: %v\n" +
-		"\u001B[32mStarting LogicLab in %v Mode...\u001B[0m (use 'ctrl-c' to stop)\n" +
+		"\u001B[32mStarting LogicLab (port: %v) ...\u001B[0m (use 'ctrl-c' to stop)\n" +
 		DIVIDE
 )

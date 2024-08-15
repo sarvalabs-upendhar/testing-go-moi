@@ -12,7 +12,7 @@ func TestMakeAddrsFactory(t *testing.T) {
 		name               string
 		disablePrivateIP   bool
 		allowIPv6Addresses bool
-		publicP2pAddresses []string
+		publicP2PAddresses []string
 		addresses          []string
 		expectedResult     []string
 	}{
@@ -126,7 +126,7 @@ func TestMakeAddrsFactory(t *testing.T) {
 			name:               "filter out private IPs and ip6 addresses from public P2P Addresses",
 			disablePrivateIP:   true,
 			allowIPv6Addresses: false,
-			publicP2pAddresses: []string{
+			publicP2PAddresses: []string{
 				"/ip4/1.1.1.1/udp/80",
 				"/ip6/2001:db8::1/tcp/53",
 			},
@@ -149,10 +149,10 @@ func TestMakeAddrsFactory(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			var publicAddresses []multiaddr.Multiaddr
-			if test.publicP2pAddresses != nil {
-				publicAddresses = make([]multiaddr.Multiaddr, len(test.publicP2pAddresses))
+			if test.publicP2PAddresses != nil {
+				publicAddresses = make([]multiaddr.Multiaddr, len(test.publicP2PAddresses))
 
-				for i, addrStr := range test.publicP2pAddresses {
+				for i, addrStr := range test.publicP2PAddresses {
 					multiaddr, err := multiaddr.NewMultiaddr(addrStr)
 					require.NoError(t, err)
 

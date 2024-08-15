@@ -169,14 +169,14 @@ func (object *Object) Balances() (*BalanceObject, error) {
 func (object *Object) BalanceOf(id identifiers.AssetID) (*big.Int, error) {
 	balObject, err := object.Balances()
 	if err != nil {
-		return nil, err
+		return big.NewInt(0), err
 	}
 
 	if v, ok := balObject.AssetMap[id]; ok {
 		return v, nil
 	}
 
-	return nil, common.ErrAssetNotFound
+	return big.NewInt(0), common.ErrAssetNotFound
 }
 
 func (object *Object) AddBalance(aid identifiers.AssetID, amount *big.Int) {
@@ -204,7 +204,7 @@ func (object *Object) SubBalance(aid identifiers.AssetID, amount *big.Int) {
 	if bal, ok := object.balance.AssetMap[aid]; ok && bal != nil {
 		object.balance.AssetMap[aid] = new(big.Int).Sub(bal, amount)
 	} else {
-		log.Panicln("asset not found")
+		log.Println("Error: asset not found", object.address, aid)
 	}
 }
 
@@ -1057,13 +1057,10 @@ func (object *Object) HasSufficientFuel(amount *big.Int) (bool, error) {
 	}
 
 	// Fetch sender balance object
-	balances, err := object.BalanceOf(common.KMOITokenAssetID)
-	if err != nil {
-		return false, err
-	}
+	balance, _ := object.BalanceOf(common.KMOITokenAssetID)
 
 	// Check if sender has sufficient balance
-	if balances.Cmp(amount) == -1 {
+	if balance.Cmp(amount) == -1 {
 		return false, nil
 	}
 

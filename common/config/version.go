@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	VersionMajor = 0 // Major version component of the current release
-	VersionMinor = 9 // Minor version component of the current release
-	VersionPatch = 0 // Patch version component of the current release
+	VersionMajor = 0  // Major version component of the current release
+	VersionMinor = 10 // Minor version component of the current release
+	VersionPatch = 0  // Patch version component of the current release
 )
 
 var ProtocolVersion = func() string {
@@ -42,4 +42,5 @@ var MOIPingStream = protocol.ID("moi/ping/stream/" + ProtocolVersion)
 var (
 	HelloTopic     = fmt.Sprintf("MOI_PUBSUB_HELLO_%s", ProtocolVersion)
 	TesseractTopic = fmt.Sprintf("MOI_PUBSUB_TESSERACT_%s", ProtocolVersion)
+	IxTopic        = fmt.Sprintf("MOI_PUBSUB_INTERACTION_%s", ProtocolVersion)
 )

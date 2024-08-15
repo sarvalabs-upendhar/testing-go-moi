@@ -294,7 +294,7 @@ func (c *Cluster) startBootNode() error {
 		// add port
 		"--port", fmt.Sprintf("%d", c.Config.BootNodePort),
 		"--key-path", fileKey,
-		"--ip-address", ip,
+		"--ipv4-address", ip,
 	}
 
 	// start the bootNode

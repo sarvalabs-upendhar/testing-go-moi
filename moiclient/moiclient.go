@@ -742,3 +742,15 @@ func (c *Client) SyncJob(ctx context.Context, args *rpcargs.SyncJobRequest) (*rp
 
 	return &syncJob, nil
 }
+
+// PeersScore returns the score of all connected peers
+func (c *Client) PeersScore(ctx context.Context, args *rpcargs.PeerScoreRequest) ([]rpcargs.RPCPeerScore, error) {
+	var peersScore []rpcargs.RPCPeerScore
+
+	err := c.Call(ctx, &peersScore, "debug.PeersScore", args)
+	if err != nil {
+		return nil, err
+	}
+
+	return peersScore, nil
+}

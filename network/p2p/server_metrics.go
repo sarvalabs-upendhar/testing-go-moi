@@ -14,6 +14,7 @@ type Metrics struct {
 	InBoundConnLimit  metrics.Gauge
 	OutBoundConnLimit metrics.Gauge
 	TotalConnections  metrics.Gauge
+	PeersScore        metrics.Gauge
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -54,6 +55,12 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "total_connections",
 			Help:      "Total no of connections",
 		}, labels).With(labelsWithValues...),
+		PeersScore: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "server",
+			Name:      "peers_score",
+			Help:      "scores of peers in pubsub",
+		}, append(labels, []string{"peer_id"}...)).With(labelsWithValues...),
 	}
 }
 
@@ -64,6 +71,7 @@ func NilMetrics() *Metrics {
 		InBoundConnLimit:  discard.NewGauge(),
 		OutBoundConnLimit: discard.NewGauge(),
 		TotalConnections:  discard.NewGauge(),
+		PeersScore:        discard.NewGauge(),
 	}
 }
 
@@ -105,4 +113,8 @@ func (metrics *Metrics) CaptureBandwidthOut(size int64) {
 
 func (metrics *Metrics) CaptureBandwidthIn(size int64) {
 	metrics.BandwidthIn.Add(float64(size))
+}
+
+func (metrics *Metrics) capturePeerScore(peerID string, delta float64) {
+	metrics.PeersScore.With("peer_id", peerID).Set(delta)
 }

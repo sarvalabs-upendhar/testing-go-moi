@@ -151,8 +151,8 @@ func (api *API) purgeUsers(c *gin.Context) {
 		return
 	}
 
-	// Remove all users from the environment
-	if err = env.RemoveAllUsers(); err != nil {
+	// Purge all users from the environment
+	if err = env.PurgeUsers(); err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
 	}

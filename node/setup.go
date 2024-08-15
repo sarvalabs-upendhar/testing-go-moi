@@ -136,6 +136,7 @@ func (n *Node) setupIxPool() error {
 	n.ixpool = ixpool.NewIxPool(
 		n.logger,
 		n.eventMux,
+		n.network,
 		sm,
 		n.exec,
 		n.cfg.IxPool,

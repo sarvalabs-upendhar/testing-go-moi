@@ -45,8 +45,10 @@ const (
 
 // IxPool defaults
 const (
-	DefaultIxPoolMode     = 0
-	DefaultMaxIXPoolSlots = 60000
+	DefaultIxPoolMode              = 0
+	DefaultMaxIXPoolSlots          = 60000
+	DefaultIxIncomingFilterMaxSize = 1000
+	DefaultMaxIxGroupSize          = 100
 )
 
 // Syncer defaults

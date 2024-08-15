@@ -128,15 +128,9 @@ func (api *API) createLogic(c *gin.Context) {
 		return
 	}
 
-	// Compile the manifest into a Logic
-	logic, fuel, err := core.NewLogic(request.Name, manifest, env.CallFuel)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, Error(errors.Wrap(err, "invalid manifest")))
-		return
-	}
-
 	// Register the logic with the environment
-	if err = env.RegisterLogic(logic, manifest); err != nil {
+	logic, fuel, err := env.CompileLogic(request.Name, manifest, env.CallFuel)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
 	}
@@ -212,8 +206,8 @@ func (api *API) purgeLogics(c *gin.Context) {
 		return
 	}
 
-	// Remove all logics from the environment
-	if err = env.RemoveAllLogics(); err != nil {
+	// Purge all logics from the environment
+	if err = env.PurgeLogics(); err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
 	}

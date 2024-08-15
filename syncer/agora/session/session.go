@@ -224,6 +224,7 @@ func (s *Session) GetBlocks(ctx context.Context, cids []cid.CID) chan *block.Blo
 				s.logger.Error("Error fetching blocks", "err", err)
 
 				s.pm.UpdateFailedAttempts(peerID, 1)
+
 				attempt++
 
 				continue

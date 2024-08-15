@@ -10,21 +10,21 @@ import (
 )
 
 type Config struct {
-	NodeType       int              `json:"node_type"`
-	KramaIDVersion int              `json:"ḭd_version"`
-	Vault          VaultConfig      `json:"vault"`
-	Network        NetworkConfig    `json:"network"`
-	Syncer         SyncerConfig     `json:"syncer"`
-	IxPool         IxPoolConfig     `json:"ixpool"`
-	Consensus      ConsensusConfig  `json:"consensus"`
-	Execution      ExecutionConfig  `json:"execution"`
-	DB             DBConfig         `json:"database"`
-	Telemetry      Telemetry        `json:"telemetry"`
-	LogFilePath    string           `json:"logfile"`
-	JSONRPC        JSONRPCConfig    `json:"jsonrpc"`
-	NetworkID      config.NetworkID `json:"network_id"`
-	State          StateConfig      `json:"state"`
-	GenesisTime    uint64           `json:"genesis_time"`
+	NodeType            int              `json:"node_type"`
+	KramaIDVersion      int              `json:"ḭd_version"`
+	Vault               VaultConfig      `json:"vault"`
+	Network             NetworkConfig    `json:"network"`
+	Syncer              SyncerConfig     `json:"syncer"`
+	IxPool              IxPoolConfig     `json:"ixpool"`
+	Consensus           ConsensusConfig  `json:"consensus"`
+	Execution           ExecutionConfig  `json:"execution"`
+	DB                  DBConfig         `json:"database"`
+	Telemetry           Telemetry        `json:"telemetry"`
+	LogFilePath         string           `json:"logfile"`
+	JSONRPC             JSONRPCConfig    `json:"jsonrpc"`
+	NetworkID           config.NetworkID `json:"network_id"`
+	State               StateConfig      `json:"state"`
+	DisableRegistration bool             `json:"disable_registration"`
 }
 
 func DefaultBabylonConfig(path string) *Config {
@@ -43,8 +43,8 @@ func DefaultBabylonConfig(path string) *Config {
 				"/ip6/::/udp/" + strconv.Itoa(config.DefaultP2PPort) + "/quic-v1",
 			},
 			BootStrapPeers: []string{
-				"/ip4/65.109.138.198/tcp/5000/p2p/16Uiu2HAmNPceqBKGNWXGTKTtWDPty4UhncdhB84VbDEPpn1H11Cb",
-				"/ip4/135.181.206.93/tcp/5000/p2p/16Uiu2HAmFXiKHS3GWgdS1V36uUBDUjigf3RZRJCrjDFFMjexR3V8",
+				"/dns/bootnode1.moi.technology/tcp/5000/p2p/16Uiu2HAmNPceqBKGNWXGTKTtWDPty4UhncdhB84VbDEPpn1H11Cb",
+				"/dns/bootnode2.moi.technology/tcp/5000/p2p/16Uiu2HAmFXiKHS3GWgdS1V36uUBDUjigf3RZRJCrjDFFMjexR3V8",
 			},
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   config.DefaultInboundConnLimit,
@@ -57,6 +57,7 @@ func DefaultBabylonConfig(path string) *Config {
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
 			RefreshSenatus:     true,
+			EnableIPColocation: true,
 		},
 		Syncer: SyncerConfig{
 			ShouldExecute: true,
@@ -336,9 +337,13 @@ func DefaultBabylonConfig(path string) *Config {
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
 		IxPool: IxPoolConfig{
-			Mode:       config.DefaultIxPoolMode,
-			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
-			MaxSlots:   config.DefaultMaxIXPoolSlots,
+			Mode:                    config.DefaultIxPoolMode,
+			PriceLimit:              hexutil.Big(*config.DefaultIxPriceLimit),
+			MaxSlots:                config.DefaultMaxIXPoolSlots,
+			IxIncomingFilterMaxSize: config.DefaultIxIncomingFilterMaxSize,
+			MaxIxGroupSize:          config.DefaultMaxIxGroupSize,
+			EnableIxFlooding:        false,
+			EnableRawIxFiltering:    true,
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
@@ -350,7 +355,8 @@ func DefaultBabylonConfig(path string) *Config {
 			TesseractRangeLimit: config.DefaultTesseractRangeLimit,
 			BatchLengthLimit:    config.DefaultBatchLengthLimit,
 		},
-		NetworkID: config.Babylon,
+		NetworkID:           config.Babylon,
+		DisableRegistration: false,
 		State: StateConfig{
 			TreeCacheSize: config.DefaultTreeCacheSize,
 		},
@@ -381,6 +387,7 @@ func DefaultDevnetConfig(path string) *Config {
 			AllowIPv6Addresses: false,
 			DisablePrivateIP:   false,
 			DiscoveryInterval:  config.DefaultDiscoveryInterval,
+			EnableIPColocation: false,
 			JSONRPCAddr:        "0.0.0.0:" + strconv.Itoa(config.DefaultJSONRPCPort),
 			CorsAllowedOrigins: []string{"*"},
 			RefreshSenatus:     true,
@@ -418,9 +425,13 @@ func DefaultDevnetConfig(path string) *Config {
 			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
 		},
 		IxPool: IxPoolConfig{
-			Mode:       config.DefaultIxPoolMode,
-			PriceLimit: hexutil.Big(*config.DefaultIxPriceLimit),
-			MaxSlots:   config.DefaultMaxIXPoolSlots,
+			Mode:                    config.DefaultIxPoolMode,
+			PriceLimit:              hexutil.Big(*config.DefaultIxPriceLimit),
+			MaxSlots:                config.DefaultMaxIXPoolSlots,
+			IxIncomingFilterMaxSize: config.DefaultIxIncomingFilterMaxSize,
+			MaxIxGroupSize:          config.DefaultMaxIxGroupSize,
+			EnableIxFlooding:        false,
+			EnableRawIxFiltering:    true,
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
@@ -446,8 +457,7 @@ type NetworkConfig struct {
 	MaxPeers           uint          `json:"max_peers"`
 	RelayNodeAddr      string        `json:"relay_node_addr"`
 	Libp2pAddr         []string      `json:"libp2p_addr"`
-	PublicP2pAddr      []string      `json:"public_p2p_addr"`
-	P2PHostPort        int           `json:"p2p_host_port"`
+	PublicP2PAddresses []string      `json:"public_p2p_addresses"`
 	JSONRPCAddr        string        `json:"jsonrpc_addr"`
 	MTQ                float64       `json:"mtq"`
 	CorsAllowedOrigins []string      `json:"cors_allowed_origins"`
@@ -461,6 +471,7 @@ type NetworkConfig struct {
 	AllowIPv6Addresses bool          `json:"allow_ipv6_addresses"`
 	DisablePrivateIP   bool          `json:"disable_private_ip"`
 	DiscoveryInterval  time.Duration `json:"discovery_interval"`
+	EnableIPColocation bool          `json:"enable_ip_colocation"`
 }
 
 type SyncerConfig struct {
@@ -471,9 +482,13 @@ type SyncerConfig struct {
 }
 
 type IxPoolConfig struct {
-	Mode       int         `json:"mode"`
-	PriceLimit hexutil.Big `json:"price_limit"`
-	MaxSlots   uint64      `json:"max_slots"`
+	Mode                    int         `json:"mode"`
+	PriceLimit              hexutil.Big `json:"price_limit"`
+	MaxSlots                uint64      `json:"max_slots"`
+	IxIncomingFilterMaxSize uint64      `json:"ix_incoming_filter_max_size"`
+	MaxIxGroupSize          int         `json:"max_ix_group_size"`
+	EnableIxFlooding        bool        `json:"enable_ix_flooding"`
+	EnableRawIxFiltering    bool        `json:"enable_raw_ix_filtering"`
 }
 
 type DBConfig struct {

@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -239,4 +242,30 @@ func CreateInteractionWithTestData(t *testing.T, ixType common.IxType, payload [
 	require.NoError(t, err)
 
 	return ix
+}
+
+func checkForRPCPeersScore(t *testing.T, rpcPeersScore RPCPeersScore, peers map[peer.ID]*pubsub.PeerScoreSnapshot) {
+	t.Helper()
+
+	for _, rpcScore := range rpcPeersScore {
+		score, ok := peers[rpcScore.ID]
+		require.True(t, ok)
+
+		require.Equal(t, score.Score, rpcScore.GossipScore)
+		require.Equal(t, score.AppSpecificScore, rpcScore.AppSpecificScore)
+		require.Equal(t, score.IPColocationFactor, rpcScore.IPColocationFactor)
+		require.Equal(t, score.BehaviourPenalty, rpcScore.BehaviourPenalty)
+
+		require.Equal(t, len(score.Topics), len(rpcScore.TopicScores))
+
+		for _, rpcTopicScore := range rpcScore.TopicScores {
+			topicScore, ok := score.Topics[rpcTopicScore.Name]
+			require.True(t, ok)
+
+			require.Equal(t, uint64(topicScore.TimeInMesh.Milliseconds()), rpcTopicScore.TimeInMesh)
+			require.Equal(t, topicScore.FirstMessageDeliveries, rpcTopicScore.FirstMessageDeliveries)
+			require.Equal(t, topicScore.MeshMessageDeliveries, rpcTopicScore.MeshMessageDeliveries)
+			require.Equal(t, topicScore.InvalidMessageDeliveries, rpcTopicScore.InvalidMessageDeliveries)
+		}
+	}
 }

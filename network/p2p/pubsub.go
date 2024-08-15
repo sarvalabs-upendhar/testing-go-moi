@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/config"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sarvalabs/go-moi/common/utils"
 
@@ -14,6 +16,18 @@ import (
 	pubsub_pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
+)
+
+const (
+	gossipScoreThreshold             = -500
+	publishScoreThreshold            = -1000
+	graylistScoreThreshold           = -2500
+	acceptPXScoreThreshold           = 1000
+	opportunisticGraftScoreThreshold = 3.5
+)
+
+const (
+	incomingThreads = 20
 )
 
 func msgIDFunction(pmsg *pubsub_pb.Message) string {
@@ -25,10 +39,15 @@ func msgIDFunction(pmsg *pubsub_pb.Message) string {
 // creates a custom gossipSub parameter set.
 func pubsubGossipParam() pubsub.GossipSubParams {
 	gParams := pubsub.DefaultGossipSubParams()
-	gParams.Dlo = 6
 	gParams.D = 8
+	gParams.Dlo = 6
 	gParams.Dhi = 12
-	gParams.GossipFactor = 0.15
+	gParams.Dscore = 6
+	gParams.Dout = 3
+	gParams.Dlazy = 12
+	gParams.GossipFactor = 0.1
+	gParams.HistoryLength = 10
+	gParams.IWantFollowupTime = 5 * time.Second
 	gParams.HeartbeatInterval = 600 * time.Millisecond
 
 	return gParams
@@ -58,13 +77,100 @@ func (pst *pubSubTopics) deleteTopicSet(topicName string) {
 	delete(pst.psTopics, topicName)
 }
 
+// peerInspector will scrape all the relevant scoring data and add it to our
+// peer scores.
+func (s *Server) peerInspector(peerMap map[peer.ID]*pubsub.PeerScoreSnapshot) {
+	for id, score := range peerMap {
+		s.metrics.capturePeerScore(id.String(), score.Score)
+	}
+
+	s.peerScores.Update(peerMap)
+}
+
 func (s *Server) setPubSubRouter() error {
-	var err error
+	var (
+		IPColocationFactorThreshold int
+		IPColocationFactorWeight    float64
+		err                         error
+	)
+
+	if s.cfg.EnableIPColocation {
+		// This sets the IP colocation threshold to 5 peers before we apply penalties
+		IPColocationFactorThreshold = 5
+		IPColocationFactorWeight = -100
+	}
 
 	s.psRouter, err = pubsub.NewGossipSub(
 		s.ctx,
 		s.host,
 		[]pubsub.Option{
+			pubsub.WithFloodPublish(true),
+			pubsub.WithPeerScore(&pubsub.PeerScoreParams{
+				DecayInterval: pubsub.DefaultDecayInterval,
+				DecayToZero:   pubsub.DefaultDecayToZero,
+				AppSpecificScore: func(p peer.ID) float64 {
+					return 0
+				},
+
+				IPColocationFactorThreshold: IPColocationFactorThreshold,
+				IPColocationFactorWeight:    IPColocationFactorWeight,
+
+				// P7: behavioural penalties, decay after 1hr
+				BehaviourPenaltyThreshold: 6,
+				BehaviourPenaltyWeight:    -10,
+				BehaviourPenaltyDecay:     pubsub.ScoreParameterDecay(time.Hour),
+
+				// this retains non-positive scores for 6 hours
+				RetainScore: 6 * time.Hour,
+
+				Topics: map[string]*pubsub.TopicScoreParams{
+					config.IxTopic: {
+						TopicWeight: 0.1, // max cap is 5, single invalid message is -100
+
+						TimeInMeshWeight:  0.0002778, // ~1/3600
+						TimeInMeshQuantum: time.Second,
+						TimeInMeshCap:     1,
+
+						FirstMessageDeliveriesWeight: 0.5, // max value is 50
+						FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(10 * time.Minute),
+						FirstMessageDeliveriesCap:    100, // 100 txns in 10 minutes
+
+						// invalid messages decay after 1 hour
+						InvalidMessageDeliveriesWeight: -1000,
+						InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+					},
+					config.TesseractTopic: {
+						TopicWeight: 0.1, // max cap is 50, single invalid message is -100
+
+						TimeInMeshWeight:  0.0002778, // ~1/3600
+						TimeInMeshQuantum: time.Second,
+						TimeInMeshCap:     1,
+
+						FirstMessageDeliveriesWeight: 5, // max value is 50
+						FirstMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(10 * time.Minute),
+						FirstMessageDeliveriesCap:    100, // 100 blocks in an hour
+
+						// invalid messages decay after 1 hour
+						InvalidMessageDeliveriesWeight: -1000,
+						InvalidMessageDeliveriesDecay:  pubsub.ScoreParameterDecay(time.Hour),
+					},
+				},
+			},
+				&pubsub.PeerScoreThresholds{
+					GossipThreshold:             gossipScoreThreshold,
+					PublishThreshold:            publishScoreThreshold,
+					GraylistThreshold:           graylistScoreThreshold,
+					AcceptPXThreshold:           acceptPXScoreThreshold,
+					OpportunisticGraftThreshold: opportunisticGraftScoreThreshold,
+				},
+			),
+			pubsub.WithPeerScoreInspect(s.peerInspector, time.Minute),
+			pubsub.WithSubscriptionFilter(pubsub.WrapLimitSubscriptionFilter(
+				pubsub.NewAllowlistSubscriptionFilter(
+					config.HelloTopic, config.TesseractTopic, config.IxTopic), 100)),
+			pubsub.WithValidateQueueSize(256),
+			pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
+			pubsub.WithValidateWorkers(incomingThreads),
 			pubsub.WithGossipSubParams(pubsubGossipParam()),
 			pubsub.WithMessageIdFn(msgIDFunction),
 		}...,
@@ -250,7 +356,9 @@ func (s *Server) routeSubscriptionMessages(
 			continue
 		}
 
-		go pipeline(msg)
+		if handler != nil {
+			go pipeline(msg)
+		}
 	}
 }
 

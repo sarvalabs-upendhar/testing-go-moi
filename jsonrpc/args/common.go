@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -142,6 +143,39 @@ func CreateRPCInteraction(
 	}
 
 	return rpcIX, nil
+}
+
+func CreateRPCPeersScore(peers map[peer.ID]*pubsub.PeerScoreSnapshot) RPCPeersScore {
+	peersScore := make(RPCPeersScore, 0, len(peers))
+
+	for id, score := range peers {
+		rpcTopicScores := make(RPCTopicScores, 0, len(score.Topics))
+
+		for name, s := range score.Topics {
+			rpcTopicScores = append(rpcTopicScores, RPCTopicScore{
+				Name:                     name,
+				TimeInMesh:               uint64(s.TimeInMesh.Milliseconds()),
+				FirstMessageDeliveries:   s.FirstMessageDeliveries,
+				MeshMessageDeliveries:    s.MeshMessageDeliveries,
+				InvalidMessageDeliveries: s.InvalidMessageDeliveries,
+			})
+		}
+
+		rpcTopicScores.Sort()
+
+		peersScore = append(peersScore, RPCPeerScore{
+			ID:                 id,
+			TopicScores:        rpcTopicScores,
+			AppSpecificScore:   score.AppSpecificScore,
+			GossipScore:        score.Score,
+			IPColocationFactor: score.IPColocationFactor,
+			BehaviourPenalty:   score.BehaviourPenalty,
+		})
+	}
+
+	peersScore.Sort()
+
+	return peersScore
 }
 
 func CreateRPCParticipants(participants common.ParticipantsState) RPCParticipants {

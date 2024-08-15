@@ -13,20 +13,21 @@ import (
 )
 
 type Config struct {
-	NodeType       int
-	KramaIDVersion int
-	Vault          *crypto.VaultConfig
-	Network        *NetworkConfig
-	Consensus      *ConsensusConfig
-	DB             *DBConfig
-	Execution      *ExecutionConfig
-	IxPool         *IxPoolConfig
-	Syncer         *SyncerConfig
-	Metrics        Telemetry
-	LogFilePath    string
-	JSONRPC        *JSONRPCConfig
-	NetworkID      NetworkID
-	State          *StateConfig
+	NodeType            int
+	KramaIDVersion      int
+	Vault               *crypto.VaultConfig
+	Network             *NetworkConfig
+	Consensus           *ConsensusConfig
+	DB                  *DBConfig
+	Execution           *ExecutionConfig
+	IxPool              *IxPoolConfig
+	Syncer              *SyncerConfig
+	Metrics             Telemetry
+	LogFilePath         string
+	JSONRPC             *JSONRPCConfig
+	NetworkID           NetworkID
+	DisableRegistration bool
+	State               *StateConfig
 }
 
 type Telemetry struct {
@@ -53,9 +54,13 @@ type ExecutionConfig struct {
 }
 
 type IxPoolConfig struct {
-	Mode       int
-	PriceLimit *big.Int
-	MaxSlots   uint64
+	Mode                    int
+	PriceLimit              *big.Int
+	MaxSlots                uint64
+	IxIncomingFilterMaxSize uint64
+	MaxIxGroupSize          int
+	EnableIxFlooding        bool
+	EnableRawIxFiltering    bool
 }
 
 type NodeInfo struct {
@@ -71,9 +76,8 @@ type NetworkConfig struct {
 	MaxPeers           uint
 	RelayNodeAddr      string
 	ListenAddresses    []maddr.Multiaddr
-	PublicP2pAddresses []maddr.Multiaddr
+	PublicP2PAddresses []maddr.Multiaddr
 	JSONRPCAddr        *net.TCPAddr
-	P2PHostPort        int
 	MTQ                float64
 	CorsAllowedOrigins []string
 
@@ -89,6 +93,7 @@ type NetworkConfig struct {
 	AllowIPv6Addresses bool
 	DisablePrivateIP   bool
 	DiscoveryInterval  time.Duration
+	EnableIPColocation bool
 }
 
 type ConsensusConfig struct {
@@ -135,7 +140,7 @@ func DefaultDevnetConfig(path string) *Config {
 		},
 		Network: &NetworkConfig{
 			ListenAddresses:    make([]maddr.Multiaddr, 0),
-			PublicP2pAddresses: make([]maddr.Multiaddr, 0),
+			PublicP2PAddresses: make([]maddr.Multiaddr, 0),
 			BootstrapPeers:     make([]maddr.Multiaddr, 0),
 			MaxPeers:           0, // current we don't limit the no.of peers
 			InboundConnLimit:   DefaultInboundConnLimit,

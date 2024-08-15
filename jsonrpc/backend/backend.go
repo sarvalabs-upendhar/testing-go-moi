@@ -4,6 +4,9 @@ import (
 	"context"
 	"math/big"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/peer"
+
 	"github.com/libp2p/go-libp2p/core/network"
 
 	"github.com/sarvalabs/go-legacy-kramaid"
@@ -15,7 +18,7 @@ import (
 )
 
 type IxPool interface {
-	AddInteractions(ixs common.Interactions) []error
+	AddLocalInteractions(ixs common.Interactions) []error
 	GetNonce(addr identifiers.Address) (uint64, error)
 	GetIxs(addr identifiers.Address, inclQueued bool) (promoted, enqueued []*common.Interaction)
 	GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[identifiers.Address][]*common.Interaction)
@@ -87,6 +90,7 @@ type Network interface {
 	GetInboundConnCount() int64
 	GetOutboundConnCount() int64
 	GetSubscribedTopics() map[string]int
+	GetPeersScores() map[peer.ID]*pubsub.PeerScoreSnapshot
 }
 
 type DB interface {

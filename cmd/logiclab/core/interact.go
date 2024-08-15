@@ -8,7 +8,7 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-type LogicInteraction struct {
+type Interaction struct {
 	Kind  common.IxType
 	Nonce uint64
 	Price *big.Int
@@ -17,12 +17,12 @@ type LogicInteraction struct {
 	Call  []byte
 }
 
-func (ixn LogicInteraction) Type() common.IxType { return ixn.Kind }
-func (ixn LogicInteraction) FuelPrice() *big.Int { return ixn.Price }
-func (ixn LogicInteraction) FuelLimit() uint64   { return ixn.Limit }
-func (ixn LogicInteraction) Callsite() string    { return ixn.Site }
-func (ixn LogicInteraction) Calldata() []byte    { return ixn.Call }
-func (ixn LogicInteraction) Hash() (common.Hash, error) {
+func (ixn Interaction) Type() common.IxType { return ixn.Kind }
+func (ixn Interaction) FuelPrice() *big.Int { return ixn.Price }
+func (ixn Interaction) FuelLimit() uint64   { return ixn.Limit }
+func (ixn Interaction) Callsite() string    { return ixn.Site }
+func (ixn Interaction) Calldata() []byte    { return ixn.Call }
+func (ixn Interaction) Hash() (common.Hash, error) {
 	hash, err := common.PoloHash(ixn)
 	if err != nil {
 		return common.NilHash, errors.Wrap(err, "failed to polorize logic interaction")

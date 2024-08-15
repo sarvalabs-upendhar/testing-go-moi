@@ -8,7 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strconv"
+	"strings"
 	"time"
 
 	maddr "github.com/multiformats/go-multiaddr"
@@ -33,7 +33,7 @@ type Params struct {
 	SyncerTrustedPeers  []config.NodeInfo
 	BootstrapPeers      []maddr.Multiaddr
 	ListenAddresses     []maddr.Multiaddr
-	PublicP2pAddresses  []maddr.Multiaddr
+	PublicP2PAddresses  []maddr.Multiaddr
 	JSONRPCAddr         *net.TCPAddr
 	PrometheusAddr      *net.TCPAddr
 }
@@ -151,13 +151,13 @@ func (p *Params) assignNetworkLibp2pListenAddress() error {
 }
 
 func (p *Params) assignNetworkLibp2pPublicAddress() error {
-	for _, v := range p.rawCfg.Network.PublicP2pAddr {
+	for _, v := range p.rawCfg.Network.PublicP2PAddresses {
 		addr, err := maddr.NewMultiaddr(v)
 		if err != nil {
-			return errors.New("invalid libp2p address")
+			return errors.New("invalid public p2p address")
 		}
 
-		p.PublicP2pAddresses = append(p.PublicP2pAddresses, addr)
+		p.PublicP2PAddresses = append(p.PublicP2PAddresses, addr)
 	}
 
 	return nil
@@ -185,24 +185,18 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 		p.rawCfg.Consensus.GenesisPath = GenesisPath
 	}
 
-	if isP2PHostPortSet(cmd) {
-		p.rawCfg.Network.P2PHostPort = P2PHostPort
-	}
+	if isPublicP2PAddrSet(cmd) {
+		addrs := make([]string, 0)
 
-	if isP2PHostIPSet(cmd) {
-		ip := net.ParseIP(P2pHostIP)
+		for _, addr := range PublicP2PAddresses {
+			if strings.Contains(addr, "ip6") && !AllowIPv6Addresses {
+				return errors.New("ipv6 addresses are disable through the flag")
+			}
 
-		if ip.To4() != nil {
-			p.rawCfg.Network.PublicP2pAddr = []string{
-				fmt.Sprintf("/ip4/%s/tcp/%s", P2pHostIP, strconv.Itoa(p.rawCfg.Network.P2PHostPort)),
-				fmt.Sprintf("/ip4/%s/udp/%s", P2pHostIP, strconv.Itoa(p.rawCfg.Network.P2PHostPort)) + "/quic-v1",
-			}
-		} else {
-			p.rawCfg.Network.PublicP2pAddr = []string{
-				fmt.Sprintf("/ip6/%s/tcp/%s", P2pHostIP, strconv.Itoa(p.rawCfg.Network.P2PHostPort)),
-				fmt.Sprintf("/ip6/%s/udp/%s", P2pHostIP, strconv.Itoa(p.rawCfg.Network.P2PHostPort)) + "/quic-v1",
-			}
+			addrs = append(addrs, addr)
 		}
+
+		p.rawCfg.Network.PublicP2PAddresses = addrs
 	}
 
 	if isOperatorSlotSet(cmd) {
@@ -219,6 +213,10 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 
 	if isCleanDBSet(cmd) {
 		p.rawCfg.DB.CleanDB = CleanDB
+	}
+
+	if isDisableRegistrationSet(cmd) {
+		p.rawCfg.DisableRegistration = DisableRegistration
 	}
 
 	if isAllowOriginsSet(cmd) {
@@ -280,8 +278,7 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		MaxPeers:           p.rawCfg.Network.MaxPeers,
 		RelayNodeAddr:      p.rawCfg.Network.RelayNodeAddr,
 		ListenAddresses:    p.ListenAddresses,
-		PublicP2pAddresses: p.PublicP2pAddresses,
-		P2PHostPort:        p.rawCfg.Network.P2PHostPort,
+		PublicP2PAddresses: p.PublicP2PAddresses,
 		JSONRPCAddr:        p.JSONRPCAddr,
 		MTQ:                p.rawCfg.Network.MTQ,
 		CorsAllowedOrigins: p.rawCfg.Network.CorsAllowedOrigins,
@@ -295,6 +292,7 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		AllowIPv6Addresses: p.rawCfg.Network.AllowIPv6Addresses,
 		DisablePrivateIP:   p.rawCfg.Network.DisablePrivateIP,
 		DiscoveryInterval:  p.rawCfg.Network.DiscoveryInterval,
+		EnableIPColocation: p.rawCfg.Network.EnableIPColocation,
 	}
 }
 
@@ -350,9 +348,13 @@ func (p *Params) getExecutionConfig() *config.ExecutionConfig {
 
 func (p *Params) getIXPoolConfig() *config.IxPoolConfig {
 	return &config.IxPoolConfig{
-		Mode:       p.rawCfg.IxPool.Mode,
-		PriceLimit: p.rawCfg.IxPool.PriceLimit.ToInt(),
-		MaxSlots:   p.rawCfg.IxPool.MaxSlots,
+		Mode:                    p.rawCfg.IxPool.Mode,
+		PriceLimit:              p.rawCfg.IxPool.PriceLimit.ToInt(),
+		MaxSlots:                p.rawCfg.IxPool.MaxSlots,
+		IxIncomingFilterMaxSize: p.rawCfg.IxPool.IxIncomingFilterMaxSize,
+		MaxIxGroupSize:          p.rawCfg.IxPool.MaxIxGroupSize,
+		EnableIxFlooding:        p.rawCfg.IxPool.EnableIxFlooding,
+		EnableRawIxFiltering:    p.rawCfg.IxPool.EnableRawIxFiltering,
 	}
 }
 
@@ -411,20 +413,21 @@ func (p *Params) processRawParams() error {
 // generateNodeConfig generates node config using params
 func (p *Params) generateNodeConfig(dataDir string) *config.Config {
 	return &config.Config{
-		NodeType:       p.rawCfg.NodeType,
-		KramaIDVersion: p.rawCfg.KramaIDVersion,
-		Vault:          p.getVaultConfig(),
-		Network:        p.getNetworkConfig(),
-		Consensus:      p.getConsensusConfig(dataDir),
-		DB:             p.getDBConfig(dataDir),
-		Execution:      p.getExecutionConfig(),
-		IxPool:         p.getIXPoolConfig(),
-		Syncer:         p.getSyncerConfig(),
-		Metrics:        *p.getTelemetryConfig(),
-		LogFilePath:    p.rawCfg.LogFilePath,
-		JSONRPC:        p.getJSONRPCConfig(),
-		NetworkID:      p.rawCfg.NetworkID,
-		State:          p.getStateConfig(),
+		NodeType:            p.rawCfg.NodeType,
+		KramaIDVersion:      p.rawCfg.KramaIDVersion,
+		Vault:               p.getVaultConfig(),
+		Network:             p.getNetworkConfig(),
+		Consensus:           p.getConsensusConfig(dataDir),
+		DB:                  p.getDBConfig(dataDir),
+		Execution:           p.getExecutionConfig(),
+		IxPool:              p.getIXPoolConfig(),
+		Syncer:              p.getSyncerConfig(),
+		Metrics:             *p.getTelemetryConfig(),
+		LogFilePath:         p.rawCfg.LogFilePath,
+		JSONRPC:             p.getJSONRPCConfig(),
+		NetworkID:           p.rawCfg.NetworkID,
+		State:               p.getStateConfig(),
+		DisableRegistration: p.rawCfg.DisableRegistration,
 	}
 }
 
@@ -450,7 +453,7 @@ func isConfigPathSet(cmd *cobra.Command) bool {
 }
 
 func isLogPathSet(cmd *cobra.Command) bool {
-	return cmd.Flags().Changed(LogDirPathFlag)
+	return cmd.Flags().Changed(logDirPathFlag)
 }
 
 func isAllowIPv6AddressesSet(cmd *cobra.Command) bool {
@@ -481,6 +484,10 @@ func isCleanDBSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(cleanDBFlag)
 }
 
+func isDisableRegistrationSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(disableRegistration)
+}
+
 func isAllowOriginsSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(allowOriginsFlag)
 }
@@ -493,12 +500,8 @@ func isNodePasswordSet(cmd *cobra.Command) bool {
 	return cmd.Flags().Changed(nodePasswordFlag)
 }
 
-func isP2PHostIPSet(cmd *cobra.Command) bool {
-	return cmd.Flags().Changed(p2pHostIPFlag)
-}
-
-func isP2PHostPortSet(cmd *cobra.Command) bool {
-	return cmd.Flags().Changed(p2pHostPortFlag)
+func isPublicP2PAddrSet(cmd *cobra.Command) bool {
+	return cmd.Flags().Changed(publicP2PAddrFlag)
 }
 
 // BuildNodeConfig function creates a node configuration by combining default configuration and the configuration file,

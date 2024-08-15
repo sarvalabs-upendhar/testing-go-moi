@@ -17,14 +17,10 @@ import (
 )
 
 const (
+	MaxTopics         = 4
 	MaxHead           = 10000
 	EventStorageLimit = 1000
 )
-
-type EventDB struct {
-	head uint64
-	size uint64
-}
 
 type Event struct {
 	IxHash  common.Hash         `json:"ixhash"`
@@ -69,8 +65,8 @@ func GetEventsFromStream(stream *compute.EventStream, ixhash common.Hash) []Even
 	return events
 }
 
-// ReorganizeEvents reorganizes events when the head reaches MaxHead
-func (env *Environment) reorganizeEvents() error {
+// ReOrgEvents reorganizes events when the head reaches MaxHead
+func (env *Environment) ReOrgEvents() error {
 	for idx := uint64(0); idx < MaxHead; idx++ {
 		oldPos := idx + MaxHead
 
@@ -85,14 +81,14 @@ func (env *Environment) reorganizeEvents() error {
 		}
 	}
 
-	env.eventDB.head = 0
+	env.eventsHead = 0
 
 	return nil
 }
 
 // InsertEvents adds events to the eventDB, managing the circular buffer
 func (env *Environment) InsertEvents(events []Event) error {
-	head, size := env.eventDB.head, env.eventDB.size
+	head, size := env.eventsHead, env.eventsSize
 	for _, event := range events {
 		size++
 
@@ -122,12 +118,12 @@ func (env *Environment) InsertEvents(events []Event) error {
 		}
 
 		// Update the eventDB head to reflect the new starting point
-		env.eventDB.head = excess - 1
+		env.eventsHead = excess - 1
 
 		// Check if the new head has reached the maximum allowed value
-		if env.eventDB.head == MaxHead {
+		if env.eventsHead == MaxHead {
 			// If the head is at its maximum, reorganize events to prevent overflow
-			if err := env.reorganizeEvents(); err != nil {
+			if err := env.ReOrgEvents(); err != nil {
 				return err
 			}
 		}
@@ -136,7 +132,7 @@ func (env *Environment) InsertEvents(events []Event) error {
 	}
 
 	// Update the size in the eventDB
-	env.eventDB.size = size
+	env.eventsSize = size
 
 	return nil
 }
@@ -153,7 +149,7 @@ func (env *Environment) IterEvents() <-chan struct {
 	go func() {
 		defer close(ch)
 
-		head, size := env.eventDB.head, env.eventDB.size
+		head, size := env.eventsHead, env.eventsSize
 		for idx := head; idx < size; idx++ {
 			value, err := env.database.Get(db.EventKey(env.ID, idx))
 			if err != nil {
@@ -233,9 +229,20 @@ func FilterByAddress(address identifiers.Address) EventFilter {
 }
 
 func FilterByName(name string) EventFilter {
-	eventHash := blake2b.Sum256([]byte(name))
+	encoded, _ := polo.Polorize(name)
+	eventHash := blake2b.Sum256(encoded)
 
 	return func(event Event) bool {
 		return event.Topics[0] == eventHash
+	}
+}
+
+func FilterByTopic(index int, topicHash common.Hash) EventFilter {
+	return func(event Event) bool {
+		if index >= 1 && index < len(event.Topics) {
+			return event.Topics[index] == topicHash
+		}
+
+		return false
 	}
 }

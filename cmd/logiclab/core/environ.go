@@ -21,7 +21,9 @@ const (
 type Environment struct {
 	database db.Database
 	lcache   map[string]*Logic
-	eventDB  *EventDB
+
+	eventsHead uint64
+	eventsSize uint64
 
 	ID    string
 	Nonce uint64
@@ -42,18 +44,11 @@ type ReplConfig struct {
 }
 
 func NewEnvironment(name string, database db.Database) *Environment {
-	eventDB, err := loadEventDB(name, database)
-	if errors.Is(err, db.ErrKeyNotFound) {
-		eventDB = &EventDB{
-			head: 0,
-			size: 0,
-		}
-	}
-
 	return &Environment{
-		database: database,
-		lcache:   make(map[string]*Logic),
-		eventDB:  eventDB,
+		database:   database,
+		lcache:     make(map[string]*Logic),
+		eventsHead: 0,
+		eventsSize: 0,
 
 		ID:       name,
 		Nonce:    0,
@@ -69,18 +64,54 @@ func NewEnvironment(name string, database db.Database) *Environment {
 	}
 }
 
-// LoadEventDB loads the event head and size from the db
-func loadEventDB(envID string, database db.Database) (*EventDB, error) {
-	// Get and decode head
-	headValue, err := database.Get(db.EventHeadKey(envID))
+func (env *Environment) Encode() ([]byte, error) {
+	encoded, err := polo.Polorize(env)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get event head: %w", err)
+		return nil, errors.Wrap(err, "failed to polorize environment")
+	}
+
+	value, err := polo.Polorize(env.eventsHead)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := env.database.Set(db.EventHeadKey(env.ID), value); err != nil {
+		return nil, err
+	}
+
+	value, err = polo.Polorize(env.eventsSize)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := env.database.Set(db.EventSizeKey(env.ID), value); err != nil {
+		return nil, err
+	}
+
+	return encoded, nil
+}
+
+func (env *Environment) Decode(encoded []byte) error {
+	envdb := env.database
+	if envdb == nil {
+		return errors.New("database unavailable")
+	}
+
+	if err := polo.Depolorize(env, encoded); err != nil {
+		return errors.Wrap(err, "failed to depolorize environment")
+	}
+
+	env.database = envdb
+
+	headValue, err := env.database.Get(db.EventHeadKey(env.ID))
+	if err != nil {
+		return fmt.Errorf("failed to get event head: %w", err)
 	}
 
 	// Get and decode size
-	sizeValue, err := database.Get(db.EventSizeKey(envID))
+	sizeValue, err := env.database.Get(db.EventSizeKey(env.ID))
 	if err != nil {
-		return nil, fmt.Errorf("failed to get event size: %w", err)
+		return fmt.Errorf("failed to get event size: %w", err)
 	}
 
 	var head, size uint64
@@ -88,56 +119,19 @@ func loadEventDB(envID string, database db.Database) (*EventDB, error) {
 	// Decode the head value
 	err = polo.Depolorize(&head, headValue)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Decode the size value
 	err = polo.Depolorize(&size, sizeValue)
 	if err != nil {
-		return nil, err
-	}
-
-	return &EventDB{head: head, size: size}, nil
-}
-
-func saveEventDB(env *Environment) error {
-	value, err := polo.Polorize(env.eventDB.head)
-	if err != nil {
 		return err
-	}
-
-	if err := env.database.Set(db.EventHeadKey(env.ID), value); err != nil {
-		return err
-	}
-
-	value, err = polo.Polorize(env.eventDB.size)
-	if err != nil {
-		return err
-	}
-
-	if err := env.database.Set(db.EventSizeKey(env.ID), value); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (env *Environment) Encode() ([]byte, error) {
-	encoded, err := polo.Polorize(env)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize environment")
-	}
-
-	return encoded, nil
-}
-
-func (env *Environment) Decode(encoded []byte) error {
-	if err := polo.Depolorize(env, encoded); err != nil {
-		return errors.Wrap(err, "failed to depolorize environment")
 	}
 
 	// Initialize the logic cache
 	env.lcache = make(map[string]*Logic)
+	env.eventsSize = size
+	env.eventsHead = head
 
 	return nil
 }
@@ -214,8 +208,8 @@ func (env *Environment) RemoveUser(username string) error {
 	return nil
 }
 
-// RemoveAllUsers removes all users from the Environment
-func (env *Environment) RemoveAllUsers() error {
+// PurgeUsers removes all users from the Environment
+func (env *Environment) PurgeUsers() error {
 	// Iterate over the users and remove each one
 	for name := range env.Users {
 		if err := env.RemoveUser(name); err != nil {

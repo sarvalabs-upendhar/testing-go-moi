@@ -47,7 +47,7 @@ func setupIPV6Filter(addressFilters *multiaddr.Filters) {
 func makeAddrsFactory(
 	disablePrivateIP,
 	allowIPv6Addresses bool,
-	publicP2pAddresses []multiaddr.Multiaddr,
+	publicP2PAddresses []multiaddr.Multiaddr,
 ) (func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr, error) {
 	addressFilters := multiaddr.NewFilters()
 
@@ -63,8 +63,8 @@ func makeAddrsFactory(
 	}
 
 	return func(addrs []multiaddr.Multiaddr) []multiaddr.Multiaddr {
-		if len(publicP2pAddresses) > 0 {
-			addrs = append(addrs, publicP2pAddresses...)
+		if len(publicP2PAddresses) > 0 {
+			addrs = append(addrs, publicP2PAddresses...)
 		}
 
 		// Filter out addresses based on the Filters

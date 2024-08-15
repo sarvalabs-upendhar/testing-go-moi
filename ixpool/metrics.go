@@ -14,6 +14,7 @@ type Metrics struct {
 	IxPoolSize      metrics.Gauge
 	SlotsUsed       metrics.Gauge
 	AccountWaitTime metrics.Histogram
+	IxRawDup        metrics.Counter
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -49,6 +50,12 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Help:      "Time taken by an interaction associated with an account to process and complete",
 			Buckets:   []float64{2, 4, 8, 10, 20, 30, 60, 120, 180, 240},
 		}, labels).With(labelsWithValues...),
+		IxRawDup: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "ixpool",
+			Name:      "ix_raw_dup",
+			Help:      "Number of ix raw duplicates",
+		}, labels).With(labelsWithValues...),
 	}
 }
 
@@ -58,6 +65,7 @@ func NilMetrics() *Metrics {
 		IxPoolSize:      discard.NewGauge(),
 		SlotsUsed:       discard.NewGauge(),
 		AccountWaitTime: discard.NewHistogram(),
+		IxRawDup:        discard.NewCounter(),
 	}
 }
 
@@ -85,4 +93,8 @@ func (metrics *Metrics) captureSlotsUsed(delta float64) {
 
 func (metrics *Metrics) captureAccountWaitTime(requestTime time.Time, waitTime time.Time) {
 	metrics.AccountWaitTime.Observe(waitTime.Sub(requestTime).Seconds())
+}
+
+func (metrics *Metrics) AddIxRawDupCount(delta float64) {
+	metrics.IxRawDup.Add(delta)
 }

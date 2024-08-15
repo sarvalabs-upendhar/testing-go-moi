@@ -2,6 +2,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -57,6 +58,15 @@ func (api *API) getEvents(c *gin.Context) {
 
 	if name := c.Query(QueryName); name != "" {
 		filters = append(filters, core.FilterByName(name))
+	}
+
+	for i := 1; i < core.MaxTopics; i++ {
+		topicParam := fmt.Sprintf("topic%d", i)
+		topic := c.Query(topicParam)
+
+		if topic != "" {
+			filters = append(filters, core.FilterByTopic(i, common.HexToHash(topic)))
+		}
 	}
 
 	events, err := env.GetEvents(filters...)

@@ -37,47 +37,6 @@ type LogicMetadata struct {
 	Manifest common.Hash         `json:"manifest"`
 }
 
-// NewLogic reads and compiles a manifest file at the given path into a Logic with the given name.
-func NewLogic(name string, manifest engineio.Manifest, fuel engineio.EngineFuel) (*Logic, engineio.EngineFuel, error) {
-	// Obtain the runtime for the logic engine in the header
-	runtime, ok := engineio.FetchEngine(manifest.Engine().Kind)
-	if !ok {
-		return nil, 0, errors.Errorf("unsupported manifest engine: %v", manifest.Engine().Kind)
-	}
-
-	// Compile the manifest into a LogicDescriptor
-	descriptor, consumed, err := runtime.CompileManifest(manifest, fuel)
-	if err != nil {
-		return nil, consumed, err
-	}
-
-	// Create a new LogicObject from the LogicDescriptor
-	// A random address is assigned to the logic account
-	logicObject := state.NewLogicObject(identifiers.NewRandomAddress(), descriptor)
-
-	// If the logic ID has no persistent state, it can be marked
-	// as ready, otherwise it requires a deployment to occur first
-	id, _ := logicObject.ID.Identifier()
-	ready := !id.HasPersistentState()
-
-	logic := &Logic{
-		Name:      name,
-		Ready:     ready,
-		Object:    logicObject,
-		Callsites: make(map[string]LogicCallsite),
-	}
-
-	for site, object := range logicObject.Callsites {
-		logic.Callsites[site] = LogicCallsite{
-			Kind: object.Kind.String(),
-			Ptr:  object.Ptr,
-			Sign: generateSignatures(manifest, object),
-		}
-	}
-
-	return logic, consumed, nil
-}
-
 // FormatREPL returns a string representation of the Logic for compatibility with the REPL
 func (logic Logic) FormatREPL() string {
 	var str strings.Builder
@@ -171,31 +130,64 @@ func (env *Environment) FetchLogic(name string) (*Logic, error) {
 	return logic, nil
 }
 
-// RegisterLogic adds a Logic object to the Environment.
+// CompileLogic adds a Logic object to the Environment.
 // The logic is indexed by its name.
-func (env *Environment) RegisterLogic(logic *Logic, manifest engineio.Manifest) error {
-	// Check if logic with the given name already exists
-	if env.LogicExists(logic.Name) {
-		return ErrLogicAlreadyExists
+func (env *Environment) CompileLogic(
+	name string,
+	manifest engineio.Manifest,
+	fuel engineio.EngineFuel,
+) (*Logic, engineio.EngineFuel, error) {
+	// Obtain the runtime for the logic engine in the header
+	runtime, ok := engineio.FetchEngine(manifest.Engine().Kind)
+	if !ok {
+		return nil, 0, errors.Errorf("unsupported manifest engine: %v", manifest.Engine().Kind)
 	}
 
-	logicID := logic.Object.ID
-
-	// Check if the logic address already exists
-	if env.AddrExists(logicID.Address()) {
-		return ErrAddrAlreadyExists
+	// Compile the manifest into a LogicDescriptor
+	descriptor, consumed, err := runtime.CompileManifest(manifest, fuel)
+	if err != nil {
+		return nil, consumed, err
 	}
 
-	env.Addrs[logicID.Address()] = struct{}{}
+	logicAddress := identifiers.NewRandomAddress()
+
+	for env.AddrExists(logicAddress) {
+		logicAddress = identifiers.NewRandomAddress()
+	}
+	// Create a new LogicObject from the LogicDescriptor
+	// A random address is assigned to the logic account
+	logicObject := state.NewLogicObject(logicAddress, descriptor)
+
+	// If the logic ID has no persistent state, it can be marked
+	// as ready, otherwise it requires a deployment to occur first
+	id, _ := logicObject.ID.Identifier()
+	ready := !id.HasPersistentState()
+
+	logic := &Logic{
+		Name:      name,
+		Ready:     ready,
+		Object:    logicObject,
+		Callsites: make(map[string]LogicCallsite),
+	}
+
+	for site, object := range logicObject.Callsites {
+		logic.Callsites[site] = LogicCallsite{
+			Kind: object.Kind.String(),
+			Ptr:  object.Ptr,
+			Sign: generateSignatures(manifest, object),
+		}
+	}
+
+	env.Addrs[logicObject.ID.Address()] = struct{}{}
 	env.lcache[logic.Name] = logic
 	env.Logics[logic.Name] = LogicMetadata{
-		LogicID:  logicID,
+		LogicID:  logicObject.ID,
 		Manifest: manifest.Hash(),
 	}
 
 	encoded, err := logic.Encode()
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 
 	account := &Account{
@@ -206,23 +198,23 @@ func (env *Environment) RegisterLogic(logic *Logic, manifest engineio.Manifest) 
 
 	rawAccount, err := account.Encode()
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 
-	if err = env.database.Set(db.LogicAccountKey(env.ID, logicID), rawAccount); err != nil {
-		return err
+	if err = env.database.Set(db.LogicAccountKey(env.ID, logicObject.ID), rawAccount); err != nil {
+		return nil, 0, err
 	}
 
 	encoded, err = manifest.Encode(common.POLO)
 	if err != nil {
-		return err
+		return nil, 0, err
 	}
 
-	if err = env.database.Set(db.LogicManifestKey(env.ID, logicID), encoded); err != nil {
-		return err
+	if err = env.database.Set(db.LogicManifestKey(env.ID, logicObject.ID), encoded); err != nil {
+		return nil, 0, err
 	}
 
-	return nil
+	return logic, consumed, nil
 }
 
 // RemoveLogic removes a logic from the Environment with a given name.
@@ -248,8 +240,8 @@ func (env *Environment) RemoveLogic(name string) error {
 	return nil
 }
 
-// RemoveAllLogics removes all users from the Environment
-func (env *Environment) RemoveAllLogics() error {
+// PurgeLogics removes all users from the Environment
+func (env *Environment) PurgeLogics() error {
 	// Iterate over the logics and remove each one
 	for name := range env.Logics {
 		if err := env.RemoveLogic(name); err != nil {

@@ -96,4 +96,5 @@ var (
 	ErrEmptyMethodName             = errors.New("methodName cannot be empty")
 	ErrOperatorNotEligible         = errors.New("operator not eligible")
 	ErrAlreadyEnlisted             = errors.New("caller already enlisted with ephemeral logic")
+	ErrEmptyPeerID                 = errors.New("peer id cannot be empty")
 )

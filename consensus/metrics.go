@@ -27,6 +27,7 @@ type Metrics struct {
 	AgreementTime                metrics.Histogram
 	AgreementFailureCount        metrics.Counter
 	SignatureVerificationTime    metrics.Histogram
+	TesseractMissCount           metrics.Counter
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -135,6 +136,12 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Help:      "Time taken to verify tesseract signature",
 			Buckets:   []float64{5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 100},
 		}, labels).With(labelsWithValues...),
+		TesseractMissCount: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: "kbft",
+			Name:      "block_miss_count",
+			Help:      "Number of blocks missing",
+		}, labels).With(labelsWithValues...),
 	}
 }
 
@@ -155,6 +162,7 @@ func NilMetrics() *Metrics {
 		AgreementTime:                discard.NewHistogram(),
 		AgreementFailureCount:        discard.NewCounter(),
 		SignatureVerificationTime:    discard.NewHistogram(),
+		TesseractMissCount:           discard.NewCounter(),
 	}
 }
 
@@ -162,6 +170,7 @@ func NilMetrics() *Metrics {
 func (metrics *Metrics) initMetrics(operatorSlotsCount float64, validatorSlotCount float64) {
 	metrics.AvailableOperatorSlots.Set(operatorSlotsCount)
 	metrics.AvailableValidatorSlots.Set(validatorSlotCount)
+	metrics.TesseractMissCount.Add(0)
 }
 
 func (metrics *Metrics) captureAvailableOperatorSlots(delta float64) {
@@ -223,4 +232,8 @@ func (metrics *Metrics) captureOperatorSelectionCount(ixHash common.Hash, peerID
 
 func (metrics *Metrics) captureICSRequestCount(ixHash common.Hash, peerID string, delta float64) {
 	metrics.ICSRequestCount.With("ix_hash", ixHash.Hex(), "peer_id", peerID).Add(delta)
+}
+
+func (metrics *Metrics) AddTesseractMissCount(delta float64) {
+	metrics.TesseractMissCount.Add(delta)
 }

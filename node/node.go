@@ -165,7 +165,9 @@ func (n *Node) Start() (err error) {
 
 	go n.syncer.Start(forage.DefaultMinConnectedPeers)
 
-	n.ixpool.Start()
+	if err = n.ixpool.Start(); err != nil {
+		return err
+	}
 
 	n.kramaEngine.Start()
 

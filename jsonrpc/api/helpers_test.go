@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+
 	"github.com/sarvalabs/go-moi/jsonrpc"
 
 	"github.com/google/uuid"
@@ -604,7 +606,7 @@ func (mc *MockIxPool) GetPendingIx(ixHash common.Hash) (*common.Interaction, boo
 	return ix, true
 }
 
-func (mc *MockIxPool) AddInteractions(ixs common.Interactions) []error {
+func (mc *MockIxPool) AddLocalInteractions(ixs common.Interactions) []error {
 	if mc.addInteractionHook != nil {
 		return mc.addInteractionHook()
 	}
@@ -672,6 +674,11 @@ type MockNetwork struct {
 	inboundConnCount  int64
 	outboundConnCount int64
 	pubsubTopics      map[string]int
+}
+
+func (mn *MockNetwork) GetPeersScores() map[peer.ID]*pubsub.PeerScoreSnapshot {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewMockNetwork(t *testing.T) *MockNetwork {

@@ -206,6 +206,13 @@ func (p *PublicDebugAPI) SyncJob(args *rpcargs.SyncJobRequest) (*rpcargs.SyncJob
 	return p.syncer.GetSyncJobInfo(args.Address)
 }
 
+// PeersScore returns the scores of all connected peers
+func (p *PublicDebugAPI) PeersScore(args *rpcargs.PeerScoreRequest) (rpcargs.RPCPeersScore, error) {
+	peersScores := p.network.GetPeersScores()
+
+	return rpcargs.CreateRPCPeersScore(peersScores), nil
+}
+
 // helper functions
 
 // getStreams retrieves stream information from a network connection

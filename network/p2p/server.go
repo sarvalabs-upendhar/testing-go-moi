@@ -62,7 +62,8 @@ type Server struct {
 
 	id kramaid.KramaID // KramaID of the node
 
-	Peers *peerSet // peerSet of node
+	Peers      *peerSet // peerSet of node
+	peerScores *PeerScores
 
 	ds *DiscoveryService
 
@@ -106,6 +107,7 @@ func NewServer(
 		cfg:                 config,
 		mux:                 mux,
 		Peers:               newPeerSet(),
+		peerScores:          newPeerScores(),
 		rpcServers:          make(map[protocol.ID]*rpc.Server),
 		vault:               vault,
 		metrics:             metrics,
@@ -125,6 +127,10 @@ func (s *Server) Close() error {
 	s.ctxCancel()
 
 	return nil
+}
+
+func (s *Server) GetPeersScores() map[peer.ID]*pubsub.PeerScoreSnapshot {
+	return s.peerScores.Get()
 }
 
 func (s *Server) AddPeerInfo(info peer.AddrInfo) {
@@ -224,7 +230,7 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 	}
 
 	// filters out address based on server config flags
-	addrsFactory, err := makeAddrsFactory(s.cfg.DisablePrivateIP, s.cfg.AllowIPv6Addresses, s.cfg.PublicP2pAddresses)
+	addrsFactory, err := makeAddrsFactory(s.cfg.DisablePrivateIP, s.cfg.AllowIPv6Addresses, s.cfg.PublicP2PAddresses)
 	if err != nil {
 		return nil, err
 	}

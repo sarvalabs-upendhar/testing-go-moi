@@ -2210,6 +2210,7 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 		if err != nil {
 			s.logger.Trace("Ixns not found in ixpool",
 				"ixns-hashes", tsInfo.ixnsHashes, "addr", tsInfo.address())
+			s.metrics.AddIxMissCount(1)
 
 			err = func() error {
 				ctx, cancel := context.WithTimeout(context.Background(), TesseractFetchTimeOut) // TODO:Optimise timeout duration

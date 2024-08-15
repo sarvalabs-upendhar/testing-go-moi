@@ -30,7 +30,7 @@ func NewAPI(lab *core.Lab) *API {
 func (api *API) Start(port int) error {
 	// Basic API Primitives
 	api.router.GET("/", api.getAPIMetadata)
-	api.router.DELETE("/", api.resetLabDB)
+	api.router.DELETE("/", api.purgeLab)
 
 	// Environment APIs
 	api.router.GET("/environments", api.getAllEnvironments)
@@ -106,7 +106,12 @@ func (api *API) getAPIMetadata(c *gin.Context) {
 	c.JSON(http.StatusOK, Success().WithData(version))
 }
 
-func (api *API) resetLabDB(c *gin.Context) {
+func (api *API) purgeLab(c *gin.Context) {
+	if err := api.lab.ResetEnvCache(); err != nil {
+		c.JSON(http.StatusInternalServerError, Error(err))
+		return
+	}
+
 	if err := api.lab.Database.DropAll(); err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return

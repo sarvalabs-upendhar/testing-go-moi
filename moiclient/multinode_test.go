@@ -540,3 +540,8 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 		})
 	}
 }
+
+func (tm *TestMultiNode) TestGetPeersScore() {
+	_, err := tm.moiClient.PeersScore(context.Background(), &rpcargs.PeerScoreRequest{})
+	require.NoError(tm.T(), err)
+}

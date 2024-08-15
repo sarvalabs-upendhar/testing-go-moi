@@ -54,7 +54,7 @@ func (api *API) createEnvironment(c *gin.Context) {
 
 func (api *API) getAllEnvironments(c *gin.Context) {
 	// Get all the environments
-	environments, err := api.lab.GetAllEnvironments()
+	environments, err := api.lab.ListEnvironments()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
