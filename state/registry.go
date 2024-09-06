@@ -36,5 +36,5 @@ func (r *RegistryObject) Copy() *RegistryObject {
 		copy(newObject.Entries[k], v)
 	}
 
-	return r
+	return newObject
 }
