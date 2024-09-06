@@ -147,18 +147,33 @@ func (n *Node) setupIxPool() error {
 	return nil
 }
 
-// setupSenatusToNetwork fetches Senatus from state and setups it to node's network manager(poorna server)
-func (n *Node) setupSenatusToNetwork() error {
+// storeStaticPeersInSenatus stores static peers in senatus
+func (n *Node) storeStaticPeersInSenatus() error {
 	n.network.Senatus = n.senatus
 
 	for _, staticPeer := range n.cfg.Network.StaticPeers {
-		err := n.network.Senatus.UpdatePeer(&senatus.NodeMetaInfo{
+		if err := n.network.Senatus.UpdatePeer(&senatus.NodeMetaInfo{
 			KramaID:    staticPeer.ID,
 			Addrs:      utils.MultiAddrToString(staticPeer.Address),
 			NTQ:        senatus.DefaultPeerNTQ,
 			Registered: true,
-		})
-		if err != nil {
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// storeTrustedPeersInSenatus stores trusted peers in senatus
+func (n *Node) storeTrustedPeersInSenatus() error {
+	for _, trustedPeer := range n.cfg.Consensus.TrustedPeers {
+		if err := n.network.Senatus.UpdatePeer(&senatus.NodeMetaInfo{
+			KramaID:    trustedPeer.ID,
+			Addrs:      utils.MultiAddrToString(trustedPeer.Address),
+			NTQ:        senatus.DefaultPeerNTQ,
+			Registered: true,
+		}); err != nil {
 			return err
 		}
 	}

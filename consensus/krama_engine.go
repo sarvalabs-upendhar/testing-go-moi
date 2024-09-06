@@ -156,31 +156,32 @@ type vault interface {
 }
 
 type Engine struct {
-	ctx               context.Context
-	ctxCancel         context.CancelFunc
-	cfg               *config.ConsensusConfig
-	mux               *utils.TypeMux
-	logger            hclog.Logger
-	selfID            kramaid.KramaID
-	slots             *ktypes.Slots
-	requests          chan ktypes.Request
-	randomizer        *flux.Randomizer
-	transport         kramaTransport
-	exec              execution
-	pool              ixPool
-	db                store
-	state             stateManager
-	executionReq      chan common.ClusterID
-	lattice           lattice
-	wal               kbft.WAL
-	vault             vault
-	clusterLocks      *locker.Locker
-	metrics           *Metrics
-	avgICSTime        time.Duration
-	slotCloseCh       chan common.ClusterID
-	lottery           *OperatorSelection
-	signatureVerifier AggregatedSignatureVerifier
-	tsTracker         map[common.Hash]*utils.TSTrackerEvent
+	ctx                 context.Context
+	ctxCancel           context.CancelFunc
+	cfg                 *config.ConsensusConfig
+	mux                 *utils.TypeMux
+	logger              hclog.Logger
+	selfID              kramaid.KramaID
+	slots               *ktypes.Slots
+	requests            chan ktypes.Request
+	randomizer          *flux.Randomizer
+	transport           kramaTransport
+	exec                execution
+	pool                ixPool
+	db                  store
+	state               stateManager
+	executionReq        chan common.ClusterID
+	lattice             lattice
+	wal                 kbft.WAL
+	vault               vault
+	clusterLocks        *locker.Locker
+	metrics             *Metrics
+	avgICSTime          time.Duration
+	slotCloseCh         chan common.ClusterID
+	lottery             *OperatorSelection
+	signatureVerifier   AggregatedSignatureVerifier
+	tsTracker           map[common.Hash]*utils.TSTrackerEvent
+	trustedPeersPresent bool
 }
 
 func NewKramaEngine(
@@ -212,31 +213,32 @@ func NewKramaEngine(
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	k := &Engine{
-		ctx:               ctx,
-		ctxCancel:         ctxCancel,
-		cfg:               cfg,
-		logger:            logger.Named("Krama-Engine"),
-		mux:               mux,
-		selfID:            selfID,
-		state:             state,
-		slots:             slots,
-		requests:          make(chan ktypes.Request),
-		randomizer:        randomizer,
-		transport:         transport,
-		exec:              exec,
-		db:                db,
-		pool:              ixPool,
-		lattice:           lattice,
-		executionReq:      make(chan common.ClusterID),
-		wal:               wal,
-		vault:             val,
-		clusterLocks:      locker.New(),
-		metrics:           metrics,
-		avgICSTime:        cfg.AccountWaitTime,
-		slotCloseCh:       make(chan common.ClusterID),
-		signatureVerifier: verifier,
-		lottery:           operatorSortition,
-		tsTracker:         make(map[common.Hash]*utils.TSTrackerEvent),
+		ctx:                 ctx,
+		ctxCancel:           ctxCancel,
+		cfg:                 cfg,
+		logger:              logger.Named("Krama-Engine"),
+		mux:                 mux,
+		selfID:              selfID,
+		state:               state,
+		slots:               slots,
+		requests:            make(chan ktypes.Request),
+		randomizer:          randomizer,
+		transport:           transport,
+		exec:                exec,
+		db:                  db,
+		pool:                ixPool,
+		lattice:             lattice,
+		executionReq:        make(chan common.ClusterID),
+		wal:                 wal,
+		vault:               val,
+		clusterLocks:        locker.New(),
+		metrics:             metrics,
+		avgICSTime:          cfg.AccountWaitTime,
+		slotCloseCh:         make(chan common.ClusterID),
+		signatureVerifier:   verifier,
+		lottery:             operatorSortition,
+		tsTracker:           make(map[common.Hash]*utils.TSTrackerEvent),
+		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
 	}
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
@@ -370,6 +372,12 @@ func (k *Engine) acquireContextLock(ctx context.Context, slot *ktypes.Slot) erro
 	)
 
 	slot.ClusterState().ICSReqTime = utils.Now()
+
+	if k.trustedPeersPresent {
+		// Choose 5 trusted nodes, as a maximum of 3 nodes are required while updating the context
+		slot.ClusterState().TrustedPeers = k.getTrustedPeers(5)
+	}
+
 	// Construct ICS_Request
 	reqMsg, err := k.getCanonicalICSReqMsg(slot.ClusterState())
 	if err != nil {
@@ -666,6 +674,8 @@ func (k *Engine) joinCluster(ctx context.Context, slot *ktypes.Slot) error {
 	slot.ClusterState().UpdateNodeSet(
 		slot.ClusterState().NodeSet.RandomSetPosition(),
 		common.NewNodeSet(slot.ClusterState().RequestMsg.RandomSet, randomPublicKeys, reqMsg.RequiredRandomSetSize))
+
+	slot.ClusterState().TrustedPeers = reqMsg.TrustedPeers
 
 	k.logger.Debug("Responding to ICS request", "from", slot.ClusterState().Operator)
 
@@ -1034,6 +1044,7 @@ func (k *Engine) getCanonicalICSReqMsg(
 	msg.IxData = rawData
 	msg.ClusterID = cs.ClusterID
 	msg.Operator = string(k.selfID)
+	msg.TrustedPeers = cs.TrustedPeers
 	msg.ContextLock = cs.ContextLock()
 	msg.Timestamp = cs.ICSReqTime.UnixNano()
 	msg.RandomSet = cs.NodeSet.RandomSet().Ids
@@ -1122,6 +1133,42 @@ func (k *Engine) createProposalTesseract(slot *ktypes.Slot) (*common.Tesseract, 
 	return generateTesseract(clusterState, stateHashes)
 }
 
+func (k *Engine) GetBehaviouralContextDelta(
+	cs *ktypes.ClusterState,
+	ps *common.Participant,
+) (kramaid.KramaID, kramaid.KramaID) {
+	if k.trustedPeersPresent {
+		return cs.GetBehaviouralContextDelta(
+			ps.NodeSetPosition,
+			cs.TrustedPeers[0],
+		)
+	}
+
+	return cs.GetBehaviouralContextDelta(
+		ps.NodeSetPosition,
+		cs.Operator,
+	)
+}
+
+func (k *Engine) GetRandomContextDelta(
+	cs *ktypes.ClusterState,
+	ps *common.Participant,
+) ([]kramaid.KramaID, []kramaid.KramaID) {
+	if k.trustedPeersPresent {
+		return cs.GetRandomContextDelta(
+			ps.NodeSetPosition+1,
+			1,
+			cs.TrustedPeers[0],
+		)
+	}
+
+	return cs.GetRandomContextDelta(
+		ps.NodeSetPosition+1,
+		1,
+		cs.Operator,
+	)
+}
+
 func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 	if slot == nil {
 		return errors.New("nil slot")
@@ -1162,9 +1209,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 			continue
 		}
 
-		senderBehaviourDelta, replacedNodes := cs.GetBehaviouralContextDelta(
-			ps.NodeSetPosition,
-		)
+		senderBehaviourDelta, replacedNodes := k.GetBehaviouralContextDelta(cs, ps)
 
 		if senderBehaviourDelta != "" {
 			deltaGroup.BehaviouralNodes = append(deltaGroup.BehaviouralNodes, senderBehaviourDelta)
@@ -1174,11 +1219,7 @@ func (k *Engine) updateContextDelta(slot *ktypes.Slot) error {
 			deltaGroup.ReplacedNodes = append(deltaGroup.ReplacedNodes, replacedNodes)
 		}
 
-		senderRandomDelta, replacedRandomDelta := cs.GetRandomContextDelta(
-			ps.NodeSetPosition+1,
-			1,
-			cs.Operator,
-		)
+		senderRandomDelta, replacedRandomDelta := k.GetRandomContextDelta(cs, ps)
 
 		deltaGroup.RandomNodes = append(deltaGroup.RandomNodes, senderRandomDelta...)
 		deltaGroup.ReplacedNodes = append(deltaGroup.ReplacedNodes, replacedRandomDelta...)
@@ -1218,11 +1259,31 @@ func (k *Engine) ExecuteAndValidate(
 	return nil
 }
 
+func (k *Engine) getTrustedPeers(count int) []kramaid.KramaID {
+	randomNumbers := utils.GetRandomNumbers(count, len(k.cfg.TrustedPeers))
+	peers := make([]kramaid.KramaID, 0, count)
+
+	for id, trustedPeer := range k.cfg.TrustedPeers {
+		if _, ok := randomNumbers[id]; ok {
+			peers = append(peers, trustedPeer.ID)
+		}
+	}
+
+	return peers
+}
+
 func (k *Engine) GetNodes(
 	clusterInfo *ktypes.ClusterState,
 	requiredRandomNodes,
 	requiredBehaviouralNodes int,
 ) (behaviouralNodes []kramaid.KramaID, randomNodes []kramaid.KramaID, err error) {
+	if k.trustedPeersPresent {
+		peers := clusterInfo.TrustedPeers
+
+		return peers[:requiredBehaviouralNodes],
+			peers[requiredBehaviouralNodes : requiredBehaviouralNodes+requiredRandomNodes], nil
+	}
+
 	// TODO: Need to improve this function
 	set := clusterInfo.NodeSet.RandomSet()
 	count := 0
@@ -1243,7 +1304,7 @@ func (k *Engine) GetNodes(
 		}
 	}
 
-	return
+	return behaviouralNodes, randomNodes, nil
 }
 
 func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {

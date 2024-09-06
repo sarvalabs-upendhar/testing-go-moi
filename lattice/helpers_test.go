@@ -339,6 +339,10 @@ type mockBatchWriter struct {
 	flushHook func() error
 }
 
+func (bw *mockBatchWriter) Delete(key []byte) error {
+	panic("implement me")
+}
+
 func newMockBatchWriter() *mockBatchWriter {
 	return &mockBatchWriter{
 		dbStorage: make(map[string][]byte),

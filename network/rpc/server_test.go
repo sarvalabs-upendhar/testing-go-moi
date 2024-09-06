@@ -228,7 +228,6 @@ func TestRegister(t *testing.T) {
 	}
 
 	err = s.Register(&arith)
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -253,8 +252,8 @@ func testCall(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer
 	}
 
 	var q Quotient
-	err = c.MoiCall(context.Background(), kramaid.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
 
+	err = c.MoiCall(context.Background(), kramaid.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -278,23 +277,6 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 	}
 
 	var q Quotient
-	err = c.MoiCall(
-		context.Background(),
-		kramaid.KramaID(getKramaID(dest)),
-		"Arith",
-		"Divide",
-		&Args{20, 6},
-		&q,
-		200*time.Millisecond,
-	)
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if q.Quo != 3 || q.Rem != 2 {
-		t.Error("bad division")
-	}
 
 	err = c.MoiCall(
 		context.Background(),
@@ -322,7 +304,23 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 		&q,
 		200*time.Millisecond,
 	)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+	if q.Quo != 3 || q.Rem != 2 {
+		t.Error("bad division")
+	}
+
+	err = c.MoiCall(
+		context.Background(),
+		kramaid.KramaID(getKramaID(dest)),
+		"Arith",
+		"Divide",
+		&Args{20, 6},
+		&q,
+		200*time.Millisecond,
+	)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,7 +357,6 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 		&q,
 		200*time.Millisecond,
 	)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -386,7 +383,6 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 	var arith Arith
 
 	err = s.Register(&arith)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +399,6 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 		&q,
 		0,
 	)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1047,7 +1042,6 @@ func TestMultiGo(t *testing.T) {
 		repliesInt,
 		dones,
 	)
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -1130,7 +1124,6 @@ func TestAuthorization(t *testing.T) {
 	var r int
 
 	err = c.Call(dest, "Arith", "Multiply", &Args{2, 3}, &r)
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1277,7 +1270,6 @@ func testStream(t *testing.T, serverCM, clientCM *MockConnectionManager, dest pe
 	close(numbersP)
 
 	err = c.Stream(context.Background(), dest, "Arith", "DivideMyNumbersPointers", numbersP, quotientsP, "rpc-conn-tag")
-
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1483,7 +1475,6 @@ func TestMultiStream(t *testing.T) {
 	}
 
 	err = s2.Register(&arith)
-
 	if err != nil {
 		t.Error("failed to Register")
 	}
@@ -1536,7 +1527,6 @@ func TestMultiStreamErrors(t *testing.T) {
 	}
 
 	err = s2.Register(&arith)
-
 	if err != nil {
 		t.Error("failed to Register")
 	}
@@ -1579,7 +1569,6 @@ func TestMultiStreamCancel(t *testing.T) {
 	}
 
 	err = s2.Register(&arith)
-
 	if err != nil {
 		t.Error("failed to Register")
 	}

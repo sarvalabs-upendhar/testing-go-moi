@@ -7,8 +7,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/utils"
+
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/senatus"
@@ -16,18 +18,20 @@ import (
 )
 
 const (
-	SLOTCOUNT  = 20
-	PEERSCOUNT = 20
+	SLOTCOUNT       = 20
+	PEERSCOUNT      = 20
+	MINCONTEXTPOWER = 0
 )
 
 type Randomizer struct {
-	ctx       context.Context
-	ctxCancel context.CancelFunc
-	peers     []*PeerList
-	server    p2pServer
-	senatus   reputationEngine
-	logger    hclog.Logger
-	metrics   *Metrics
+	ctx         context.Context
+	ctxCancel   context.CancelFunc
+	peers       []*PeerList
+	deletePeers chan []kramaid.KramaID
+	server      p2pServer
+	senatus     reputationEngine
+	logger      hclog.Logger
+	metrics     *Metrics
 }
 
 type PeerList struct {
@@ -45,6 +49,7 @@ type p2pServer interface {
 type reputationEngine interface {
 	StreamPeerInfos(ctx context.Context) (chan *senatus.PeerInfo, error)
 	TotalPeerCount() uint64
+	DeletePeers(ids []kramaid.KramaID) error
 }
 
 func NewRandomizer(
@@ -55,13 +60,14 @@ func NewRandomizer(
 ) *Randomizer {
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	r := &Randomizer{
-		ctx:       ctx,
-		ctxCancel: ctxCancel,
-		peers:     make([]*PeerList, SLOTCOUNT),
-		server:    server,
-		senatus:   reputationEngine,
-		logger:    logger.Named("Flux-Engine"),
-		metrics:   metrics,
+		ctx:         ctx,
+		ctxCancel:   ctxCancel,
+		peers:       make([]*PeerList, SLOTCOUNT),
+		deletePeers: make(chan []kramaid.KramaID),
+		server:      server,
+		senatus:     reputationEngine,
+		logger:      logger.Named("Flux-Engine"),
+		metrics:     metrics,
 	}
 
 	for i := 0; i < SLOTCOUNT; i++ {
@@ -76,6 +82,10 @@ func NewRandomizer(
 	r.metrics.initMetrics(SLOTCOUNT)
 
 	return r
+}
+
+func (r *Randomizer) DeletePeers(ids []kramaid.KramaID) {
+	r.deletePeers <- ids
 }
 
 func (r *Randomizer) addPeers(slot int) {
@@ -95,6 +105,7 @@ func (r *Randomizer) addPeers(slot int) {
 		return
 	}
 
+	// TODO Fix total peer count logic, it should be changed to include only peers that have minimum context power
 	// Retrieve the total number of peers from the db
 	peerCount := r.senatus.TotalPeerCount()
 	if peerCount == 0 {
@@ -108,18 +119,7 @@ func (r *Randomizer) addPeers(slot int) {
 		minValue = int(peerCount)
 	}
 
-	randomNumbers := make(map[int]struct{})
-
-	// Add values to the map to track random numbers and ensure uniqueness
-	for i := 0; i < minValue; {
-		index := rand.Intn(int(peerCount))
-
-		// Check if the index has already been selected
-		if _, exists := randomNumbers[index]; !exists {
-			randomNumbers[index] = struct{}{}
-			i++
-		}
-	}
+	randomNumbers := utils.GetRandomNumbers(minValue, int(peerCount))
 
 	counter := 0
 	desiredCount := 0
@@ -137,6 +137,11 @@ func (r *Randomizer) addPeers(slot int) {
 				r.logger.Error("Error reading message", "err", err)
 
 				return
+			}
+
+			// peer should have minimum context power to be part of random set / context nodes.
+			if info.ContextPower < MINCONTEXTPOWER {
+				continue
 			}
 
 			r.peers[slot].pendingCount--
@@ -172,6 +177,20 @@ func (r *Randomizer) Start() {
 				r.logger.Info("Closing randomizer")
 
 				return
+			case peers := <-r.deletePeers:
+				if err := r.senatus.DeletePeers(peers); err != nil {
+					r.logger.Error("Error deleting peers in db", "err", err)
+				}
+
+				for slot := 0; slot < SLOTCOUNT; slot++ {
+					r.peers[slot].mtx.Lock()
+
+					for _, peer := range peers {
+						delete(r.peers[slot].nonUtilized, peer)
+					}
+
+					r.peers[slot].mtx.Unlock()
+				}
 			case <-time.After(300 * time.Millisecond):
 				if uint32(r.server.GetPeersCount()) >= 3 {
 					for k, v := range r.peers {
@@ -241,6 +260,7 @@ func (r *Randomizer) GetRandomNodes(
 		select {
 		case <-ctx.Done():
 			return nil, common.ErrTimeOut
+
 		default:
 			if requiredNo <= 0 {
 				return

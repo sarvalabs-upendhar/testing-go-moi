@@ -62,7 +62,7 @@ func DefaultBabylonConfig(path string) *Config {
 		Syncer: SyncerConfig{
 			ShouldExecute: true,
 			//nolint
-			TrustedPeers: []PeerInfo{
+			SyncPeers: []PeerInfo{
 				{
 					ID:      "3Wz4nx3XTjxyNBABhNudKhFFSnBow5Rbh1ZRpP75sY9o56BLcM9y.16Uiu2HAm56BPrW52mcHBpKrCDxwNNxvGQsHzD7omnJHDUEyo2wAh",
 					Address: "/ip4/167.235.70.122/udp/6000/quic-v1/p2p/16Uiu2HAm56BPrW52mcHBpKrCDxwNNxvGQsHzD7omnJHDUEyo2wAh",
@@ -476,7 +476,7 @@ type NetworkConfig struct {
 
 type SyncerConfig struct {
 	ShouldExecute  bool
-	TrustedPeers   []PeerInfo `json:"trusted_peers"`
+	SyncPeers      []PeerInfo `json:"sync_peers"`
 	EnableSnapSync bool
 	SyncMode       int
 }
@@ -504,27 +504,28 @@ type Telemetry struct {
 }
 
 type ConsensusConfig struct {
-	TimeoutPropose        int64  `json:"timeout_propose"`
-	TimeoutProposeDelta   int64  `json:"timeout_propose_delta"`
-	TimeoutPrevote        int64  `json:"timeout_prevote"`
-	TimeoutPrevoteDelta   int64  `json:"timeout_prevote_delta"`
-	TimeoutPrecommit      int64  `json:"timeout_precommit"`
-	TimeoutPrecommitDelta int64  `json:"timeout_precommit_delta"`
-	TimeoutCommit         int64  `json:"timeout_commit"`
-	SkipTimeoutCommit     bool   `json:"skip_timeout_commit"`
-	AccountWaitTime       int    `json:"wait_time"`
-	MessageDelay          int64  `json:"message_delay"`
-	Precision             int64  `json:"precision"`
-	OperatorSlots         int    `json:"operator_slots"`
-	ValidatorSlots        int    `json:"validator_slots"`
-	EnableDebugMode       bool   `json:"enable_debug_mode"`
-	MaxGossipPeers        int    `json:"max_gossip_peers"`
-	MinGossipPeers        int    `json:"min_gossip_peers"`
-	GenesisTime           uint64 `json:"genesis_time"`
-	GenesisPath           string `json:"genesis_path"`
-	EnableSortition       bool   `json:"enable_sortition"`
-	GenesisSeed           string `json:"genesis_seed"`
-	GenesisProof          string `json:"genesis_proof"`
+	TimeoutPropose        int64      `json:"timeout_propose"`
+	TimeoutProposeDelta   int64      `json:"timeout_propose_delta"`
+	TimeoutPrevote        int64      `json:"timeout_prevote"`
+	TimeoutPrevoteDelta   int64      `json:"timeout_prevote_delta"`
+	TimeoutPrecommit      int64      `json:"timeout_precommit"`
+	TimeoutPrecommitDelta int64      `json:"timeout_precommit_delta"`
+	TimeoutCommit         int64      `json:"timeout_commit"`
+	SkipTimeoutCommit     bool       `json:"skip_timeout_commit"`
+	AccountWaitTime       int        `json:"wait_time"`
+	MessageDelay          int64      `json:"message_delay"`
+	Precision             int64      `json:"precision"`
+	OperatorSlots         int        `json:"operator_slots"`
+	ValidatorSlots        int        `json:"validator_slots"`
+	EnableDebugMode       bool       `json:"enable_debug_mode"`
+	MaxGossipPeers        int        `json:"max_gossip_peers"`
+	MinGossipPeers        int        `json:"min_gossip_peers"`
+	GenesisTime           uint64     `json:"genesis_time"`
+	GenesisPath           string     `json:"genesis_path"`
+	EnableSortition       bool       `json:"enable_sortition"`
+	GenesisSeed           string     `json:"genesis_seed"`
+	GenesisProof          string     `json:"genesis_proof"`
+	TrustedPeers          []PeerInfo `json:"trusted_peers"`
 }
 
 type ExecutionConfig struct {

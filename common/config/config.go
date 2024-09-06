@@ -38,7 +38,7 @@ type Telemetry struct {
 
 type SyncerConfig struct {
 	ShouldExecute  bool
-	TrustedPeers   []NodeInfo
+	SyncPeers      []NodeInfo
 	EnableSnapSync bool
 	SyncMode       common.SyncMode
 }
@@ -119,6 +119,7 @@ type ConsensusConfig struct {
 	EnableSortition       bool
 	GenesisTimestamp      uint64
 	GenesisFilePath       string
+	TrustedPeers          []NodeInfo
 }
 
 type JSONRPCConfig struct {

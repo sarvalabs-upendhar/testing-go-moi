@@ -127,8 +127,8 @@ func Authenticate(defAddr, passPhrase, moiIDBaseURL string) (bool, *zkAuthProof,
 	}
 
 	var tempResponseFromExec resFromAuth
-	err = json.Unmarshal(authResponse, &tempResponseFromExec)
 
+	err = json.Unmarshal(authResponse, &tempResponseFromExec)
 	if err != nil {
 		return false, nil, err
 	}

@@ -82,6 +82,7 @@ func (im *ICSMSG) FromBytes(bytes []byte) error {
 type CanonicalICSRequest struct {
 	ClusterID               common.ClusterID
 	Operator                string
+	TrustedPeers            []id.KramaID
 	ContextLock             map[identifiers.Address]common.ContextLockInfo
 	IxData                  []byte
 	Timestamp               int64

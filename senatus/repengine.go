@@ -30,6 +30,7 @@ const (
 
 type senatusStore interface {
 	ReadEntry(key []byte) ([]byte, error)
+	DeleteEntry(key []byte) error
 	NewBatchWriter() db.BatchWriter
 	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *common.DBEntry, error)
 }
@@ -190,6 +191,8 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 	defer r.dirtyLock.Unlock()
 
 	r.dirtyEntries[peerID] = info
+
+	r.logger.Debug("dirty entries count", len(r.dirtyEntries))
 
 	r.cache.Add(storage.SenatusCacheKey(peerID), info)
 
@@ -431,6 +434,24 @@ func (r *ReputationEngine) flushDirtyEntries() error {
 	return writer.Flush()
 }
 
+// DeletePeers deletes peer ids through batch writer
+func (r *ReputationEngine) DeletePeers(ids []kramaid.KramaID) error {
+	writer := r.db.NewBatchWriter()
+
+	for _, id := range ids {
+		peerID, err := id.DecodedPeerID()
+		if err != nil {
+			return err
+		}
+
+		if err := writer.Delete(storage.SenatusDBKey(peerID)); err != nil {
+			return err
+		}
+	}
+
+	return writer.Flush()
+}
+
 func (r *ReputationEngine) isSysAccSynced() bool {
 	r.sysAccSyncLock.RLock()
 	defer r.sysAccSyncLock.RUnlock()
@@ -493,7 +514,7 @@ func (r *ReputationEngine) dbWorker() {
 		}
 
 		if err := r.flushDirtyEntries(); err != nil {
-			r.logger.Error("Error flushing dirty entries from the database", "err", err)
+			r.logger.Error("Error flushing dirty entries to the database", "err", err)
 
 			continue
 		}

@@ -94,7 +94,6 @@ func (c *Client) CallContext(ctx context.Context, result interface{}, method str
 	}
 
 	err = c.sendHTTP(ctx, op, msg)
-
 	if err != nil {
 		return err
 	}

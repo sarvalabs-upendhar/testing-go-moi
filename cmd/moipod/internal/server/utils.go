@@ -13,7 +13,7 @@ import (
 
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/spf13/cobra"
 
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
@@ -23,14 +23,18 @@ import (
 	"github.com/sarvalabs/go-moi/crypto"
 )
 
-const genesisURL = "https://moichain-pub.s3.amazonaws.com/genesis.json"
+const (
+	genesisURL      = "https://moichain-pub.s3.amazonaws.com/genesis.json"
+	trustedPeersURL = "https://moichain-pub.s3.amazonaws.com/trusted_peers.json"
+)
 
 // Params holds raw config and also custom types which will be extracted from raw config
 type Params struct {
 	rawCfg              *cmdCommon.Config
 	NetworkTrustedPeers []config.NodeInfo
 	StaticPeers         []config.NodeInfo
-	SyncerTrustedPeers  []config.NodeInfo
+	SyncerPeers         []config.NodeInfo
+	TrustedPeers        []config.NodeInfo
 	BootstrapPeers      []maddr.Multiaddr
 	ListenAddresses     []maddr.Multiaddr
 	PublicP2PAddresses  []maddr.Multiaddr
@@ -99,15 +103,31 @@ func (p *Params) assignNetworkStaticNodes() error {
 	return nil
 }
 
-func (p *Params) assignSyncerTrustedNodes() error {
-	for _, trustedNode := range p.rawCfg.Syncer.TrustedPeers {
-		addr, err := maddr.NewMultiaddr(trustedNode.Address)
+func (p *Params) assignSyncerPeers() error {
+	for _, syncPeer := range p.rawCfg.Syncer.SyncPeers {
+		addr, err := maddr.NewMultiaddr(syncPeer.Address)
 		if err != nil {
 			return errors.New("invalid syncer trusted node address")
 		}
 
-		p.SyncerTrustedPeers = append(p.SyncerTrustedPeers, config.NodeInfo{
-			ID:      kramaid.KramaID(trustedNode.ID),
+		p.SyncerPeers = append(p.SyncerPeers, config.NodeInfo{
+			ID:      kramaid.KramaID(syncPeer.ID),
+			Address: addr,
+		})
+	}
+
+	return nil
+}
+
+func (p *Params) assignTrustedPeers() error {
+	for _, trustedPeer := range p.rawCfg.Consensus.TrustedPeers {
+		addr, err := maddr.NewMultiaddr(trustedPeer.Address)
+		if err != nil {
+			return errors.New("invalid trusted node address")
+		}
+
+		p.TrustedPeers = append(p.TrustedPeers, config.NodeInfo{
+			ID:      kramaid.KramaID(trustedPeer.ID),
 			Address: addr,
 		})
 	}
@@ -253,6 +273,19 @@ func (p *Params) applyFlags(cmd *cobra.Command, path string) error {
 			return err
 		}
 
+		trustedPeers := path + "/trustedpeers.json"
+
+		if err := downloadFile(trustedPeers, trustedPeersURL); err != nil {
+			return err
+		}
+
+		peers, err := readTrustedPeers(trustedPeers)
+		if err != nil {
+			return err
+		}
+
+		p.rawCfg.Consensus.TrustedPeers = peers
+
 		return nil
 	}
 
@@ -320,13 +353,14 @@ func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
 		GenesisFilePath:       p.rawCfg.Consensus.GenesisPath,
 		GenesisSeed:           p.rawCfg.Consensus.GenesisSeed,
 		GenesisProof:          p.rawCfg.Consensus.GenesisProof,
+		TrustedPeers:          p.TrustedPeers,
 	}
 }
 
 func (p *Params) getSyncerConfig() *config.SyncerConfig {
 	return &config.SyncerConfig{
 		ShouldExecute:  p.rawCfg.Syncer.ShouldExecute,
-		TrustedPeers:   p.SyncerTrustedPeers,
+		SyncPeers:      p.SyncerPeers,
 		EnableSnapSync: p.rawCfg.Syncer.EnableSnapSync,
 		SyncMode:       common.SyncMode(p.rawCfg.Syncer.SyncMode),
 	}
@@ -387,7 +421,11 @@ func (p *Params) processRawParams() error {
 		return err
 	}
 
-	if err = p.assignSyncerTrustedNodes(); err != nil {
+	if err = p.assignSyncerPeers(); err != nil {
+		return err
+	}
+
+	if err = p.assignTrustedPeers(); err != nil {
 		return err
 	}
 
@@ -446,6 +484,21 @@ func ReadConfig(path string) (*cmdCommon.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func readTrustedPeers(path string) ([]cmdCommon.PeerInfo, error) {
+	peers := make([]cmdCommon.PeerInfo, 0)
+
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return nil, errors.New("error reading trusted peers file")
+	}
+
+	if err = json.Unmarshal(file, &peers); err != nil {
+		return nil, errors.Wrap(err, "error unmarshalling trusted peers file")
+	}
+
+	return peers, nil
 }
 
 func isConfigPathSet(cmd *cobra.Command) bool {
