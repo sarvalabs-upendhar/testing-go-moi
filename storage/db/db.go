@@ -31,6 +31,7 @@ type Database interface {
 // BatchWriter is a common interface to write bulk entries
 type BatchWriter interface {
 	Set(key, value []byte) error
+	Delete(key []byte) error
 	WriteBuffer(buf []byte) error // This should contain key value entries
 	Flush() error
 }

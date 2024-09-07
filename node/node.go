@@ -102,7 +102,7 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 		return nil, err
 	}
 
-	if err = n.setupSenatusToNetwork(); err != nil {
+	if err = n.storeStaticPeersInSenatus(); err != nil {
 		return nil, err
 	}
 
@@ -116,6 +116,10 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 
 	sm, err := n.newStateManager(true)
 	if err != nil {
+		return nil, err
+	}
+
+	if err = n.storeTrustedPeersInSenatus(); err != nil {
 		return nil, err
 	}
 

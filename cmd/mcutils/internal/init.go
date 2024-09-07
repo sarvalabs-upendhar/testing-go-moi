@@ -164,7 +164,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			ShouldExecute:  shouldExecute,
 			SyncMode:       int(config.DefaultSyncMode),
 			EnableSnapSync: true,
-			TrustedPeers:   peerList.SyncerTrustedPeers,
+			SyncPeers:      peerList.SyncerTrustedPeers,
 		},
 		Consensus: cmdCommon.ConsensusConfig{
 			TimeoutPropose:        30000,

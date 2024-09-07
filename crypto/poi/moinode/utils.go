@@ -89,8 +89,8 @@ func (mnR *MoiNodeRegistry) GetNodes(optArgs map[string]interface{}) ([]MoiNode,
 
 	if isCountOnlyRequest {
 		var countResponse map[string]uint32
-		err = json.Unmarshal(allNodesResponseInBytes, &countResponse)
 
+		err = json.Unmarshal(allNodesResponseInBytes, &countResponse)
 		if err != nil {
 			return nil, 0, err
 		}

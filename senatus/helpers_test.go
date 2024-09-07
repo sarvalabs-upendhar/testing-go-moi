@@ -24,6 +24,10 @@ type MockDB struct {
 	peerCountHook func() error
 }
 
+func (db *MockDB) DeleteEntry(key []byte) error {
+	panic("implement me")
+}
+
 func (db *MockDB) ReadEntry(key []byte) ([]byte, error) {
 	data, ok := db.data[string(key)]
 	if !ok {
@@ -91,6 +95,10 @@ func NewMockDB() *MockDB {
 
 type mockBatchWriter struct {
 	db *MockDB
+}
+
+func (bw *mockBatchWriter) Delete(key []byte) error {
+	panic("implement me")
 }
 
 func (bw *mockBatchWriter) WriteBuffer(buf []byte) error {

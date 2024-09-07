@@ -220,7 +220,7 @@ type Syncer struct {
 	execGrid            map[common.Hash]struct{}
 	tracker             *SyncStatusTracker
 	workerWaitTime      time.Duration
-	trustedPeersPresent bool
+	syncPeersPresent    bool
 	IxFetchGrid         map[common.Hash]struct{}
 	IxFetchLock         sync.Mutex
 }
@@ -267,16 +267,16 @@ func NewSyncer(
 		pendingMsgChan:      make(chan *TesseractInfo, 10),
 		execGrid:            make(map[common.Hash]struct{}),
 		tracker:             NewSyncStatusTracker(0),
-		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
+		syncPeersPresent:    len(cfg.SyncPeers) > 0,
 		IxFetchGrid:         make(map[common.Hash]struct{}),
 	}
 
 	return s, nil
 }
 
-func (s *Syncer) addTrustedPeersToPeerstore() error {
-	for i := 0; i < len(s.cfg.TrustedPeers); i++ {
-		bestPeer := s.cfg.TrustedPeers[i]
+func (s *Syncer) addSyncPeersToPeerstore() error {
+	for i := 0; i < len(s.cfg.SyncPeers); i++ {
+		bestPeer := s.cfg.SyncPeers[i]
 
 		peerID, err := bestPeer.ID.DecodedPeerID()
 		if err != nil {
@@ -355,7 +355,7 @@ func (s *Syncer) NewSyncRequest(
 		return nil
 	}
 
-	if !s.hasTrustedPeers() && syncMode == common.FullSync {
+	if !s.hasSyncPeers() && syncMode == common.FullSync {
 		var height uint64
 
 		height, bestPeers, err = s.findLatestHeightAndBestPeers(addr)
@@ -428,8 +428,8 @@ func (s *Syncer) worker() {
 	}
 }
 
-func (s *Syncer) hasTrustedPeers() bool {
-	return s.trustedPeersPresent
+func (s *Syncer) hasSyncPeers() bool {
+	return s.syncPeersPresent
 }
 
 func (s *Syncer) jobClosure(job *SyncJob) error {
@@ -495,9 +495,9 @@ func (s *Syncer) RPCGetLatestAccountInfo(
 }
 
 func (s *Syncer) chooseBestPeersForInitialSync(addr identifiers.Address) (uint64, []kramaid.KramaID, error) {
-	if s.hasTrustedPeers() {
+	if s.hasSyncPeers() {
 		for i := 0; i < 3; i++ {
-			bestPeer := s.chooseAnyTrustedPeer()
+			bestPeer := s.chooseAnySyncPeer()
 
 			resp, err := s.RPCGetLatestAccountInfo(bestPeer.ID, addr)
 			if err != nil {
@@ -507,7 +507,7 @@ func (s *Syncer) chooseBestPeersForInitialSync(addr identifiers.Address) (uint64
 			return resp.Height, []kramaid.KramaID{bestPeer.ID}, nil
 		}
 
-		return 0, nil, errors.New("unable to fetch latest account info from trusted peers")
+		return 0, nil, errors.New("unable to fetch latest account info from sync peers")
 	}
 
 	bestHeight, bestPeers, err := s.findLatestHeightAndBestPeers(addr)
@@ -519,10 +519,10 @@ func (s *Syncer) chooseBestPeersForInitialSync(addr identifiers.Address) (uint64
 }
 
 func (s *Syncer) chooseBestPeer(job *SyncJob) (kramaid.KramaID, error) {
-	// If initial sync is not done, then choose best peer from trusted peers
+	// If initial sync is not done, then choose best peer from sync peers
 	// to improve probability of success in syncing
-	if !s.isInitialSyncDone() && s.hasTrustedPeers() {
-		bestPeer := s.chooseAnyTrustedPeer()
+	if !s.isInitialSyncDone() && s.hasSyncPeers() {
+		bestPeer := s.chooseAnySyncPeer()
 
 		return bestPeer.ID, nil
 	}
@@ -872,11 +872,11 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (kramaid.KramaID, error) {
 	return bestPeers[0], nil
 }
 
-func (s *Syncer) chooseAnyTrustedPeer() config.NodeInfo {
+func (s *Syncer) chooseAnySyncPeer() config.NodeInfo {
 	randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
-	randNumber := randomSource.Intn(len(s.cfg.TrustedPeers))
+	randNumber := randomSource.Intn(len(s.cfg.SyncPeers))
 
-	return s.cfg.TrustedPeers[randNumber]
+	return s.cfg.SyncPeers[randNumber]
 }
 
 // syncSystemAccount sends a sync request for the specified address and waits for it to complete within a given time.
@@ -1605,7 +1605,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			return false, err
 		}
 
-		// During the initial sync stage, we retrieve participant data from trusted peers using snap sync.
+		// During the initial sync stage, we retrieve participant data from sync peers using snap sync.
 		// If participant state exists, it indicates that all data related to the participant has been fetched,
 		// allowing us to skip syncing for that participant.
 		if s.isInitialSyncDone() ||
@@ -2237,7 +2237,6 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 
 				return nil
 			}()
-
 			if err != nil {
 				return err
 			}
@@ -2272,7 +2271,6 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 
 			return nil
 		}()
-
 		if err != nil {
 			return err
 		}
@@ -2440,7 +2438,7 @@ func (s *Syncer) TesseractValidator(
 func (s *Syncer) Start(minConnectedPeers int) error {
 	s.logger.Info("Starting Syncer")
 
-	if err := s.addTrustedPeersToPeerstore(); err != nil {
+	if err := s.addSyncPeersToPeerstore(); err != nil {
 		return err
 	}
 

@@ -99,8 +99,8 @@ func (env *Environment) InsertEvents(events []Event) error {
 
 		pos := head + size - 1
 		key := db.EventKey(env.ID, pos)
-		err = env.database.Set(key, value)
 
+		err = env.database.Set(key, value)
 		if err != nil {
 			return fmt.Errorf("failed to set event at position %d: %w", pos, err)
 		}

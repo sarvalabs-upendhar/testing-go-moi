@@ -754,7 +754,6 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 	}
 
 	err = receiveResponse(c.logger, sWrap, call)
-
 	if err != nil {
 		c.logger.Error("Client received response error", "stream-ID", sWrap.stream.ID(), "err", err)
 
@@ -993,8 +992,8 @@ func (c *Client) stream(call *Call) {
 
 			// Now decode the data
 			reply := reflect.New(call.StreamReplies.Type().Elem()).Elem().Interface()
-			err = sWrap.dec.Decode(&reply)
 
+			err = sWrap.dec.Decode(&reply)
 			if err != nil {
 				call.setError(newClientError(err))
 

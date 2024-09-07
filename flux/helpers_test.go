@@ -33,6 +33,10 @@ type MockReputationEngine struct {
 	peerCount uint64
 }
 
+func (re *MockReputationEngine) DeletePeers(ids []kramaid.KramaID) error {
+	panic("implement me")
+}
+
 func NewMockReputationEngine() *MockReputationEngine {
 	return &MockReputationEngine{
 		data: make(map[peer.ID][]byte),

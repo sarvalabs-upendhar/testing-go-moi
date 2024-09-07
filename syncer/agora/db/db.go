@@ -151,7 +151,6 @@ func (ds *DataStore) jobPerKey(ctx context.Context, keys []cid.CID, jobFn func(k
 			jobFn(c)
 			wg.Done()
 		})
-
 		if err != nil {
 			wg.Done()
 

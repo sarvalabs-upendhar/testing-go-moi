@@ -140,10 +140,10 @@ func TestFullSync(t *testing.T) {
 	checkJobQueue(t, clientSyncer, serverSyncer)
 }
 
-// TestFullSync_TrustedPeers ensures that the client syncs only from trusted peers.
-// A trusted peer is the only node that possesses all tesseracts.
-// If the client syncs from nodes other than the trusted peer, syncing will fail.
-func TestFullSync_TrustedPeers(t *testing.T) {
+// TestFullSync_SyncPeers ensures that the client syncs only from sync peers.
+// A sync peer is the only node that possesses all tesseracts.
+// If the client syncs from nodes other than the sync peer, syncing will fail.
+func TestFullSync_SyncPeers(t *testing.T) {
 	t.Parallel()
 
 	ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
@@ -197,7 +197,7 @@ func TestFullSync_TrustedPeers(t *testing.T) {
 			ShouldExecute:  false,
 			SyncMode:       config.DefaultSyncMode,
 			EnableSnapSync: true,
-			TrustedPeers: []config.NodeInfo{
+			SyncPeers: []config.NodeInfo{
 				{
 					ID: servers[0].GetKramaID(),
 				},
@@ -1479,7 +1479,7 @@ func TestIsAnyOtherParticipantStored(t *testing.T) {
 	}
 }
 
-func TestTrustedPeerInPeerstore(t *testing.T) {
+func TestSyncPeerInPeerstore(t *testing.T) {
 	t.Parallel()
 
 	ctx, ctxCancel := context.WithTimeout(context.Background(), maxTimeout)
@@ -1508,7 +1508,7 @@ func TestTrustedPeerInPeerstore(t *testing.T) {
 
 	// setup mock syncer config
 	cfg := defaultSyncerConfig()
-	cfg.TrustedPeers = []config.NodeInfo{
+	cfg.SyncPeers = []config.NodeInfo{
 		{
 			ID:      kid,
 			Address: addr,
@@ -1542,7 +1542,7 @@ func TestTrustedPeerInPeerstore(t *testing.T) {
 
 	multiAddr := make([]multiaddr.Multiaddr, 0)
 
-	// retry until trusted peer is added to peer store
+	// retry until sync peer is added to peer store
 	_, err = tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
 		resp := testSyncer.network.GetAddrsFromPeerStore(peerID)
 

@@ -47,6 +47,10 @@ type mockBatchWriter struct {
 	db *mockDB
 }
 
+func (bw *mockBatchWriter) Delete(key []byte) error {
+	panic("implement me")
+}
+
 func (bw *mockBatchWriter) WriteBuffer(buf []byte) error {
 	// TODO implement me
 	panic("implement me")

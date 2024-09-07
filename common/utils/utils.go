@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/libp2p/go-libp2p-pubsub"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
@@ -56,6 +56,26 @@ func RandString(length int) string {
 	}
 
 	return string(b)
+}
+
+// GetRandomNumbers returns unique random numbers in the half-open interval [0,maxNum)
+func GetRandomNumbers(count, maxNum int) map[int]struct{} {
+	rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	randomNumbers := make(map[int]struct{})
+
+	// Add values to the map to track random numbers and ensure uniqueness
+	for i := 0; i < count; {
+		num := rand.Intn(maxNum)
+
+		// Check if the number has already been selected
+		if _, exists := randomNumbers[num]; !exists {
+			randomNumbers[num] = struct{}{}
+			i++
+		}
+	}
+
+	return randomNumbers
 }
 
 // EnsureDir ensures the given directory exists, or creates if required

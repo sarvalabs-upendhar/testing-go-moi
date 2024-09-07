@@ -22,6 +22,7 @@ type ClusterState struct {
 	mtx                      sync.Mutex
 	selfID                   kramaid.KramaID
 	NodeSet                  *common.ICSNodeSet
+	TrustedPeers             []kramaid.KramaID
 	ixns                     common.Interactions
 	ClusterID                common.ClusterID
 	Operator                 kramaid.KramaID
@@ -195,9 +196,12 @@ func (cs *ClusterState) RespondedEligibleSet() (count int, nodes []kramaid.Krama
 	return
 }
 
-func (cs *ClusterState) GetBehaviouralContextDelta(nodeSetPosition int) (added, replaced kramaid.KramaID) {
+func (cs *ClusterState) GetBehaviouralContextDelta(
+	nodeSetPosition int,
+	newPeer kramaid.KramaID,
+) (added, replaced kramaid.KramaID) {
 	for _, peerID := range cs.NodeSet.Sets[nodeSetPosition].Ids {
-		if cs.Operator == peerID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
+		if newPeer == peerID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
 			return
 		}
 	}
@@ -206,7 +210,7 @@ func (cs *ClusterState) GetBehaviouralContextDelta(nodeSetPosition int) (added, 
 		replaced = cs.NodeSet.Sets[nodeSetPosition].Ids[0]
 	}
 
-	return cs.Operator, replaced
+	return newPeer, replaced
 }
 
 func (cs *ClusterState) GetRandomContextDelta(
@@ -222,6 +226,20 @@ func (cs *ClusterState) GetRandomContextDelta(
 		}
 	}
 
+	if len(cs.TrustedPeers) > 0 {
+		for _, trustedPeer := range cs.TrustedPeers {
+			if !utils.ContainsKramaID(skipPeers, trustedPeer) {
+				addedPeers = append(addedPeers, trustedPeer)
+			}
+
+			if len(addedPeers) == requiredCount {
+				break
+			}
+		}
+
+		return addedPeers, replacedPeers
+	}
+
 	set := cs.NodeSet.RandomSet()
 	for index, v := range set.Ids {
 		if set.Responses.GetIndex(index) && !utils.ContainsKramaID(skipPeers, v) {
@@ -233,7 +251,7 @@ func (cs *ClusterState) GetRandomContextDelta(
 		}
 	}
 
-	return
+	return addedPeers, replacedPeers
 }
 
 func (cs *ClusterState) IsContextQuorum() bool {

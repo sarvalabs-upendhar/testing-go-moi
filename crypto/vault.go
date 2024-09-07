@@ -92,7 +92,6 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 		}
 
 		signingAndNetworkKeys, moiIDAddress, nodeIgcPath, err = poi.DecryptKeystore(nodeKeystore, cfg.NodePassword)
-
 		if err != nil {
 			return nil, err
 		}

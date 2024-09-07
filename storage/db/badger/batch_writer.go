@@ -20,6 +20,10 @@ func (b *BatchWriter) Set(key, value []byte) error {
 	return b.bw.Set(key, value)
 }
 
+func (b *BatchWriter) Delete(key []byte) error {
+	return b.bw.Delete(key)
+}
+
 // Flush commits all the entries to database
 func (b *BatchWriter) Flush() error {
 	return b.bw.Flush()

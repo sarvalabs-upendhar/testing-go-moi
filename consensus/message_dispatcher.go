@@ -58,6 +58,11 @@ func (k *Engine) sendICSRequest(
 		return 0, err
 	}
 
+	var (
+		mtx              sync.Mutex
+		unRespondedNodes = make([]id.KramaID, 0)
+	)
+
 	for icsSetType, ns := range nodeset.Sets {
 		if ns == nil {
 			continue
@@ -88,6 +93,10 @@ func (k *Engine) sendICSRequest(
 
 					k.logger.Error("Failed to connect", "krama-id", kramaID, "err", err)
 
+					mtx.Lock()
+					unRespondedNodes = append(unRespondedNodes, kramaID)
+					mtx.Unlock()
+
 					return
 				}
 
@@ -98,7 +107,6 @@ func (k *Engine) sendICSRequest(
 					networkmsg.ICSREQUEST,
 					payload,
 				)
-
 				if err != nil {
 					failedReqCount.Add(1)
 
@@ -109,6 +117,10 @@ func (k *Engine) sendICSRequest(
 	}
 
 	waitGroup.Wait()
+
+	if len(unRespondedNodes) > 0 {
+		k.randomizer.DeletePeers(unRespondedNodes)
+	}
 
 	return int(failedReqCount.Load()), nil
 }

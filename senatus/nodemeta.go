@@ -24,6 +24,7 @@ type NodeMetaInfo struct {
 	mtx           sync.RWMutex
 	Addrs         []string
 	KramaID       kramaid.KramaID
+	ContextPower  int
 	NTQ           float32
 	RTT           int64
 	WalletCount   int32
