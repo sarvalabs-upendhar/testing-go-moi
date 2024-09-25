@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/hexutil"
+
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
 
@@ -287,7 +289,7 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 		blake2b.Sum256(must(polo.Polorize(sender.Addr))),
 		blake2b.Sum256(must(polo.Polorize(another.Addr))),
 	}, log.Topics)
-	require.Equal(te.T(), func() []byte {
+	require.Equal(te.T(), func() hexutil.Bytes {
 		doc := make(polo.Document)
 
 		_ = doc.Set("sender", sender.Addr)

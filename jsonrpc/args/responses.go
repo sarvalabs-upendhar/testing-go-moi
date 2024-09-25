@@ -169,7 +169,7 @@ type RPCLog struct {
 	Address identifiers.Address `json:"address"`
 	LogicID identifiers.LogicID `json:"logic_id,omitempty"`
 	Topics  []common.Hash       `json:"topics"`
-	Data    []byte              `json:"data"`
+	Data    hexutil.Bytes       `json:"data"`
 
 	// Derived fields, avoid serializing these fields while storing to DB
 	IxHash       common.Hash     `json:"ix_hash"`
