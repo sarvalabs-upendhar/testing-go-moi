@@ -238,7 +238,8 @@ func (suite *TestSuite) sender() StateDriver {
 
 func (suite *TestSuite) call(kind common.IxType, site string, input polo.Document) CallResult {
 	// Create a new LogicDeploy ixn
-	ixn := newDebugIxnDriver(suite.T(), kind,
+	ixn := newDebugIxnDriver(suite.T(),
+		kind, common.Hash{},
 		site, input.Bytes(),
 		suite.defaultFuel,
 		big.NewInt(1), // default fuel price

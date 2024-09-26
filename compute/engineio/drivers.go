@@ -28,6 +28,7 @@ type StorageReader interface {
 // other information such as the Interaction's fuel parameters or transfer funds.
 type InteractionDriver interface {
 	Type() common.IxType
+	Hash() common.Hash
 
 	FuelPrice() *big.Int
 	FuelLimit() uint64

@@ -184,14 +184,15 @@ func (state debugStateDriver) Copy() *debugStateDriver {
 
 type debugIxnDriver struct {
 	kind     common.IxType
+	hash     common.Hash
 	price    *big.Int
 	limit    uint64
 	callsite string
 	calldata []byte
 }
 
-func newDebugIxnDriver(
-	t *testing.T, kind common.IxType,
+func newDebugIxnDriver(t *testing.T,
+	kind common.IxType, hash common.Hash,
 	callsite string, calldata []byte,
 	limit uint64, price *big.Int,
 ) debugIxnDriver {
@@ -199,6 +200,7 @@ func newDebugIxnDriver(
 
 	return debugIxnDriver{
 		kind:     kind,
+		hash:     hash,
 		price:    price,
 		limit:    limit,
 		callsite: callsite,
@@ -207,6 +209,7 @@ func newDebugIxnDriver(
 }
 
 func (ixn debugIxnDriver) Type() common.IxType { return ixn.kind }
+func (ixn debugIxnDriver) Hash() common.Hash   { return ixn.hash }
 func (ixn debugIxnDriver) FuelPrice() *big.Int { return ixn.price }
 func (ixn debugIxnDriver) FuelLimit() uint64   { return ixn.limit }
 func (ixn debugIxnDriver) Callsite() string    { return ixn.callsite }

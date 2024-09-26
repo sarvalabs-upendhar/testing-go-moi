@@ -195,11 +195,7 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 	env.IncrementNonce()
 
 	// Get the logic interaction hash
-	hash, err := ixn.Hash()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return
-	}
+	hash := ixn.Hash()
 
 	// Get the events of core.Event type
 	events := core.GetEventsFromStream(eventstream, hash)
@@ -347,11 +343,7 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 	env.IncrementNonce()
 
 	// Get the logic interaction hash
-	hash, err := ixn.Hash()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return
-	}
+	hash := ixn.Hash()
 
 	// Get the events of core.Event type
 	events := core.GetEventsFromStream(eventstream, hash)
@@ -503,11 +495,7 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 	_ = env.Enlist(senderAddress, logicID)
 
 	// Get the logic interaction hash
-	hash, err := ixn.Hash()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, Error(err))
-		return
-	}
+	hash := ixn.Hash()
 
 	// Get the events of core.Event type
 	events := core.GetEventsFromStream(eventstream, hash)

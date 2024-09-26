@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/hexutil"
+
 	gorillaWS "github.com/gorilla/websocket"
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
@@ -372,7 +374,7 @@ func validateLogs(t *testing.T, log common.Log, rpcLog *rpcargs.RPCLog) {
 	require.Equal(t, log.Address, rpcLog.Address)
 	require.Equal(t, log.LogicID, rpcLog.LogicID)
 	require.Equal(t, log.Topics, rpcLog.Topics)
-	require.Equal(t, log.Data, rpcLog.Data)
+	require.Equal(t, hexutil.Bytes(log.Data), rpcLog.Data)
 }
 
 func createAndRunFilterManager(
