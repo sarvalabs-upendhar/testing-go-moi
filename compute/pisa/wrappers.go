@@ -21,7 +21,8 @@ func newIxn(driver engineio.InteractionDriver) Ixn {
 	return Ixn{driver: driver, calldata: calldata}
 }
 
-func (ixn Ixn) Kind() string { return ixn.driver.Type().String() }
+func (ixn Ixn) Kind() string   { return ixn.driver.Type().String() }
+func (ixn Ixn) Hash() [32]byte { return ixn.driver.Hash() }
 
 func (ixn Ixn) FuelPrice() *big.Int { return ixn.driver.FuelPrice() }
 func (ixn Ixn) FuelLimit() uint64   { return ixn.driver.FuelLimit() }
