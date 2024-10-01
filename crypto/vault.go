@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
@@ -343,6 +343,16 @@ func VerifyAggregateSignature(data []byte, aggSignature []byte, multiplePubKeys 
 	}
 
 	return bls.VerifyAggregateSignature(data, aggSignature, multiplePubKeys)
+}
+
+func VerifyMultiSig(aggSignature []byte, allMsgs [][]byte, allPubKeys [][]byte) (bool, error) {
+	for i := 0; i < len(allPubKeys); i++ {
+		if len(allPubKeys[i]) != 48 {
+			return false, cryptocommon.ErrInvalidBLSPublicKeyLength
+		}
+	}
+
+	return bls.VerifyMultiSig(aggSignature, allMsgs, allPubKeys)
 }
 
 // GetSignature generates EcdsaSecp256k1 signature using DefaultMOIWallet IGCPath

@@ -4,16 +4,19 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/stretchr/testify/require"
-
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/crypto/common"
+	"github.com/stretchr/testify/require"
+	blst "github.com/supranational/blst/bindings/go"
 )
 
 const (
 	expectedSig = "0460b776cf0407a74559f4e696fedf5990294794915be00e14e81cab41a2ea49bd4d4d5d0f45" +
 		"0aaae872232e38019320f7ad19954814cb53b13b17be262ddf99251af7d4509af52f6f1dcc27b732" +
 		"c0d0216e93f4e057c47fc058f4aa201f80d40b6a"
+	kid = kramaid.KramaID("bvby3pBVU5BEL2jBHJrH23GTb9qe8nL4XHqqKzZVbth7gBZ5c3.16Uiu2HAmGZr9gyQ7fD" +
+		"dmdBsRL29EjxR81Y74TEPbemBkyKuk2Ufj")
 )
 
 var (
@@ -31,34 +34,166 @@ var (
 	}
 )
 
-func TestBLSSign(t *testing.T) {
-	t.Parallel()
+// variable for multi-sig
+var (
+	pk1S256, _ = hexutil.Decode("0x8491a74ba065adb16c36fe05fc88d04ddfe10603a2e7c703064a63ab9b939edc")
+	pk1Bls     = blst.KeyGen(pk1S256)
+	skA        = new(blst.SecretKey).Deserialize(pk1Bls.Serialize())
 
-	var bsig BlsWithBlstSignature
+	pk2S256, _ = hexutil.Decode("0xe6ebdb53f3782fd08ef97579fde81492bb823b6f53b20adf6ad62e5cdbdd6fd0")
+	pk2Bls     = blst.KeyGen(pk2S256)
+	skB        = new(blst.SecretKey).Deserialize(pk2Bls.Serialize())
 
-	kid := kramaid.KramaID("bvby3pBVU5BEL2jBHJrH23GTb9qe8nL4XHqqKzZVbth7gBZ5c3.16Uiu2HAmGZr9gyQ7fD" +
-		"dmdBsRL29EjxR81Y74TEPbemBkyKuk2Ufj")
+	pk3S256, _ = hexutil.Decode("0x509deefbb0dfe44db6e8e72f17b283f660b23ad7aeaf238159f27a5a38ce6853")
+	pk3Bls     = blst.KeyGen(pk3S256)
+	skC        = new(blst.SecretKey).Deserialize(pk3Bls.Serialize())
 
-	err := bsig.Sign(sampleMessage, samplePrivateKey, kid)
-	require.NoError(t, err)
+	msgsArr     = [][]byte{[]byte("message_1"), []byte("message_2"), []byte("message_3")}
+	wrongMsgArr = [][]byte{[]byte("wrong_message_1"), []byte("wrong_message_2"), []byte("wrong_message_3")}
 
-	sigInHex := hex.EncodeToString(common.MarshalSignature(common.Signature(bsig)))
-	require.Equal(t, expectedSig, sigInHex)
+	// Public keys corresponding to above secret keys
+	pubKeyA = new(blst.P1Affine).From(skA)
+	pubKeyB = new(blst.P1Affine).From(skB)
+	pubKeyC = new(blst.P1Affine).From(skC)
+)
+
+func TestBLSSignAndVerify(t *testing.T) {
+	tests := []struct {
+		name           string
+		message        []byte
+		privateKey     []byte
+		expectedSig    string
+		expectingError bool
+	}{
+		{
+			name:        "Valid BLS Sign",
+			message:     sampleMessage,
+			privateKey:  samplePrivateKey,
+			expectedSig: expectedSig,
+		},
+		{
+			name:           "Invalid BLS Sign with wrong private key",
+			message:        sampleMessage,
+			privateKey:     []byte{1, 2, 3}, // some invalid key
+			expectedSig:    "",
+			expectingError: true,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var bsig BlsWithBlstSignature
+
+			err := bsig.Sign(test.message, test.privateKey, kid)
+			if test.expectingError {
+				require.Error(t, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			sigInHex := hex.EncodeToString(common.MarshalSignature(common.Signature(bsig)))
+			require.Equal(t, test.expectedSig, sigInHex)
+		})
+	}
 }
 
 func TestBLSVerify(t *testing.T) {
+	tests := []struct {
+		name           string
+		message        []byte
+		publicKey      []byte
+		signature      string
+		expectingError bool
+		expectingValid bool
+	}{
+		{
+			name:           "Valid BLS Verify",
+			message:        sampleMessage,
+			publicKey:      blsPublicKey,
+			signature:      expectedSig,
+			expectingError: false,
+			expectingValid: true,
+		},
+		{
+			name:           "Invalid BLS Verify with wrong message",
+			message:        []byte("invalid message"),
+			publicKey:      blsPublicKey,
+			signature:      expectedSig,
+			expectingError: false,
+			expectingValid: false,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			sigInHexBytes, err := hex.DecodeString(test.signature)
+			require.NoError(t, err)
+
+			bsigGeneral, err := common.UnmarshalSignature(sigInHexBytes)
+			require.NoError(t, err)
+
+			bsig := BlsWithBlstSignature(bsigGeneral)
+
+			verificationBool, err := bsig.Verify(test.message, test.publicKey)
+			require.NoError(t, err)
+			require.Equal(t, test.expectingValid, verificationBool)
+		})
+	}
+}
+
+func TestBlsMultiSig(t *testing.T) {
 	t.Parallel()
 
-	sigInHexBytes, err := hex.DecodeString(expectedSig)
-	require.NoError(t, err)
+	tests := []struct {
+		name            string
+		messages        [][]byte
+		expectedSuccess bool
+		publicKeys      [][]byte
+	}{
+		{
+			name:            "Positive case",
+			messages:        msgsArr,
+			expectedSuccess: true,
+			publicKeys:      [][]byte{pubKeyA.Serialize(), pubKeyB.Serialize(), pubKeyC.Serialize()},
+		},
+		{
+			name:            "Wrong messages case",
+			messages:        wrongMsgArr,
+			expectedSuccess: false,
+			publicKeys:      [][]byte{pubKeyA.Serialize(), pubKeyB.Serialize(), pubKeyC.Serialize()},
+		},
+		{
+			name:            "Incorrect order case",
+			messages:        msgsArr,
+			expectedSuccess: false,
+			publicKeys:      [][]byte{pubKeyA.Serialize(), pubKeyC.Serialize(), pubKeyB.Serialize()},
+		},
+	}
 
-	bsigGeneral, err := common.UnmarshalSignature(sigInHexBytes)
-	require.NoError(t, err)
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
 
-	bsig := BlsWithBlstSignature(bsigGeneral)
+			var sigA, sigB, sigC BlsWithBlstSignature
 
-	verificationBool, err := bsig.Verify(sampleMessage, blsPublicKey)
-	require.NoError(t, err)
+			err := sigA.Sign(msgsArr[0], skA.Serialize(), kid)
+			require.NoError(t, err)
 
-	require.Equal(t, true, verificationBool)
+			err = sigB.Sign(msgsArr[1], skB.Serialize(), kid)
+			require.NoError(t, err)
+
+			err = sigC.Sign(msgsArr[2], skC.Serialize(), kid)
+			require.NoError(t, err)
+
+			sigBytes, err := AggregateSignatures([]BlsWithBlstSignature{sigA, sigB, sigC})
+			require.NoError(t, err)
+
+			validation, err := VerifyMultiSig(sigBytes, tt.messages, tt.publicKeys)
+			require.NoError(t, err)
+			require.Equal(t, tt.expectedSuccess, validation)
+		})
+	}
 }
