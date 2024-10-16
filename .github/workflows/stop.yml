@@ -1,6 +1,6 @@
 name: Stop Containers
 
-on:
+on:  
   workflow_dispatch:
   workflow_call:
     secrets:
@@ -36,17 +36,13 @@ on:
         required: true
       NODE_USER:
         required: true
-      SSH_KEY:
+      TELEPORT_HOST:
         required: true
-      SSH_PORT:
+      TELEPORT_USER:
         required: true
-      PROXY_HOST:
+      TELEPORT_PRIVATE_KEY:
         required: true
-      PROXY_USER:
-        required: true
-      PROXY_KEY:
-        required: true
-      PROXY_PORT:
+      TELEPORT_PORT:
         required: true
 
 jobs:
@@ -55,48 +51,29 @@ jobs:
 
     strategy:
       matrix:
-        hosts: [HOST01, HOST02, HOST03, HOST04, HOST05, HOST06, HOST07, HOST08, HOST09, HOST10, HOST11, HOST12, HOST13, HOST14, HOST15]
-        include:
-          - hosts: HOST01
-            ip: IP01
-          - hosts: HOST02
-            ip: IP02
-          - hosts: HOST03
-            ip: IP03
-          - hosts: HOST04
-            ip: IP04
-          - hosts: HOST05
-            ip: IP05
-          - hosts: HOST06
-            ip: IP06
-          - hosts: HOST07
-            ip: IP07
-          - hosts: HOST08
-            ip: IP08
-          - hosts: HOST09
-            ip: IP09
-          - hosts: HOST10
-            ip: IP10
-          - hosts: HOST11
-            ip: IP11
-          - hosts: HOST12
-            ip: IP12
-          - hosts: HOST13
-            ip: IP13
-          - hosts: HOST14
-            ip: IP14
-          - hosts: HOST15
-            ip: IP15
+        host: 
+          - IP01
+          - IP02
+          - IP03
+          - IP04
+          - IP05
+          - IP06
+          - IP07
+          - IP08
+          - IP09
+          - IP10
+          - IP11
+          - IP12
+          - IP13
+          - IP14
+          - IP15
     steps:
       - name: Stop Devnet
         uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6
         with:
-          host: ${{ secrets[matrix.ip] }}
-          username: ${{ secrets.NODE_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          proxy_host: ${{ secrets.PROXY_HOST }}
-          proxy_username: ${{ secrets.PROXY_USER }}
-          proxy_key: ${{ secrets.PROXY_KEY }}
-          proxy_port: ${{ secrets.PROXY_PORT }}
-          script: bash stop.sh
+          host: ${{ secrets.TELEPORT_HOST }}
+          username: ${{ secrets.TELEPORT_USER }}
+          key: ${{ secrets.TELEPORT_PRIVATE_KEY }}
+          port: ${{ secrets.TELEPORT_PORT }}
+          script: |
+            ssh -o StrictHostKeyChecking=no -i ~/.ssh/teleport moichain@${{ secrets[matrix.host] }} "bash stop.sh"
