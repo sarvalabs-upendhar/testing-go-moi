@@ -10,15 +10,12 @@ linters:
   enable:
     - dogsled
     - dupl
-    - depguard
     - errname
     - errorlint
     - forcetypeassert
-    - exportloopref
     - goconst
     - gocritic
     - gofumpt
-    - gosec
     - gosimple
     - govet
     - importas

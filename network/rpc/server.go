@@ -739,8 +739,10 @@ func (server *Server) serverCall(call *Call) error {
 		if reflect.TypeOf(call.Args).Kind() == reflect.Ptr {
 			return fmt.Errorf("%s is being called with the wrong arg type", call.SvcID)
 		}
+
 		argv = reflect.New(mtype.ArgType)
 		argv.Elem().Set(reflect.ValueOf(call.Args))
+
 		argIsValue = true
 	}
 	// argv guaranteed to be a pointer here.

@@ -3,7 +3,6 @@ package state
 import (
 	"context"
 	"math/big"
-	"math/rand"
 	"reflect"
 	"testing"
 
@@ -74,18 +73,23 @@ type MockDB struct {
 	createEntryHook     func() error
 }
 
-func (m *MockDB) FetchTesseractFromDB(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (m *MockDB) GetTesseract(hash common.Hash, withInteractions, withCommitInfo bool) (*common.Tesseract, error) {
 	ts, ok := m.tesseracts[hash]
 	if !ok {
 		return nil, common.ErrFetchingTesseract
 	}
 
+	tsCopy := *ts // copy, so that stored tesseract won't be modified
+
 	if !withInteractions {
-		ts = ts.Copy()
-		ts.SetIxns(nil)
+		tsCopy = *tsCopy.GetTesseractWithoutIxns()
 	}
 
-	return ts, nil
+	if !withCommitInfo {
+		tsCopy = *tsCopy.GetTesseractWithoutCommitInfo()
+	}
+
+	return &tsCopy, nil
 }
 
 func mockDB() *MockDB {
@@ -445,7 +449,7 @@ func (m *MockMerkleTree) GetPreImageKey(hashKey common.Hash) ([]byte, error) {
 }
 
 func (m *MockMerkleTree) IsDirty() bool {
-	return m.dirty != nil && len(m.dirty) > 0
+	return len(m.dirty) > 0
 }
 
 func (m *MockMerkleTree) Copy() tree.MerkleTree {
@@ -654,17 +658,6 @@ func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Ha
 		Participants: common.ParticipantsState{
 			address: {
 				StateHash: hash,
-			},
-		},
-	}
-}
-
-func getTesseractParamsWithContextHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
-	return &tests.CreateTesseractParams{
-		Addresses: []identifiers.Address{address},
-		Participants: common.ParticipantsState{
-			address: {
-				LatestContext: hash,
 			},
 		},
 	}
@@ -1348,39 +1341,6 @@ func createTestKramaHashTree(
 	return kt, storageRoot
 }
 
-func getTesseractParams(
-	address identifiers.Address,
-	ixns common.Interactions,
-	hash common.Hash,
-) *tests.CreateTesseractParams {
-	return &tests.CreateTesseractParams{
-		Addresses: []identifiers.Address{address},
-		Ixns:      ixns,
-		Participants: common.ParticipantsState{
-			address: {
-				PreviousContext: hash,
-			},
-		},
-	}
-}
-
-func createRandomArrayOfBits(t *testing.T, count int) []*common.ArrayOfBits {
-	t.Helper()
-
-	arrayOfBits := make([]*common.ArrayOfBits, 0)
-
-	for i := 0; i < count; i++ {
-		arrayOfBit := common.ArrayOfBits{
-			Size:     1,
-			Elements: []uint64{uint64(rand.Intn(256))},
-		}
-
-		arrayOfBits = append(arrayOfBits, &arrayOfBit)
-	}
-
-	return arrayOfBits
-}
-
 func copyStorageTrees(ast map[identifiers.LogicID]tree.MerkleTree) map[identifiers.LogicID]tree.MerkleTree {
 	copiedAST := make(map[identifiers.LogicID]tree.MerkleTree, len(ast))
 
@@ -1520,11 +1480,17 @@ func getContextObjectFromDirtyEntries(t *testing.T, s *Object, hash common.Hash)
 	return obj
 }
 
-func checkForTesseractInSMCache(t *testing.T, sm *StateManager, ts *common.Tesseract, withInteractions bool) {
+func checkForTesseractInSMCache(
+	t *testing.T,
+	sm *StateManager,
+	ts *common.Tesseract,
+	withInteractions,
+	withCommitInfo bool,
+) {
 	t.Helper()
 
 	object, isCached := sm.cache.Get(ts.Hash())
-	if withInteractions {
+	if withInteractions || withCommitInfo {
 		require.False(t, isCached) // make sure tesseract not cached
 
 		return
@@ -1553,15 +1519,21 @@ func checkIfContextMatches(
 
 func checkIfNodesetEqual(
 	t *testing.T,
-	expectedBeh *common.NodeSet,
-	expectedRand *common.NodeSet,
-	beh *common.NodeSet,
-	rand *common.NodeSet,
+	expectedBeh []kramaid.KramaID,
+	expectedRand []kramaid.KramaID,
+	expectedBehPk [][]byte,
+	expectedRandPk [][]byte,
+	beh []kramaid.KramaID,
+	rand []kramaid.KramaID,
+	behPk [][]byte,
+	randPk [][]byte,
 ) {
 	t.Helper()
 
 	require.Equal(t, expectedBeh, beh)
 	require.Equal(t, expectedRand, rand)
+	require.Equal(t, expectedBehPk, behPk)
+	require.Equal(t, expectedRandPk, randPk)
 }
 
 func checkIfTreesAreEqual(t *testing.T, oldTree, newTree tree.MerkleTree) {
@@ -1960,19 +1932,30 @@ func checkForEntryInTxn(t *testing.T, txn *iradix.Txn, key []byte, value []byte)
 	require.Equal(t, value, actualValue)
 }
 
-func validateTesseract(t *testing.T, ts *common.Tesseract, expectedTS *common.Tesseract, withInteractions bool) {
+func createAndSignTesseracts(t *testing.T, count int) ([]*common.Tesseract, [][]byte, [][]byte) {
 	t.Helper()
 
-	if withInteractions { // check if tesseracts matches
-		ts.Hash() // calculate hash to fill hash field in tesseract
+	tesseracts := make([]*common.Tesseract, count)
+	signedTS := make([][]byte, count)
+	pks := make([][]byte, count)
 
-		require.Equal(t, expectedTS, ts)
+	for i := 0; i < count; i++ {
+		tesseract := tests.CreateTesseract(t, &tests.CreateTesseractParams{
+			Addresses: []identifiers.Address{tests.RandomAddress(t), tests.RandomAddress(t)},
+			Heights:   []uint64{1, 4},
+		})
 
-		return
+		rawData, err := tesseract.SignBytes()
+		require.NoError(t, err)
+
+		signedData, pk := tests.SignBytes(t, rawData)
+
+		tesseracts[i] = tesseract
+		signedTS[i] = signedData
+		pks[i] = pk
 	}
 
-	require.Equal(t, expectedTS.Canonical(), ts.Canonical())
-	require.Equal(t, 0, len(ts.Interactions())) // make sure returned tesseract has zero ixns
+	return tesseracts, signedTS, pks
 }
 
 // utility functions

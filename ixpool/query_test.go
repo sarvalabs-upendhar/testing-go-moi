@@ -75,7 +75,7 @@ func TestIxPool_GetIxs(t *testing.T) {
 	testcases := []struct {
 		name            string
 		address         identifiers.Address
-		ixs             common.Interactions
+		ixs             []*common.Interaction
 		inclQueued      bool
 		expectedIxQueue expectedIxQueue
 	}{
@@ -84,9 +84,9 @@ func TestIxPool_GetIxs(t *testing.T) {
 			address: address,
 			ixs: append(
 				// promoted
-				createTestIxs(t, common.IxValueTransfer, 6, 8, address),
+				createTestIxs(t, 6, 8, address),
 				// enqueued
-				createTestIxs(t, common.IxValueTransfer, 10, 13, address)...,
+				createTestIxs(t, 10, 13, address)...,
 			),
 			inclQueued: false,
 			expectedIxQueue: expectedIxQueue{
@@ -99,9 +99,9 @@ func TestIxPool_GetIxs(t *testing.T) {
 			address: address,
 			ixs: append(
 				// promoted
-				createTestIxs(t, common.IxValueTransfer, 6, 8, address),
+				createTestIxs(t, 6, 8, address),
 				// enqueued
-				createTestIxs(t, common.IxValueTransfer, 10, 13, address)...,
+				createTestIxs(t, 10, 13, address)...,
 			),
 			inclQueued: true,
 			expectedIxQueue: expectedIxQueue{
@@ -120,7 +120,7 @@ func TestIxPool_GetIxs(t *testing.T) {
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
 			}, true, sm, nil, newMockNetwork(""))
 
-			addAndProcessIxs(t, sm, ixPool, testcase.ixs)
+			addAndProcessIxs(t, sm, ixPool, testcase.ixs...)
 
 			pendingIxs, queuedIxs := ixPool.GetIxs(testcase.address, testcase.inclQueued)
 
@@ -135,24 +135,24 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		accounts        map[identifiers.Address]common.Interactions
+		accounts        map[identifiers.Address][]*common.Interaction
 		inclQueued      bool
 		expectedIxQueue map[identifiers.Address]expectedIxQueue
 	}{
 		{
 			name: "Without queued interactions",
-			accounts: map[identifiers.Address]common.Interactions{
+			accounts: map[identifiers.Address][]*common.Interaction{
 				addresses[0]: append(
 					// promoted
-					createTestIxs(t, common.IxValueTransfer, 1, 3, addresses[0]),
+					createTestIxs(t, 1, 3, addresses[0]),
 					// enqueued
-					createTestIxs(t, common.IxValueTransfer, 7, 10, addresses[0])...,
+					createTestIxs(t, 7, 10, addresses[0])...,
 				),
 				addresses[1]: append(
 					// promoted
-					createTestIxs(t, common.IxValueTransfer, 6, 8, addresses[1]),
+					createTestIxs(t, 6, 8, addresses[1]),
 					// enqueued
-					createTestIxs(t, common.IxValueTransfer, 10, 13, addresses[1])...,
+					createTestIxs(t, 10, 13, addresses[1])...,
 				),
 			},
 			inclQueued: false,
@@ -169,18 +169,18 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 		},
 		{
 			name: "With queued interactions",
-			accounts: map[identifiers.Address]common.Interactions{
+			accounts: map[identifiers.Address][]*common.Interaction{
 				addresses[0]: append(
 					// promoted
-					createTestIxs(t, common.IxValueTransfer, 1, 3, addresses[0]),
+					createTestIxs(t, 1, 3, addresses[0]),
 					// enqueued
-					createTestIxs(t, common.IxValueTransfer, 7, 10, addresses[0])...,
+					createTestIxs(t, 7, 10, addresses[0])...,
 				),
 				addresses[1]: append(
 					// promoted
-					createTestIxs(t, common.IxValueTransfer, 6, 8, addresses[1]),
+					createTestIxs(t, 6, 8, addresses[1]),
 					// enqueued
-					createTestIxs(t, common.IxValueTransfer, 10, 13, addresses[1])...,
+					createTestIxs(t, 10, 13, addresses[1])...,
 				),
 			},
 			inclQueued: true,
@@ -207,7 +207,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 			}, true, sm, nil, newMockNetwork(""))
 
 			for _, ixs := range testcase.accounts {
-				addAndProcessIxs(t, sm, ixPool, ixs)
+				addAndProcessIxs(t, sm, ixPool, ixs...)
 			}
 
 			pendingIxs, queuedIxs := ixPool.GetAllIxs(testcase.inclQueued)

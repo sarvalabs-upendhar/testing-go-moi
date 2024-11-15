@@ -77,7 +77,7 @@ func (mnR *MoiNodeRegistry) GetNodes(optArgs map[string]interface{}) ([]MoiNode,
 
 	log.Println("Request URL : ", requestURL)
 
-	allNodesResponse, err := http.Get(requestURL) //nolint
+	allNodesResponse, err := http.Get(requestURL)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -176,7 +176,7 @@ func (mnR *MoiNodeRegistry) UpdateNode(upgradeBool bool,
 	updateNodeReqURL := strings.Join([]string{mnR.String(), "/moi-id/moinode/update"}, "")
 
 	// Making a call to register/upgrade the node
-	resp, err := http.Post(updateNodeReqURL, "application/json", requestBody) //nolint
+	resp, err := http.Post(updateNodeReqURL, "application/json", requestBody)
 	if err != nil {
 		return false, err
 	}
@@ -222,7 +222,7 @@ func (mnR *MoiNodeRegistry) GetNodePublicKey(nodeKramaID kramaid.KramaID) ([]byt
 	updateNodeReqURL := strings.Join([]string{mnR.String(), "/moi-id/moinode/getnodeinfo"}, "")
 
 	// Making a call to register/upgrade the node
-	resp, err := http.Post(updateNodeReqURL, "application/json", requestBody) //nolint
+	resp, err := http.Post(updateNodeReqURL, "application/json", requestBody)
 	if err != nil {
 		return nil, err
 	}

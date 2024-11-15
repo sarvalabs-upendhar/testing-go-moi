@@ -25,16 +25,26 @@ func (te *TestEnvironment) createAsset(
 	payload, err := assetCreatePayload.Bytes()
 	te.Suite.NoError(err)
 
-	sendIXArgs := &common.SendIXArgs{
-		Type:      common.IxAssetCreate,
+	ixData := &common.IxData{
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Payload:   payload,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetCreate,
+				Payload: payload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  acc.Addr,
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
-	sendIX := moiclient.CreateSendIXFromSendIXArgs(te.T(), sendIXArgs, acc.Mnemonic)
+	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, acc.Mnemonic)
 
 	return te.moiClient.SendInteractions(context.Background(), sendIX)
 }
@@ -47,13 +57,14 @@ func validateAssetCreation(
 	te *TestEnvironment,
 	sender identifiers.Address,
 	ixHash common.Hash,
+	txnID int,
 	assetCreatePayload *common.AssetCreatePayload,
 ) {
 	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	var assetReceipt common.AssetCreationReceipt
+	var assetReceipt common.AssetCreationResult
 
-	err := json.Unmarshal(receipt.ExtraData, &assetReceipt)
+	err := json.Unmarshal(receipt.IxOps[txnID].Data, &assetReceipt)
 	require.NoError(te.T(), err)
 
 	assetDescriptor, err := te.moiClient.AssetInfoByAssetID(context.Background(), &args.GetAssetInfoArgs{
@@ -105,6 +116,7 @@ func (te *TestEnvironment) TestAssetCreate() {
 			te *TestEnvironment,
 			acc identifiers.Address,
 			ixHash common.Hash,
+			txnID int,
 			assetCreatePayload *common.AssetCreatePayload,
 		)
 		expectedError error
@@ -167,7 +179,7 @@ func (te *TestEnvironment) TestAssetCreate() {
 			}
 
 			require.NoError(te.T(), err)
-			test.postTest(te, acc.Addr, ixHash, test.assetCreatePayload)
+			test.postTest(te, acc.Addr, ixHash, 0, test.assetCreatePayload)
 		})
 	}
 }

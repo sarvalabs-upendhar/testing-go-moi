@@ -37,8 +37,9 @@ type RPCTesseract struct {
 
 	Seal hexutil.Bytes `json:"seal"`
 
-	Hash common.Hash     `json:"hash"`
-	Ixns RPCInteractions `json:"ixns"`
+	Hash       common.Hash     `json:"hash"`
+	Ixns       RPCInteractions `json:"ixns"`
+	CommitInfo RPCCommitInfo   `json:"commit_info"`
 }
 
 // ContextResponse is response object for fetching context info
@@ -80,29 +81,21 @@ type TDU struct {
 	Amount  *hexutil.Big        `json:"amount"`
 }
 
+type RPCIxOp struct {
+	Type    common.IxOpType `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
 type RPCInteraction struct {
-	Type  common.IxType  `json:"type"`
 	Nonce hexutil.Uint64 `json:"nonce"`
 
-	Sender   identifiers.Address `json:"sender"`
-	Receiver identifiers.Address `json:"receiver"`
-	Payer    identifiers.Address `json:"payer"`
-
-	TransferValues  map[string]*hexutil.Big `json:"transfer_values"`
-	PerceivedValues map[string]*hexutil.Big `json:"perceived_values"`
-	PerceivedProofs hexutil.Bytes           `json:"perceived_proofs"`
+	Sender identifiers.Address `json:"sender"`
+	Payer  identifiers.Address `json:"payer"`
 
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 
-	Payload json.RawMessage `json:"payload"`
-
-	Mode         hexutil.Uint64    `json:"mode"`
-	ComputeHash  common.Hash       `json:"compute_hash"`
-	ComputeNodes []kramaid.KramaID `json:"compute_nodes"`
-
-	MTQ        hexutil.Uint64    `json:"mtq"`
-	TrustNodes []kramaid.KramaID `json:"trust_nodes"`
+	IxOps []RPCIxOp `json:"ix_operations"`
 
 	Hash         common.Hash     `json:"hash"`
 	Signature    hexutil.Bytes   `json:"signature"`
@@ -111,14 +104,18 @@ type RPCInteraction struct {
 	IxIndex      hexutil.Uint64  `json:"ix_index"`
 }
 
+type RPCIxOpResult struct {
+	TxType hexutil.Uint64    `json:"tx_type"`
+	Status common.IxOpStatus `json:"status"`
+	Data   json.RawMessage   `json:"data"`
+}
+
 type RPCReceipt struct {
-	IxType       hexutil.Uint64       `json:"ix_type"`
 	IxHash       common.Hash          `json:"ix_hash"`
 	Status       common.ReceiptStatus `json:"status"`
 	FuelUsed     hexutil.Uint64       `json:"fuel_used"`
-	ExtraData    json.RawMessage      `json:"extra_data"`
+	IxOps        []*RPCIxOpResult     `json:"ix_operations"`
 	From         identifiers.Address  `json:"from"`
-	To           identifiers.Address  `json:"to"`
 	IXIndex      hexutil.Uint64       `json:"ix_index,omitempty"`
 	TSHash       common.Hash          `json:"ts_hash,omitempty"`
 	Participants RPCParticipants      `json:"participants,omitempty"`
@@ -138,12 +135,10 @@ type RPCAccount struct {
 }
 
 type RPCAccountMetaInfo struct {
-	Type common.AccountType `json:"type"`
-
-	Address identifiers.Address `json:"address"`
-	Height  hexutil.Uint64      `json:"height"`
-
-	TesseractHash common.Hash `json:"tesseract_hash"`
+	Type          common.AccountType  `json:"type"`
+	Address       identifiers.Address `json:"address"`
+	Height        hexutil.Uint64      `json:"height"`
+	TesseractHash common.Hash         `json:"tesseract_hash"`
 }
 
 type AccSyncStatus struct {
@@ -182,12 +177,11 @@ type RPCLog struct {
 // InteractionResponse is a struct that represents a single interaction
 type InteractionResponse struct {
 	Nonce     hexutil.Uint64      `json:"nonce"`
-	Type      hexutil.Uint64      `json:"type"`
 	Sender    identifiers.Address `json:"sender"`
-	Receiver  identifiers.Address `json:"receiver"`
 	Cost      *hexutil.Big        `json:"cost"`
 	FuelPrice *hexutil.Big        `json:"fuel_price"`
 	FuelLimit hexutil.Uint64      `json:"fuel_limit"`
+	IxOps     []IxOp              `json:"ix_operations"`
 	Input     string              `json:"input"`
 	Hash      common.Hash         `json:"hash"`
 }
@@ -195,15 +189,22 @@ type InteractionResponse struct {
 // NewInteractionResponse is a contructor function that generates
 // and returns a new InteractionResponse for a given Interaction
 func NewInteractionResponse(ix *common.Interaction) *InteractionResponse {
+	ops := make([]IxOp, len(ix.IXData().IxOps))
+
+	for idx, op := range ix.IXData().IxOps {
+		ops[idx] = IxOp{
+			Type:    op.Type,
+			Payload: op.Payload,
+		}
+	}
+
 	return &InteractionResponse{
 		Nonce:     hexutil.Uint64(ix.Nonce()),
-		Type:      hexutil.Uint64(ix.Type()),
 		Sender:    ix.Sender(),
-		Receiver:  ix.Receiver(),
 		Cost:      (*hexutil.Big)(ix.Cost()),
 		FuelPrice: (*hexutil.Big)(ix.FuelPrice()),
 		FuelLimit: hexutil.Uint64(ix.FuelLimit()),
-		Input:     common.BytesToHex(ix.Payload()),
+		IxOps:     ops,
 		Hash:      ix.Hash(),
 	}
 }
@@ -334,18 +335,15 @@ func (participants RPCParticipants) Sort() {
 }
 
 type RPCPoXtData struct {
-	EvidenceHash common.Hash   `json:"evidence_hash"`
-	BinaryHash   common.Hash   `json:"binary_hash"`
-	IdentityHash common.Hash   `json:"identity_hash"`
-	ICSHash      common.Hash   `json:"ics_hash"`
-	ClusterID    string        `json:"cluster_id"`
-	ICSSignature hexutil.Bytes `json:"ics_signature"`
-	ICSVoteset   string        `json:"ics_vote_set"`
-
-	// non canonical fields
-	Round           hexutil.Uint64 `json:"round"`
-	CommitSignature hexutil.Bytes  `json:"commit_signature"`
-	BFTVoteSet      string         `json:"bft_vote_set"`
+	Proposer     kramaid.KramaID                         `json:"operator"`
+	BinaryHash   common.Hash                             `json:"binary_hash"`
+	IdentityHash common.Hash                             `json:"identity_hash"`
+	View         hexutil.Uint64                          `json:"view"`
+	LastCommit   map[identifiers.Address]common.Hash     `json:"last_commit"`
+	AccountLocks map[identifiers.Address]common.LockType `json:"account_locks"`
+	ICSSeed      [32]byte                                `json:"ics_seed"`
+	ICSProof     hexutil.Bytes                           `json:"ics_proof"`
+	EvidenceHash map[identifiers.Address]common.Hash     `json:"evidence_hash"`
 }
 
 func (t *RPCTesseract) HasParticipant(addr identifiers.Address) bool {
@@ -367,6 +365,56 @@ func (t *RPCTesseract) Height(addr identifiers.Address) uint64 {
 
 	// return 1000 as we will not use 1000 tesseracts in tests
 	return 1000
+}
+
+type RPCQc struct {
+	Type          common.ConsensusMsgType `json:"type"`
+	Address       identifiers.Address     `json:"address"`
+	LockType      common.LockType         `json:"lock_type"`
+	View          uint64                  `json:"view"`
+	TSHash        common.Hash             `json:"ts_hash"`
+	SignerIndices string                  `json:"signer_indices"`
+	Signature     []byte                  `json:"signature"`
+}
+
+type RPCCommitInfo struct {
+	QC                        *RPCQc            `json:"commit_qc"`
+	Operator                  kramaid.KramaID   `json:"operator"`
+	ClusterID                 common.ClusterID  `json:"cluster_id"`
+	View                      uint64            `json:"commit_view"`
+	RandomSet                 []kramaid.KramaID `json:"random_set"`
+	RandomSetSizeWithoutDelta uint32            `json:"random_set_size"`
+}
+
+func CreateRPCCommitInfo(info *common.CommitInfo) RPCCommitInfo {
+	if info == nil {
+		return RPCCommitInfo{}
+	}
+
+	rpcCommitInfo := RPCCommitInfo{
+		Operator:                  info.Operator,
+		ClusterID:                 info.ClusterID,
+		View:                      info.View,
+		RandomSet:                 info.RandomSet,
+		RandomSetSizeWithoutDelta: info.RandomSetSizeWithoutDelta,
+	}
+
+	if info.QC != nil {
+		rpcCommitInfo.QC = &RPCQc{
+			Type:      info.QC.Type,
+			Address:   info.QC.Address,
+			LockType:  info.QC.LockType,
+			View:      info.QC.View,
+			TSHash:    info.QC.TSHash,
+			Signature: info.QC.Signature,
+		}
+
+		if info.QC.SignerIndices != nil {
+			rpcCommitInfo.QC.SignerIndices = info.QC.SignerIndices.String()
+		}
+	}
+
+	return rpcCommitInfo
 }
 
 // Not used

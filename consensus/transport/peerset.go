@@ -3,11 +3,8 @@ package transport
 import (
 	"errors"
 	"sync"
-	"time"
 
 	id "github.com/sarvalabs/go-legacy-kramaid"
-
-	"github.com/sarvalabs/go-moi/common"
 )
 
 var errAlreadyRegistered = errors.New("peer is already registered")
@@ -113,6 +110,7 @@ func (ps *icsPeerSet) ForEach(fn func(kPeer *icsPeer)) {
 	}
 }
 
+/*
 // peerList represents a list of peers.
 type peerList struct {
 	mtx       sync.RWMutex
@@ -158,6 +156,7 @@ func (pl *peerList) getUpdatedAt() int64 {
 
 	return pl.updatedAt
 }
+
 
 // transitPeers represents a collection of transit peer information organized by cluster ID.
 type transitPeers struct {
@@ -214,3 +213,4 @@ func (tp *transitPeers) remove(clusterID common.ClusterID) {
 
 	delete(tp.clusters, clusterID)
 }
+*/

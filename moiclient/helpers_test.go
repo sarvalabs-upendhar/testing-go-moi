@@ -71,7 +71,7 @@ func makeHTTPRequest(t *testing.T, url string, method string, result interface{}
 	jsonData, err := json.Marshal(values)
 	require.NoError(t, err)
 
-	httpResponse, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData)) //nolint
+	httpResponse, err := http.Post(url, "application/json", bytes.NewBuffer(jsonData))
 	require.NoError(t, err)
 
 	// status should be >= 200 && < 300
@@ -112,16 +112,26 @@ func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address
 	payload, err := polo.Polorize(assetCreationPayload)
 	require.NoError(t, err)
 
-	sendIXArgs := &common.SendIXArgs{
-		Type:      common.IxAssetCreate,
+	ixData := &common.IxData{
 		Nonce:     nonce,
 		Sender:    addr,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 200,
-		Payload:   payload,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetCreate,
+				Payload: payload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  addr,
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
-	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromIxData(t, ixData, mnemonic)
 
 	_, err = client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
@@ -143,16 +153,26 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemoni
 	payload, err := polo.Polorize(assetCreationPayload)
 	require.NoError(t, err)
 
-	sendIXArgs := &common.SendIXArgs{
-		Type:      common.IxAssetCreate,
+	ixData := &common.IxData{
 		Nonce:     GetLatestNonce(t, client, addr),
 		Sender:    addr,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 200,
-		Payload:   payload,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetCreate,
+				Payload: payload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  addr,
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
-	sendIX := CreateSendIXFromSendIXArgs(t, sendIXArgs, mnemonic)
+	sendIX := CreateSendIXFromIxData(t, ixData, mnemonic)
 
 	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
@@ -163,8 +183,8 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemoni
 	receipt := RetryFetchReceipt(t, ctx, client, ixHash)
 	require.Equal(t, common.ReceiptOk, receipt.Status)
 
-	var assetReceipt common.AssetCreationReceipt
-	err = json.Unmarshal(receipt.ExtraData, &assetReceipt)
+	var assetReceipt common.AssetCreationResult
+	err = json.Unmarshal(receipt.IxOps[0].Data, &assetReceipt)
 	require.NoError(t, err)
 
 	return ixHash, assetReceipt.AssetAccount
@@ -177,11 +197,10 @@ func checkForCallReceipt(
 ) {
 	t.Helper()
 
-	require.Equal(t, expectedReceipt.IxType, actualReceipt.IxType)
 	require.Equal(t, expectedReceipt.FuelUsed, actualReceipt.FuelUsed)
-	require.Equal(t, expectedReceipt.ExtraData, actualReceipt.ExtraData)
+	require.Equal(t, expectedReceipt.IxOps[0].Data, actualReceipt.IxOps[0].Data)
+	require.Equal(t, expectedReceipt.IxOps[0].TxType, actualReceipt.IxOps[0].TxType)
 	require.Equal(t, expectedReceipt.From, actualReceipt.From)
-	require.Equal(t, expectedReceipt.To, actualReceipt.To)
 }
 
 func createTesseractFilter(t *testing.T, ctx context.Context, moiClient *Client) *rpcargs.FilterResponse {

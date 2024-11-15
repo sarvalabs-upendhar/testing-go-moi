@@ -15,8 +15,8 @@ import (
 )
 
 type account struct {
-	pending  common.Interactions
-	queued   common.Interactions
+	pending  []*common.Interaction
+	queued   []*common.Interaction
 	waitTime int64
 }
 
@@ -43,8 +43,8 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 			name: "Ix pool with no interactions",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued:  common.Interactions{},
+					pending: []*common.Interaction{},
+					queued:  []*common.Interaction{},
 				},
 			},
 			expectedIxQueue: map[identifiers.Address]*expectedResult{
@@ -58,14 +58,14 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 			name: "Ix pool with one pending interaction",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
-					queued: common.Interactions{},
+					queued: []*common.Interaction{},
 				},
 			},
 			testFn: func(accounts map[identifiers.Address]*account) {
@@ -84,12 +84,12 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 			name: "Ix pool with one queued interaction",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{},
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -110,38 +110,38 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 			name: "Ix pool with multiple pending and queued interactions",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{},
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 2
-							ixData.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 2
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
 				addressList[1]: {
-					pending: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 2
-							ixData.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 2
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 3
-							ixData.Input.FuelPrice = big.NewInt(100)
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 3
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -209,8 +209,8 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			},
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued:  common.Interactions{},
+					pending: []*common.Interaction{},
+					queued:  []*common.Interaction{},
 				},
 			},
 			expectedIxQueue: &expectedResult{
@@ -226,14 +226,14 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			},
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
-					queued: common.Interactions{},
+					queued: []*common.Interaction{},
 				},
 			},
 			testFn: func(accounts map[identifiers.Address]*account) {
@@ -254,12 +254,12 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			},
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{},
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -282,38 +282,38 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 			},
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{},
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 2
-							ixData.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 2
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
 				addressList[1]: {
-					pending: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 2
-							ixData.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 2
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 3
-							ixData.Input.FuelPrice = big.NewInt(100)
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 3
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -369,8 +369,8 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 			name: "Ix pool with no interactions",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued:  common.Interactions{},
+					pending: []*common.Interaction{},
+					queued:  []*common.Interaction{},
 				},
 			},
 			expectedIxQueue: &expectedResult{
@@ -382,38 +382,38 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 			name: "Ix pool with multiple pending and queued interactions",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{},
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 2
-							ixData.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 2
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
 				addressList[1]: {
-					pending: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 2
-							ixData.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 2
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 3
-							ixData.Input.FuelPrice = big.NewInt(100)
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 3
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 				},
@@ -460,8 +460,8 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 			name: "Ix pool with no interactions",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending:  common.Interactions{},
-					queued:   common.Interactions{},
+					pending:  []*common.Interaction{},
+					queued:   []*common.Interaction{},
 					waitTime: 0,
 				},
 			},
@@ -483,16 +483,26 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 			name: "Ix pool with one pending interaction",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{
-						newTestInteraction(t, 0, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Receiver = addressList[1]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
-							ixData.Input.Type = common.IxValueTransfer
+					pending: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
+							ixData.IxOps = []common.IxOpRaw{
+								{
+									Type:    common.IxAssetCreate,
+									Payload: tests.CreateRawAssetCreatePayload(t),
+								},
+							}
+							ixData.Participants = []common.IxParticipant{
+								{
+									Address:  addressList[0],
+									LockType: common.MutateLock,
+								},
+							}
 						}),
 					},
-					queued:   common.Interactions{},
+					queued:   []*common.Interaction{},
 					waitTime: int64(1500 * time.Millisecond),
 				},
 			},
@@ -515,13 +525,18 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 			name: "Ix pool with one queued interaction",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Receiver = addressList[1]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{},
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
+							ixData.IxOps = []common.IxOpRaw{
+								{
+									Type:    common.IxAssetCreate,
+									Payload: tests.CreateRawAssetCreatePayload(t),
+								},
+							}
 						}),
 					},
 					waitTime: int64(2500 * time.Millisecond),
@@ -546,39 +561,39 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 			name: "Ix pool with multiple pending and queued interactions",
 			accounts: map[identifiers.Address]*account{
 				addressList[0]: {
-					pending: common.Interactions{},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{},
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[0]
-							ixData.Input.Nonce = 2
-							ixData.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[0]
+							ixData.Nonce = 2
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 					waitTime: int64(500 * time.Millisecond),
 				},
 				addressList[1]: {
-					pending: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 1
-							ixData.Input.FuelPrice = big.NewInt(100)
+					pending: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 1
+							ixData.FuelPrice = big.NewInt(100)
 						}),
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 2
-							ixData.Input.FuelPrice = big.NewInt(100)
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 2
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
-					queued: common.Interactions{
-						newTestInteraction(t, 1, func(ixData *common.IxData) {
-							ixData.Input.Sender = addressList[1]
-							ixData.Input.Nonce = 3
-							ixData.Input.FuelPrice = big.NewInt(100)
+					queued: []*common.Interaction{
+						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
+							ixData.Sender = addressList[1]
+							ixData.Nonce = 3
+							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 					waitTime: int64(1000 * time.Millisecond),

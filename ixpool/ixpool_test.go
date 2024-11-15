@@ -7,18 +7,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/pkg/errors"
-	errgroup "golang.org/x/sync/errgroup"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/state"
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -27,29 +30,196 @@ import (
 
 var defaultIxPriceLimit = big.NewInt(1)
 
-const contextTimeout = 5 * time.Second
+const (
+	contextTimeout = 5 * time.Second
+	ixMaxSize      = 128 * 1024 // 128Kb
+)
+
+func TestGetNextView(t *testing.T) {
+	testcases := []struct {
+		name         string
+		currentView  uint64
+		nodePosition uint64
+	}{
+		{
+			name:         "simple test: current view-0, node position-0",
+			currentView:  0,
+			nodePosition: 0,
+		},
+		{
+			name:         "simple test: current view-0, node position-1",
+			currentView:  0,
+			nodePosition: 1,
+		},
+		{
+			name:         "simple test: current view-0, node position-2",
+			currentView:  0,
+			nodePosition: 2,
+		},
+		{
+			name:         "simple test: current view-0, node position-3",
+			currentView:  0,
+			nodePosition: 3,
+		},
+		{
+			name:         "roundoff test: current view-1, node position-0",
+			currentView:  1,
+			nodePosition: 0,
+		},
+		{
+			name:         "roundoff test: current view-7, node position-0",
+			currentView:  7,
+			nodePosition: 0,
+		},
+		{
+			name:         "roundoff test: current view-7, node position-1",
+			currentView:  7,
+			nodePosition: 1,
+		},
+		{
+			name:         "roundoff test: current view-7, node position-2",
+			currentView:  7,
+			nodePosition: 2,
+		},
+		{
+			name:         "roundoff test: current view-7, node position-3",
+			currentView:  7,
+			nodePosition: 3,
+		},
+		{
+			name:         "roundoff test: current view-7, node position-3",
+			currentView:  288497950,
+			nodePosition: 0,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ixPool := &IxPool{}
+
+			allocatedView := ixPool.getNextView(testcase.currentView, testcase.nodePosition)
+			validateAllocatedView(t, allocatedView, testcase.currentView, testcase.nodePosition)
+		})
+	}
+}
+
+func TestAllocateView(t *testing.T) {
+	sm := NewMockStateManager(t)
+	sm.SetAccountMetaInfo(common.SargaAddress, &common.AccountMetaInfo{
+		PositionInContextSet: 3,
+	})
+
+	testcases := []struct {
+		name          string
+		ixns          []*common.Interaction
+		currentView   uint64
+		shouldPropose bool
+		allottedView  uint64
+	}{
+		{
+			name: "this node is not found in context set of leader account",
+			ixns: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+					0, tests.RandomAddress(t), nil,
+				),
+			},
+			currentView:   0,
+			shouldPropose: false,
+			allottedView:  0,
+		},
+		{
+			name: "this node is found in context set of leader account",
+			ixns: []*common.Interaction{
+				newTestInteraction(t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
+					0, tests.RandomAddress(t), nil,
+				),
+				newTestInteraction(t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
+					0, tests.RandomAddress(t), nil,
+				),
+			},
+			currentView:   4,
+			shouldPropose: true,
+			allottedView:  7,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ixPool := &IxPool{
+				sm:     sm,
+				logger: hclog.NewNullLogger(),
+			}
+
+			ixPool.allocateView(testcase.currentView, testcase.ixns...)
+
+			for _, ixn := range testcase.ixns {
+				require.Equal(t, testcase.shouldPropose, ixn.ShouldPropose())
+
+				if !testcase.shouldPropose {
+					require.Equal(t, uint64(0), ixn.AllottedView())
+
+					continue
+				}
+
+				validateAllocatedView(t, ixn.AllottedView(), testcase.currentView, 3)
+			}
+		})
+	}
+}
 
 func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 	var (
-		defaultPayload = make([]byte, 3*ixSlotSize)
-		price          = 1
-		sm             = NewMockStateManager(t)
-		addrs          = tests.GetAddresses(t, 1)
+		transferPayload = &common.AssetActionPayload{
+			Beneficiary: tests.RandomAddress(t),
+			AssetID:     common.KMOITokenAssetID,
+			Amount:      big.NewInt(1),
+		}
+
+		defaultPayload, _ = transferPayload.Bytes()
+
+		price = 1
+		sm    = NewMockStateManager(t)
+		addrs = tests.GetAddresses(t, 1)
 	)
 
 	sm.setTestMOIBalance(t, addrs...)
+	sm.registerAccounts(transferPayload.Beneficiary)
 
-	getIxParams := func(from identifiers.Address, nonce uint64, price int, payload []byte) *tests.CreateIxParams {
+	getIxParams := func(
+		from identifiers.Address, nonce uint64,
+		price int, payload []byte, noOfTxs int,
+	) *tests.CreateIxParams {
 		return &tests.CreateIxParams{
 			IxDataCallback: func(ix *common.IxData) {
-				ix.Input.Sender = from
-				ix.Input.Nonce = nonce
-				ix.Input.Type = common.IxValueTransfer
-				ix.Input.FuelPrice = big.NewInt(int64(price))
-				ix.Input.Payload = payload
-				ix.Input.FuelLimit = 1
-				ix.Input.TransferValues = map[identifiers.AssetID]*big.Int{
-					common.KMOITokenAssetID: big.NewInt(1),
+				ix.Sender = from
+				ix.Nonce = nonce
+				ix.FuelPrice = big.NewInt(int64(price))
+				ix.FuelLimit = 1
+				ix.IxOps = make([]common.IxOpRaw, noOfTxs)
+				ix.Funds = []common.IxFund{
+					{
+						AssetID: transferPayload.AssetID,
+						Amount:  transferPayload.Amount,
+					},
+				}
+
+				ix.Participants = []common.IxParticipant{
+					{
+						Address:  from,
+						LockType: common.MutateLock,
+					},
+					{
+						Address:  transferPayload.Beneficiary,
+						LockType: common.MutateLock,
+					},
+				}
+
+				for i := 0; i < noOfTxs; i++ {
+					ix.IxOps[i] = common.IxOpRaw{
+						Type:    common.IxAssetTransfer,
+						Payload: payload,
+					}
 				}
 			},
 		}
@@ -65,18 +235,18 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 	}{
 		{
 			name: "successfully replace ixn in enqueue",
-			ix:   tests.CreateIX(t, getIxParams(addrs[0], 1, price, defaultPayload)),
+			ix:   tests.CreateIX(t, getIxParams(addrs[0], 1, price, defaultPayload, 20)),
 			preTestFn: func(ixPool *IxPool) {
-				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 1, price, nil)))
+				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 1, price, defaultPayload, 1)))
 				require.NoError(t, err)
 			},
 			expectedGaugeSize: 4,
 		},
 		{
 			name: "successfully replace ixn in promoted queue",
-			ix:   tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload)),
+			ix:   tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload, 20)),
 			preTestFn: func(ixPool *IxPool) {
-				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 0, price, nil)))
+				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload, 1)))
 				require.NoError(t, err)
 			},
 			replaceInPromote:  true,
@@ -84,10 +254,10 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 		},
 		{
 			name: "successfully replace with lower size ixn",
-			ix:   tests.CreateIX(t, getIxParams(addrs[0], 1, price, nil)),
+			ix:   tests.CreateIX(t, getIxParams(addrs[0], 1, price, defaultPayload, 1)),
 			preTestFn: func(ixPool *IxPool) {
 				err := ixPool.validateAndEnqueueIx(
-					tests.CreateIX(t, getIxParams(addrs[0], 1, price, defaultPayload)),
+					tests.CreateIX(t, getIxParams(addrs[0], 1, price, defaultPayload, 30)),
 				)
 				require.NoError(t, err)
 			},
@@ -95,27 +265,27 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 		},
 		{
 			name: "failed to replace with cheaper ixn",
-			ix:   tests.CreateIX(t, getIxParams(addrs[0], 0, 0, nil)),
+			ix:   tests.CreateIX(t, getIxParams(addrs[0], 0, 0, defaultPayload, 1)),
 			preTestFn: func(ixPool *IxPool) {
-				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 0, price, nil)))
+				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload, 1)))
 				require.NoError(t, err)
 			},
 			expectedErr: common.ErrUnderpriced,
 		},
 		{
 			name: "failed to replace with same ixn",
-			ix:   tests.CreateIX(t, getIxParams(addrs[0], 0, price, nil)),
+			ix:   tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload, 1)),
 			preTestFn: func(ixPool *IxPool) {
-				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 0, price, nil)))
+				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload, 1)))
 				require.NoError(t, err)
 			},
 			expectedErr: ErrAlreadyKnown,
 		},
 		{
 			name: "failed to replace with ixn which will overflow ixpool",
-			ix:   tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload)),
+			ix:   tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload, 30)),
 			preTestFn: func(ixPool *IxPool) {
-				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 0, price, nil)))
+				err := ixPool.validateAndEnqueueIx(tests.CreateIX(t, getIxParams(addrs[0], 0, price, defaultPayload, 1)))
 				require.NoError(t, err)
 
 				ixPool.gauge.increase(config.DefaultMaxIXPoolSlots - 1)
@@ -185,13 +355,22 @@ func TestIxPool_validateAndEnqueueIx(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name:        "Interaction with invalid address",
-			ix:          newIxWithoutAddress(t, 0),
+			name: "Interaction with invalid address",
+			ix: newTestInteraction(
+				t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+				0, addrs[0], nil,
+			),
+			preTestFn: func(ixPool *IxPool, interaction *common.Interaction) {
+				interaction.SetSender(identifiers.NilAddress)
+			},
 			expectedErr: common.ErrInvalidAddress,
 		},
 		{
 			name: "Already known Interaction",
-			ix:   newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			ix: newTestInteraction(
+				t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
+				0, addrs[0], nil,
+			),
 			preTestFn: func(ixPool *IxPool, interaction *common.Interaction) {
 				err := ixPool.validateAndEnqueueIx(interaction)
 				require.NoError(t, err)
@@ -200,11 +379,17 @@ func TestIxPool_validateAndEnqueueIx(t *testing.T) {
 		},
 		{
 			name: "New valid interaction",
-			ix:   newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			ix: newTestInteraction(
+				t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+				0, addrs[0], nil,
+			),
 		},
 		{
 			name: "ixpool overflow",
-			ix:   newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			ix: newTestInteraction(
+				t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+				0, addrs[0], nil,
+			),
 			preTestFn: func(ixPool *IxPool, interaction *common.Interaction) {
 				ixPool.gauge.increase(config.DefaultMaxIXPoolSlots)
 			},
@@ -212,14 +397,20 @@ func TestIxPool_validateAndEnqueueIx(t *testing.T) {
 		},
 		{
 			name: "fill ixpool to the limit",
-			ix:   newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			ix: newTestInteraction(
+				t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+				0, addrs[0], nil,
+			),
 			preTestFn: func(ixPool *IxPool, interaction *common.Interaction) {
 				ixPool.gauge.increase(config.DefaultMaxIXPoolSlots - 1)
 			},
 		},
 		{
 			name: "failed to add lower nonce ixn",
-			ix:   newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			ix: newTestInteraction(
+				t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+				0, addrs[0], nil,
+			),
 			preTestFn: func(ixPool *IxPool, interaction *common.Interaction) {
 				ixPool.createAccountOnce(addrs[0], 1)
 			},
@@ -260,48 +451,64 @@ func TestIxPool_AddRemoteInteractions(t *testing.T) {
 
 	testcases := []struct {
 		name              string
-		ixns              common.Interactions
+		ixns              []*common.Interaction
 		sigVerification   bool
+		preTestFn         func(interactions []*common.Interaction)
 		expectedAddedIxns int
 		expectedResult    pubsub.ValidationResult
 	}{
 		{
 			name: "Reject interactions with oversized data",
-			ixns: common.Interactions{
-				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
-				newIxWithPayload(t, common.IxValueTransfer, 5, addrs[0], make([]byte, ixMaxSize+2)),
+			ixns: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+					0, addrs[0], nil,
+				),
+				newIxWithPayload(t, common.IxAssetCreate, 5, addrs[0], make([]byte, IxMaxSize+2)),
 			},
 			expectedAddedIxns: 1,
 			expectedResult:    pubsub.ValidationReject,
 		},
 		{
 			name: "Reject interactions with invalid address",
-			ixns: common.Interactions{
-				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
-				newIxWithoutAddress(t, 5),
+			ixns: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+					0, addrs[0], nil,
+				),
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+					0, addrs[0], nil,
+				),
+			},
+			preTestFn: func(interactions []*common.Interaction) {
+				interactions[1].SetSender(identifiers.NilAddress)
 			},
 			expectedAddedIxns: 1,
 			expectedResult:    pubsub.ValidationReject,
 		},
 		{
 			name: "Reject interactions with invalid signature",
-			ixns: common.Interactions{
-				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			ixns: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+					0, addrs[0], nil,
+				),
 			},
 			sigVerification: true,
 			expectedResult:  pubsub.ValidationReject,
 		},
 		{
 			name:              "valid ixn group",
-			ixns:              createTestIxs(t, common.IxValueTransfer, 0, 2, addrs[0]),
+			ixns:              createTestIxs(t, 0, 2, addrs[0]),
 			expectedAddedIxns: 2,
 			expectedResult:    pubsub.ValidationAccept,
 		},
 		{
 			name: "Ignore ixns as more than half of them have errors and count greater than 10",
 			ixns: append(
-				createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[0]),
-				createTestIxs(t, common.IxValueTransfer, 0, 6, addrs[1])...,
+				createTestIxs(t, 0, 5, addrs[0]),
+				createTestIxs(t, 0, 6, addrs[1])...,
 			),
 			expectedAddedIxns: 5,
 			expectedResult:    pubsub.ValidationIgnore,
@@ -309,15 +516,15 @@ func TestIxPool_AddRemoteInteractions(t *testing.T) {
 		{
 			name: "accept ixns as less than half of them have errors and count greater than 10",
 			ixns: append(
-				createTestIxs(t, common.IxValueTransfer, 0, 6, addrs[0]),
-				createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[1])...,
+				createTestIxs(t, 0, 6, addrs[0]),
+				createTestIxs(t, 0, 5, addrs[1])...,
 			),
 			expectedAddedIxns: 6,
 			expectedResult:    pubsub.ValidationAccept,
 		},
 		{
 			name:           "accept ixns if length of ixns less than or equal to 10 and all ixns have errors",
-			ixns:           createTestIxs(t, common.IxValueTransfer, 0, 10, addrs[1]),
+			ixns:           createTestIxs(t, 0, 10, addrs[1]),
 			expectedResult: pubsub.ValidationAccept,
 		},
 	}
@@ -330,7 +537,11 @@ func TestIxPool_AddRemoteInteractions(t *testing.T) {
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
 			}, !test.sigVerification, sm, nil, nil)
 
-			res := ixPool.AddRemoteInteractions(test.ixns)
+			if test.preTestFn != nil {
+				test.preTestFn(test.ixns)
+			}
+
+			res := ixPool.AddRemoteInteractions(test.ixns...)
 			require.Equal(t, test.expectedResult, res)
 			require.Equal(t, test.expectedAddedIxns, len(ixPool.allIxs.all))
 		})
@@ -344,28 +555,41 @@ func TestIxPool_AddLocalInteractions_Broadcast(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		ixns             common.Interactions
+		ixns             []*common.Interaction
 		enableIxFlooding bool
-		broadcastedIxns  common.Interactions
+		preTestFn        func(interactions []*common.Interaction)
+		broadcastedIxns  []*common.Interaction
 	}{
 		{
 			name: "broadcast only valid ixn group",
-			ixns: common.Interactions{
-				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
-				newIxWithoutAddress(t, 5),
+			ixns: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, addrs[1]),
+					0, addrs[0], nil,
+				),
+				newTestInteraction(
+					t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+					0, addrs[0], nil,
+				),
 			},
-			broadcastedIxns: common.Interactions{
-				newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			preTestFn: func(interactions []*common.Interaction) {
+				interactions[1].SetSender(identifiers.NilAddress)
+			},
+			broadcastedIxns: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, addrs[1]),
+					0, addrs[0], nil,
+				),
 			},
 		},
 		{
 			name: "do not broadcast zero ixns",
-			ixns: createTestIxs(t, common.IxValueTransfer, 0, 2, addrs[1]),
+			ixns: createTestIxs(t, 0, 2, addrs[1]),
 		},
 		{
 			name:             "do not broadcast ixns if flooding enabled",
 			enableIxFlooding: true,
-			ixns:             createTestIxs(t, common.IxValueTransfer, 0, 2, addrs[0]),
+			ixns:             createTestIxs(t, 0, 2, addrs[0]),
 		},
 	}
 
@@ -378,7 +602,11 @@ func TestIxPool_AddLocalInteractions_Broadcast(t *testing.T) {
 				c.EnableIxFlooding = test.enableIxFlooding
 			}, true, sm, nil, newMockNetwork(""))
 
-			ixPool.AddLocalInteractions(test.ixns)
+			if test.preTestFn != nil {
+				test.preTestFn(test.ixns)
+			}
+
+			ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, test.ixns...))
 
 			net, ok := ixPool.network.(*mockNetwork)
 			require.True(t, ok)
@@ -386,7 +614,7 @@ func TestIxPool_AddLocalInteractions_Broadcast(t *testing.T) {
 			if test.broadcastedIxns != nil {
 				require.Equal(t, len(test.broadcastedIxns), len(net.broadcasted))
 
-				expected, err := test.broadcastedIxns.Bytes()
+				expected, err := polo.Polorize(test.broadcastedIxns)
 				require.NoError(t, err)
 
 				actual, ok := net.broadcasted[config.IxTopic]
@@ -407,16 +635,16 @@ func TestIxPool_IxValidator(t *testing.T) {
 	addrs := tests.GetAddresses(t, 2)
 	sm.setTestMOIBalance(t, addrs[0])
 
-	validIxns := createTestIxs(t, common.IxValueTransfer, 0, 2, addrs[0])
-	rawData, err := validIxns.Bytes()
+	validIxns := createTestIxs(t, 0, 2, addrs[0])
+	rawData, err := polo.Polorize(validIxns)
 	require.NoError(t, err)
 
-	zeroIxns := common.Interactions{}
-	zeroIxnsRawData, err := zeroIxns.Bytes()
+	zeroIxns := []*common.Interaction{}
+	zeroIxnsRawData, err := polo.Polorize(zeroIxns)
 	require.NoError(t, err)
 
-	excessIxns := createTestIxs(t, common.IxValueTransfer, 0, 3, addrs[0])
-	excessIxnsRawData, err := excessIxns.Bytes()
+	excessIxns := createTestIxs(t, 0, 3, addrs[0])
+	excessIxnsRawData, err := polo.Polorize(excessIxns)
 	require.NoError(t, err)
 
 	KID := tests.RandomKramaID(t, 0)
@@ -533,11 +761,16 @@ func TestIxPool_addedIxnEvent(t *testing.T) {
 
 	testcases := []struct {
 		name string
-		ixn  common.Interactions
+		ixn  []*common.Interaction
 	}{
 		{
 			name: "check for add ixn event",
-			ixn:  common.Interactions{newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil)},
+			ixn: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+					0, addrs[0], nil,
+				),
+			},
 		},
 	}
 
@@ -583,7 +816,10 @@ func TestIxPool_validateAndEnqueueIx_HighPressure(t *testing.T) {
 	}{
 		{
 			name: "prune should be signalled when ixpool overflows",
-			ix:   newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], nil),
+			ix: newTestInteraction(
+				t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+				0, addrs[0], nil,
+			),
 			preTestFn: func(ixPool *IxPool, interaction *common.Interaction) {
 				ixPool.gauge.increase((80 * config.DefaultMaxIXPoolSlots / 100) + 1)
 			},
@@ -591,7 +827,10 @@ func TestIxPool_validateAndEnqueueIx_HighPressure(t *testing.T) {
 		},
 		{
 			name: "reject the future ix",
-			ix:   newTestInteraction(t, common.IxValueTransfer, 1, addrs[0], nil),
+			ix: newTestInteraction(
+				t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+				1, addrs[0], nil,
+			),
 			preTestFn: func(ixPool *IxPool, interaction *common.Interaction) {
 				ixPool.createAccountOnce(interaction.Sender(), 0)
 				ixPool.gauge.increase((80 * config.DefaultMaxIXPoolSlots / 100) + 1)
@@ -650,16 +889,22 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 
 	testcases := []struct {
 		name           string
-		ixs            common.Interactions
-		testFn         func(ixPool *IxPool, interactions common.Interactions)
+		ixs            []*common.Interaction
+		testFn         func(ixPool *IxPool, interactions []*common.Interaction)
 		expectedResult expectedResult
 		expectedErrors int
 	}{
 		{
 			name: "Enqueue ixs with higher nonce",
-			ixs: common.Interactions{
-				newTestInteraction(t, common.IxValueTransfer, 0, address, nil),
-				newTestInteraction(t, common.IxValueTransfer, 5, address, nil),
+			ixs: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+					0, address, nil,
+				),
+				newTestInteraction(
+					t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+					5, address, nil,
+				),
 			},
 			expectedResult: expectedResult{
 				enqueued:         1,
@@ -668,8 +913,8 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 		},
 		{
 			name: "All the ixs are with low nonce",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 5, address),
-			testFn: func(ixPool *IxPool, interactions common.Interactions) {
+			ixs:  createTestIxs(t, 0, 5, address),
+			testFn: func(ixPool *IxPool, interactions []*common.Interaction) {
 				ixPool.createAccountOnce(interactions[0].Sender(), 5)
 			},
 			expectedResult: expectedResult{
@@ -680,8 +925,8 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 		},
 		{
 			name: "Should not enqueue ixs with low nonce",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 6, address),
-			testFn: func(ixPool *IxPool, interactions common.Interactions) {
+			ixs:  createTestIxs(t, 0, 6, address),
+			testFn: func(ixPool *IxPool, interactions []*common.Interaction) {
 				ixPool.createAccountOnce(interactions[0].Sender(), 5)
 			},
 			expectedResult: expectedResult{
@@ -692,7 +937,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 		},
 		{
 			name: "Promote ixs with expected nonce",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 3, address),
+			ixs:  createTestIxs(t, 0, 3, address),
 			expectedResult: expectedResult{
 				enqueued:         0,
 				promotedAccounts: 3,
@@ -715,7 +960,7 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 
 			require.Equal(t, uint64(0), ixPool.gauge.read())
 
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Equal(t, testcase.expectedErrors, len(errs))
 
 			require.Equal(t, testcase.expectedResult.enqueued, ixPool.accounts.get(senderAddress).enqueued.length())
@@ -728,32 +973,47 @@ func TestIxPool_handleEnqueueRequest(t *testing.T) {
 func TestIxPool_handlePromoteRequest(t *testing.T) {
 	sm := NewMockStateManager(t)
 	addrs := tests.GetAddresses(t, 3)
+
+	addr, err := identifiers.NewAddressFromHex("0x0000000000000000000000000516a2efe9cd53c3d54e1f9a6e60e9077e9f9384")
+	require.NoError(t, err)
+
+	addrs[0] = addr
+
 	sm.setTestMOIBalance(t, addrs...)
+	sm.SetAccountMetaInfo(common.SargaAddress, &common.AccountMetaInfo{
+		PositionInContextSet: 1,
+	})
 
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
 		c.MaxSlots = config.DefaultMaxIXPoolSlots
 	}, true, sm, nil, newMockNetwork(""))
+	ixPool.UpdateCurrentView(4)
 
 	testcases := []struct {
-		name     string
-		ixs      common.Interactions
-		popIx    func(address identifiers.Address)
-		expected expectedResult
+		name                  string
+		ixs                   []*common.Interaction
+		popIx                 func(address identifiers.Address)
+		shouldPropose         bool
+		expected              expectedResult
+		expectedAllocatedView uint64
 	}{
 		{
 			name: "Promote one ix",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 1, addrs[0]),
+			ixs:  createTestIxs(t, 0, 1, addrs[0]),
 			expected: expectedResult{
 				nonce:    1,
 				enqueued: 0,
 				promoted: 1,
 			},
+			shouldPropose:         true,
+			expectedAllocatedView: 5,
 		},
 		{
-			name: "Promote several ixs",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 3, addrs[1]),
+			name:          "Promote several ixs",
+			ixs:           createTestIxs(t, 0, 3, addrs[1]),
+			shouldPropose: true,
 			expected: expectedResult{
 				nonce:    3,
 				enqueued: 0,
@@ -766,7 +1026,7 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			senderAddress := testcase.ixs[0].Sender()
 
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Len(t, errs, 0)
 
 			if testcase.popIx != nil {
@@ -779,6 +1039,16 @@ func TestIxPool_handlePromoteRequest(t *testing.T) {
 			require.Equal(t, testcase.expected.enqueued, ixPool.accounts.get(senderAddress).enqueued.length())
 			// checks whether the ixs are promoted
 			require.Equal(t, testcase.expected.promoted, ixPool.accounts.get(senderAddress).promoted.length())
+
+			if !testcase.shouldPropose {
+				require.Equal(t, testcase.shouldPropose, testcase.ixs[0].ShouldPropose())
+
+				return
+			}
+
+			require.Equal(t, testcase.shouldPropose, testcase.ixs[0].ShouldPropose())
+
+			validateAllocatedView(t, testcase.ixs[0].AllottedView(), 4, 1)
 		})
 	}
 }
@@ -790,11 +1060,11 @@ func TestIxPool_promoteIxnEvent(t *testing.T) {
 
 	testcases := []struct {
 		name string
-		ixs  common.Interactions
+		ixs  []*common.Interaction
 	}{
 		{
 			name: "check for promoted ixn event",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 1, addrs[0]),
+			ixs:  createTestIxs(t, 0, 1, addrs[0]),
 		},
 	}
 
@@ -815,7 +1085,7 @@ func TestIxPool_promoteIxnEvent(t *testing.T) {
 
 			go utils.HandleMuxEvents(ctx, ixPromotedEventSub, ixPromotedResp, len(testcase.ixs))
 
-			addAndProcessIxs(t, sm, ixPool, testcase.ixs)
+			addAndProcessIxs(t, sm, ixPool, testcase.ixs...)
 
 			data := tests.WaitForResponse(t, ixPromotedResp, utils.PromotedInteractionEvent{})
 			event, ok := data.(utils.PromotedInteractionEvent)
@@ -883,26 +1153,26 @@ func TestIxPool_ResetWithHeaders_resetWaitTime(t *testing.T) {
 
 	testcases := []struct {
 		name               string
-		ixs                common.Interactions
+		ixs                []*common.Interaction
 		nonce              int
 		incrementCounter   func(acc *account)
 		expectedPromotions uint64
 	}{
 		{
 			name:               "Prune all the interactions with low nonce",
-			ixs:                createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[0]),
+			ixs:                createTestIxs(t, 0, 5, addrs[0]),
 			nonce:              5,
 			expectedPromotions: 0,
 		},
 		{
 			name:               "Prune some interactions with low nonce",
-			ixs:                createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[1]),
+			ixs:                createTestIxs(t, 0, 5, addrs[1]),
 			nonce:              1,
 			expectedPromotions: 3,
 		},
 		{
 			name:  "Reset wait time",
-			ixs:   createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[2]),
+			ixs:   createTestIxs(t, 0, 5, addrs[2]),
 			nonce: 3,
 			incrementCounter: func(acc *account) {
 				// increment the account's delay counter
@@ -916,7 +1186,7 @@ func TestIxPool_ResetWithHeaders_resetWaitTime(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			senderAddress := testcase.ixs[0].Sender()
 
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Len(t, errs, 0)
 
 			if testcase.incrementCounter != nil {
@@ -944,26 +1214,26 @@ func TestIxPool_ResetWithHeaders_enqueued(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		ixs              common.Interactions
+		ixs              []*common.Interaction
 		nonce            uint64
 		expectedEnqueued uint64
 		expectedPromoted uint64
 	}{
 		{
 			name:             "Prune all ixs with low nonce",
-			ixs:              createTestIxs(t, common.IxValueTransfer, 1, 5, addrs[0]),
+			ixs:              createTestIxs(t, 1, 5, addrs[0]),
 			nonce:            5,
 			expectedEnqueued: 0,
 		},
 		{
 			name:             "No low nonce ixs to prune",
-			ixs:              createTestIxs(t, common.IxValueTransfer, 1, 7, addrs[1])[2:6],
+			ixs:              createTestIxs(t, 1, 7, addrs[1])[2:6],
 			nonce:            1,
 			expectedEnqueued: 4,
 		},
 		{
 			name:             "Prune some ixs with low nonce",
-			ixs:              createTestIxs(t, common.IxValueTransfer, 1, 6, addrs[2]),
+			ixs:              createTestIxs(t, 1, 6, addrs[2]),
 			nonce:            3,
 			expectedPromoted: 2,
 		},
@@ -981,7 +1251,7 @@ func TestIxPool_ResetWithHeaders_enqueued(t *testing.T) {
 
 			ixPool.createAccountOnce(senderAddress, 0)
 
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Len(t, errs, 0)
 
 			ts := getTesseractWithIxs(t, senderAddress, int(testcase.nonce))
@@ -1005,13 +1275,13 @@ func TestIxPool_ResetWithHeaders_prunedEnqueuedIxnEvent(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		ixs              common.Interactions
+		ixs              []*common.Interaction
 		nonce            uint64
 		expectEventCount int
 	}{
 		{
 			name:             "Prune some enqueue ixs with low nonce and check for events",
-			ixs:              createTestIxs(t, common.IxValueTransfer, 1, 6, addrs[1]),
+			ixs:              createTestIxs(t, 1, 6, addrs[1]),
 			nonce:            3,
 			expectEventCount: 3,
 		},
@@ -1037,7 +1307,7 @@ func TestIxPool_ResetWithHeaders_prunedEnqueuedIxnEvent(t *testing.T) {
 
 			go utils.HandleMuxEvents(ctx, ixPrunedEnqueueEventSub, ixPrunedEnqueueResp, len(testcase.ixs))
 
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Len(t, errs, 0)
 
 			// ResetWithHeaders should prune the ixs from the enqueue if the nonce is lesser than the given nonce
@@ -1068,25 +1338,25 @@ func TestIxPool_ResetWithHeaders_promoted(t *testing.T) {
 
 	testcases := []struct {
 		name               string
-		ixs                common.Interactions
+		ixs                []*common.Interaction
 		nonce              uint64
 		expectedPromotions uint64
 	}{
 		{
 			name:               "Prune all the ixs with low nonce",
-			ixs:                createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[0]),
+			ixs:                createTestIxs(t, 0, 5, addrs[0]),
 			nonce:              5,
 			expectedPromotions: 0,
 		},
 		{
 			name:               "No low nonce ixs to prune",
-			ixs:                createTestIxs(t, common.IxValueTransfer, 0, 6, addrs[1])[1:6],
+			ixs:                createTestIxs(t, 0, 6, addrs[1])[1:6],
 			nonce:              0,
 			expectedPromotions: 5,
 		},
 		{
 			name:               "Prune some ixs with low nonce",
-			ixs:                createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[2]),
+			ixs:                createTestIxs(t, 0, 5, addrs[2]),
 			nonce:              3,
 			expectedPromotions: 1,
 		},
@@ -1096,7 +1366,7 @@ func TestIxPool_ResetWithHeaders_promoted(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			senderAddress := testcase.ixs[0].Sender()
 
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Len(t, errs, 0)
 
 			ts := getTesseractWithIxs(t, senderAddress, int(testcase.nonce))
@@ -1115,13 +1385,13 @@ func TestIxPool_ResetWithHeaders_prunedPromotedIxnEvent(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		ixs              common.Interactions
+		ixs              []*common.Interaction
 		nonce            uint64
 		expectEventCount int
 	}{
 		{
 			name:             "Prune some promoted ixs with low nonce and check for events",
-			ixs:              createTestIxs(t, common.IxValueTransfer, 0, 5, addrs[1]),
+			ixs:              createTestIxs(t, 0, 5, addrs[1]),
 			nonce:            3,
 			expectEventCount: 4,
 		},
@@ -1146,7 +1416,7 @@ func TestIxPool_ResetWithHeaders_prunedPromotedIxnEvent(t *testing.T) {
 
 			senderAddress := testcase.ixs[0].Sender()
 
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Len(t, errs, 0)
 
 			ts := getTesseractWithIxs(t, senderAddress, int(testcase.nonce))
@@ -1168,7 +1438,7 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 
 	testcases := []struct {
 		name     string
-		ixs      common.Interactions
+		ixs      []*common.Interaction
 		nonce    uint64
 		promote  bool
 		expected expectedResult
@@ -1177,9 +1447,9 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 			name: "Prune all ixs with low nonce",
 			ixs: append(
 				// promoted
-				createTestIxs(t, common.IxValueTransfer, 0, 3, address),
+				createTestIxs(t, 0, 3, address),
 				// enqueued
-				createTestIxs(t, common.IxValueTransfer, 4, 7, address)...,
+				createTestIxs(t, 4, 7, address)...,
 			),
 			nonce: 7,
 			expected: expectedResult{
@@ -1191,9 +1461,9 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 			name: "No low nonce ixs to prune",
 			ixs: append(
 				// promoted
-				createTestIxs(t, common.IxValueTransfer, 6, 8, address),
+				createTestIxs(t, 6, 8, address),
 				// enqueued
-				createTestIxs(t, common.IxValueTransfer, 10, 13, address)...,
+				createTestIxs(t, 10, 13, address)...,
 			),
 			nonce: 5,
 			expected: expectedResult{
@@ -1205,9 +1475,9 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 			name: "Prune all promoted",
 			ixs: append(
 				// promoted
-				createTestIxs(t, common.IxValueTransfer, 1, 3, address),
+				createTestIxs(t, 1, 3, address),
 				// enqueued
-				createTestIxs(t, common.IxValueTransfer, 5, 7, address)...,
+				createTestIxs(t, 5, 7, address)...,
 			),
 			nonce:   2,
 			promote: true,
@@ -1220,9 +1490,9 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 			name: "Prune signals promotion",
 			ixs: append(
 				// promoted
-				createTestIxs(t, common.IxValueTransfer, 0, 3, address),
+				createTestIxs(t, 0, 3, address),
 				// enqueued
-				createTestIxs(t, common.IxValueTransfer, 4, 7, address)...,
+				createTestIxs(t, 4, 7, address)...,
 			),
 			nonce: 4,
 			expected: expectedResult{
@@ -1246,7 +1516,7 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 
 			require.Equal(t, uint64(0), ixPool.gauge.read())
 
-			addAndProcessIxs(t, sm, ixPool, testcase.ixs)
+			addAndProcessIxs(t, sm, ixPool, testcase.ixs...)
 			require.Equal(t, uint64(len(testcase.ixs)), ixPool.gauge.read())
 
 			acc := ixPool.accounts.get(senderAddress)
@@ -1281,12 +1551,12 @@ func TestIxPool_Pop(t *testing.T) {
 
 	testcases := []struct {
 		name               string
-		ixs                common.Interactions
+		ixs                []*common.Interaction
 		expectedPromotions uint64
 	}{
 		{
 			name:               "Prune the ix from the promoted queue",
-			ixs:                createTestIxs(t, common.IxValueTransfer, 0, 5, addr1),
+			ixs:                createTestIxs(t, 0, 5, addr1),
 			expectedPromotions: 4,
 		},
 	}
@@ -1297,7 +1567,7 @@ func TestIxPool_Pop(t *testing.T) {
 
 			require.Equal(t, uint64(0), ixPool.gauge.read())
 
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Len(t, errs, 0)
 
 			require.Equal(t, uint64(len(testcase.ixs)), ixPool.gauge.read())
@@ -1326,11 +1596,11 @@ func TestIxPool_Drop(t *testing.T) {
 
 	testcases := []struct {
 		name string
-		ixs  common.Interactions
+		ixs  []*common.Interaction
 	}{
 		{
 			name: "Remove the account form accounts map and check for dropped events",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 5, addr1),
+			ixs:  createTestIxs(t, 0, 5, addr1),
 		},
 	}
 
@@ -1346,11 +1616,12 @@ func TestIxPool_Drop(t *testing.T) {
 			go utils.HandleMuxEvents(ctx, ixDroppedEventSub, ixDroppedResp, len(testcase.ixs))
 
 			senderAddress := testcase.ixs[0].Sender()
-			errs := ixPool.AddLocalInteractions(testcase.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.ixs...))
 			require.Len(t, errs, 0)
 
 			acc := ixPool.accounts.get(senderAddress)
 			ix := acc.promoted.peek()
+
 			require.Equal(t, uint64(len(testcase.ixs)), ixPool.gauge.read())
 			require.Equal(t, uint64(len(testcase.ixs)), uint64(len(acc.nonceToIX.mapping)))
 
@@ -1373,7 +1644,7 @@ func TestIxPool_Drop_FinalizedIx(t *testing.T) {
 	sm := NewMockStateManager(t)
 	sm.setTestMOIBalance(t, addr1)
 
-	ixs := createTestIxs(t, common.IxValueTransfer, 0, 5, addr1)
+	ixs := createTestIxs(t, 0, 5, addr1)
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
 		c.PriceLimit = defaultIxPriceLimit
@@ -1383,7 +1654,7 @@ func TestIxPool_Drop_FinalizedIx(t *testing.T) {
 	testcases := []struct {
 		name          string
 		finalizedIx   *common.Interaction
-		pendingIxs    common.Interactions
+		pendingIxs    []*common.Interaction
 		preTestFn     func()
 		expectedError error
 	}{
@@ -1409,7 +1680,7 @@ func TestIxPool_Drop_FinalizedIx(t *testing.T) {
 			go utils.HandleMuxEvents(ctx, ixDroppedEventSub, ixDroppedResp, len(testcase.pendingIxs))
 
 			senderAddress := testcase.pendingIxs[0].Sender()
-			errs := ixPool.AddLocalInteractions(testcase.pendingIxs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, testcase.pendingIxs...))
 			require.Len(t, errs, 0)
 
 			acc := ixPool.accounts.get(senderAddress)
@@ -1484,6 +1755,7 @@ func TestIxPool_IncrementWaitTime(t *testing.T) {
 
 			for i := 0; i < testcase.delta; i++ {
 				require.NoError(t, ixPool.IncrementWaitTime(testcase.addr, baseTime))
+
 				initTime = time.Now()
 			}
 
@@ -1526,17 +1798,26 @@ func TestIxPool_validateIx(t *testing.T) {
 	}{
 		{
 			name:        "Oversized data error",
-			ix:          newIxWithPayload(t, common.IxValueTransfer, 5, addrs[0], make([]byte, ixMaxSize+2)),
+			ix:          newIxWithPayload(t, common.IxAssetCreate, 5, addrs[0], make([]byte, IxMaxSize+2)),
 			expectedErr: ErrOversizedData,
 		},
 		{
-			name:        "Invalid address error",
-			ix:          newIxWithoutAddress(t, 5),
+			name: "Invalid address error",
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+				0, tests.RandomAddress(t), nil,
+			),
+			testFn: func(interaction *common.Interaction) {
+				interaction.SetSender(identifiers.NilAddress)
+			},
 			expectedErr: common.ErrInvalidAddress,
 		},
 		{
 			name: "Nonce too low error",
-			ix:   newTestInteraction(t, common.IxValueTransfer, 9, addrs[1], nil),
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+				9, addrs[1], nil,
+			),
 			testFn: func(interaction *common.Interaction) {
 				sm.setLatestNonce(t, interaction.Sender(), 10)
 			},
@@ -1549,32 +1830,39 @@ func TestIxPool_validateIx(t *testing.T) {
 		},
 		{
 			name: "Ix with negative transfer value",
-			ix: newTestInteraction(t, common.IxValueTransfer, 0, addrs[2], func(ixData *common.IxData) {
-				ixData.Input.Type = common.IxValueTransfer
-				ixData.Input.TransferValues = map[identifiers.AssetID]*big.Int{
-					"assetID1": new(big.Int).Neg(big.NewInt(20)),
-				}
-			}),
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer,
+				common.AssetActionPayload{
+					Beneficiary: addrs[1],
+					AssetID:     "assetID1",
+					Amount:      new(big.Int).Neg(big.NewInt(20)),
+				},
+				0, addrs[2], nil,
+			),
 			expectedErr: common.ErrInvalidValue,
 		},
 		{
 			name: "Ix with invalid assetID",
-			ix: newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], func(ixData *common.IxData) {
-				ixData.Input.Type = common.IxValueTransfer
-				ixData.Input.TransferValues = map[identifiers.AssetID]*big.Int{
-					"assetID1": big.NewInt(20),
-				}
-			}),
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer,
+				common.AssetActionPayload{
+					Beneficiary: addrs[1],
+					AssetID:     "assetID1",
+					Amount:      big.NewInt(20),
+				},
+				0, addrs[0], nil),
 			expectedErr: common.ErrFetchingBalance,
 		},
 		{
 			name: "Ix with insufficient funds",
-			ix: newTestInteraction(t, common.IxValueTransfer, 0, addrs[0], func(ixData *common.IxData) {
-				ixData.Input.Type = common.IxValueTransfer
-				ixData.Input.TransferValues = map[identifiers.AssetID]*big.Int{
-					"assetID1": big.NewInt(20),
-				}
-			}),
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer,
+				common.AssetActionPayload{
+					AssetID: "assetID1",
+					Amount:  big.NewInt(20),
+				},
+				0, addrs[0], nil,
+			),
 			testFn: func(interaction *common.Interaction) {
 				sm.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					"assetID1": big.NewInt(10),
@@ -1615,13 +1903,41 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 
 	sm.setTestMOIBalance(t, address, addr2)
 
-	ixArgs := common.SendIXArgs{
+	ixArgs := common.IxData{
 		Sender:    address,
-		Type:      common.IxValueTransfer,
 		FuelPrice: defaultIxPriceLimit,
 		FuelLimit: 1,
-		TransferValues: map[identifiers.AssetID]*big.Int{
-			"assetID1": big.NewInt(5),
+		Funds: []common.IxFund{
+			{
+				AssetID: "assetID1",
+				Amount:  big.NewInt(5),
+			},
+		},
+		IxOps: []common.IxOpRaw{
+			{
+				Type: common.IxAssetTransfer,
+				Payload: func() []byte {
+					transferPayload := &common.AssetActionPayload{
+						Beneficiary: addr2,
+						AssetID:     "assetID1",
+						Amount:      big.NewInt(5),
+					}
+
+					payload, _ := transferPayload.Bytes()
+
+					return payload
+				}(),
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  address,
+				LockType: common.MutateLock,
+			},
+			{
+				Address:  addr2,
+				LockType: common.MutateLock,
+			},
 		},
 	}
 
@@ -1629,14 +1945,17 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 
 	ix := tests.CreateIX(t, getIXParams(
 		address,
-		common.IxValueTransfer,
+		common.IxAssetTransfer,
 		defaultIxPriceLimit,
-		map[identifiers.AssetID]*big.Int{
-			"assetID1": big.NewInt(5),
+		common.AssetActionPayload{
+			Beneficiary: addr2,
+			AssetID:     "assetID1",
+			Amount:      big.NewInt(5),
 		},
 		rawSign,
 	))
 
+	sm.registerAccounts(addr2)
 	testcases := []struct {
 		name        string
 		ix          *common.Interaction
@@ -1645,11 +1964,15 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 	}{
 		{
 			name: "invalid signature",
-			ix: newTestInteraction(t, common.IxValueTransfer, 0, addr2, func(ixData *common.IxData) {
-				ixData.Input.TransferValues = map[identifiers.AssetID]*big.Int{
-					"assetID1": big.NewInt(5),
-				}
-			}),
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer,
+				common.AssetActionPayload{
+					AssetID: "assetID1",
+					Amount:  big.NewInt(5),
+				},
+				0, addr2,
+				nil,
+			),
 			testFn: func(interaction *common.Interaction) {
 				sm.setBalance(t, interaction.Sender(), "assetID1", big.NewInt(10))
 			},
@@ -1664,13 +1987,160 @@ func TestIxPool_validateIx_WithSign(t *testing.T) {
 		},
 	}
 
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			if test.testFn != nil {
+				test.testFn(test.ix)
+			}
+
+			err := ixPool.validateIx(test.ix)
+			if test.expectedErr != nil {
+				require.ErrorContains(t, err, test.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestIxPool_ValidateFunds(t *testing.T) {
+	address := tests.RandomAddress(t)
+	sm := NewMockStateManager(t)
+
+	sm.setBalance(t, address, common.KMOITokenAssetID, big.NewInt(10))
+
+	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+		c.Mode = WaitMode
+		c.PriceLimit = defaultIxPriceLimit
+	}, false, sm, nil, nil)
+
+	testcases := []struct {
+		name        string
+		ix          *common.Interaction
+		expectedErr error
+	}{
+		{
+			name: "negative asset fund",
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+				0, address, func(ixData *common.IxData) {
+					ixData.Funds = []common.IxFund{
+						{
+							AssetID: common.KMOITokenAssetID,
+							Amount:  new(big.Int).Neg(big.NewInt(20)),
+						},
+					}
+				},
+			),
+			expectedErr: common.ErrInvalidValue,
+		},
+		{
+			name: "account not registered",
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+				0, tests.RandomAddress(t), nil,
+			),
+			expectedErr: common.ErrFetchingBalance,
+		},
+		{
+			name: "insufficient asset funds",
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+				0, address, func(ixData *common.IxData) {
+					ixData.Funds = []common.IxFund{
+						{
+							AssetID: common.KMOITokenAssetID,
+							Amount:  big.NewInt(20),
+						},
+					}
+				},
+			),
+			expectedErr: common.ErrInsufficientFunds,
+		},
+		{
+			name: "valid asset funds",
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+				0, address, func(ixData *common.IxData) {
+					ixData.Funds = []common.IxFund{
+						{
+							AssetID: common.KMOITokenAssetID,
+							Amount:  big.NewInt(5),
+						},
+					}
+				},
+			),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := ixPool.validateFunds(test.ix)
+			if test.expectedErr != nil {
+				require.ErrorContains(t, err, test.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestIxPool_ValidateOperations(t *testing.T) {
+	address := tests.RandomAddress(t)
+	sm := NewMockStateManager(t)
+
+	sm.setBalance(t, address, common.KMOITokenAssetID, big.NewInt(10))
+
+	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+		c.Mode = WaitMode
+		c.PriceLimit = defaultIxPriceLimit
+	}, false, sm, nil, nil)
+
+	validAssetPayload := common.AssetCreatePayload{
+		Standard: common.MAS1,
+		Supply:   defaultIxPriceLimit,
+	}
+
+	invalidAssetPayload := common.AssetCreatePayload{
+		Standard: 2,
+	}
+
+	testcases := []struct {
+		name        string
+		ix          *common.Interaction
+		testFn      func(ix *common.Interaction)
+		expectedErr error
+	}{
+		{
+			name: "ix with invalid operation type",
+			ix:   newTestInteraction(t, common.IxAssetCreate, validAssetPayload, 0, address, nil),
+			testFn: func(ix *common.Interaction) {
+				ix.GetIxOp(0).OpType = common.IxInvalid
+			},
+			expectedErr: common.ErrInvalidInteractionType,
+		},
+		{
+			name:        "ix with invalid operation payload",
+			ix:          newTestInteraction(t, common.IxAssetCreate, invalidAssetPayload, 0, address, nil),
+			expectedErr: common.ErrInvalidAssetStandard,
+		},
+		{
+			name: "ix with valid operation payload",
+			ix:   newTestInteraction(t, common.IxAssetCreate, validAssetPayload, 0, address, nil),
+		},
+	}
+
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			if testcase.testFn != nil {
 				testcase.testFn(testcase.ix)
 			}
 
-			err := ixPool.validateIx(testcase.ix)
+			err := ixPool.validateTransactions(testcase.ix)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 
@@ -1703,45 +2173,30 @@ func TestIxPool_ValidateAssetCreate(t *testing.T) {
 		Supply:   big.NewInt(33),
 	}
 
-	rawValidAssetPayload, err := validAssetPayload.Bytes()
-	require.NoError(t, err)
-
-	rawInValidAssetStandardPayload, err := invalidAssetStandardPayload.Bytes()
-	require.NoError(t, err)
-
-	rawInvalidAssetSupplyPayload, err := invalidAssetSupplyPayload.Bytes()
-	require.NoError(t, err)
-
 	testcases := []struct {
 		name        string
 		ix          *common.Interaction
 		expectedErr error
 	}{
 		{
-			name: "should return error if asset standard is invalid",
-			ix: newTestInteraction(t, common.IxAssetCreate, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawInValidAssetStandardPayload
-			}),
+			name:        "should return error if asset standard is invalid",
+			ix:          newTestInteraction(t, common.IxAssetCreate, invalidAssetStandardPayload, 0, address, nil),
 			expectedErr: common.ErrInvalidAssetStandard,
 		},
 		{
-			name: "should return error if asset supply is invalid",
-			ix: newTestInteraction(t, common.IxAssetCreate, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawInvalidAssetSupplyPayload
-			}),
+			name:        "should return error if asset supply is invalid",
+			ix:          newTestInteraction(t, common.IxAssetCreate, invalidAssetSupplyPayload, 0, address, nil),
 			expectedErr: common.ErrInvalidAssetSupply,
 		},
 		{
 			name: "should return success if asset standard is valid",
-			ix: newTestInteraction(t, common.IxAssetCreate, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawValidAssetPayload
-			}),
+			ix:   newTestInteraction(t, common.IxAssetCreate, validAssetPayload, 0, address, nil),
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := ixPool.validateAssetCreate(testcase.ix)
+			err := ixPool.validateAssetCreate(testcase.ix, 0)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 
@@ -1762,19 +2217,13 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 
 	address := tests.RandomAddress(t)
 	assetID := tests.GetRandomAssetID(t, address)
-	assetPayload := common.AssetMintOrBurnPayload{
-		Asset: assetID,
+	assetPayload := common.AssetSupplyPayload{
+		AssetID: assetID,
 	}
 
-	rawAssetPayload, err := assetPayload.Bytes()
-	require.NoError(t, err)
-
-	NFTAssetPayload := common.AssetMintOrBurnPayload{
-		Asset: identifiers.NewAssetIDv0(false, false, 1, uint16(common.MAS1), address),
+	NFTAssetPayload := common.AssetSupplyPayload{
+		AssetID: identifiers.NewAssetIDv0(false, false, 1, uint16(common.MAS1), address),
 	}
-
-	rawNFTAssetPayload, err := NFTAssetPayload.Bytes()
-	require.NoError(t, err)
 
 	testcases := []struct {
 		name        string
@@ -1783,17 +2232,13 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "should return error if asset not found",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawAssetPayload
-			}),
+			name:        "should return error if asset not found",
+			ix:          newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
 			expectedErr: common.ErrAssetNotFound,
 		},
 		{
 			name: "should return error if operator address mismatch",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawAssetPayload
-			}),
+			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
 			testFn: func(interaction *common.Interaction) {
 				sm.setAssetInfo(
 					t,
@@ -1805,9 +2250,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 		},
 		{
 			name: "should return success if asset mint data is valid",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawAssetPayload
-			}),
+			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
 			testFn: func(interaction *common.Interaction) {
 				sm.setAssetInfo(
 					t,
@@ -1818,9 +2261,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 		},
 		{
 			name: "should return error if non fungible token minted",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawNFTAssetPayload
-			}),
+			ix:   newTestInteraction(t, common.IxAssetMint, NFTAssetPayload, 0, address, nil),
 			testFn: func(interaction *common.Interaction) {
 				sm.setAssetInfo(
 					t,
@@ -1838,7 +2279,7 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 				testcase.testFn(testcase.ix)
 			}
 
-			err := ixPool.validateAssetMint(testcase.ix)
+			err := ixPool.validateAssetMint(testcase.ix, 0)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 
@@ -1853,13 +2294,10 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 func TestIxPool_ValidateAssetBurn(t *testing.T) {
 	address := tests.RandomAddress(t)
 	assetID := tests.GetRandomAssetID(t, address)
-	assetPayload := common.AssetMintOrBurnPayload{
-		Asset:  assetID,
-		Amount: big.NewInt(100),
+	assetPayload := common.AssetSupplyPayload{
+		AssetID: assetID,
+		Amount:  big.NewInt(100),
 	}
-
-	rawAssetPayload, err := assetPayload.Bytes()
-	require.NoError(t, err)
 
 	testcases := []struct {
 		name        string
@@ -1868,17 +2306,13 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "asset not found",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawAssetPayload
-			}),
+			name:        "asset not found",
+			ix:          newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
 			expectedErr: common.ErrAssetNotFound,
 		},
 		{
 			name: "balance not found",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawAssetPayload
-			}),
+			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
 			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
 				mockStateManager.setAssetInfo(
 					t,
@@ -1890,9 +2324,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 		},
 		{
 			name: "insufficient funds",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawAssetPayload
-			}),
+			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
 			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
 				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(10),
@@ -1907,9 +2339,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 		},
 		{
 			name: "operator address mismatch",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawAssetPayload
-			}),
+			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
 			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
 				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(1000),
@@ -1924,9 +2354,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 		},
 		{
 			name: "valid asset burn data",
-			ix: newTestInteraction(t, common.IxAssetMint, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawAssetPayload
-			}),
+			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
 			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
 				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
 					assetID: big.NewInt(1000),
@@ -1952,7 +2380,7 @@ func TestIxPool_ValidateAssetBurn(t *testing.T) {
 				testcase.testFn(testcase.ix, sm)
 			}
 
-			err := ixPool.validateAssetBurn(testcase.ix)
+			err := ixPool.validateAssetBurn(testcase.ix, 0)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 
@@ -1971,12 +2399,6 @@ func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
 		Manifest: []byte{1, 2},
 	}
 
-	invalidRawLogicPayload, err := invalidLogicPayload.Bytes()
-	require.NoError(t, err)
-
-	validRawLogicPayload, err := validLogicPayload.Bytes()
-	require.NoError(t, err)
-
 	testcases := []struct {
 		name        string
 		ix          *common.Interaction
@@ -1984,23 +2406,17 @@ func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "should return error if manifest is empty",
-			ix: newTestInteraction(t, common.IxLogicDeploy, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = invalidRawLogicPayload
-			}),
+			name:        "should return error if manifest is empty",
+			ix:          newTestInteraction(t, common.IxLogicDeploy, invalidLogicPayload, 0, address, nil),
 			expectedErr: common.ErrEmptyManifest,
 		},
 		{
 			name: "should return success if logic payload is valid",
-			ix: newTestInteraction(t, common.IxLogicDeploy, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = validRawLogicPayload
-			}),
+			ix:   newTestInteraction(t, common.IxLogicDeploy, validLogicPayload, 0, address, nil),
 		},
 		{
 			name: "should return error if callsite is invalid",
-			ix: newTestInteraction(t, common.IxLogicDeploy, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = validRawLogicPayload
-			}),
+			ix:   newTestInteraction(t, common.IxLogicDeploy, validLogicPayload, 0, address, nil),
 			setHook: func(exec *MockExecutionManager) {
 				exec.validateLogicDeployHook = func() error {
 					return errors.New("invalid callsite")
@@ -2014,6 +2430,7 @@ func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			sm := NewMockStateManager(t)
 			exec := NewMockExecutionManager(t)
+
 			if testcase.setHook != nil {
 				testcase.setHook(exec)
 			}
@@ -2023,7 +2440,7 @@ func TestIxPool_ValidateLogicDeployPayload(t *testing.T) {
 				c.PriceLimit = defaultIxPriceLimit
 			}, false, sm, exec, nil)
 
-			err := ixPool.validateLogicDeployPayload(testcase.ix)
+			err := ixPool.validateLogicDeployPayload(testcase.ix, 0)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 
@@ -2046,15 +2463,6 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 		Callsite: "seeder",
 	}
 
-	rawPayloadWithoutCallsite, err := payloadWithoutCallsite.Bytes()
-	require.NoError(t, err)
-
-	rawPayloadWithoutLogicID, err := payloadWithoutLogicID.Bytes()
-	require.NoError(t, err)
-
-	validRawLogicPayload, err := validLogicPayload.Bytes()
-	require.NoError(t, err)
-
 	testcases := []struct {
 		name        string
 		ix          *common.Interaction
@@ -2063,24 +2471,18 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "should return error if call site is empty",
-			ix: newTestInteraction(t, common.IxLogicInvoke, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawPayloadWithoutCallsite
-			}),
+			name:        "should return error if call site is empty",
+			ix:          newTestInteraction(t, common.IxLogicInvoke, payloadWithoutCallsite, 0, address, nil),
 			expectedErr: common.ErrEmptyCallSite,
 		},
 		{
-			name: "should return error if logicID is empty",
-			ix: newTestInteraction(t, common.IxLogicInvoke, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = rawPayloadWithoutLogicID
-			}),
+			name:        "should return error if logicID is empty",
+			ix:          newTestInteraction(t, common.IxLogicInvoke, payloadWithoutLogicID, 0, address, nil),
 			expectedErr: common.ErrMissingLogicID,
 		},
 		{
 			name: "should return error if receiver object not found",
-			ix: newTestInteraction(t, common.IxLogicInvoke, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = validRawLogicPayload
-			}),
+			ix:   newTestInteraction(t, common.IxLogicInvoke, validLogicPayload, 0, address, nil),
 			preTestFn: func(interaction *common.Interaction, msm *MockStateManager) {
 				msm.registerLogicID(t, "logicID-1")
 			},
@@ -2088,20 +2490,16 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 		},
 		{
 			name: "should return success if logic payload is valid",
-			ix: newTestInteraction(t, common.IxLogicInvoke, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = validRawLogicPayload
-			}),
+			ix:   newTestInteraction(t, common.IxLogicInvoke, validLogicPayload, 0, address, nil),
 			preTestFn: func(interaction *common.Interaction, msm *MockStateManager) {
 				msm.registerLogicID(t, "logicID-1")
-				msm.setLatestStateObject(interaction.Receiver(), &state.Object{})
+				msm.setLatestStateObject(interaction.GetIxOp(0).Target(), &state.Object{})
 				msm.setLatestStateObject(interaction.Sender(), &state.Object{})
 			},
 		},
 		{
 			name: "should return error if callsite is invalid",
-			ix: newTestInteraction(t, common.IxLogicInvoke, 0, address, func(ixData *common.IxData) {
-				ixData.Input.Payload = validRawLogicPayload
-			}),
+			ix:   newTestInteraction(t, common.IxLogicInvoke, validLogicPayload, 0, address, nil),
 			setHook: func(exec *MockExecutionManager) {
 				exec.validateLogicInvokeHook = func() error {
 					return errors.New("invalid callsite")
@@ -2109,7 +2507,7 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 			},
 			preTestFn: func(interaction *common.Interaction, msm *MockStateManager) {
 				msm.registerLogicID(t, "logicID-1")
-				msm.setLatestStateObject(interaction.Receiver(), &state.Object{})
+				msm.setLatestStateObject(interaction.GetIxOp(0).Target(), &state.Object{})
 				msm.setLatestStateObject(interaction.Sender(), &state.Object{})
 			},
 			expectedErr: errors.New("failed to validate logic invoke"),
@@ -2120,6 +2518,7 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			sm := NewMockStateManager(t)
 			exec := NewMockExecutionManager(t)
+
 			if testcase.setHook != nil {
 				testcase.setHook(exec)
 			}
@@ -2133,7 +2532,7 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 				testcase.preTestFn(testcase.ix, sm)
 			}
 
-			err := ixPool.validateLogicInvokePayload(testcase.ix)
+			err := ixPool.validateLogicInvokePayload(testcase.ix, 0)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 
@@ -2146,7 +2545,7 @@ func TestIxPool_ValidateLogicInvokePayload(t *testing.T) {
 }
 
 type (
-	accounts      map[identifiers.Address]common.Interactions
+	accounts      map[identifiers.Address][]*common.Interaction
 	delayCounters map[identifiers.Address]int32
 )
 
@@ -2162,11 +2561,11 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 	}{
 		{
 			name: "One ix per account",
-			accounts: map[identifiers.Address]common.Interactions{
-				addresses[0]: createTestIxs(t, common.IxValueTransfer, 0, 1, addresses[0]),
-				addresses[1]: createTestIxs(t, common.IxValueTransfer, 0, 1, addresses[1]),
-				addresses[2]: createTestIxs(t, common.IxValueTransfer, 0, 1, addresses[2]),
-				addresses[3]: createTestIxs(t, common.IxValueTransfer, 0, 1, addresses[3]),
+			accounts: map[identifiers.Address][]*common.Interaction{
+				addresses[0]: createTestIxs(t, 0, 1, addresses[0]),
+				addresses[1]: createTestIxs(t, 0, 1, addresses[1]),
+				addresses[2]: createTestIxs(t, 0, 1, addresses[2]),
+				addresses[3]: createTestIxs(t, 0, 1, addresses[3]),
 			},
 			delayCounters: map[identifiers.Address]int32{
 				addresses[0]: 3,
@@ -2189,11 +2588,11 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 		},
 		{
 			name: "Several ixs from multiple accounts",
-			accounts: map[identifiers.Address]common.Interactions{
-				addresses[0]: createTestIxs(t, common.IxValueTransfer, 0, 2, addresses[0]),
-				addresses[1]: createTestIxs(t, common.IxValueTransfer, 0, 2, addresses[1]),
-				addresses[2]: createTestIxs(t, common.IxValueTransfer, 0, 2, addresses[2]),
-				addresses[3]: createTestIxs(t, common.IxValueTransfer, 0, 2, addresses[3]),
+			accounts: map[identifiers.Address][]*common.Interaction{
+				addresses[0]: createTestIxs(t, 0, 2, addresses[0]),
+				addresses[1]: createTestIxs(t, 0, 2, addresses[1]),
+				addresses[2]: createTestIxs(t, 0, 2, addresses[2]),
+				addresses[3]: createTestIxs(t, 0, 2, addresses[3]),
 			},
 			delayCounters: map[identifiers.Address]int32{
 				addresses[0]: 3,
@@ -2234,7 +2633,7 @@ func TestIxPool_Executables_Wait_Mode(t *testing.T) {
 			defer ixPool.Close()
 
 			for _, ixs := range testcase.accounts {
-				errs := ixPool.AddLocalInteractions(ixs)
+				errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, ixs...))
 				require.Len(t, errs, 0)
 			}
 
@@ -2358,18 +2757,18 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		accounts        map[identifiers.Address]common.Interactions
+		accounts        map[identifiers.Address][]*common.Interaction
 		accountWaitTime map[identifiers.Address]time.Time
 		updateWaitTime  func(ixPool *IxPool, accountWaitTime map[identifiers.Address]time.Time)
 		expectedNonce   map[identifiers.Address]uint64
 	}{
 		{
 			name: "One ix per account",
-			accounts: map[identifiers.Address]common.Interactions{
-				addresses[0]: createTestIxs(t, common.IxValueTransfer, 7, 8, addresses[0]),
-				addresses[1]: createTestIxs(t, common.IxValueTransfer, 8, 9, addresses[1]),
-				addresses[2]: createTestIxs(t, common.IxValueTransfer, 5, 6, addresses[2]),
-				addresses[3]: createTestIxs(t, common.IxValueTransfer, 6, 7, addresses[3]),
+			accounts: map[identifiers.Address][]*common.Interaction{
+				addresses[0]: createTestIxs(t, 7, 8, addresses[0]),
+				addresses[1]: createTestIxs(t, 8, 9, addresses[1]),
+				addresses[2]: createTestIxs(t, 5, 6, addresses[2]),
+				addresses[3]: createTestIxs(t, 6, 7, addresses[3]),
 			},
 			accountWaitTime: map[identifiers.Address]time.Time{
 				addresses[0]: time.Now().Add(1000 * time.Millisecond),
@@ -2391,11 +2790,11 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 		},
 		{
 			name: "Several ixs from multiple accounts",
-			accounts: map[identifiers.Address]common.Interactions{
-				addresses[0]: createTestIxs(t, common.IxValueTransfer, 4, 6, addresses[0]),
-				addresses[1]: createTestIxs(t, common.IxValueTransfer, 5, 7, addresses[1]),
-				addresses[2]: createTestIxs(t, common.IxValueTransfer, 6, 8, addresses[2]),
-				addresses[3]: createTestIxs(t, common.IxValueTransfer, 7, 9, addresses[3]),
+			accounts: map[identifiers.Address][]*common.Interaction{
+				addresses[0]: createTestIxs(t, 4, 6, addresses[0]),
+				addresses[1]: createTestIxs(t, 5, 7, addresses[1]),
+				addresses[2]: createTestIxs(t, 6, 8, addresses[2]),
+				addresses[3]: createTestIxs(t, 7, 9, addresses[3]),
 			},
 			accountWaitTime: map[identifiers.Address]time.Time{
 				addresses[0]: time.Now().Add(-200),
@@ -2431,7 +2830,7 @@ func TestIxPool_Executables_Wait_Time(t *testing.T) {
 			defer ixPool.Close()
 
 			for _, ixs := range testcase.accounts {
-				errs := ixPool.AddLocalInteractions(ixs)
+				errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, ixs...))
 				require.Len(t, errs, 0)
 			}
 
@@ -2462,14 +2861,14 @@ func TestIxPool_RemoveNonceHoleAccounts(t *testing.T) {
 
 	testcases := []struct {
 		name                string
-		ixs                 common.Interactions
+		ixs                 []*common.Interaction
 		ixPoolCallback      func(i *IxPool)
 		expectedEnqueuedIxs uint64
 		expectedPromotedIxs uint64
 	}{
 		{
 			name: "accounts without nonce holes",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 0, 5, addr[0]),
+			ixs:  createTestIxs(t, 0, 5, addr[0]),
 			ixPoolCallback: func(i *IxPool) {
 				i.accounts.initOnce(addr[0], 0)
 			},
@@ -2478,7 +2877,7 @@ func TestIxPool_RemoveNonceHoleAccounts(t *testing.T) {
 		},
 		{
 			name: "accounts with nonce holes",
-			ixs:  createTestIxs(t, common.IxValueTransfer, 2, 8, addr[1]),
+			ixs:  createTestIxs(t, 2, 8, addr[1]),
 			ixPoolCallback: func(i *IxPool) {
 				i.accounts.initOnce(addr[1], 0)
 			},
@@ -2504,7 +2903,7 @@ func TestIxPool_RemoveNonceHoleAccounts(t *testing.T) {
 			// make sure gauge is zero initially
 			require.Equal(t, uint64(0), ixPool.gauge.read())
 
-			errs := ixPool.AddLocalInteractions(test.ixs)
+			errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(true, test.ixs...))
 			require.Len(t, errs, 0)
 
 			// make sure gauge is increased after ixns enqueued
@@ -2531,7 +2930,7 @@ func TestIxPool_RemoveNonceHoleAccounts_WithEmptyEnqueues(t *testing.T) {
 
 	testcases := []struct {
 		name           string
-		ixs            common.Interactions
+		ixs            []*common.Interaction
 		ixPoolCallback func(i *IxPool)
 	}{
 		{
@@ -2565,6 +2964,235 @@ func TestIxPool_RemoveNonceHoleAccounts_WithEmptyEnqueues(t *testing.T) {
 			require.Equal(t, uint64(0), ixPool.gauge.read())
 			require.Equal(t, uint64(0), ixPool.accounts.get(addr[0]).getNonce())
 			require.Equal(t, uint64(0), ixPool.accounts.get(addr[0]).enqueued.length())
+		})
+	}
+}
+
+func TestIxPool_GetIxParticipants(t *testing.T) {
+	testcases := []struct {
+		name                 string
+		ix                   *common.Interaction
+		expectedParticipants map[identifiers.Address]struct{}
+	}{
+		{
+			name: "ix participants with beneficiary",
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+				0, tests.RandomAddress(t), nil,
+			),
+		},
+		{
+			name: "ix participants with beneficiary and payer",
+			ix: newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+				0, tests.RandomAddress(t), func(ixData *common.IxData) {
+					ixData.Payer = tests.RandomAddress(t)
+					ixData.Participants = append(ixData.Participants, common.IxParticipant{
+						Address:  ixData.Payer,
+						LockType: common.MutateLock,
+					})
+				}),
+		},
+		{
+			name: "ix participants without beneficiary and payer",
+			ix: newTestInteraction(
+				t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
+				0, tests.RandomAddress(t), nil,
+			),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			participants := getIxParticipants(test.ix)
+
+			require.Equal(t, len(test.ix.IxParticipants()), len(participants))
+
+			for _, participant := range test.ix.IxParticipants() {
+				require.NotNil(t, participants[participant.Address])
+			}
+		})
+	}
+}
+
+func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
+	sm := NewMockStateManager(t)
+	addrs := make([]identifiers.Address, 2)
+	addr, err := identifiers.NewAddressFromHex("0x0000000000000000000000000516a2efe9cd53c3d54e1f9a6e60e9077e9f9384")
+	require.NoError(t, err)
+
+	addrs[0] = addr
+
+	addr, err = identifiers.NewAddressFromHex("0x0000000000000000000000000516a2efe9cd53c3d54e1f9a6e60e9077e9f9385")
+	require.NoError(t, err)
+
+	addrs[1] = addr
+
+	sm.SetAccountMetaInfo(addrs[0], &common.AccountMetaInfo{
+		PositionInContextSet: 0,
+	})
+
+	testcases := []struct {
+		name              string
+		currentView       uint64
+		getIxns           func() (input []*common.Interaction, expected []*common.Interaction)
+		expectedBatchList []CreateBatches
+	}{
+		{
+			name:        "get processable batches",
+			currentView: 4,
+			getIxns: func() (input []*common.Interaction, expected []*common.Interaction) {
+				ixns := createTestAssetTransferIxs(t, 0, 4, addrs[0], sm)
+
+				for _, ixn := range ixns {
+					ixn.SetShouldPropose(true)
+					ixn.UpdateAllottedView(4)
+				}
+
+				return ixns, ixns[:3]
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 3,
+						psCount:  4,
+					},
+				},
+			},
+		},
+		{
+			name:        "get processable batches from ixns where current view of an ixn is expired",
+			currentView: TotalContextNodes,
+			getIxns: func() (input []*common.Interaction, expected []*common.Interaction) {
+				ixns := createTestAssetTransferIxs(t, 0, 3, addrs[0], sm)
+
+				for _, ixn := range ixns {
+					ixn.SetShouldPropose(true)
+					ixn.UpdateAllottedView(4)
+				}
+
+				ixns[1].UpdateAllottedView(0)
+
+				return ixns, ixns
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 3,
+						psCount:  4,
+					},
+				},
+			},
+		},
+		{
+			name:        "get processable batches from ixns in an optimal way",
+			currentView: 4,
+			getIxns: func() (input []*common.Interaction, expected []*common.Interaction) {
+				ixns1 := createTestAssetTransferIxs(t, 0, 1, addrs[0], sm)
+
+				ixns1[0].SetShouldPropose(true)
+				ixns1[0].UpdateAllottedView(4)
+
+				ixns2 := createTestAssetTransferIxs(t, 0, 1, addrs[1], sm)
+
+				ixns2[0].SetShouldPropose(true)
+				ixns2[0].UpdateAllottedView(4)
+
+				return append(ixns1, ixns2...), append(ixns1, ixns2...)
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 2,
+						psCount:  4,
+					},
+				},
+			},
+		},
+		{
+			name:        "get processable batches without nonce holes (one of the ixn cannot be proposed)",
+			currentView: 4,
+			getIxns: func() (input []*common.Interaction, expected []*common.Interaction) {
+				ixns := createTestAssetTransferIxs(t, 0, 3, addrs[0], sm)
+
+				for _, ixn := range ixns {
+					ixn.SetShouldPropose(true)
+					ixn.UpdateAllottedView(4)
+				}
+
+				ixns[1].SetShouldPropose(false)
+
+				return ixns, ixns[:1]
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 1,
+						psCount:  2,
+					},
+				},
+			},
+		},
+		{
+			name:        "get processable batches without nonce holes (ixn allotted view > current view)",
+			currentView: 4,
+			getIxns: func() (input []*common.Interaction, expected []*common.Interaction) {
+				ixns := createTestAssetTransferIxs(t, 0, 3, addrs[0], sm)
+
+				for _, ixn := range ixns {
+					ixn.SetShouldPropose(true)
+					ixn.UpdateAllottedView(4)
+				}
+
+				ixns[1].UpdateAllottedView(5)
+
+				return ixns, ixns[:1]
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 1,
+						psCount:  2,
+					},
+				},
+			},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+				c.Mode = WaitMode
+				c.PriceLimit = defaultIxPriceLimit
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
+			}, true, sm, nil, newMockNetwork(""))
+
+			ixPool.UpdateCurrentView(testcase.currentView)
+			input, expectedIxns := testcase.getIxns()
+
+			insertIxnsInPromotedQueue(ixPool, input)
+
+			batches := ixPool.ProcessableBatches()
+
+			index := 0
+
+			for _, expectedBatches := range testcase.expectedBatchList {
+				for i := 0; i < expectedBatches.batchCount; i++ {
+					require.Equal(t, expectedBatches.batch.psCount, batches[i].PsCount())
+					require.Equal(t, expectedBatches.batch.ixnCount, batches[i].IxCount())
+
+					for _, ix := range batches[i].IxList() {
+						require.Equal(t, expectedIxns[index], ix)
+
+						index++
+					}
+				}
+			}
 		})
 	}
 }

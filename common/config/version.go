@@ -17,9 +17,10 @@ var ProtocolVersion = func() string {
 }()
 
 var (
-	ICSProtocolDirectStream = protocol.ID("moi/ics/direct/stream/" + ProtocolVersion)
-	ICSProtocolMeshStream   = protocol.ID("moi/ics/mesh/stream/" + ProtocolVersion)
-	ICSProtocolRPC          = protocol.ID("moi/ics/rpc/" + ProtocolVersion)
+	ICSProtocolDirectStream    = protocol.ID("moi/ics/direct/stream/" + ProtocolVersion)
+	ICSProtocolTransientStream = protocol.ID("moi/ics/transient/stream/" + ProtocolVersion)
+	ICSProtocolMeshStream      = protocol.ID("moi/ics/mesh/stream/" + ProtocolVersion)
+	ICSProtocolRPC             = protocol.ID("moi/ics/rpc/" + ProtocolVersion)
 )
 
 var (

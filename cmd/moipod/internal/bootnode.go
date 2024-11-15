@@ -84,7 +84,7 @@ func runBootNodeCommand(cmd *cobra.Command, args []string) {
 func startBootNode() {
 	privateKey, err := getPrivateKey(keyFile)
 	if err != nil {
-		log.Panic("Failed to get private keys : ", err)
+		log.Panic("failed to get private keys : ", err)
 	}
 
 	sourceMultiAddr4, err := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ipv4Address, portNumber))
@@ -190,14 +190,14 @@ func startBootNode() {
 
 		peerinfo, err := peer.AddrInfoFromP2pAddr(maddr)
 		if err != nil {
-			log.Printf("Failed to parse peer address: %s", err)
+			log.Printf("failed to parse peer address: %s", err)
 
 			continue
 		}
 
 		err = p2pHost.Connect(context.Background(), *peerinfo)
 		if err != nil {
-			log.Printf("Failed to connect to peer %s: %s", peerinfo.ID, err)
+			log.Printf("failed to connect to peer %s: %s", peerinfo.ID, err)
 		}
 
 		peerInfoList = append(peerInfoList, *peerinfo)
@@ -289,7 +289,7 @@ func maintainConnections(ctx context.Context, host host.Host, peers []peer.AddrI
 
 					err := host.Connect(ctx, p)
 					if err != nil {
-						fmt.Printf("Failed to connect to peer %s: %s\n", p.ID.String(), err)
+						fmt.Printf("failed to connect to peer %s: %s\n", p.ID.String(), err)
 					}
 				}
 			}

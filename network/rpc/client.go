@@ -706,6 +706,7 @@ func (c *Client) send(call *Call, ttl time.Duration) (network.Stream, error) {
 		if !ok {
 			c.logger.Error("network.Stream type assertion failed")
 		}
+
 		stream = s
 	}
 

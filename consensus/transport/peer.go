@@ -3,7 +3,6 @@ package transport
 import (
 	"bufio"
 	"context"
-	"fmt"
 
 	"github.com/hashicorp/go-hclog"
 	p2pnet "github.com/libp2p/go-libp2p/core/network"
@@ -12,7 +11,6 @@ import (
 	id "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
-	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
 // clusterRegistry represents a registry of cluster IDs.
@@ -95,6 +93,10 @@ func (p *icsPeer) decodePeerMessage() (*types.ICSMSG, error) {
 		return nil, err
 	}
 
+	if p.kramaID == "" {
+		p.kramaID = msg.Sender
+	}
+
 	msg.ReceivedFrom = p.kramaID
 
 	return msg, nil
@@ -107,25 +109,4 @@ func shipMessage(rw *bufio.ReadWriter, data []byte) error {
 	}
 
 	return rw.Writer.Flush()
-}
-
-func GenerateWireMessage(
-	sender id.KramaID,
-	clusterID common.ClusterID,
-	msgType networkmsg.MsgType,
-	payload networkmsg.Payload,
-) ([]byte, error) {
-	rawPayload, err := payload.Bytes()
-	if err != nil {
-		return nil, fmt.Errorf("polorize message payload %w", err)
-	}
-
-	icsMsg := types.NewICSMsg(sender, clusterID, msgType, rawPayload)
-
-	rawData, err := icsMsg.Bytes()
-	if err != nil {
-		return nil, err
-	}
-
-	return rawData, nil
 }

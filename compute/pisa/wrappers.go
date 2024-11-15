@@ -9,26 +9,26 @@ import (
 	"github.com/sarvalabs/go-polo"
 )
 
-type Ixn struct {
-	driver   engineio.InteractionDriver
+type Txn struct {
+	driver   engineio.IxDriver
 	calldata polo.Document
 }
 
-func newIxn(driver engineio.InteractionDriver) Ixn {
+func newTxn(driver engineio.IxDriver) Txn {
 	calldata := make(polo.Document)
 	_ = polo.Depolorize(&calldata, driver.Calldata())
 
-	return Ixn{driver: driver, calldata: calldata}
+	return Txn{driver: driver, calldata: calldata}
 }
 
-func (ixn Ixn) Kind() string   { return ixn.driver.Type().String() }
-func (ixn Ixn) Hash() [32]byte { return ixn.driver.Hash() }
+func (txn Txn) Kind() string   { return txn.driver.Type().String() }
+func (txn Txn) Hash() [32]byte { return txn.driver.Hash() }
 
-func (ixn Ixn) FuelPrice() *big.Int { return ixn.driver.FuelPrice() }
-func (ixn Ixn) FuelLimit() uint64   { return ixn.driver.FuelLimit() }
+func (txn Txn) FuelPrice() *big.Int { return txn.driver.FuelPrice() }
+func (txn Txn) FuelLimit() uint64   { return txn.driver.FuelLimit() }
 
-func (ixn Ixn) Callsite() string        { return ixn.driver.Callsite() }
-func (ixn Ixn) Calldata() polo.Document { return ixn.calldata }
+func (txn Txn) Callsite() string        { return txn.driver.Callsite() }
+func (txn Txn) Calldata() polo.Document { return txn.calldata }
 
 type Env struct {
 	driver engineio.EnvironmentDriver

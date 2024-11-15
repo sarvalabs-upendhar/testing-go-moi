@@ -261,6 +261,7 @@ func TestTxHandlerSaltedCacheManual(t *testing.T) {
 		exist = cache.check(ds2[i][:])
 		require.True(t, exist)
 	}
+
 	require.Equal(t, 2*size, cache.Len())
 
 	// ensure the old data still in

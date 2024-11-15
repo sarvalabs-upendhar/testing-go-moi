@@ -800,11 +800,14 @@ func TestErrorResponse(t *testing.T) {
 
 	t.Run("remote", func(t *testing.T) {
 		var r int
+
 		c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
+
 		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err == nil || err.Error() != "an error" {
 			t.Error("expected different error")
 		}
+
 		if r != 42 {
 			t.Error("response should be set even on error")
 		}
@@ -812,11 +815,14 @@ func TestErrorResponse(t *testing.T) {
 
 	t.Run("local", func(t *testing.T) {
 		var r int
+
 		c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
+
 		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err == nil || err.Error() != "an error" {
 			t.Error("expected different error")
 		}
+
 		if r != 42 {
 			t.Error("response should be set even on error")
 		}
@@ -838,7 +844,9 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("local non rpc error", func(t *testing.T) {
 		var r int
+
 		c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
+
 		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err != nil {
 			if IsRPCError(err) {
@@ -850,7 +858,9 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("local rpc error", func(t *testing.T) {
 		var r int
+
 		c := NewClientWithServer(testLogger, cm[0], "rpc", nil, s)
+
 		err := c.Call(cm[0].host.ID(), "Arith", "ThisIsNotAMethod", &Args{1, 2}, &r)
 		if err != nil {
 			if !IsRPCError(err) {
@@ -862,7 +872,9 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("remote non rpc error", func(t *testing.T) {
 		var r int
+
 		c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
+
 		err := c.Call(cm[0].host.ID(), "Arith", "GimmeError", &Args{1, 2}, &r)
 		if err != nil {
 			if IsRPCError(err) {
@@ -874,7 +886,9 @@ func TestNonRPCError(t *testing.T) {
 
 	t.Run("remote rpc error", func(t *testing.T) {
 		var r int
+
 		c := NewClientWithServer(testLogger, cm[1], "rpc", nil, s)
+
 		err := c.Call(cm[0].host.ID(), "Arith", "ThisIsNotAMethod", &Args{1, 2}, &r)
 		if err != nil {
 			if !IsRPCError(err) {
@@ -938,8 +952,8 @@ func TestCallContext(t *testing.T) {
 
 		var arith Arith
 		arith.ctxTracker = &ctxTracker{}
-		err := s.Register(&arith)
-		if err != nil {
+
+		if err := s.Register(&arith); err != nil {
 			t.Error("failed to Register")
 		}
 
@@ -947,7 +961,8 @@ func TestCallContext(t *testing.T) {
 		defer cancel()
 
 		done := make(chan *Call, 1)
-		err = c.GoContext(ctx, cm[0].host.ID(), "Arith", "Sleep", 5, &struct{}{}, done)
+
+		err := c.GoContext(ctx, cm[0].host.ID(), "Arith", "Sleep", 5, &struct{}{}, done)
 		if err != nil {
 			t.Fatal(err)
 		}

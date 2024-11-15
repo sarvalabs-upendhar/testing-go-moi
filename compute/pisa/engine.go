@@ -119,42 +119,42 @@ func (engine Engine) DecodeErrorResult(data []byte) (engineio.ErrorResult, error
 // * If the calldata is invalid for the callsite.
 //
 // Implements the engineio.Engine interface for pisa.Engine.
-func (engine Engine) ValidateCalldata(logic engineio.LogicDriver, ixn engineio.InteractionDriver) error {
+func (engine Engine) ValidateCalldata(logic engineio.LogicDriver, txn engineio.IxDriver) error {
 	// Check logic driver engine
 	if logic.Engine() != engineio.PISA {
 		return errors.New("incompatible logic driver: not a PISA logic")
 	}
 
 	// Get the callsite information from the logic and verify that it exists
-	callsite, ok := logic.GetCallsite(ixn.Callsite())
+	callsite, ok := logic.GetCallsite(txn.Callsite())
 	if !ok {
-		return errors.Errorf("invalid callsite '%v': does not exist", ixn.Callsite())
+		return errors.Errorf("invalid callsite '%v': does not exist", txn.Callsite())
 	}
 
 	// Check that the callsite kind and ixn type of the IxnObject are compatible
 	switch callsite.Kind {
 	case engineio.CallsiteInvoke:
-		if ixn.Type() != common.IxLogicInvoke {
-			return errors.Errorf("invalid callsite '%v' for IxnLogicInvoke", ixn.Callsite())
+		if txn.Type() != common.IxLogicInvoke {
+			return errors.Errorf("invalid callsite '%v' for IxnLogicInvoke", txn.Callsite())
 		}
 
 	case engineio.CallsiteDeploy:
-		if ixn.Type() != common.IxLogicDeploy {
-			return errors.Errorf("invalid callsite '%v' for IxnLogicDeploy", ixn.Callsite())
+		if txn.Type() != common.IxLogicDeploy {
+			return errors.Errorf("invalid callsite '%v' for IxnLogicDeploy", txn.Callsite())
 		}
 
 	case engineio.CallsiteEnlist:
-		if ixn.Type() != common.IxLogicEnlist {
-			return errors.Errorf("invalid callsite '%v' for IxnLogicEnlist", ixn.Callsite())
+		if txn.Type() != common.IxLogicEnlist {
+			return errors.Errorf("invalid callsite '%v' for IxnLogicEnlist", txn.Callsite())
 		}
 
 	default:
-		return errors.Errorf("unsupported callsite kind '%v' for callsite '%v'", callsite.Kind, ixn.Callsite())
+		return errors.Errorf("unsupported callsite kind '%v' for callsite '%v'", callsite.Kind, txn.Callsite())
 	}
 
 	element, ok := logic.GetElement(callsite.Ptr)
 	if !ok {
-		return errors.Errorf("could not fetch element for callsite '%v'", ixn.Callsite())
+		return errors.Errorf("could not fetch element for callsite '%v'", txn.Callsite())
 	}
 
 	routine := new(pisa.Routine)
@@ -164,15 +164,15 @@ func (engine Engine) ValidateCalldata(logic engineio.LogicDriver, ixn engineio.I
 
 	calldata := make(polo.Document)
 	// Decode the payload calldata into a polo.Document
-	if ixn.Calldata() != nil {
-		if err := polo.Depolorize(&calldata, ixn.Calldata()); err != nil {
+	if txn.Calldata() != nil {
+		if err := polo.Depolorize(&calldata, txn.Calldata()); err != nil {
 			return errors.Wrap(err, "could not decode calldata into polo document")
 		}
 	}
 
 	// Convert the input Calldata into a RegisterSet confirming
 	if _, err := values.NewRegisterSet(routine.Inputs, calldata); err != nil {
-		return errors.Errorf("invalid calldata for callsite '%v': %v", ixn.Callsite(), err)
+		return errors.Errorf("invalid calldata for callsite '%v': %v", txn.Callsite(), err)
 	}
 
 	return nil

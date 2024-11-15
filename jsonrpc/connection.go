@@ -33,7 +33,7 @@ func (cm *ConnectionManager) WriteMessage(messageType int, data []byte) error {
 	writeErr := cm.connection.WriteMessage(messageType, data)
 
 	if writeErr != nil {
-		fmt.Printf("Failed to write websocket message, %s", writeErr.Error())
+		fmt.Printf("failed to write websocket message, %s", writeErr.Error())
 	}
 
 	return writeErr

@@ -119,7 +119,7 @@ func (eh *SubHandler) msgHandler() {
 		case msg := <-eh.server.MsgChan():
 			if err := eh.handleMsg(msg); err != nil {
 				eh.logger.Debug(
-					"Failed to handle peer msg",
+					"failed to handle peer msg",
 					"error", common.ErrPeerNotAvailable,
 					"krama-id", msg.Sender,
 				)
@@ -135,7 +135,7 @@ func (eh *SubHandler) handleMsg(msg *networkmsg.Message) error {
 	case networkmsg.NEWIXSMSG:
 		peerID, err := msg.Sender.DecodedPeerID()
 		if err != nil {
-			eh.logger.Error("Failed to decode peerID")
+			eh.logger.Error("failed to decode peerID")
 		}
 
 		p := eh.peers.Peer(peerID)
@@ -152,7 +152,7 @@ func (eh *SubHandler) handleMsg(msg *networkmsg.Message) error {
 		}
 
 		// Mark the interactions in the message as 'known' by the peer
-		for _, v := range *ixns {
+		for _, v := range ixns.IxList() {
 			eh.logger.Info("Received interactions from", "krama-id", p.kramaID, "ix-hash", v.Hash())
 
 			p.markInteraction(v.Hash())
@@ -168,7 +168,7 @@ func (eh *SubHandler) handleMsg(msg *networkmsg.Message) error {
 
 				ixnss := *ixns
 
-				eh.logger.Error("Unable to add interaction", "ix-hash", ixnss[index].Hash(), "err", err)
+				eh.logger.Error("Unable to add interaction", "ix-hash", ixnss.IxList()[index].Hash(), "err", err)
 
 				return nil
 			}
@@ -190,7 +190,7 @@ func (eh *SubHandler) ixBroadcastLoop() {
 		// Assert event as a AddedInteractionEvent
 		if event, ok := obj.Data.(utils.AddedInteractionEvent); ok {
 			if err := eh.broadcastIXs(event.Ixs); err != nil {
-				eh.logger.Error("Failed to broadcast interactions", "err", err)
+				eh.logger.Error("failed to broadcast interactions", "err", err)
 			}
 		}
 	}
@@ -216,7 +216,7 @@ func (eh *SubHandler) broadcastIXs(ixs []*common.Interaction) error {
 	// Emit the Interaction
 	for peer, ixs := range peerIxSet {
 		go func(peer *Peer, ixs []*common.Interaction) {
-			if err := peer.SendIXs(eh.id, ixs); err != nil {
+			if err := peer.SendIXs(eh.id, common.NewInteractionsWithLeaderCheck(false, ixs...)); err != nil {
 				eh.logger.Error("Error sending interaction", "err", err)
 			}
 		}(peer, ixs)
@@ -264,7 +264,7 @@ func (eh *SubHandler) signalNewMessages() {
 func (eh *SubHandler) verifyHelloMsg(msg *networkmsg.HelloMsg) error {
 	rawData, err := msg.Canonical()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to fetch hello message bytes")
+		return errors.Wrapf(err, "failed to fetch hello message bytes")
 	}
 
 	if err := crypto.VerifySignatureUsingKramaID(msg.KramaID, rawData, msg.Signature); err != nil {
@@ -285,7 +285,7 @@ func (eh *SubHandler) handleMessages(msgs []*networkmsg.HelloMsg) {
 		}
 
 		if err := eh.verifyHelloMsg(msg); err != nil {
-			eh.logger.Error("Failed to verify hello message", "err", err)
+			eh.logger.Error("failed to verify hello message", "err", err)
 
 			continue
 		}

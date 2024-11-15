@@ -1,15 +1,7 @@
 package consensus
 
-import (
-	"errors"
-	"time"
-
-	"github.com/sarvalabs/go-moi/common"
-	ktypes "github.com/sarvalabs/go-moi/consensus/types"
-)
-
 func (k *Engine) minter() {
-	for {
+	/*	for {
 		interactionQueue := k.pool.Executables()
 
 		for interactionQueue.Len() > 0 && k.slots.AvailableOperatorSlots() > 0 {
@@ -70,5 +62,5 @@ func (k *Engine) minter() {
 			return
 		case <-time.After(1000 * time.Millisecond):
 		}
-	}
+	}*/
 }

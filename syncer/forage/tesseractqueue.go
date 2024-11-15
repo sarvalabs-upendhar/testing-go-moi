@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/consensus/types"
 
 	"github.com/sarvalabs/go-moi/common"
 )
@@ -13,8 +14,7 @@ type TesseractInfo struct {
 	addr          identifiers.Address
 	tesseract     *common.Tesseract
 	shouldExecute bool
-	clusterInfo   *common.ICSClusterInfo
-	icsNodeSet    *common.ICSNodeSet
+	committee     *types.ICSCommittee
 	ixnsHashes    common.Hashes
 	delta         map[string][]byte
 }
@@ -24,8 +24,7 @@ func (ti *TesseractInfo) CreateTSInfoWithAddr(addr identifiers.Address) *Tessera
 		addr:          addr,
 		tesseract:     ti.tesseract,
 		shouldExecute: ti.shouldExecute,
-		clusterInfo:   ti.clusterInfo,
-		icsNodeSet:    ti.icsNodeSet,
+		committee:     ti.committee,
 		ixnsHashes:    ti.ixnsHashes,
 		delta:         ti.delta,
 	}
@@ -48,16 +47,16 @@ func (ti *TesseractInfo) extractICSNodeset(s *Syncer) bool {
 		}
 
 		if _, ok := ti.delta[contextHash.String()]; !ok {
-			ti.icsNodeSet, err = s.state.FetchICSNodeSet(ti.tesseract, ti.clusterInfo)
+			ti.committee, err = s.consensus.GetICSCommittee(ti.tesseract, ti.tesseract.CommitInfo())
 			if err != nil {
-				s.logger.Error("Failed to fetch node set", "err", err)
+				s.logger.Error("failed to fetch node set", "err", err)
 
 				return false
 			}
 		} else {
-			ti.icsNodeSet, err = s.state.GetICSNodeSetFromRawContext(ti.tesseract, ti.delta, ti.clusterInfo)
+			ti.committee, err = s.consensus.GetICSCommitteeFromRawContext(ti.tesseract, ti.delta, ti.tesseract.CommitInfo())
 			if err != nil {
-				s.logger.Error("Failed to fetch node set", "err", err)
+				s.logger.Error("failed to fetch node set", "err", err)
 
 				return false
 			}

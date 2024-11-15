@@ -34,6 +34,7 @@ func (b *BatchWriter) Flush() error {
 func (b *BatchWriter) WriteBuffer(buf []byte) error {
 	err := z.NewBufferSlice(buf).SliceIterate(func(slice []byte) error {
 		kv := new(pb.KV)
+
 		err := kv.Unmarshal(slice)
 		if err != nil {
 			return err

@@ -381,7 +381,7 @@ func CreateTestAssets(t *testing.T, count int) ([]identifiers.AssetID, []*common
 	return assetIDs, assetDescriptors
 }
 
-func GetRandomNumbers(t *testing.T, max int, count int) []*big.Int {
+func GetRandomNumbers(t *testing.T, ceil int, count int) []*big.Int {
 	t.Helper()
 
 	var err error
@@ -389,7 +389,7 @@ func GetRandomNumbers(t *testing.T, max int, count int) []*big.Int {
 	numbers := make([]*big.Int, count)
 
 	for i := 0; i < count; i++ {
-		numbers[i], err = rand.Int(rand.Reader, big.NewInt(int64(max)))
+		numbers[i], err = rand.Int(rand.Reader, big.NewInt(int64(ceil)))
 		require.NoError(t, err)
 	}
 
@@ -452,12 +452,14 @@ func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 	t.Helper()
 
 	return &common.AccountMetaInfo{
-		Address:       RandomAddress(t),
-		Type:          common.AccountType(1),
-		Height:        height,
-		TesseractHash: RandomHash(t),
-		StateHash:     RandomHash(t),
-		ContextHash:   RandomHash(t),
+		Address:              RandomAddress(t),
+		Type:                 common.AccountType(1),
+		Height:               height,
+		TesseractHash:        RandomHash(t),
+		StateHash:            RandomHash(t),
+		ContextHash:          RandomHash(t),
+		CommitHash:           RandomHash(t),
+		PositionInContextSet: 3,
 	}
 }
 
@@ -505,9 +507,9 @@ type CreateTesseractParams struct {
 	TSDataCallback       func(ts *TesseractData)
 	ParticipantsCallback func(participants common.ParticipantsState)
 
-	Ixns     common.Interactions
-	Receipts common.Receipts
-	Seed     [32]byte
+	Ixns       common.Interactions
+	Receipts   common.Receipts
+	CommitInfo *common.CommitInfo
 }
 
 type TesseractData struct {
@@ -519,6 +521,7 @@ type TesseractData struct {
 	FuelUsed         uint64
 	FuelLimit        uint64
 	ConsensusInfo    common.PoXtData
+	CommitInfo       *common.CommitInfo
 
 	// non canonical fields
 	Seal   []byte
@@ -534,7 +537,9 @@ func DefaultTesseractData() *TesseractData {
 		Operator:         "",
 		FuelUsed:         100,
 		FuelLimit:        100,
-		ConsensusInfo:    common.PoXtData{},
+		ConsensusInfo: common.PoXtData{
+			View: 1,
+		},
 
 		// non canonical fields
 		Seal:   nil,
@@ -578,7 +583,7 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 		}
 	}
 
-	if params.Ixns != nil {
+	if len(params.Ixns.IxList()) != 0 {
 		hash, err := params.Ixns.Hash()
 		require.NoError(t, err)
 
@@ -599,7 +604,6 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 		tsData.ReceiptsHash,
 		tsData.Epoch,
 		tsData.Timestamp,
-		tsData.Operator,
 		tsData.FuelUsed,
 		tsData.FuelLimit,
 		tsData.ConsensusInfo,
@@ -607,6 +611,7 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 		tsData.SealBy,
 		params.Ixns,
 		params.Receipts,
+		params.CommitInfo,
 	)
 }
 
@@ -684,6 +689,108 @@ type CreateIxParams struct {
 	Sign           []byte
 }
 
+func IsPresent(participants []common.IxParticipant, addr identifiers.Address) bool {
+	for _, p := range participants {
+		if p.Address == addr {
+			return true
+		}
+	}
+
+	return false
+}
+
+func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
+	t.Helper()
+
+	var err error
+
+	if !data.Payer.IsNil() {
+		if !IsPresent(data.Participants, data.Payer) {
+			data.Participants = append(data.Participants, common.IxParticipant{
+				Address:  data.Payer,
+				LockType: common.MutateLock,
+			})
+		}
+	}
+
+	if !IsPresent(data.Participants, data.Sender) {
+		data.Participants = append(data.Participants, common.IxParticipant{
+			Address:  data.Sender,
+			LockType: common.MutateLock,
+		})
+	}
+
+	for _, op := range data.IxOps {
+		switch op.Type {
+		case common.IxParticipantCreate:
+			participantCreatePayload := new(common.ParticipantCreatePayload)
+			err = participantCreatePayload.FromBytes(op.Payload)
+			require.NoError(t, err)
+
+			if !IsPresent(data.Participants, participantCreatePayload.Address) {
+				data.Participants = append(data.Participants, common.IxParticipant{
+					Address:  participantCreatePayload.Address,
+					LockType: common.MutateLock,
+				})
+			}
+
+		case common.IxAssetCreate:
+		case common.IxAssetTransfer:
+			assetActionPayload := new(common.AssetActionPayload)
+			err = assetActionPayload.FromBytes(op.Payload)
+			require.NoError(t, err)
+
+			if !IsPresent(data.Participants, assetActionPayload.Beneficiary) {
+				data.Participants = append(data.Participants, common.IxParticipant{
+					Address:  assetActionPayload.Beneficiary,
+					LockType: common.MutateLock,
+				})
+			}
+
+		case common.IxAssetMint, common.IxAssetBurn:
+			assetSupplyPayload := new(common.AssetSupplyPayload)
+			err = assetSupplyPayload.FromBytes(op.Payload)
+			require.NoError(t, err)
+
+			if !IsPresent(data.Participants, assetSupplyPayload.AssetID.Address()) {
+				data.Participants = append(data.Participants, common.IxParticipant{
+					Address:  assetSupplyPayload.AssetID.Address(),
+					LockType: common.MutateLock,
+				})
+			}
+
+		case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
+			logicPayload := new(common.LogicPayload)
+
+			err = logicPayload.FromBytes(op.Payload)
+			require.NoError(t, err)
+
+			if common.IxLogicDeploy != op.Type {
+				if !IsPresent(data.Participants, logicPayload.Logic.Address()) {
+					data.Participants = append(data.Participants, common.IxParticipant{
+						Address:  logicPayload.Logic.Address(),
+						LockType: common.MutateLock,
+					})
+				}
+
+				for _, logic := range logicPayload.Interfaces {
+					if !IsPresent(data.Participants, logic.Address()) {
+						data.Participants = append(data.Participants, common.IxParticipant{
+							Address:  logic.Address(),
+							LockType: common.MutateLock,
+						})
+					}
+				}
+
+				continue
+			}
+
+		default:
+			require.NoError(t, common.ErrInvalidInteractionType)
+		}
+	}
+}
+
 func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 	t.Helper()
 
@@ -695,20 +802,25 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		"0xff919c3bd4523d638b1878a59c62e1c9a0a628127317d63359da30e18ee67593")
 	require.NoError(t, err)
 
-	assetID := identifiers.NewAssetIDv0(false, false, 0, 0, addr)
-
 	data := &common.IxData{
-		Input: common.IxInput{
-			Type: common.IxValueTransfer,
-			TransferValues: map[identifiers.AssetID]*big.Int{
-				assetID: big.NewInt(1),
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetTransfer,
+				Payload: CreateRawAssetActionPayload(t, addr),
 			},
 		},
+		Participants: []common.IxParticipant{},
 	}
 
 	if params.IxDataCallback != nil {
 		params.IxDataCallback(data)
 	}
+
+	if data.Sender == identifiers.NilAddress {
+		data.Sender = RandomAddress(t)
+	}
+
+	AppendParticipantsInIxData(t, data)
 
 	if len(params.Sign) == 0 {
 		params.Sign = []byte{}
@@ -720,14 +832,14 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 	return ix
 }
 
-func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) common.Interactions {
+func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) []*common.Interaction {
 	t.Helper()
 
 	if paramsMap == nil {
 		paramsMap = map[int]*CreateIxParams{}
 	}
 
-	ixns := make(common.Interactions, count)
+	ixns := make([]*common.Interaction, count)
 
 	for i := 0; i < count; i++ {
 		ixns[i] = CreateIX(t, paramsMap[i])
@@ -736,25 +848,45 @@ func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) comm
 	return ixns
 }
 
-func GetIxParamsWithAddress(from identifiers.Address, to identifiers.Address) *CreateIxParams {
+func GetIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifiers.Address) *CreateIxParams {
+	t.Helper()
+
 	return &CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.Input.Sender = from
-			ix.Input.Receiver = to
+			ix.Sender = from
+			ix.IxOps = []common.IxOpRaw{
+				{
+					Type:    common.IxAssetTransfer,
+					Payload: CreateRawAssetActionPayload(t, to),
+				},
+			}
+			ix.Participants = []common.IxParticipant{
+				{
+					Address:  from,
+					LockType: common.MutateLock,
+				},
+				{
+					Address:  to,
+					LockType: common.MutateLock,
+				},
+			}
 		},
 		Sign: nil,
 	}
 }
 
 func GetIxParamsMapWithAddresses(
+	t *testing.T,
 	from []identifiers.Address,
 	to []identifiers.Address,
 ) map[int]*CreateIxParams {
+	t.Helper()
+
 	count := len(from)
 	ixParams := make(map[int]*CreateIxParams, count)
 
 	for i := 0; i < count; i++ {
-		ixParams[i] = GetIxParamsWithAddress(from[i], to[i])
+		ixParams[i] = GetIxParamsWithAddress(t, from[i], to[i])
 	}
 
 	return ixParams
@@ -771,7 +903,7 @@ func GetTesseractParamsMapWithIxnsAndReceipts(t *testing.T, tsCount, ixnCount in
 	ixns := CreateIxns(
 		t,
 		(tsCount-1)*ixnCount,
-		GetIxParamsMapWithAddresses(addresses[:2*(tsCount-1)], addresses[2*(tsCount-1):]),
+		GetIxParamsMapWithAddresses(t, addresses[:2*(tsCount-1)], addresses[2*(tsCount-1):]),
 	)
 
 	// allocate interactions to each tesseract, excluding the first tesseract (which is the genesis tesseract)
@@ -782,10 +914,14 @@ func GetTesseractParamsMapWithIxnsAndReceipts(t *testing.T, tsCount, ixnCount in
 
 		if i > 0 {
 			// allocate two interactions per tesseract
-			tesseractParams[i].Ixns = ixns[(i-1)*ixnCount : (i-1)*ixnCount+ixnCount]
+			tesseractParams[i].Ixns = common.NewInteractionsWithLeaderCheck(false,
+				ixns[(i-1)*ixnCount:(i-1)*ixnCount+ixnCount]...)
 		}
 
 		tesseractParams[i].Receipts = receipts
+		tesseractParams[i].CommitInfo = &common.CommitInfo{
+			Operator: RandomKramaID(t, 0),
+		}
 	}
 
 	return tesseractParams
@@ -805,18 +941,33 @@ func GetTestAccount(t *testing.T, callBack func(acc *common.Account)) (*common.A
 	return acc, accHash
 }
 
-func CheckForTesseract(t *testing.T, expectedTS, actualTS *common.Tesseract, withInteractions bool) {
+func ValidateTesseract(t *testing.T, expectedTS *common.Tesseract, ts *common.Tesseract,
+	withInteractions bool, withCommitInfo bool,
+) {
 	t.Helper()
 
-	if withInteractions {
-		require.Greater(t, len(expectedTS.Interactions()), 0)
-		require.Equal(t, expectedTS, actualTS)
+	require.Equal(t, expectedTS.Participants(), ts.Participants())
+	require.Equal(t, expectedTS.Epoch(), ts.Epoch())
+	require.Equal(t, expectedTS.Timestamp(), ts.Timestamp())
+	require.Equal(t, expectedTS.FuelUsed(), ts.FuelUsed())
+	require.Equal(t, expectedTS.FuelLimit(), ts.FuelLimit())
+	require.Equal(t, expectedTS.ConsensusInfo(), ts.ConsensusInfo())
+	require.Equal(t, expectedTS.Seal(), ts.Seal())
+	require.Equal(t, expectedTS.SealBy(), ts.SealBy())
 
-		return
+	if !withInteractions { // check if tesseracts matches
+		require.Equal(t, 0, ts.Interactions().Len()) // make sure returned tesseract has zero ixns
+		require.Equal(t, 0, len(ts.Receipts()))
+	} else {
+		require.Equal(t, expectedTS.Interactions().IxList(), ts.Interactions().IxList())
+		require.Equal(t, expectedTS.Receipts(), ts.Receipts())
 	}
 
-	require.Equal(t, expectedTS.Canonical(), actualTS.Canonical())
-	require.Nil(t, actualTS.Interactions())
+	if !withCommitInfo {
+		require.Nil(t, ts.CommitInfo())
+	} else {
+		require.Equal(t, expectedTS.CommitInfo(), ts.CommitInfo())
+	}
 }
 
 func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
@@ -851,62 +1002,64 @@ func SignBytes(t *testing.T, msg []byte) (sigBytes, pk []byte) {
 	return sigBytes, pk
 }
 
-func CreateIXInputWithTestData(
-	t *testing.T,
-	ixType common.IxType,
-	payload []byte,
-	perceivedProofs []byte,
-) common.IxInput {
+func CreateIXDataWithTestData(t *testing.T, callback func(ixData *common.IxData)) common.IxData {
 	t.Helper()
 
-	IxInput := common.IxInput{
-		Type:  ixType,
+	ixData := &common.IxData{
 		Nonce: 2,
 
-		Sender:   RandomAddress(t),
-		Receiver: RandomAddress(t),
-		Payer:    RandomAddress(t),
-
-		TransferValues: map[identifiers.AssetID]*big.Int{
-			"0180127603f47e5aff68052402fda5c4364e8e6cff1e107e4e821af00d0eee2edf16": big.NewInt(1033),
-			"0180127603f47e5aff68052402fda5c4364e8e6cff1e107e4e821af00d0eee2edf15": big.NewInt(1093),
-		},
-		PerceivedValues: map[identifiers.AssetID]*big.Int{
-			"0180127603f47e5aff68053102fda5c4364e8e6cff1e107e4e821af00d0eee2edf16": big.NewInt(1233),
-			"0180127603f47e5aff68053102fda5c4364e8e6cff1e107e4e821af00d0eee2ed416": big.NewInt(1333),
-		},
-		PerceivedProofs: perceivedProofs,
+		Sender: RandomAddress(t),
+		Payer:  RandomAddress(t),
 
 		FuelLimit: 1043,
 		FuelPrice: new(big.Int).SetUint64(1),
 
-		Payload: payload,
+		Funds: []common.IxFund{
+			{
+				AssetID: GetRandomAssetID(t, RandomAddress(t)),
+				Amount:  big.NewInt(10),
+			},
+		},
+
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetCreate,
+				Payload: CreateRawAssetCreatePayload(t),
+			},
+		},
+
+		Participants: []common.IxParticipant{
+			{
+				Address:  RandomAddress(t),
+				LockType: common.MutateLock,
+			},
+		},
+
+		Preferences: &common.IxPreferences{
+			Compute: []byte{1, 2, 3},
+			Consensus: &common.IxConsensusPreference{
+				MTQ:        1,
+				TrustNodes: RandomKramaIDs(t, 3),
+			},
+		},
+
+		Perception: []byte{1, 2, 3},
 	}
 
-	return IxInput
-}
+	ixData.Participants = append(ixData.Participants, []common.IxParticipant{
+		{
+			Address: ixData.Sender,
+		},
+		{
+			Address: ixData.Payer,
+		},
+	}...)
 
-func CreateComputeWithTestData(t *testing.T, hash common.Hash, kramaIDs []kramaid.KramaID) common.IxCompute {
-	t.Helper()
-
-	IxCompute := common.IxCompute{
-		Mode:         3,
-		Hash:         hash,
-		ComputeNodes: kramaIDs,
+	if callback != nil {
+		callback(ixData)
 	}
 
-	return IxCompute
-}
-
-func CreateTrustWithTestData(t *testing.T) common.IxTrust {
-	t.Helper()
-
-	IxTrust := common.IxTrust{
-		MTQ:        8,
-		TrustNodes: RandomKramaIDs(t, 2),
-	}
-
-	return IxTrust
+	return *ixData
 }
 
 func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
@@ -921,12 +1074,17 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 	}
 
 	receipt := &common.Receipt{
-		IxType:    2,
-		IxHash:    RandomHash(t),
-		Logs:      []common.Log{log},
-		Status:    common.ReceiptStateReverted,
-		FuelUsed:  99,
-		ExtraData: []byte{1, 2},
+		IxHash:   RandomHash(t),
+		Status:   common.ReceiptStateReverted,
+		FuelUsed: 99,
+		IxOps: []*common.IxOpResult{
+			{
+				IxType: 2,
+				Status: common.ResultStateReverted,
+				Data:   []byte{1, 2},
+				Logs:   []common.Log{log},
+			},
+		},
 	}
 
 	return receipt
@@ -951,24 +1109,31 @@ func CreateStateWithTestData(t *testing.T) common.State {
 	return s
 }
 
-func CreatePoXtWithTestData(t *testing.T) common.PoXtData {
+func CreatePoXtWithTestData(t *testing.T, view uint64) common.PoXtData {
 	t.Helper()
 
 	return common.PoXtData{
-		EvidenceHash: RandomHash(t),
+		// TODO: Improve fields here
 		BinaryHash:   RandomHash(t),
 		IdentityHash: RandomHash(t),
-		ICSHash:      RandomHash(t),
-		ClusterID:    "cluster",
-		ICSSignature: []byte{1, 2, 3},
-		ICSVoteset: &common.ArrayOfBits{
-			Elements: []uint64{4, 6},
+		View:         view,
+		ICSSeed:      RandomHash(t),
+		ICSProof:     RandomHash(t).Bytes(),
+	}
+}
+
+func CreateCommitInfoWithTestData(t *testing.T) common.CommitInfo {
+	t.Helper()
+
+	return common.CommitInfo{
+		QC: &common.Qc{
+			Address: RandomAddress(t),
 		},
-		Round:           5,
-		CommitSignature: []byte{1, 2, 3, 5},
-		BFTVoteSet: &common.ArrayOfBits{
-			Elements: []uint64{4, 8},
-		},
+		Operator:                  RandomKramaID(t, 1),
+		ClusterID:                 "cluster-1",
+		View:                      5,
+		RandomSet:                 RandomKramaIDs(t, 2),
+		RandomSetSizeWithoutDelta: 4,
 	}
 }
 
@@ -1008,10 +1173,10 @@ func GetAccountMnemonicsFromFile(filePath string) ([]AccountWithMnemonic, error)
 	return accounts, nil
 }
 
-func GetIXSignature(t *testing.T, ixArgs *common.SendIXArgs, mnemonic string) []byte {
+func GetIXSignature(t *testing.T, ixData *common.IxData, mnemonic string) []byte {
 	t.Helper()
 
-	rawIX, err := ixArgs.Bytes()
+	rawIX, err := ixData.Bytes()
 	require.NoError(t, err)
 
 	sign, err := crypto.GetSignature(rawIX, mnemonic)
@@ -1093,10 +1258,10 @@ func GetKramaIDAndConsensusKey(t *testing.T, nthValidator uint32) (kramaid.Krama
 	return kramaID, privKeyBytes[:32]
 }
 
-func GetRandomNumber(t *testing.T, max int) int {
+func GetRandomNumber(t *testing.T, ceil int) int {
 	t.Helper()
 
-	nBig, err := rand.Int(rand.Reader, big.NewInt(int64(max)))
+	nBig, err := rand.Int(rand.Reader, big.NewInt(int64(ceil)))
 	require.NoError(t, err)
 
 	return int(nBig.Int64())
@@ -1127,30 +1292,30 @@ func NewTestTreeCache() *fastcache.Cache {
 // CreateTestIxParticipants creates a list of address and a map of IxParticipants with default values
 func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
 	[]identifiers.Address,
-	map[identifiers.Address]common.IxParticipant,
+	map[identifiers.Address]common.ParticipantInfo,
 ) {
 	t.Helper()
 
 	addrs := make([]identifiers.Address, count)
 
-	ps := make(map[identifiers.Address]common.IxParticipant, 0)
+	ps := make(map[identifiers.Address]common.ParticipantInfo, 0)
 
 	for i := 0; i < count; i++ {
 		addrs[i] = RandomAddress(t)
-		ps[addrs[i]] = common.IxParticipant{
+		ps[addrs[i]] = common.ParticipantInfo{
 			AccType:   common.RegularAccount,
 			IsSigner:  true,
-			LockType:  common.WriteLock,
+			LockType:  common.MutateLock,
 			IsGenesis: false,
 		}
 	}
 
 	for i := 0; i < genesisAccCount; i++ {
 		addrs[i] = RandomAddress(t)
-		ps[addrs[i]] = common.IxParticipant{
+		ps[addrs[i]] = common.ParticipantInfo{
 			AccType:   common.RegularAccount,
 			IsSigner:  true,
-			LockType:  common.WriteLock,
+			LockType:  common.MutateLock,
 			IsGenesis: true,
 		}
 	}
@@ -1178,4 +1343,138 @@ func GetHexEntries(t *testing.T, count int) []string {
 	}
 
 	return entries
+}
+
+func CreateTxPayload(t *testing.T, ixType common.IxOpType, beneficiary identifiers.Address) []byte {
+	t.Helper()
+
+	switch ixType {
+	case common.IxParticipantCreate:
+		return CreateRawParticipantCreatePayload(t, beneficiary)
+	case common.IxAssetCreate:
+		return CreateRawAssetCreatePayload(t)
+	case common.IxAssetTransfer:
+		return CreateRawAssetActionPayload(t, beneficiary)
+	case common.IxAssetMint, common.IxAssetBurn:
+		return CreateRawAssetSupplyPayload(t, beneficiary)
+	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
+		return CreateRawLogicPayload(t, RandomAddress(t))
+	default:
+		return []byte{}
+	}
+}
+
+func CreateParticipantCreatePayload(t *testing.T, address identifiers.Address) common.ParticipantCreatePayload {
+	t.Helper()
+
+	if address.IsNil() {
+		address = RandomAddress(t)
+	}
+
+	return common.ParticipantCreatePayload{
+		Address: address,
+		Amount:  big.NewInt(1),
+	}
+}
+
+func CreateAssetCreatePayload(t *testing.T) common.AssetCreatePayload {
+	t.Helper()
+
+	return common.AssetCreatePayload{
+		Symbol:   GetRandomUpperCaseString(t, 5),
+		Supply:   big.NewInt(2000),
+		Standard: common.MAS0,
+	}
+}
+
+func CreateAssetActionPayload(t *testing.T, address identifiers.Address) common.AssetActionPayload {
+	t.Helper()
+
+	if address.IsNil() {
+		address = RandomAddress(t)
+	}
+
+	return common.AssetActionPayload{
+		Beneficiary: address,
+		AssetID:     common.KMOITokenAssetID,
+		Amount:      big.NewInt(1),
+	}
+}
+
+func CreateAssetSupplyPayload(t *testing.T, address identifiers.Address) common.AssetSupplyPayload {
+	t.Helper()
+
+	if address.IsNil() {
+		address = RandomAddress(t)
+	}
+
+	return common.AssetSupplyPayload{
+		AssetID: GetRandomAssetID(t, address),
+		Amount:  big.NewInt(1),
+	}
+}
+
+func CreateLogicPayload(t *testing.T, address identifiers.Address) common.LogicPayload {
+	t.Helper()
+
+	return common.LogicPayload{
+		Manifest: []byte{1, 2, 3},
+		Logic:    GetLogicID(t, address),
+		Callsite: "hello",
+	}
+}
+
+func CreateRawAssetCreatePayload(t *testing.T) []byte {
+	t.Helper()
+
+	payload := CreateAssetCreatePayload(t)
+
+	rawPayload, err := payload.Bytes()
+	require.NoError(t, err)
+
+	return rawPayload
+}
+
+func CreateRawParticipantCreatePayload(t *testing.T, address identifiers.Address) []byte {
+	t.Helper()
+
+	payload := CreateParticipantCreatePayload(t, address)
+
+	rawPayload, err := payload.Bytes()
+	require.NoError(t, err)
+
+	return rawPayload
+}
+
+func CreateRawAssetActionPayload(t *testing.T, address identifiers.Address) []byte {
+	t.Helper()
+
+	payload := CreateAssetActionPayload(t, address)
+
+	rawPayload, err := payload.Bytes()
+	require.NoError(t, err)
+
+	return rawPayload
+}
+
+func CreateRawAssetSupplyPayload(t *testing.T, address identifiers.Address) []byte {
+	t.Helper()
+
+	payload := CreateAssetSupplyPayload(t, address)
+
+	rawPayload, err := payload.Bytes()
+	require.NoError(t, err)
+
+	return rawPayload
+}
+
+func CreateRawLogicPayload(t *testing.T, address identifiers.Address) []byte {
+	t.Helper()
+
+	payload := CreateLogicPayload(t, address)
+
+	rawPayload, err := payload.Bytes()
+	require.NoError(t, err)
+
+	return rawPayload
 }

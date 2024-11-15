@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -17,10 +20,7 @@ import (
 
 	"github.com/sarvalabs/battleground/network/infrastructure"
 	"github.com/sarvalabs/battleground/types"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/bgclient"
-	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
@@ -41,7 +41,7 @@ const (
 	DefaultBGStartTime      = 25 * time.Minute
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
-	DefaultAccountCount     = 2 // 2 accounts are enough to fire ixns in debug mode
+	DefaultAccountCount     = 4
 	InitialKMOITokens       = 50000
 	DefaultJSONRPCPort      = 29000
 )
@@ -154,6 +154,7 @@ func (te *TestEnvironment) configureBattleGround() error {
 		d.ShouldExecute = *shouldExecute
 		d.OldState = *oldState
 		d.EnableSortition = *enableSortition
+		d.ValidatorCount = 30
 
 		te.bgClient = bgclient.NewClient(&bgclient.Config{
 			ClusterConfig: d,
@@ -358,11 +359,13 @@ func (te *TestEnvironment) SetupSuite() {
 	te.logger.Debug("registering accounts on chain", te.accounts)
 
 	KMOIAssetID := identifiers.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
+	te.logger.Debug("kmoi addr", KMOIAssetID.Address())
 
 	for _, account := range te.accounts {
 		te.logger.Debug("sending Fuel token ", "KMOI ", InitialKMOITokens)
-		transferAsset(te, registeredAcc[0], account.Addr, map[identifiers.AssetID]*big.Int{
-			KMOIAssetID: big.NewInt(InitialKMOITokens),
+		createParticipant(te, registeredAcc[0], &common.ParticipantCreatePayload{
+			Address: account.Addr,
+			Amount:  big.NewInt(InitialKMOITokens),
 		})
 	}
 

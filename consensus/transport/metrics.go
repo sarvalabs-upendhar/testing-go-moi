@@ -54,10 +54,6 @@ func (metrics *Metrics) captureActiveRouters(delta float64) {
 	metrics.ActiveRouters.Add(delta)
 }
 
-func (metrics *Metrics) captureActiveMeshPeers(delta float64) {
-	metrics.ActiveMeshPeers.Add(delta)
-}
-
 func (metrics *Metrics) captureActiveDirectPeers(delta float64) {
 	metrics.ActiveDirectPeers.Add(delta)
 }

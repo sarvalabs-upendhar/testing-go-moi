@@ -69,7 +69,7 @@ func (an *AgoraNetwork) streamHandler(stream p2pnet.Stream) {
 func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	defer func() {
 		if err := an.server.ConnManager.ResetStream(peer.stream, p2p.AgoraStreamTag); err != nil {
-			an.logger.Debug("Failed to close stream", "err", err, "peer-id", peer.id)
+			an.logger.Debug("failed to close stream", "err", err, "peer-id", peer.id)
 		}
 
 		an.peers.Delete(peer.id)
@@ -87,7 +87,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		// Unmarshal the buffer into a proto message
 		msg := new(networkmsg.Message)
 		if err = msg.FromBytes(buffer); err != nil {
-			an.logger.Error("Failed to decode message", "err", err)
+			an.logger.Error("failed to decode message", "err", err)
 
 			return
 		}
@@ -100,7 +100,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		case networkmsg.AGORAREQ:
 			reqMsg := new(message.AgoraRequestMsg)
 			if err = reqMsg.FromBytes(msg.Payload); err != nil {
-				an.logger.Error("Failed to depolorize agora request message", "err", err)
+				an.logger.Error("failed to depolorize agora request message", "err", err)
 
 				continue
 			}
@@ -110,7 +110,7 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 		case networkmsg.AGORARESP:
 			respMsg := new(message.AgoraResponseMsg)
 			if err = respMsg.FromBytes(msg.Payload); err != nil {
-				an.logger.Error("Failed to depolorize agora response message", "err", err)
+				an.logger.Error("failed to depolorize agora response message", "err", err)
 
 				continue
 			}
@@ -197,6 +197,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 			if !ok {
 				return false
 			}
+
 			agoraPeer.mtx.Lock()
 			defer agoraPeer.mtx.Unlock()
 
@@ -205,7 +206,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 
 				// cancel the receiving routine
 				if err := agoraPeer.Close(an.server.ConnManager); err != nil {
-					an.logger.Info("Failed to close the stream", "err", err)
+					an.logger.Info("failed to close the stream", "err", err)
 				}
 
 				// cleanup the memory

@@ -25,19 +25,19 @@ func (instance Instance) Kind() engineio.EngineKind { return engineio.PISA }
 // Implements the engineio.Engine interface for Instance.
 func (instance Instance) Call(
 	_ context.Context,
-	ixn engineio.InteractionDriver,
+	txn engineio.IxDriver,
 	sender engineio.StateDriver,
 	_ ...engineio.StateDriver,
 ) (
 	engineio.CallResult, error,
 ) {
 	// Get the callsite information from the logic and verify that it exists
-	callsite, ok := instance.logicIO.GetCallsite(ixn.Callsite())
+	callsite, ok := instance.logicIO.GetCallsite(txn.Callsite())
 	if !ok {
-		return nil, errors.Errorf("callsite '%v' does not exist", ixn.Callsite())
+		return nil, errors.Errorf("callsite '%v' does not exist", txn.Callsite())
 	}
 
-	switch kind := ixn.Type(); kind {
+	switch kind := txn.Type(); kind {
 	case common.IxLogicInvoke:
 		if callsite.Kind != engineio.CallsiteInvoke {
 			return nil, errors.Errorf("callsite kind '%v' is not appropriate for IxLogicInvoke", callsite.Kind)
@@ -61,7 +61,7 @@ func (instance Instance) Call(
 		return nil, errors.Errorf("sender driver cannot be nil")
 	}
 
-	result, err := instance.internal.Call(newIxn(ixn), newState(sender), nil)
+	result, err := instance.internal.Call(newTxn(txn), newState(sender), nil)
 	if err != nil {
 		return nil, err
 	}

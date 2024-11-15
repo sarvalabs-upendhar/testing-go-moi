@@ -308,9 +308,10 @@ func (te *TestEnvironment) CallAndCheckReceipt(ixhash common.Hash, err error) {
 func (te *TestEnvironment) GetLogicID(addr identifiers.Address) identifiers.LogicID {
 	height := moiclient.GetLatestHeight(te.T(), te.moiClient, addr)
 
-	return moiclient.GetLogicID(te.T(), te.moiClient, addr, int64(height))
+	return moiclient.GetLogicID(te.T(), te.moiClient, 0, addr, int64(height))
 }
 
+//nolint:dupl
 func (te *TestEnvironment) enlistLogic(
 	acc tests.AccountWithMnemonic,
 	logicPayload *common.LogicPayload,
@@ -325,16 +326,30 @@ func (te *TestEnvironment) enlistLogic(
 	payload, err := logicPayload.Bytes()
 	te.Suite.NoError(err)
 
-	sendIXArgs := &common.SendIXArgs{
-		Type:      common.IxLogicEnlist,
+	ixData := &common.IxData{
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Payload:   payload,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxLogicEnlist,
+				Payload: payload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  acc.Addr,
+				LockType: common.MutateLock,
+			},
+			{
+				Address:  logicPayload.Logic.Address(),
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
-	sendIX := moiclient.CreateSendIXFromSendIXArgs(te.T(), sendIXArgs, acc.Mnemonic)
+	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, acc.Mnemonic)
 
 	return te.moiClient.SendInteractions(context.Background(), sendIX)
 }

@@ -216,7 +216,7 @@ func UseFuel(fuel uint64) TestSuiteOption {
 }
 
 func (suite *TestSuite) callAndCheck(
-	kind common.IxType, site string, input polo.Document,
+	kind common.IxOpType, site string, input polo.Document,
 	expectedOut polo.Document, expectedErr ErrorResult,
 	opts ...TestSuiteOption,
 ) {
@@ -236,9 +236,9 @@ func (suite *TestSuite) sender() StateDriver {
 	return suite.participants[suite.defaultSender]
 }
 
-func (suite *TestSuite) call(kind common.IxType, site string, input polo.Document) CallResult {
+func (suite *TestSuite) call(kind common.IxOpType, site string, input polo.Document) CallResult {
 	// Create a new LogicDeploy ixn
-	ixn := newDebugIxnDriver(suite.T(),
+	ixn := newDebugTxnDriver(suite.T(),
 		kind, common.Hash{},
 		site, input.Bytes(),
 		suite.defaultFuel,

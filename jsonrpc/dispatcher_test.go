@@ -595,6 +595,7 @@ func Test_handleWs(t *testing.T) {
 			}
 
 			var resultString string
+
 			if testcase.isBatch {
 				var batchResponse []SuccessResponse
 				err = json.Unmarshal(resp, &batchResponse)

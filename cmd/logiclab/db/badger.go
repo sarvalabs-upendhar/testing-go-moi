@@ -109,16 +109,19 @@ func (database *BadgerDB) PrefixCollect(prefix []byte) (map[string][]byte, error
 		// Iterate over keys with the given prefix
 		opts := badger.DefaultIteratorOptions
 		opts.PrefetchValues = true
+
 		it := txn.NewIterator(opts)
 		defer it.Close()
 
 		for it.Seek(prefix); it.ValidForPrefix(prefix); it.Next() {
 			item := it.Item()
 			key := string(item.KeyCopy(nil))
+
 			value, err := item.ValueCopy(nil)
 			if err != nil {
 				return err
 			}
+
 			entries[key] = value
 		}
 

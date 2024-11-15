@@ -6,41 +6,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sarvalabs/go-moi/telemetry/tracing"
-
-	"github.com/pkg/errors"
 	id "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
-// initOutboundMessageHandler initializes and runs a loop to handle outbound messages.
-func (k *Engine) initOutboundMessageHandler(ctx context.Context, slot *types.Slot) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case msg := <-slot.BftOutboundChan:
-			k.handleOutboundMessage(ctx, slot.ClusterID(), msg)
-		}
-	}
-}
-
-// handleOutboundMessage processes the outbound vote messages.
-func (k *Engine) handleOutboundMessage(ctx context.Context, clusterID common.ClusterID, msg types.ConsensusMessage) {
-	if voteMsg, ok := msg.Message.(*types.VoteMessage); ok {
-		if err := k.sendVote(ctx, clusterID, voteMsg); err != nil {
-			k.logger.Error("Failed to send vote msg", "error", err)
-		}
-	}
-}
-
-// sendICSRequest broadcasts the ICS request to all the nodes that are part of the ICS
-func (k *Engine) sendICSRequest(
+// sendPrepareMsg broadcasts the ICS request to all the nodes that are part of the ICS
+func (k *Engine) sendPrepareMsg(
 	ctx context.Context,
-	canonicalReq types.CanonicalICSRequest,
-	nodeset *common.ICSNodeSet,
+	clusterID common.ClusterID,
+	msg *types.Prepare,
+	nodeset *types.ICSCommittee,
 ) (int, error) {
 	var (
 		requestTS      = time.Now()
@@ -51,10 +28,14 @@ func (k *Engine) sendICSRequest(
 
 	defer k.metrics.captureRequestTurnaroundTime(requestTS)
 
-	payload, err := k.signICSRequest(canonicalReq)
+	payload, err := msg.Bytes()
 	if err != nil {
-		k.logger.Error("Failed to sign canonical ics request", err)
+		return 0, err
+	}
 
+	// Construct the prepared message here to avoid sending the prepare message to the local node (self)
+	preparedMsg, err := k.createPreparedMsg(msg)
+	if err != nil {
 		return 0, err
 	}
 
@@ -68,30 +49,31 @@ func (k *Engine) sendICSRequest(
 			continue
 		}
 
-		for index, kramaID := range ns.Ids {
-			if k.selfID == kramaID {
+		for index, info := range ns.Infos {
+			if k.selfID == info.ID {
+				ns.UpdateViewInfo(index, preparedMsg)
 				ns.UpdateResponse(index, true)
 
 				continue
 			}
 
-			if _, ok := requestedNodes[kramaID]; ok {
+			if _, ok := requestedNodes[info.ID]; ok {
 				continue
 			}
 
-			requestedNodes[kramaID] = struct{}{}
+			requestedNodes[info.ID] = struct{}{}
 
 			waitGroup.Add(1)
 
 			go func(kramaID id.KramaID, icsSetType int) {
 				defer waitGroup.Done()
 
-				k.logger.Trace("Sending ICS Request", "cluster-id", canonicalReq.ClusterID, "to", kramaID)
+				k.logger.Trace("sending prepare msg", "cluster-id", clusterID, "to", kramaID)
 
-				if err = k.transport.ConnectToDirectPeer(ctx, kramaID, canonicalReq.ClusterID); err != nil {
+				if err = k.transport.ConnectToDirectPeer(ctx, kramaID, clusterID); err != nil {
 					failedReqCount.Add(1)
 
-					k.logger.Error("Failed to connect", "krama-id", kramaID, "err", err)
+					k.logger.Error("failed to connect", "krama-id", kramaID, "err", err)
 
 					mtx.Lock()
 					unRespondedNodes = append(unRespondedNodes, kramaID)
@@ -101,18 +83,20 @@ func (k *Engine) sendICSRequest(
 				}
 
 				err = k.transport.SendMessage(
+					ctx,
 					kramaID,
-					k.selfID,
-					canonicalReq.ClusterID,
-					networkmsg.ICSREQUEST,
-					payload,
-				)
+					types.NewICSMsg(
+						k.selfID,
+						clusterID,
+						networkmsg.PREPARE,
+						payload,
+					))
 				if err != nil {
 					failedReqCount.Add(1)
 
-					k.logger.Error("Failed to send ics message", "krama-id", kramaID, "err", err)
+					k.logger.Error("failed to send ics message", "krama-id", kramaID, "err", err)
 				}
-			}(kramaID, icsSetType)
+			}(info.ID, icsSetType)
 		}
 	}
 
@@ -123,85 +107,4 @@ func (k *Engine) sendICSRequest(
 	}
 
 	return int(failedReqCount.Load()), nil
-}
-
-// SendICSResponse sends an ICS response to a specific KramaID with the given context type and status code
-func (k *Engine) SendICSResponse(
-	kramaID id.KramaID,
-	clusterID common.ClusterID,
-	statusCode types.ICSResponseCode,
-	operators []types.ICSOperatorInfo,
-) error {
-	k.logger.Trace("Sending ICS Response", "cluster-id", clusterID, "to", kramaID, "status-code", statusCode)
-
-	if err := k.transport.SendMessage(
-		kramaID,
-		k.selfID,
-		clusterID,
-		networkmsg.ICSRESPONSE,
-		types.NewICSResponse(statusCode, operators)); err != nil {
-		k.logger.Error("Failed to send ics response", "krama-id", kramaID, "err", err)
-
-		return err
-	}
-
-	return nil
-}
-
-// sendICSSuccess broadcasts an ICS success message to all the connected peers.
-func (k *Engine) sendICSSuccess(ctx context.Context, clusterID common.ClusterID) error {
-	spanCtx, span := tracing.Span(ctx, "Krama.Engine", "sendICSSuccessMsg")
-	defer span.End()
-
-	slot := k.slots.GetSlot(clusterID)
-
-	if slot == nil {
-		return errors.New("nil slot")
-	}
-
-	var (
-		clusterState = slot.ClusterState()
-		payload      = clusterState.CreateICSSuccessMsg()
-	)
-
-	rawData, err := payload.Bytes()
-	if err != nil {
-		return err
-	}
-
-	icsMsg := types.NewICSMsg(k.selfID, clusterID, networkmsg.ICSSUCCESS, rawData)
-
-	clusterState.SetSuccessMsg(icsMsg)
-
-	k.transport.BroadcastMessage(spanCtx, icsMsg)
-
-	return nil
-}
-
-// sendICSFailure broadcasts an ICS failure message to all the connected peers.
-func (k *Engine) sendICSFailure(ctx context.Context, clusterID common.ClusterID) error {
-	payload, err := types.NewICSFailure(clusterID).Bytes()
-	if err != nil {
-		return err
-	}
-
-	k.transport.BroadcastMessage(ctx, types.NewICSMsg(k.selfID, clusterID, networkmsg.ICSFAILURE, payload))
-
-	return nil
-}
-
-// sendVote broadcasts the vote o all the connected peers using ICSHave
-func (k *Engine) sendVote(
-	ctx context.Context,
-	clusterID common.ClusterID,
-	vote *types.VoteMessage,
-) error {
-	payload, err := types.NewICSHave(nil, vote.Vote).Bytes()
-	if err != nil {
-		return err
-	}
-
-	k.transport.BroadcastMessage(ctx, types.NewICSMsg(k.selfID, clusterID, networkmsg.ICSHAVE, payload))
-
-	return nil
 }

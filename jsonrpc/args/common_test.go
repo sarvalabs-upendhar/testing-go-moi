@@ -1,7 +1,6 @@
 package args
 
 import (
-	"encoding/json"
 	"math/big"
 	"testing"
 
@@ -24,22 +23,27 @@ func TestCreateRPCInteraction(t *testing.T) {
 	assetCreatePayloadBytes, err := assetPayload.Bytes()
 	require.NoError(t, err)
 
-	logicPayload := &common.LogicPayload{
-		Callsite: "call site",
+	transferPayload := &common.AssetActionPayload{
+		Beneficiary: tests.RandomAddress(t),
 	}
 
-	logicPayloadBytes, err := polo.Polorize(logicPayload)
+	transferPayloadBytes, err := transferPayload.Bytes()
 	require.NoError(t, err)
 
-	input := tests.CreateIXInputWithTestData(t, common.IxAssetCreate, assetCreatePayloadBytes, nil)
-	input.PerceivedValues = nil
-	input.TransferValues = nil
+	logicPayloadBytes, err := polo.Polorize(&common.LogicPayload{
+		Logic:    tests.GetLogicID(t, tests.RandomAddress(t)),
+		Callsite: "call site",
+	})
+	require.NoError(t, err)
 
-	ixData := common.IxData{
-		Input:   input,
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.RandomKramaIDs(t, 2)),
-		Trust:   tests.CreateTrustWithTestData(t),
-	}
+	ixData := tests.CreateIXDataWithTestData(t, func(ixData *common.IxData) {
+		ixData.IxOps = []common.IxOpRaw{
+			{
+				Type:    common.IxAssetCreate,
+				Payload: assetCreatePayloadBytes,
+			},
+		}
+	})
 
 	ixWithNilFields, err := common.NewInteraction(ixData, tests.RandomHash(t).Bytes())
 	require.NoError(t, err)
@@ -53,8 +57,13 @@ func TestCreateRPCInteraction(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name: "create rpc interaction for value transfer interaction",
-			ix:   CreateInteractionWithTestData(t, common.IxValueTransfer, json.RawMessage{}),
+			name: "create rpc interaction for participant create interaction",
+			ix: CreateInteractionWithTestData(t, common.IxParticipantCreate,
+				tests.CreateRawParticipantCreatePayload(t, tests.RandomAddress(t))),
+		},
+		{
+			name: "create rpc interaction for asset transfer interaction",
+			ix:   CreateInteractionWithTestData(t, common.IxAssetTransfer, transferPayloadBytes),
 		},
 		{
 			name: "create rpc interaction for asset creation interaction",
@@ -74,7 +83,7 @@ func TestCreateRPCInteraction(t *testing.T) {
 		},
 		{
 			name: "create rpc interaction with particpants data",
-			ix:   CreateInteractionWithTestData(t, common.IxValueTransfer, json.RawMessage{}),
+			ix:   CreateInteractionWithTestData(t, common.IxAssetTransfer, transferPayloadBytes),
 		},
 	}
 
@@ -126,7 +135,7 @@ func TestCreateRPCPoXtData(t *testing.T) {
 	}{
 		{
 			name:     "create rpc participants",
-			poxtData: tests.CreatePoXtWithTestData(t),
+			poxtData: tests.CreatePoXtWithTestData(t, common.GenesisView),
 		},
 	}
 
@@ -150,7 +159,7 @@ func TestCreateRPCTesseract(t *testing.T) {
 	participants := tests.CreateParticipantWithTestData(t, 2)
 
 	// make sure to fill at least one field of every field of tesseract so that we can verify that every field is copied
-	createTesseractParams := func(clusterID common.ClusterID) *tests.CreateTesseractParams {
+	createTesseractParams := func(view uint64) *tests.CreateTesseractParams {
 		return &tests.CreateTesseractParams{
 			Participants: participants,
 			TSDataCallback: func(ts *tests.TesseractData) {
@@ -161,10 +170,28 @@ func TestCreateRPCTesseract(t *testing.T) {
 				ts.Operator = "guardian"
 				ts.FuelUsed = 55
 				ts.FuelLimit = 88
-				ts.ConsensusInfo = tests.CreatePoXtWithTestData(t)
+				ts.ConsensusInfo = tests.CreatePoXtWithTestData(t, view)
 				ts.Seal = []byte{2, 3, 4}
 				ts.SealBy = tests.RandomKramaIDs(t, 1)[0]
-				ts.ConsensusInfo.ClusterID = clusterID
+			},
+			CommitInfo: &common.CommitInfo{
+				QC: &common.Qc{
+					Type:     3,
+					Address:  tests.RandomAddress(t),
+					LockType: 2,
+					View:     334,
+					TSHash:   tests.RandomHash(t),
+					SignerIndices: &common.ArrayOfBits{
+						Size:     1,                 // represents node tsCount
+						Elements: make([]uint64, 1), // each element holds eight votes
+					},
+					Signature: []byte{0, 1},
+				},
+				Operator:                  tests.RandomKramaID(t, 1),
+				ClusterID:                 "12342",
+				View:                      9,
+				RandomSet:                 tests.RandomKramaIDs(t, 2),
+				RandomSetSizeWithoutDelta: 3,
 			},
 		}
 	}
@@ -177,24 +204,24 @@ func TestCreateRPCTesseract(t *testing.T) {
 	}{
 		{
 			name:     "created rpc tesseract for non-genesis tesseract",
-			ixParams: GetIxParamsWithInputComputeTrust(common.IxAssetCreate, assetPayloadBytes, 2, 3),
-			tsParams: createTesseractParams("non-genesis"),
+			ixParams: GetIxParamsWithIxData(common.IxAssetCreate, assetPayloadBytes),
+			tsParams: createTesseractParams(1),
 		},
 		{
 			name:     "create rpc tesseract for genesis tesseract",
-			tsParams: createTesseractParams(common.GenesisIdentifier),
+			tsParams: createTesseractParams(common.GenesisView),
 		},
 		{
 			name:     "nil interactions",
 			ixParams: nil,
-			tsParams: createTesseractParams("non-genesis"),
+			tsParams: createTesseractParams(common.GenesisView),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.ixParams != nil {
-				test.tsParams.Ixns = []*common.Interaction{tests.CreateIX(t, test.ixParams)}
+				test.tsParams.Ixns = common.NewInteractionsWithLeaderCheck(false, tests.CreateIX(t, test.ixParams))
 			}
 
 			ts := tests.CreateTesseract(t, test.tsParams)
@@ -215,7 +242,7 @@ func TestCreateRPCTesseract(t *testing.T) {
 }
 
 func TestCreateRPCReceipt(t *testing.T) {
-	ixParams := tests.GetIxParamsWithAddress(tests.RandomAddress(t), tests.RandomAddress(t))
+	ixParams := tests.GetIxParamsWithAddress(t, tests.RandomAddress(t), tests.RandomAddress(t))
 	testcases := []struct {
 		name         string
 		tsHash       common.Hash

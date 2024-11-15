@@ -57,6 +57,7 @@ func (ds *DataStore) worker() {
 	defer func() {
 		ds.workerLock.Lock()
 		defer ds.workerLock.Unlock()
+
 		ds.workerCount--
 	}()
 

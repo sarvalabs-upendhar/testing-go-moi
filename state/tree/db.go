@@ -121,7 +121,7 @@ func (tdb *TreeDB) IsDirty() bool {
 	tdb.mtx.RLock()
 	defer tdb.mtx.RUnlock()
 
-	return tdb.dirty != nil && len(tdb.dirty) > 0
+	return len(tdb.dirty) > 0
 }
 
 // Copy returns a copy of DB

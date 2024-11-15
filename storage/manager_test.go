@@ -7,9 +7,9 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 )
@@ -76,7 +76,10 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 				test.args.TesseractHash,
 				test.args.StateHash,
 				test.args.ContextHash,
+				test.args.CommitHash,
 				test.args.Type,
+				true,
+				test.args.PositionInContextSet,
 			)
 			require.Error(t, err)
 			require.Equal(t, test.expectedError, err)
@@ -95,7 +98,10 @@ func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 		args.TesseractHash,
 		args.StateHash,
 		args.ContextHash,
+		args.CommitHash,
 		args.Type,
+		true,
+		args.PositionInContextSet,
 	)
 
 	require.NoError(t, err)
@@ -122,70 +128,82 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 	hash := tests.RandomHash(t)
 
 	testcases := []struct {
-		name          string
-		accMetaInfo   *common.AccountMetaInfo
-		args          *common.AccountMetaInfo
-		expectedError error
+		name                        string
+		accMetaInfo                 *common.AccountMetaInfo
+		args                        *common.AccountMetaInfo
+		shouldUpdateContextPosition bool
 	}{
 		{
 			name: "should update with new height",
 			accMetaInfo: &common.AccountMetaInfo{
-				Address:       addresses[0],
-				Type:          common.AccountType(1),
-				Height:        height,
-				TesseractHash: tests.RandomHash(t),
-				StateHash:     tests.RandomHash(t),
-				ContextHash:   tests.RandomHash(t),
+				Address:              addresses[0],
+				Type:                 common.AccountType(1),
+				Height:               height,
+				TesseractHash:        tests.RandomHash(t),
+				StateHash:            tests.RandomHash(t),
+				ContextHash:          tests.RandomHash(t),
+				CommitHash:           tests.RandomHash(t),
+				PositionInContextSet: 1,
 			},
+			shouldUpdateContextPosition: true,
 			args: &common.AccountMetaInfo{
-				Address:       addresses[0],
-				Type:          common.AccountType(1),
-				Height:        height + 1,
-				TesseractHash: tests.RandomHash(t),
-				StateHash:     tests.RandomHash(t),
-				ContextHash:   tests.RandomHash(t),
+				Address:              addresses[0],
+				Type:                 common.AccountType(1),
+				Height:               height + 1,
+				TesseractHash:        tests.RandomHash(t),
+				StateHash:            tests.RandomHash(t),
+				ContextHash:          tests.RandomHash(t),
+				CommitHash:           tests.RandomHash(t),
+				PositionInContextSet: 2,
 			},
-			expectedError: nil,
 		},
 		{
 			name: "should update with equal height ",
 			accMetaInfo: &common.AccountMetaInfo{
-				Address:       addresses[1],
-				Type:          common.AccountType(3),
-				Height:        height,
-				TesseractHash: hash,
-				StateHash:     tests.RandomHash(t),
-				ContextHash:   tests.RandomHash(t),
+				Address:              addresses[1],
+				Type:                 common.AccountType(3),
+				Height:               height,
+				TesseractHash:        hash,
+				StateHash:            tests.RandomHash(t),
+				ContextHash:          tests.RandomHash(t),
+				CommitHash:           tests.RandomHash(t),
+				PositionInContextSet: 3,
 			},
+			shouldUpdateContextPosition: true,
 			args: &common.AccountMetaInfo{
-				Address:       addresses[1],
-				Type:          common.AccountType(3),
-				Height:        height,
-				TesseractHash: hash,
-				StateHash:     tests.RandomHash(t),
-				ContextHash:   tests.RandomHash(t),
+				Address:              addresses[1],
+				Type:                 common.AccountType(3),
+				Height:               height,
+				TesseractHash:        hash,
+				StateHash:            tests.RandomHash(t),
+				ContextHash:          tests.RandomHash(t),
+				CommitHash:           tests.RandomHash(t),
+				PositionInContextSet: 4,
 			},
-			expectedError: nil,
 		},
 		{
 			name: "shouldn't update with low height",
 			accMetaInfo: &common.AccountMetaInfo{
-				Address:       addresses[2],
-				Type:          common.AccountType(1),
-				Height:        height,
-				TesseractHash: tests.RandomHash(t),
-				StateHash:     tests.RandomHash(t),
-				ContextHash:   tests.RandomHash(t),
+				Address:              addresses[2],
+				Type:                 common.AccountType(1),
+				Height:               height,
+				TesseractHash:        tests.RandomHash(t),
+				StateHash:            tests.RandomHash(t),
+				ContextHash:          tests.RandomHash(t),
+				CommitHash:           tests.RandomHash(t),
+				PositionInContextSet: 5,
 			},
+			shouldUpdateContextPosition: false,
 			args: &common.AccountMetaInfo{
-				Address:       addresses[2],
-				Type:          common.AccountType(3),
-				Height:        height - 1,
-				TesseractHash: tests.RandomHash(t),
-				StateHash:     tests.RandomHash(t),
-				ContextHash:   tests.RandomHash(t),
+				Address:              addresses[2],
+				Type:                 common.AccountType(3),
+				Height:               height - 1,
+				TesseractHash:        tests.RandomHash(t),
+				StateHash:            tests.RandomHash(t),
+				ContextHash:          tests.RandomHash(t),
+				CommitHash:           tests.RandomHash(t),
+				PositionInContextSet: 6,
 			},
-			expectedError: nil,
 		},
 	}
 
@@ -203,7 +221,10 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				test.args.TesseractHash,
 				test.args.StateHash,
 				test.args.ContextHash,
+				test.args.CommitHash,
 				test.args.Type,
+				test.shouldUpdateContextPosition,
+				test.args.PositionInContextSet,
 			)
 			require.NoError(t, err)
 
@@ -220,7 +241,9 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				require.Equal(t, test.args.ContextHash, afterAccMetaInfo.ContextHash)
 				require.Equal(t, test.args.Address, afterAccMetaInfo.Address)
 				require.Equal(t, test.args.Height, afterAccMetaInfo.Height)
-				require.Equal(t, beforeAccMetaInfo.Type, afterAccMetaInfo.Type)
+				require.Equal(t, test.args.Type, afterAccMetaInfo.Type)
+				require.Equal(t, test.args.PositionInContextSet, afterAccMetaInfo.PositionInContextSet)
+				require.Equal(t, test.args.CommitHash, afterAccMetaInfo.CommitHash)
 			} else { // changes shouldn't take place if new height less than current height
 				require.Equal(t, beforeAccMetaInfo.TesseractHash, afterAccMetaInfo.TesseractHash)
 				require.Equal(t, beforeAccMetaInfo.StateHash, afterAccMetaInfo.StateHash)
@@ -228,6 +251,8 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 				require.Equal(t, beforeAccMetaInfo.Address, afterAccMetaInfo.Address)
 				require.Equal(t, beforeAccMetaInfo.Height, afterAccMetaInfo.Height)
 				require.Equal(t, beforeAccMetaInfo.Type, afterAccMetaInfo.Type)
+				require.Equal(t, beforeAccMetaInfo.PositionInContextSet, afterAccMetaInfo.PositionInContextSet)
+				require.Equal(t, beforeAccMetaInfo.CommitHash, afterAccMetaInfo.CommitHash)
 			}
 		})
 	}
@@ -260,7 +285,10 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 		args.TesseractHash,
 		args.StateHash,
 		args.ContextHash,
+		args.CommitHash,
 		args.Type,
+		true,
+		args.PositionInContextSet,
 	)
 	require.NoError(t, err)
 
@@ -407,139 +435,6 @@ func TestIncrementBucketCount(t *testing.T) {
 	}
 }
 
-func TestUpdateTesseractStatus_CheckErrors(t *testing.T) {
-	pm := NewTestPersistenceManager(t)
-
-	type args struct {
-		address identifiers.Address
-		height  uint64
-		hash    common.Hash
-		status  bool
-	}
-
-	AccMetaInfo := tests.GetRandomAccMetaInfo(t, 30)
-	insertAccMetaInfo(t, pm, *AccMetaInfo)
-
-	testcases := []struct {
-		name          string
-		arg           args
-		expectedError error
-	}{
-		{
-			name: "account doesn't exist",
-			arg: args{
-				address: tests.RandomAddress(t),
-				height:  1,
-				hash:    AccMetaInfo.TesseractHash,
-				status:  false,
-			},
-			expectedError: common.ErrKeyNotFound,
-		},
-		{
-			name: "should return error if hash mismatch",
-			arg: args{
-				address: AccMetaInfo.Address,
-				height:  AccMetaInfo.Height,
-				hash:    tests.RandomHash(t),
-				status:  false,
-			},
-			expectedError: common.ErrHashMismatch,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			err := pm.UpdateTesseractStatus(
-				test.arg.address,
-				test.arg.height,
-				test.arg.hash,
-			)
-			require.Error(t, err)
-
-			require.Equal(t, test.expectedError, err)
-		})
-	}
-}
-
-func TestUpdateTesseractStatus_CheckHeight(t *testing.T) {
-	pm := NewTestPersistenceManager(t)
-
-	type args struct {
-		address identifiers.Address
-		height  uint64
-		hash    common.Hash
-	}
-
-	addresses := tests.GetAddresses(t, 3)
-	hashes := tests.GetHashes(t, 3)
-	height := uint64(30)
-	testcases := []struct {
-		name          string
-		accMetaInfo   *common.AccountMetaInfo
-		arg           args
-		expectedError error
-	}{
-		{
-			name: "shouldn't update with lower height",
-			accMetaInfo: &common.AccountMetaInfo{
-				Address:       addresses[0],
-				Type:          common.AccountType(1),
-				Height:        height,
-				TesseractHash: hashes[0],
-			},
-			arg: args{
-				address: addresses[0],
-				height:  height - 1,
-				hash:    hashes[0],
-			},
-		},
-		{
-			name: "should update with equal height",
-			accMetaInfo: &common.AccountMetaInfo{
-				Address:       addresses[1],
-				Type:          common.AccountType(1),
-				Height:        height,
-				TesseractHash: hashes[1],
-			},
-			arg: args{
-				address: addresses[1],
-				height:  height,
-				hash:    hashes[1],
-			},
-		},
-		{
-			name: "should update with new height",
-			accMetaInfo: &common.AccountMetaInfo{
-				Address:       addresses[2],
-				Type:          common.AccountType(1),
-				Height:        height,
-				TesseractHash: hashes[2],
-			},
-			arg: args{
-				address: addresses[2],
-				height:  height + 1,
-				hash:    hashes[2],
-			},
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			insertAccMetaInfo(t, pm, *test.accMetaInfo)
-
-			err := pm.UpdateTesseractStatus(
-				test.arg.address,
-				test.arg.height,
-				test.arg.hash,
-			)
-			require.NoError(t, err)
-
-			_, err = pm.GetAccountMetaInfo(test.arg.address)
-			require.NoError(t, err)
-		})
-	}
-}
-
 // here we increment bucket count for 10000 addresses and check if number of addresses in each bucket are as expected
 func TestGetBucketSizes(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
@@ -580,12 +475,12 @@ func TestGetAccounts(t *testing.T) {
 	}
 }
 
-func TestPersistenceManager_FetchTesseractFromDB(t *testing.T) {
+func TestPersistenceManager_GetTesseract(t *testing.T) {
 	tesseractParams := tests.GetTesseractParamsMapWithIxnsAndReceipts(t, 2, 2)
 
 	// Set the clusterID to genesis identifier to avoid fetching interactions
 	tesseractParams[0].TSDataCallback = func(ts *tests.TesseractData) {
-		ts.ConsensusInfo.ClusterID = common.GenesisIdentifier
+		ts.ConsensusInfo.View = common.GenesisView
 	}
 
 	tesseracts := tests.CreateTesseracts(t, 3, tesseractParams)
@@ -595,11 +490,13 @@ func TestPersistenceManager_FetchTesseractFromDB(t *testing.T) {
 	insertTesseracts(t, pm, tesseracts...)
 	insertIxns(t, pm, tesseracts[:2]...)
 	insertReceiptsInDB(t, pm, tesseracts[:2]...)
+	insertCommitInfosInDB(t, pm, tesseracts[:2]...)
 
 	testcases := []struct {
 		name             string
 		hash             common.Hash
 		withInteractions bool
+		withCommitInfo   bool
 		expectedTS       *common.Tesseract
 		expectedError    error
 	}{
@@ -609,15 +506,24 @@ func TestPersistenceManager_FetchTesseractFromDB(t *testing.T) {
 			expectedTS: tesseracts[0],
 		},
 		{
-			name:             "non-genesis tesseract with interactions",
+			name:             "non-genesis tesseract with interactions with commit info",
 			hash:             tesseracts[1].Hash(),
 			withInteractions: true,
+			withCommitInfo:   true,
 			expectedTS:       tesseracts[1],
 		},
 		{
-			name:             "without interactions",
+			name:             "without interactions and with commit info",
 			hash:             tesseracts[1].Hash(),
 			withInteractions: false,
+			withCommitInfo:   true,
+			expectedTS:       tesseracts[1],
+		},
+		{
+			name:             "with interactions and without commit info",
+			hash:             tesseracts[1].Hash(),
+			withInteractions: true,
+			withCommitInfo:   false,
 			expectedTS:       tesseracts[1],
 		},
 		{
@@ -632,11 +538,17 @@ func TestPersistenceManager_FetchTesseractFromDB(t *testing.T) {
 			withInteractions: true,
 			expectedError:    common.ErrFetchingInteractions,
 		},
+		{
+			name:           "should fail if commit info not found",
+			hash:           tesseracts[2].Hash(),
+			withCommitInfo: true,
+			expectedError:  common.ErrCommitInfoNotFound,
+		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ts, err := pm.FetchTesseractFromDB(test.hash, test.withInteractions)
+			ts, err := pm.GetTesseract(test.hash, test.withInteractions, test.withCommitInfo)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -645,7 +557,7 @@ func TestPersistenceManager_FetchTesseractFromDB(t *testing.T) {
 
 			require.NoError(t, err)
 
-			validateTesseract(t, ts, test.expectedTS, test.withInteractions)
+			validateTesseract(t, test.expectedTS, ts, test.withInteractions, test.withCommitInfo)
 		})
 	}
 }
@@ -807,6 +719,7 @@ func TestPersistenceManager_GetAccountSnapshot(t *testing.T) {
 		for i := 1; i <= count; i++ {
 			require.NoError(t, bw.Set(keyWithPrefix(prefix, i), value(i)))
 		}
+
 		require.NoError(t, bw.Flush())
 	}
 

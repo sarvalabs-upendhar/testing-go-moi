@@ -379,17 +379,17 @@ func GetSignature(bz []byte, mnemonic string) (string, error) {
 func VerifySignatureUsingKramaID(id kramaid.KramaID, rawData []byte, signature []byte) error {
 	peerID, err := id.DecodedPeerID()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to get peer id from krama id")
+		return errors.Wrapf(err, "failed to get peer id from krama id")
 	}
 
 	pk, err := peerID.ExtractPublicKey()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to get public key from peer id")
+		return errors.Wrapf(err, "failed to get public key from peer id")
 	}
 
 	rawPK, err := pk.Raw()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to get raw public key from public key")
+		return errors.Wrapf(err, "failed to get raw public key from public key")
 	}
 
 	verified, err := Verify(rawData, signature, rawPK)

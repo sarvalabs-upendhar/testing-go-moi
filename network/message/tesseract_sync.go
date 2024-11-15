@@ -14,6 +14,7 @@ type TesseractSyncMsg struct {
 	Ixns         []byte
 	Receipts     []byte
 	Delta        map[string][]byte
+	CommitInfo   []byte
 }
 
 func (tm *TesseractSyncMsg) Bytes() ([]byte, error) {
@@ -36,14 +37,15 @@ func (tm *TesseractSyncMsg) FromBytes(bytes []byte) error {
 func (tm *TesseractSyncMsg) GetTesseract() (*common.Tesseract, error) {
 	ixns := new(common.Interactions)
 	receipts := new(common.Receipts)
+	commitInfo := new(common.CommitInfo)
 
-	ts := new(common.CanonicalTesseract)
+	ts := new(common.Tesseract)
 
 	if err := ts.FromBytes(tm.RawTesseract); err != nil {
 		return nil, err
 	}
 
-	if tm.Ixns != nil && !ts.InteractionsHash.IsNil() {
+	if tm.Ixns != nil && !ts.InteractionsHash().IsNil() {
 		if err := ixns.FromBytes(tm.Ixns); err != nil {
 			if !errors.Is(err, polo.ErrNullPack) {
 				return nil, err
@@ -51,7 +53,7 @@ func (tm *TesseractSyncMsg) GetTesseract() (*common.Tesseract, error) {
 		}
 	}
 
-	if tm.Receipts != nil && !ts.ReceiptsHash.IsNil() {
+	if tm.Receipts != nil && !ts.ReceiptsHash().IsNil() {
 		if err := receipts.FromBytes(tm.Receipts); err != nil {
 			if !errors.Is(err, polo.ErrNullPack) {
 				return nil, err
@@ -59,5 +61,13 @@ func (tm *TesseractSyncMsg) GetTesseract() (*common.Tesseract, error) {
 		}
 	}
 
-	return ts.ToTesseract(*ixns, *receipts), nil
+	if ts.ConsensusInfo().View != common.GenesisView {
+		if err := commitInfo.FromBytes(tm.CommitInfo); err != nil {
+			return nil, err
+		}
+	}
+
+	ts.WithIxnAndReceipts(*ixns, *receipts, commitInfo)
+
+	return ts, nil
 }

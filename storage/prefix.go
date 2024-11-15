@@ -30,13 +30,15 @@ const (
 	Senatus             PrefixTag = 0x81
 	SenatusPeerCount    PrefixTag = 0x82
 	Tesseract           PrefixTag = 0x83
-	TSGridLookup        PrefixTag = 0x84
+	TesseractCommitInfo PrefixTag = 0x84
 	Receipt             PrefixTag = 0x85
 	AccountSyncJob      PrefixTag = 0x86
 	AccountSyncStatus   PrefixTag = 0x87
 	PrincipalSyncStatus PrefixTag = 0x88
 	Bucket              PrefixTag = 0x89
 	BucketCount         PrefixTag = 0x8A
+	ConsensusProposals  PrefixTag = 0x8B
+	ConsensusSafetyInfo PrefixTag = 0x8C
 )
 
 const (

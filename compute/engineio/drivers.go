@@ -23,11 +23,11 @@ type StorageReader interface {
 	GetStorageEntry([]byte) ([]byte, error)
 }
 
-// InteractionDriver represents a driver for interaction information.
+// IxDriver represents a driver for interaction information.
 // It describes the callsite and input calldata for execution calls along with
-// other information such as the Interaction's fuel parameters or transfer funds.
-type InteractionDriver interface {
-	Type() common.IxType
+// other information such as the Interactions fuel parameters or transfer funds.
+type IxDriver interface {
+	Type() common.IxOpType
 	Hash() common.Hash
 
 	FuelPrice() *big.Int

@@ -1,8 +1,8 @@
 # amd64 arch
-# golang:1.20.8-alpine3.18
-# sha256:90246ec31bcf460ff3dbe8a4a63e8997bc36781a2eba9e0419e9b53e0bd36a0d
+# golang:1.22.8-alpine3.20
+# sha256:f56a8a4a1aea41bc4694728b69c219af1523aea15690cbbed82dc9bac81e6603
 
-FROM golang@sha256:90246ec31bcf460ff3dbe8a4a63e8997bc36781a2eba9e0419e9b53e0bd36a0d AS build
+FROM golang@sha256:f56a8a4a1aea41bc4694728b69c219af1523aea15690cbbed82dc9bac81e6603 AS build
 
 # essential packages for build-dep
 ENV pkgs "git gcc g++ ca-certificates tzdata openssl libgcc libstdc++"

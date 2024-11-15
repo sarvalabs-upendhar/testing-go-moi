@@ -61,6 +61,7 @@ type IxPoolConfig struct {
 	MaxIxGroupSize          int
 	EnableIxFlooding        bool
 	EnableRawIxFiltering    bool
+	ViewTimeout             time.Duration
 }
 
 type NodeInfo struct {

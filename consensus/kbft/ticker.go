@@ -13,10 +13,10 @@ type timeoutInfo struct {
 	Duration time.Duration `json:"duration"`
 	// Represents the height that the timeout applies for
 	Height map[identifiers.Address]uint64 `json:"height"`
-	// Represents the round that the timout applies for
-	Round int32 `json:"round"`
-	// Represents the round step type that the timout applies for
-	Step RoundStepType `json:"step"`
+	// Represents the view that the timout applies for
+	View uint64 `json:"view"`
+	// Represents the view step type that the timout applies for
+	Step ViewStepType `json:"step"`
 }
 
 // Ticker is a struct that represent timout ticker
@@ -107,11 +107,11 @@ func (t *Ticker) timeoutRoutine() {
 			if len(info.Height) > 0 && areHeightsGreater(info.Height, newTimeoutInfo.Height) {
 				continue
 			} else if len(info.Height) > 0 && areHeightsEqual(newTimeoutInfo.Height, info.Height) {
-				// Skip scheduling if new timeout round is less than current
-				if newTimeoutInfo.Round < info.Round {
+				// Skip scheduling if new timeout view is less than current
+				if newTimeoutInfo.View < info.View {
 					continue
-				} else if newTimeoutInfo.Round == info.Round {
-					// For same rounds, skip scheduling if current timeout has a running round
+				} else if newTimeoutInfo.View == info.View {
+					// For same rounds, skip scheduling if current timeout has a running view
 					// AND new timeout step is less than current
 					if info.Step > 0 && newTimeoutInfo.Step <= info.Step {
 						continue

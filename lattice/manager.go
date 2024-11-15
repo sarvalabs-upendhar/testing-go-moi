@@ -6,6 +6,7 @@ import (
 
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
@@ -28,11 +29,13 @@ type store interface {
 		id identifiers.Address,
 		height uint64,
 		tesseractHash common.Hash,
-		stateHash common.Hash,
-		contextHash common.Hash,
+		stateHash, contextHash common.Hash,
+		commitHash common.Hash,
 		accType common.AccountType,
+		shouldUpdateContextSetPosition bool,
+		positionInContextSet int,
 	) (int32, bool, error)
-	GetTesseract(tsHash common.Hash) ([]byte, error)
+	GetRawTesseract(tsHash common.Hash) ([]byte, error)
 	SetTesseract(tsHash common.Hash, data []byte) error
 	HasTesseract(tsHash common.Hash) bool
 	GetTesseractHeightEntry(addr identifiers.Address, height uint64) ([]byte, error)
@@ -45,9 +48,10 @@ type store interface {
 	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
 	HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool
 	SetIXLookup(ixHash common.Hash, tsHash common.Hash) error
-	FetchTesseractFromDB(
+	GetTesseract(
 		hash common.Hash,
 		withInteractions bool,
+		withCommitInfo bool,
 	) (*common.Tesseract, error)
 }
 
@@ -128,20 +132,24 @@ func (c *ChainManager) UpdateNodeInclusivity(delta *common.DeltaGroup) error {
 
 func (c *ChainManager) GetTesseract(
 	hash common.Hash,
-	withInteractions bool,
+	withInteractions, withCommitInfo bool,
 ) (*common.Tesseract, error) {
 	if withInteractions {
-		return c.db.FetchTesseractFromDB(hash, withInteractions)
+		return c.db.GetTesseract(hash, withInteractions, withCommitInfo)
 	}
 
 	tesseractData, isCached := c.tesseracts.Get(hash)
 	if !isCached {
-		tesseract, err := c.db.FetchTesseractFromDB(hash, withInteractions)
+		tesseract, err := c.db.GetTesseract(hash, withInteractions, true)
 		if err != nil {
 			return nil, err
 		}
 
 		c.tesseracts.Add(hash, tesseract)
+
+		if !withCommitInfo {
+			return tesseract.GetTesseractWithoutCommitInfo(), nil
+		}
 
 		return tesseract, nil
 	}
@@ -151,6 +159,10 @@ func (c *ChainManager) GetTesseract(
 		return nil, common.ErrInterfaceConversion
 	}
 
+	if !withCommitInfo {
+		return tesseract.GetTesseractWithoutCommitInfo(), nil
+	}
+
 	return tesseract, nil
 }
 
@@ -158,13 +170,14 @@ func (c *ChainManager) GetTesseractByHeight(
 	address identifiers.Address,
 	height uint64,
 	withInteractions bool,
+	withCommitInfo bool,
 ) (*common.Tesseract, error) {
 	tesseractHash, err := c.db.GetTesseractHeightEntry(address, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch tesseract height entry")
 	}
 
-	return c.GetTesseract(common.BytesToHash(tesseractHash), withInteractions)
+	return c.GetTesseract(common.BytesToHash(tesseractHash), withInteractions, withCommitInfo)
 }
 
 func (c *ChainManager) GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error) {
@@ -220,10 +233,25 @@ func (c *ChainManager) storeReceipts(bw db.BatchWriter, ts *common.Tesseract) er
 	return nil
 }
 
+func (c *ChainManager) storeCommitInfo(bw db.BatchWriter, ts *common.Tesseract) error {
+	rawCommitInfo, err := ts.CommitInfo().Bytes()
+	if err != nil {
+		return err
+	}
+
+	if err = bw.Set(storage.TesseractCommitInfoKey(ts.Hash()), rawCommitInfo); err != nil {
+		return errors.Wrap(err, "error writing receipts to db")
+	}
+
+	return nil
+}
+
 // The storeInteractions function uses tesseract hash as a key to store interactions.
 // It also stores key-value pairs of ix hash and tesseract hash,
 func (c *ChainManager) storeInteractions(bw db.BatchWriter, ts *common.Tesseract) error {
-	ixRawData, err := ts.Interactions().Bytes()
+	ixs := ts.Interactions()
+
+	ixRawData, err := ixs.Bytes()
 	if err != nil {
 		return err
 	}
@@ -236,7 +264,7 @@ func (c *ChainManager) storeInteractions(bw db.BatchWriter, ts *common.Tesseract
 			fmt.Sprintf("error writing interactions to db with ts-hash %s", tsHash))
 	}
 
-	for _, ix := range ts.Interactions() {
+	for _, ix := range ts.Interactions().IxList() {
 		c.logger.Trace(
 			"Storing ts-hash by ix-hash", "ix-hash", ix.Hash(), "ts-hash", tsHash)
 
@@ -253,34 +281,41 @@ func (c *ChainManager) storeInteractions(bw db.BatchWriter, ts *common.Tesseract
 	return nil
 }
 
-func (c *ChainManager) addParticipant(
-	tsHash common.Hash,
-	addr identifiers.Address,
-	participantState common.State,
-	transition *state.Transition,
+func (c *ChainManager) addParticipant(addr identifiers.Address, tsHash common.Hash, commitHash common.Hash,
+	participantState common.State, transition *state.Transition,
 ) error {
 	if err := transition.Flush(addr); err != nil {
 		return err
 	}
 
 	c.logger.Info(
-		"Participant added", "addr", addr, "height ", participantState.Height, "ts-hash", tsHash)
+		"Participant added", "addr", addr, "height ",
+		participantState.Height, "ts-hash", tsHash, "state-hash", participantState.StateHash)
 
 	if err := c.db.SetTesseractHeightEntry(addr, participantState.Height, tsHash); err != nil {
 		return errors.Wrap(err, "failed to write tesseract height entry")
 	}
 
-	accType := transition.GetAccTypeUsingStateObject(addr)
+	var (
+		accType              = transition.GetAccTypeUsingStateObject(addr)
+		positionInContextSet int
+	)
 
-	_, _, err := c.db.UpdateAccMetaInfo(
+	if participantState.ContextDelta != nil {
+		positionInContextSet = participantState.ContextDelta.NodeIndex(c.network.GetKramaID())
+	}
+
+	if _, _, err := c.db.UpdateAccMetaInfo(
 		addr,
 		participantState.Height,
 		tsHash,
 		participantState.StateHash,
 		participantState.LatestContext,
+		commitHash,
 		accType,
-	)
-	if err != nil {
+		participantState.ContextDelta != nil,
+		positionInContextSet,
+	); err != nil {
 		return errors.Wrap(err, "account meta info update failed")
 	}
 
@@ -312,14 +347,28 @@ func (c *ChainManager) addParticipantsData(
 		participants[addr] = s
 	}
 
-	for address := range participants {
-		if c.db.HasAccMetaInfoAt(address, ts.Height(address)) {
+	for address, pState := range participants {
+		lockType, ok := ts.ConsensusInfo().AccountLocks[address]
+		if ok && lockType > common.MutateLock {
+			continue
+		}
+
+		if pState.StateHash != common.NilHash && c.db.HasAccMetaInfoAt(address, ts.Height(address)) {
 			return nil
 		}
 	}
 
 	for addr, participantState := range participants {
-		if err := c.addParticipant(ts.Hash(), addr, participantState, transition); err != nil {
+		if participantState.StateHash == common.NilHash {
+			continue
+		}
+
+		lockType, ok := ts.ConsensusInfo().AccountLocks[addr]
+		if ok && lockType > common.MutateLock {
+			continue
+		}
+
+		if err := c.addParticipant(addr, ts.Hash(), ts.CommitHash(), participantState, transition); err != nil {
 			return err
 		}
 	}
@@ -331,7 +380,7 @@ func (c *ChainManager) addTesseractData(
 	bw db.BatchWriter,
 	t *common.Tesseract,
 ) error {
-	tsRawData, err := t.Canonical().Bytes()
+	tsRawData, err := t.Bytes()
 	if err != nil {
 		return err
 	}
@@ -346,6 +395,10 @@ func (c *ChainManager) addTesseractData(
 
 	if err = c.storeReceipts(bw, t); err != nil {
 		return errors.Wrap(err, "failed to store receipts")
+	}
+
+	if err = c.storeCommitInfo(bw, t); err != nil {
+		return err
 	}
 
 	return nil
@@ -373,7 +426,7 @@ func (c *ChainManager) AddTesseract(
 			return errors.Wrap(err, "failed to flush tesseract")
 		}
 
-		c.logger.Info("Tesseract added", "ts-hash ", t.Hash())
+		c.logger.Info("ts added", "ts-hash ", t.Hash())
 
 		if cache {
 			c.tesseracts.Add(t.Hash(), t.GetTesseractWithoutIxns())
@@ -411,14 +464,14 @@ func (c *ChainManager) AddTesseractWithState(
 		return errors.New("nil tesseract")
 	}
 
-	if len(dirtyStorage) == 0 {
-		return errors.New("empty dirty storage")
-	}
+	// if len(dirtyStorage) == 0 {
+	//	return errors.New("empty dirty storage")
+	// }
 
 	tsAdditionInitTime := time.Now()
 
-	if _, ok := dirtyStorage[ts.ICSHash()]; !ok {
-		return errors.New("cluster info not found")
+	if ts.CommitInfo() == nil {
+		return common.ErrCommitInfoNotFound
 	}
 
 	if err := c.AddTesseract(true, addr, ts, transition, allParticipants); err != nil {
@@ -441,19 +494,19 @@ func (c *ChainManager) Close() {
 	c.logger.Info("Closing ChainManager.")
 }
 
-func (c *ChainManager) getInteractionsByTSHash(tsHash common.Hash) (common.Interactions, error) {
-	interactions := new(common.Interactions)
+func (c *ChainManager) getInteractionsByTSHash(tsHash common.Hash) ([]*common.Interaction, error) {
+	interactions := make([]*common.Interaction, 0)
 
 	buf, err := c.db.GetInteractions(tsHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "error fetching interactions")
 	}
 
-	if err := interactions.FromBytes(buf); err != nil {
+	if err := polo.Depolorize(&interactions, buf); err != nil {
 		return nil, err
 	}
 
-	return *interactions, nil
+	return interactions, nil
 }
 
 // GetInteractionAndParticipantsByTSHash returns interaction,participants for the given tesseract hash and ix index
@@ -462,21 +515,21 @@ func (c *ChainManager) GetInteractionAndParticipantsByTSHash(tsHash common.Hash,
 	common.ParticipantsState,
 	error,
 ) {
-	ts, err := c.GetTesseract(tsHash, true)
+	ts, err := c.GetTesseract(tsHash, true, false)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	interactions := ts.Interactions()
 
-	if ixIndex >= len(interactions) || ixIndex < 0 {
+	if ixIndex >= interactions.Len() || ixIndex < 0 {
 		return nil, nil, common.ErrIndexOutOfRange
 	}
 
-	return interactions[ixIndex], ts.Participants(), nil
+	return interactions.IxList()[ixIndex], ts.Participants(), nil
 }
 
-// GetInteractionAndParticipantsByIxHash returns interaction ,ts hash,
+// GetInteractionAndParticipantsByIxHash returns interaction,ts hash,
 // participants, ix index for the given tesseract hash
 func (c *ChainManager) GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (
 	*common.Interaction,
@@ -492,12 +545,12 @@ func (c *ChainManager) GetInteractionAndParticipantsByIxHash(ixHash common.Hash)
 
 	tsHash := common.BytesToHash(rawData)
 
-	ts, err := c.GetTesseract(tsHash, true)
+	ts, err := c.GetTesseract(tsHash, true, false)
 	if err != nil {
 		return nil, common.NilHash, nil, 0, err
 	}
 
-	for ixIndex, ix := range ts.Interactions() {
+	for ixIndex, ix := range ts.Interactions().IxList() {
 		if ix.Hash() == ixHash {
 			return ix, ts.Hash(), ts.Participants(), ixIndex, nil
 		}

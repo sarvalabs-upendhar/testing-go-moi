@@ -3,11 +3,10 @@ package e2e
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"testing"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -38,10 +37,9 @@ func createAssetCreatePayload(
 func transferAsset(
 	te *TestEnvironment,
 	sender tests.AccountWithMnemonic,
-	receiver identifiers.Address,
-	transferValues map[identifiers.AssetID]*big.Int,
+	payload *common.AssetActionPayload,
 ) {
-	ixHash, err := te.transferAsset(sender, receiver, transferValues)
+	ixHash, err := te.transferAsset(sender, payload)
 	require.NoError(te.T(), err)
 
 	// make sure interaction executed successfully
@@ -62,12 +60,41 @@ func createAsset(
 
 	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	var assetReceipt common.AssetCreationReceipt
+	var assetReceipt common.AssetCreationResult
 
-	err = json.Unmarshal(receipt.ExtraData, &assetReceipt)
+	err = json.Unmarshal(receipt.IxOps[0].Data, &assetReceipt)
 	require.NoError(te.T(), err)
 
 	return assetReceipt.AssetID
+}
+
+func createParticipant(
+	te *TestEnvironment,
+	sender tests.AccountWithMnemonic,
+	payload *common.ParticipantCreatePayload,
+) {
+	ixHash, err := te.createParticipant(sender, payload)
+	require.NoError(te.T(), err)
+
+	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
+}
+
+func deployLogic(
+	te *TestEnvironment,
+	sender tests.AccountWithMnemonic,
+	payload *common.LogicPayload,
+) identifiers.LogicID {
+	ixHash, err := te.deployLogic(sender, payload)
+	require.NoError(te.T(), err)
+
+	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
+
+	var logicDeployReceipt common.LogicDeployResult
+
+	err = json.Unmarshal(receipt.IxOps[0].Data, &logicDeployReceipt)
+	require.NoError(te.T(), err)
+
+	return logicDeployReceipt.LogicID
 }
 
 func getBalance(te *TestEnvironment, addr identifiers.Address, assetID identifiers.AssetID, height int64) uint64 {
@@ -91,7 +118,7 @@ func getBalance(te *TestEnvironment, addr identifiers.Address, assetID identifie
 //	defer cancel()
 //
 //	receipt := moiclient.RetryFetchReceipt(t, ctx, client, ixHash)
-//	require.Equal(t, common.ReceiptFailed, receipt.Status)
+//	require.Equal(t, common.ReceiptStateReverted, receipt.Status)
 // }
 
 func checkForReceiptSuccess(t *testing.T, client *moiclient.Client, ixHash common.Hash) *rpcargs.RPCReceipt {
@@ -102,7 +129,7 @@ func checkForReceiptSuccess(t *testing.T, client *moiclient.Client, ixHash commo
 	defer cancel()
 
 	receipt := moiclient.RetryFetchReceipt(t, ctx, client, ixHash)
-	require.Equalf(t, common.ReceiptOk, receipt.Status, fmt.Sprintf("%v", receipt.ExtraData))
+	require.Equal(t, common.ReceiptOk, receipt.Status)
 
 	return receipt
 }

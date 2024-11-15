@@ -5,6 +5,8 @@ import (
 	id "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/crypto"
+	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-polo"
 )
@@ -38,6 +40,8 @@ func (rc ICSResponseCode) String() string {
 
 	return "Invalid Status Code"
 }
+
+type signer func(data []byte, sigType mudraCommon.SigType, signOptions ...crypto.SignOption) ([]byte, error)
 
 type ICSPayload interface {
 	Bytes() ([]byte, error)
@@ -79,164 +83,99 @@ func (im *ICSMSG) FromBytes(bytes []byte) error {
 	return nil
 }
 
-type CanonicalICSRequest struct {
-	ClusterID               common.ClusterID
-	Operator                string
-	TrustedPeers            []id.KramaID
-	ContextLock             map[identifiers.Address]common.ContextLockInfo
-	IxData                  []byte
-	Timestamp               int64
-	StakingContractState    common.Hash
-	RandomSet               []id.KramaID
-	ObserverSet             []id.KramaID
-	RequiredRandomSetSize   uint32
-	RequiredObserverSetSize uint32
-	VrfOutput               [32]byte
-	VrfProof                []byte
-	ICSSeed                 [32]byte
+type Prepare struct {
+	View uint64
+	Ixns []common.Hash
+	Ps   []identifiers.Address
 }
 
-func (ics CanonicalICSRequest) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(ics)
+func (pm *Prepare) Bytes() ([]byte, error) {
+	raw, err := polo.Polorize(pm)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize canonical ics request")
+		return nil, errors.Wrap(err, "failed to polorize prepare msg")
 	}
 
-	return rawData, nil
+	return raw, nil
 }
 
-func (ics *CanonicalICSRequest) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(ics, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize canonical ics request")
+func (pm *Prepare) FromBytes(data []byte) error {
+	if err := polo.Depolorize(pm, data); err != nil {
+		return errors.Wrap(err, "failed to de polorize prepare msg")
 	}
 
 	return nil
 }
 
-type ICSRequest struct {
-	ReqData   []byte
+type Prepared struct {
+	View      uint64
+	Infos     common.Views
 	Signature []byte
 }
 
-func NewICSRequest(rawICSReq []byte, signature []byte) *ICSRequest {
-	return &ICSRequest{
-		ReqData:   rawICSReq,
-		Signature: signature,
-	}
+func (pdMsg *Prepared) Validate() error {
+	return nil
 }
 
-func (ir ICSRequest) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(ir)
+func (pdMsg *Prepared) Sign(sign signer) error {
+	if len(pdMsg.Signature) != 0 {
+		return errors.New("non nil signature")
+	}
+
+	rawMsg, err := pdMsg.SignBytes()
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize ics request message")
+		return err
 	}
 
-	return rawData, nil
-}
-
-func (ir *ICSRequest) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(ir, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize ics request message")
+	pdMsg.Signature, err = sign(rawMsg, mudraCommon.BlsBLST)
+	if err != nil {
+		return err
 	}
 
 	return nil
 }
 
-type ICSResponse struct {
-	StatusCode    ICSResponseCode
-	OperatorsInfo []ICSOperatorInfo
-}
+func (pdMsg *Prepared) SignBytes() ([]byte, error) {
+	polorizer := polo.NewPolorizer()
 
-func NewICSResponse(statusCode ICSResponseCode, operators []ICSOperatorInfo) *ICSResponse {
-	return &ICSResponse{
-		StatusCode:    statusCode,
-		OperatorsInfo: operators,
+	if err := polorizer.Polorize(pdMsg.View); err != nil {
+		return nil, err
 	}
+
+	if err := polorizer.Polorize(pdMsg.Infos); err != nil {
+		return nil, err
+	}
+
+	return polorizer.Bytes(), nil
 }
 
-func (ir ICSResponse) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(ir)
+func (pdMsg *Prepared) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(pdMsg)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize ics response message")
+		return nil, errors.Wrap(err, "failed to polorize ics message")
 	}
 
 	return rawData, nil
 }
 
-func (ir *ICSResponse) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(ir, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize ics response message")
-	}
-
-	return nil
-}
-
-type ICSSuccess struct {
-	ClusterID common.ClusterID
-	Responses []*common.ArrayOfBits
-	Signature []byte
-}
-
-func NewICSSuccess(responses []*common.ArrayOfBits, signature []byte) *ICSSuccess {
-	return &ICSSuccess{
-		Responses: responses,
-		Signature: signature,
-	}
-}
-
-func (is ICSSuccess) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(is)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize ics success message")
-	}
-
-	return rawData, nil
-}
-
-func (is *ICSSuccess) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(is, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize ics success message")
-	}
-
-	return nil
-}
-
-type ICSFailure struct {
-	ClusterID common.ClusterID
-}
-
-func NewICSFailure(clusterID common.ClusterID) *ICSFailure {
-	return &ICSFailure{
-		ClusterID: clusterID,
-	}
-}
-
-func (ifr ICSFailure) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(ifr)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize ics failure message")
-	}
-
-	return rawData, nil
-}
-
-func (ifr *ICSFailure) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(ifr, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize ics failure message")
+func (pdMsg *Prepared) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(pdMsg, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize ics message")
 	}
 
 	return nil
 }
 
 type ICSHave struct {
-	Votes            []*Vote
-	RoundVoteBitSets map[int32]*VoteBitSet
+	Proposal        *Proposal
+	Votes           []*Vote
+	ViewVoteBitSets map[uint64]*VoteBitSet
 }
 
-func NewICSHave(response map[int32]*VoteBitSet, vote ...*Vote) *ICSHave {
+func NewICSHave(response map[uint64]*VoteBitSet, proposal *Proposal, votes ...*Vote) *ICSHave {
 	return &ICSHave{
-		Votes:            vote,
-		RoundVoteBitSets: response,
+		Proposal:        proposal,
+		Votes:           votes,
+		ViewVoteBitSets: response,
 	}
 }
 
@@ -258,12 +197,12 @@ func (ih *ICSHave) FromBytes(bytes []byte) error {
 }
 
 type ICSWant struct {
-	RoundVoteBitSets map[int32]*VoteBitSet // Array index is the round number
+	ViewVoteBitSets map[uint64]*VoteBitSet // Array index is the round number
 }
 
-func NewICSWant(set map[int32]*VoteBitSet) *ICSWant {
+func NewICSWant(set map[uint64]*VoteBitSet) *ICSWant {
 	return &ICSWant{
-		RoundVoteBitSets: set,
+		ViewVoteBitSets: set,
 	}
 }
 

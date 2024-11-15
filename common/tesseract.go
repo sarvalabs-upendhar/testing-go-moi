@@ -10,11 +10,12 @@ import (
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
+	"golang.org/x/crypto/blake2b"
 )
 
 type State struct {
 	Height          uint64
-	TransitiveLink  Hash // transitive link is made up of multiple accounts data in previous grid formation
+	TransitiveLink  Hash
 	PreviousContext Hash
 	LatestContext   Hash
 	ContextDelta    *DeltaGroup
@@ -47,47 +48,50 @@ func (p ParticipantsState) Copy() ParticipantsState {
 	return participants
 }
 
-type PoXtData struct {
-	BinaryHash   Hash         `json:"binary_hash"`
-	IdentityHash Hash         `json:"identity_hash"`
-	ICSHash      Hash         `json:"ics_hash"`
-	ICSSeed      [32]byte     `json:"ics_seed"`
-	ICSProof     []byte       `json:"ics_proof"`
-	ClusterID    ClusterID    `json:"cluster_id"`
-	ICSSignature []byte       `json:"ics_signature"`
-	ICSVoteset   *ArrayOfBits `json:"ics_vote_set"`
+func (p ParticipantsState) IsExcluded(addr identifiers.Address) bool {
+	state, ok := p[addr]
+	if !ok {
+		return true
+	}
 
-	// non canonical fields
-	EvidenceHash    Hash         `json:"evidence_hash"`
-	Round           int32        `json:"round"`
-	CommitSignature []byte       `json:"commit_signature"`
-	BFTVoteSet      *ArrayOfBits `json:"bft_vote_set"`
+	return state.StateHash == NilHash
 }
 
-func (p *PoXtData) Copy() PoXtData {
-	poxt := *p
+type PoXtData struct {
+	Proposer     kramaid.KramaID                  `json:"proposer"`
+	BinaryHash   Hash                             `json:"binary_hash"`
+	IdentityHash Hash                             `json:"identity_hash"`
+	View         uint64                           `json:"view"`
+	LastCommit   map[identifiers.Address]Hash     `json:"last_commit"`
+	EvidenceHash map[identifiers.Address]Hash     `json:"evidence_hash"`
+	AccountLocks map[identifiers.Address]LockType `json:"account_locks"`
+	ICSSeed      [32]byte                         `json:"ics_seed"`
+	ICSProof     []byte                           `json:"ics_proof"`
+}
 
-	if len(p.ICSSignature) > 0 {
-		poxt.ICSSignature = make([]byte, len(p.ICSSignature))
+type CommitInfo struct {
+	QC                        *Qc               `json:"commit_qc"`
+	Operator                  kramaid.KramaID   `json:"operator"`
+	ClusterID                 ClusterID         `json:"cluster_id"`
+	View                      uint64            `json:"commit_view"`
+	RandomSet                 []kramaid.KramaID `json:"random_set"`
+	RandomSetSizeWithoutDelta uint32            `json:"random_set_size"`
+}
 
-		copy(poxt.ICSSignature, p.ICSSignature)
+func (ci *CommitInfo) FromBytes(raw []byte) error {
+	if err := polo.Depolorize(ci, raw); err != nil {
+		return errors.Wrap(err, "failed to depolorize commit info")
 	}
 
-	if len(p.CommitSignature) > 0 {
-		poxt.CommitSignature = make([]byte, len(p.CommitSignature))
+	return nil
+}
 
-		copy(poxt.CommitSignature, p.CommitSignature)
-	}
+func (ci *CommitInfo) Bytes() ([]byte, error) {
+	return polo.Polorize(ci)
+}
 
-	if p.ICSVoteset != nil {
-		poxt.ICSVoteset = p.ICSVoteset.copy()
-	}
-
-	if p.BFTVoteSet != nil {
-		poxt.BFTVoteSet = p.BFTVoteSet.copy()
-	}
-
-	return poxt
+func (ci *CommitInfo) Hash() (Hash, error) {
+	return PoloHash(ci)
 }
 
 type Tesseract struct {
@@ -96,19 +100,19 @@ type Tesseract struct {
 	receiptsHash     Hash
 	epoch            *big.Int
 	timestamp        uint64
-	operator         string
 	fuelUsed         uint64
 	fuelLimit        uint64
 	consensusInfo    PoXtData
 
-	// non canonical fields
 	seal   []byte
 	sealBy kramaid.KramaID
 
-	// derived fields
+	// derived fields, these fields are not available in the encoded data
 	hash     atomic.Value
 	ixns     Interactions
 	receipts Receipts
+	// commitQc info associated with the current tesseract
+	commitInfo *CommitInfo
 }
 
 func NewTesseract(
@@ -117,13 +121,13 @@ func NewTesseract(
 	receiptHash Hash,
 	epoch *big.Int,
 	timestamp uint64,
-	operator string,
 	fuelUsed, fuelLimit uint64,
 	consensusInfo PoXtData,
 	seal []byte,
 	sealBy kramaid.KramaID,
 	ixns Interactions,
 	receipts Receipts,
+	commitInfo *CommitInfo,
 ) *Tesseract {
 	bytes := make([]byte, len(seal))
 	copy(bytes, seal)
@@ -134,16 +138,16 @@ func NewTesseract(
 		receiptsHash:     receiptHash,
 		epoch:            new(big.Int).Set(epoch),
 		timestamp:        timestamp,
-		operator:         operator,
 		fuelUsed:         fuelUsed,
 		fuelLimit:        fuelLimit,
-		consensusInfo:    consensusInfo.Copy(),
+		consensusInfo:    consensusInfo,
 
 		seal:   bytes,
 		sealBy: sealBy,
 
-		ixns:     ixns,
-		receipts: receipts,
+		ixns:       ixns,
+		receipts:   receipts,
+		commitInfo: commitInfo,
 	}
 
 	return t
@@ -156,7 +160,6 @@ func (t *Tesseract) Copy() *Tesseract {
 		t.ReceiptsHash(),
 		t.Epoch(),
 		t.Timestamp(),
-		t.Operator(),
 		t.FuelUsed(),
 		t.FuelLimit(),
 		t.ConsensusInfo(),
@@ -164,6 +167,7 @@ func (t *Tesseract) Copy() *Tesseract {
 		t.SealBy(),
 		t.Interactions(),
 		t.Receipts(),
+		t.CommitInfo(),
 	)
 }
 
@@ -189,31 +193,14 @@ func (t *Tesseract) Hash() Hash {
 		return actualHash
 	}
 
-	ts := CanonicalTesseract{
-		Participants:     t.participants,
-		InteractionsHash: t.interactionsHash,
-		ReceiptsHash:     t.receiptsHash,
-		Epoch:            t.epoch,
-		Timestamp:        t.timestamp,
-		Operator:         t.operator,
-		FuelUsed:         t.fuelUsed,
-		FuelLimit:        t.fuelLimit,
-		ConsensusInfo: PoXtData{
-			BinaryHash:   t.consensusInfo.BinaryHash,
-			IdentityHash: t.consensusInfo.IdentityHash,
-			ICSHash:      t.consensusInfo.ICSHash,
-			ClusterID:    t.consensusInfo.ClusterID,
-			ICSSignature: t.consensusInfo.ICSSignature,
-			ICSVoteset:   t.consensusInfo.ICSVoteset,
-		},
-	}
-
-	hash, err := PoloHash(ts)
+	raw, err := t.SignBytes()
 	if err != nil {
-		panic("failed to polorize tesseract")
+		panic(err)
 	}
 
-	t.hash.Store(hash)
+	hash := blake2b.Sum256(raw)
+
+	t.hash.Store(BytesToHash(hash[:]))
 
 	return hash
 }
@@ -228,6 +215,18 @@ func (t *Tesseract) HasParticipant(target identifiers.Address) bool {
 	return false
 }
 
+func (t *Tesseract) ExcludedAccounts() Addresses {
+	addrs := make(Addresses, 0)
+
+	for addr, ps := range t.participants {
+		if ps.StateHash == NilHash {
+			addrs = append(addrs, addr)
+		}
+	}
+
+	return addrs
+}
+
 func (t *Tesseract) Addresses() Addresses {
 	addrs := make(Addresses, 0, t.ParticipantCount())
 
@@ -238,6 +237,15 @@ func (t *Tesseract) Addresses() Addresses {
 	sort.Sort(addrs)
 
 	return addrs
+}
+
+func (t *Tesseract) Heights() map[identifiers.Address]uint64 {
+	heights := make(map[identifiers.Address]uint64)
+	for addr, ps := range t.participants {
+		heights[addr] = ps.Height
+	}
+
+	return heights
 }
 
 func (t *Tesseract) AnyAddress() identifiers.Address {
@@ -281,8 +289,8 @@ func (t *Tesseract) Timestamp() uint64 {
 	return t.timestamp
 }
 
-func (t *Tesseract) Operator() string {
-	return t.operator
+func (t *Tesseract) Operator() kramaid.KramaID {
+	return t.consensusInfo.Proposer
 }
 
 func (t *Tesseract) FuelUsed() uint64 {
@@ -297,8 +305,18 @@ func (t *Tesseract) ConsensusInfo() PoXtData {
 	return t.consensusInfo
 }
 
-func (t *Tesseract) BFTVoteSet() *ArrayOfBits {
-	return t.consensusInfo.BFTVoteSet
+func (t *Tesseract) CommitInfo() *CommitInfo {
+	return t.commitInfo
+}
+
+func (t *Tesseract) CommitHash() Hash {
+	if t.commitInfo == nil {
+		return NilHash
+	}
+
+	hash, _ := t.commitInfo.Hash()
+
+	return hash
 }
 
 func (t *Tesseract) Seal() []byte {
@@ -309,12 +327,11 @@ func (t *Tesseract) SealBy() kramaid.KramaID {
 	return t.sealBy
 }
 
-func (t *Tesseract) ExecutionContext(participants map[identifiers.Address]IxParticipant) *ExecutionContext {
+func (t *Tesseract) ExecutionContext() *ExecutionContext {
 	return &ExecutionContext{
-		Participants: participants,
-		CtxDelta:     t.ContextDelta(),
-		Cluster:      t.ClusterID(),
-		Time:         t.Timestamp(),
+		CtxDelta: t.ContextDelta(),
+		Cluster:  t.ClusterID(),
+		Time:     t.Timestamp(),
 	}
 }
 
@@ -335,7 +352,12 @@ func (t *Tesseract) HasReceipts() bool {
 }
 
 func (t *Tesseract) Height(address identifiers.Address) uint64 {
-	return t.participants[address].Height
+	ps, ok := t.participants[address]
+	if !ok {
+		return 0
+	}
+
+	return ps.Height
 }
 
 func (t *Tesseract) TransitiveLink(address identifiers.Address) Hash {
@@ -386,11 +408,7 @@ func (t *Tesseract) GetContextDelta(address identifiers.Address) (*DeltaGroup, b
 }
 
 func (t *Tesseract) ClusterID() ClusterID {
-	return t.consensusInfo.ClusterID
-}
-
-func (t *Tesseract) ICSHash() Hash {
-	return t.consensusInfo.ICSHash
+	return t.commitInfo.ClusterID
 }
 
 func (t *Tesseract) ICSSeed() [32]byte {
@@ -401,20 +419,16 @@ func (t *Tesseract) ICSProof() []byte {
 	return t.consensusInfo.ICSProof
 }
 
-func (t *Tesseract) SetRound(round int32) {
-	t.consensusInfo.Round = round
+func (t *Tesseract) SetView(view uint64) {
+	t.consensusInfo.View = view
 }
 
-func (t *Tesseract) SetCommitSignature(sig []byte) {
-	t.consensusInfo.CommitSignature = sig
+func (t *Tesseract) SetCommitQc(qc *Qc) {
+	t.commitInfo.QC = qc
 }
 
-func (t *Tesseract) SetEvidenceHash(hash Hash) {
-	t.consensusInfo.EvidenceHash = hash
-}
-
-func (t *Tesseract) SetBFTVoteSet(v *ArrayOfBits) {
-	t.consensusInfo.BFTVoteSet = v
+func (t *Tesseract) SetEvidenceHash(addr identifiers.Address, hash Hash) {
+	t.consensusInfo.EvidenceHash[addr] = hash
 }
 
 func (t *Tesseract) SetSeal(seal []byte) {
@@ -429,55 +443,146 @@ func (t *Tesseract) SetIxns(ixns Interactions) {
 	t.ixns = ixns
 }
 
-func (t *Tesseract) Bytes() ([]byte, error) {
-	c := t.CanonicalWithoutSeal()
+func (t *Tesseract) Polorize() (*polo.Polorizer, error) {
+	polorizer := polo.NewPolorizer()
 
-	rawData, err := polo.Polorize(c)
+	if err := polorizer.Polorize(t.participants); err != nil {
+		return nil, err
+	}
+
+	polorizer.PolorizeBytes(t.interactionsHash.Bytes())
+	polorizer.PolorizeBytes(t.receiptsHash.Bytes())
+	polorizer.PolorizeBigInt(t.epoch)
+	polorizer.PolorizeUint(t.timestamp)
+	polorizer.PolorizeUint(t.fuelUsed)
+	polorizer.PolorizeUint(t.fuelLimit)
+
+	if err := polorizer.Polorize(t.consensusInfo); err != nil {
+		return nil, err
+	}
+
+	polorizer.PolorizeBytes(t.seal)
+	polorizer.PolorizeString(string(t.SealBy()))
+
+	return polorizer, nil
+}
+
+func (t *Tesseract) SignBytes() ([]byte, error) {
+	polorizer := polo.NewPolorizer()
+	if err := polorizer.Polorize(t.participants); err != nil {
+		return nil, err
+	}
+
+	polorizer.PolorizeBytes(t.interactionsHash.Bytes())
+	polorizer.PolorizeBytes(t.receiptsHash.Bytes())
+	polorizer.PolorizeBigInt(t.epoch)
+	polorizer.PolorizeUint(t.timestamp)
+	polorizer.PolorizeUint(t.fuelUsed)
+	polorizer.PolorizeUint(t.fuelLimit)
+
+	if err := polorizer.Polorize(t.consensusInfo); err != nil {
+		return nil, err
+	}
+
+	return polorizer.Bytes(), nil
+}
+
+func (t *Tesseract) Depolorize(depolorizer *polo.Depolorizer) (err error) {
+	depolorizer, err = depolorizer.DepolorizePacked()
+	if errors.Is(err, polo.ErrNullPack) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	ps := make(ParticipantsState)
+	consensusInfo := new(PoXtData)
+
+	if err = depolorizer.Depolorize(&ps); err != nil {
+		return err
+	}
+
+	rawIxnHash, err := depolorizer.DepolorizeBytes()
+	if err != nil {
+		return err
+	}
+
+	t.interactionsHash = BytesToHash(rawIxnHash)
+
+	rawReceiptsHash, err := depolorizer.DepolorizeBytes()
+	if err != nil {
+		return err
+	}
+
+	t.receiptsHash = BytesToHash(rawReceiptsHash)
+
+	if t.epoch, err = depolorizer.DepolorizeBigInt(); err != nil {
+		return err
+	}
+
+	if t.timestamp, err = depolorizer.DepolorizeUint(); err != nil {
+		return err
+	}
+
+	if t.fuelUsed, err = depolorizer.DepolorizeUint(); err != nil {
+		return err
+	}
+
+	if t.fuelLimit, err = depolorizer.DepolorizeUint(); err != nil {
+		return err
+	}
+
+	if err = depolorizer.Depolorize(consensusInfo); err != nil {
+		return err
+	}
+
+	if t.seal, err = depolorizer.DepolorizeBytes(); err != nil {
+		return err
+	}
+
+	sealer, err := depolorizer.DepolorizeString()
+	if err != nil {
+		return err
+	}
+
+	t.sealBy = kramaid.KramaID(sealer)
+	t.participants = ps
+	t.consensusInfo = *consensusInfo
+
+	return nil
+}
+
+func (t *Tesseract) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(t)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to polorize tesseract")
 	}
 
-	return rawData, nil
+	return data, nil
 }
 
-func (t *Tesseract) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(t, bytes); err != nil {
+func (t *Tesseract) FromBytes(data []byte) error {
+	if err := polo.Depolorize(t, data); err != nil {
 		return errors.Wrap(err, "failed to depolorize tesseract")
 	}
 
 	return nil
 }
 
-// Canonical method returns a copy of the tesseract without interactions
-func (t *Tesseract) Canonical() *CanonicalTesseract {
-	return &CanonicalTesseract{
-		Participants:     t.participants,
-		InteractionsHash: t.interactionsHash,
-		ReceiptsHash:     t.receiptsHash,
-		Epoch:            t.epoch,
-		Timestamp:        t.timestamp,
-		Operator:         t.operator,
-		FuelUsed:         t.fuelUsed,
-		FuelLimit:        t.fuelLimit,
-		ConsensusInfo:    t.consensusInfo,
-		Seal:             t.seal,
-		SealBy:           t.sealBy,
+func (t *Tesseract) ValidateAllParticipantsState() bool {
+	for _, state := range t.participants {
+		if state.StateHash == NilHash {
+			return false
+		}
 	}
+
+	return true
 }
 
-// CanonicalWithoutSeal method returns a copy of the tesseract without seal and interactions
-func (t *Tesseract) CanonicalWithoutSeal() *CanonicalTesseractWithoutSeal {
-	return &CanonicalTesseractWithoutSeal{
-		Participants:     t.participants,
-		InteractionsHash: t.interactionsHash,
-		ReceiptsHash:     t.receiptsHash,
-		Epoch:            t.epoch,
-		Timestamp:        t.timestamp,
-		Operator:         t.operator,
-		FuelUsed:         t.fuelUsed,
-		FuelLimit:        t.fuelLimit,
-		ConsensusInfo:    t.consensusInfo,
-	}
+func (t *Tesseract) WithIxnAndReceipts(ixs Interactions, receipts Receipts, commitInfo *CommitInfo) {
+	t.ixns = ixs
+	t.receipts = receipts
+	t.commitInfo = commitInfo
 }
 
 func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
@@ -487,78 +592,28 @@ func (t *Tesseract) GetTesseractWithoutIxns() *Tesseract {
 		receiptsHash:     t.receiptsHash,
 		epoch:            t.epoch,
 		timestamp:        t.timestamp,
-		operator:         t.operator,
 		fuelUsed:         t.fuelUsed,
 		fuelLimit:        t.fuelLimit,
 		consensusInfo:    t.consensusInfo,
 		seal:             t.seal,
 		sealBy:           t.sealBy,
+		commitInfo:       t.commitInfo,
 	}
 }
 
-type CanonicalTesseractWithoutSeal struct {
-	Participants     map[identifiers.Address]State
-	InteractionsHash Hash
-	ReceiptsHash     Hash
-	Epoch            *big.Int
-	Timestamp        uint64
-	Operator         string
-	FuelUsed         uint64
-	FuelLimit        uint64
-	ConsensusInfo    PoXtData
-}
-
-type CanonicalTesseract struct {
-	Participants     ParticipantsState
-	InteractionsHash Hash
-	ReceiptsHash     Hash
-	Epoch            *big.Int
-	Timestamp        uint64
-	Operator         string
-	FuelUsed         uint64
-	FuelLimit        uint64
-	ConsensusInfo    PoXtData
-	Seal             []byte
-	SealBy           kramaid.KramaID
-}
-
-// Bytes method polorizes and returns the canonical tesseract in bytes
-func (c *CanonicalTesseract) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(c)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize canonical tesseract")
-	}
-
-	return rawData, nil
-}
-
-func (c *CanonicalTesseract) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(c, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize canonical tesseract")
-	}
-
-	return nil
-}
-
-// TODO: WRITE TEST
-func (c *CanonicalTesseract) ToTesseract(ixns Interactions, receipts Receipts) *Tesseract {
+func (t *Tesseract) GetTesseractWithoutCommitInfo() *Tesseract {
 	return &Tesseract{
-		participants:     c.Participants,
-		interactionsHash: c.InteractionsHash,
-		receiptsHash:     c.ReceiptsHash,
-		epoch:            c.Epoch,
-		timestamp:        c.Timestamp,
-		operator:         c.Operator,
-		fuelUsed:         c.FuelUsed,
-		fuelLimit:        c.FuelLimit,
-		consensusInfo:    c.ConsensusInfo,
-
-		// non canonical fields
-		seal:   c.Seal,
-		sealBy: c.SealBy,
-
-		// derived fields
-		ixns:     ixns,
-		receipts: receipts,
+		participants:     t.participants,
+		interactionsHash: t.interactionsHash,
+		receiptsHash:     t.receiptsHash,
+		epoch:            t.epoch,
+		timestamp:        t.timestamp,
+		fuelUsed:         t.fuelUsed,
+		fuelLimit:        t.fuelLimit,
+		consensusInfo:    t.consensusInfo,
+		seal:             t.seal,
+		sealBy:           t.sealBy,
+		ixns:             t.ixns,
+		receipts:         t.receipts,
 	}
 }

@@ -3,16 +3,21 @@ package api
 import (
 	"encoding/hex"
 	"errors"
-	"math/big"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
 	"github.com/sarvalabs/go-polo"
 )
 
-var ErrGenesisAccount = errors.New("genesis account interactions forbidden")
+const MaxAllowedOps = 3
+
+var (
+	ErrEmptyIxOps           = errors.New("ix operations cannot be empty")
+	ErrTooManyIxOps         = errors.New("max 3 ops allowed")
+	ErrAssetCreationLimit   = errors.New("maximum one asset creation allowed")
+	ErrLogicDeploymentLimit = errors.New("maximum one logic deployment allowed")
+)
 
 // SendInteractions is a method of PublicIXAPI that stores the interaction
 func (p *PublicCoreAPI) SendInteractions(sendIx *rpcargs.SendIX) (common.Hash, error) {
@@ -21,19 +26,21 @@ func (p *PublicCoreAPI) SendInteractions(sendIx *rpcargs.SendIX) (common.Hash, e
 		return common.NilHash, err
 	}
 
-	ixArgs, err := validateArgumentsWithSign(sendIx)
+	ixData, err := validateArgumentsWithSign(sendIx)
 	if err != nil {
 		return common.NilHash, err
 	}
 
-	ixn, err := constructInteraction(ixArgs, sign)
+	ixn, err := common.NewInteraction(*ixData, sign)
 	if err != nil {
 		return common.NilHash, err
 	}
 
 	// TODO Add validation to check for max ixn group size
 	// add the interactions to ix pool
-	errs := p.ixpool.AddLocalInteractions(common.Interactions{ixn})
+	ixs := common.NewInteractionsWithLeaderCheck(true, ixn)
+
+	errs := p.ixpool.AddLocalInteractions(ixs)
 	if len(errs) > 0 {
 		return common.NilHash, errs[0]
 	}
@@ -41,133 +48,164 @@ func (p *PublicCoreAPI) SendInteractions(sendIx *rpcargs.SendIX) (common.Hash, e
 	return ixn.Hash(), nil
 }
 
-// helper function for moi.SendInteractions
-func constructInteraction(args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
-	if args.FuelPrice == nil {
-		return nil, common.ErrFuelPriceNotFound
-	}
-
-	if args.FuelLimit == 0 {
-		return nil, common.ErrFuelLimitNotFound
-	}
-
-	data := common.IxData{
-		Input: common.IxInput{
-			Type:            args.Type,
-			Nonce:           args.Nonce,
-			Sender:          args.Sender,
-			Receiver:        args.Receiver,
-			Payer:           args.Payer,
-			TransferValues:  args.TransferValues,
-			PerceivedValues: args.PerceivedValues,
-			FuelPrice:       args.FuelPrice,
-			FuelLimit:       args.FuelLimit,
-			Payload:         args.Payload,
-		},
-	}
-
-	return common.NewInteraction(data, sign)
-}
-
 // validateArgumentsWithSign checks whether the IXArgs are valid or not
-func validateArgumentsWithSign(args *rpcargs.SendIX) (*common.SendIXArgs, error) {
+func validateArgumentsWithSign(args *rpcargs.SendIX) (*common.IxData, error) {
 	bz, err := hex.DecodeString(args.IXArgs)
 	if err != nil {
 		return nil, err
 	}
 
-	ixArgs := new(common.SendIXArgs)
+	ixData := new(common.IxData)
 
-	err = polo.Depolorize(ixArgs, bz)
+	err = polo.Depolorize(ixData, bz)
 	if err != nil {
 		return nil, err
 	}
 
-	if ixArgs.Sender.IsNil() {
-		return nil, common.ErrInvalidAddress
+	if err = validateIxData(ixData, true); err != nil {
+		return nil, err
 	}
 
-	if ixArgs.Sender == ixArgs.Receiver {
-		return nil, common.ErrInvalidIxParticipants
+	return ixData, nil
+}
+
+func validateIxData(ixData *common.IxData, requiresFuel bool) error {
+	if ixData.Sender.IsNil() {
+		return common.ErrInvalidAddress
 	}
 
 	// Reject genesis account interaction
-	if ixArgs.Sender == common.SargaAddress {
-		return nil, ErrGenesisAccount
+	if ixData.Sender == common.SargaAddress {
+		return common.ErrGenesisAccount
 	}
 
-	if !ixArgs.Receiver.IsNil() {
-		// Reject genesis account interaction
-		if ixArgs.Receiver == common.SargaAddress {
-			return nil, ErrGenesisAccount
+	if requiresFuel {
+		if err := validateFuel(ixData); err != nil {
+			return err
 		}
 	}
 
-	// TODO: Add more checks to validate inputs
+	if err := validateIxOps(ixData.IxOps); err != nil {
+		return err
+	}
 
-	return ixArgs, nil
+	return nil
+}
+
+func validateFuel(ixData *common.IxData) error {
+	if ixData.FuelPrice == nil {
+		return common.ErrFuelPriceNotFound
+	}
+
+	if ixData.FuelLimit == 0 {
+		return common.ErrFuelLimitNotFound
+	}
+
+	return nil
+}
+
+func validateIxOps(ixOps []common.IxOpRaw) error {
+	if len(ixOps) == 0 {
+		return ErrEmptyIxOps
+	}
+
+	if len(ixOps) > MaxAllowedOps {
+		return ErrTooManyIxOps
+	}
+
+	assetCreationCount, logicDeployCount := 0, 0
+
+	for _, op := range ixOps {
+		if op.Type == common.IxAssetCreate {
+			assetCreationCount++
+
+			continue
+		}
+
+		if op.Type == common.IxLogicDeploy {
+			logicDeployCount++
+		}
+	}
+
+	if assetCreationCount > 1 {
+		return ErrAssetCreationLimit
+	}
+
+	if logicDeployCount > 1 {
+		return ErrLogicDeploymentLimit
+	}
+
+	return nil
 }
 
 // helper function for moi.Call and moi.FuelEstimate
-func constructIxn(sm backend.StateManager, args *common.SendIXArgs, sign []byte) (ix *common.Interaction, err error) {
-	data := common.IxData{
-		Input: common.IxInput{
-			Type:            args.Type,
-			Nonce:           args.Nonce,
-			Sender:          args.Sender,
-			Receiver:        args.Receiver,
-			Payer:           args.Payer,
-			TransferValues:  args.TransferValues,
-			PerceivedValues: args.PerceivedValues,
-			Payload:         args.Payload,
-		},
-	}
+func constructIxn(sm backend.StateManager, ixData *common.IxData, sign []byte) (ix *common.Interaction, err error) {
+	for _, op := range ixData.IxOps {
+		if op.Type == common.IxLogicDeploy || op.Type == common.IxAssetCreate {
+			nonce, err := sm.GetNonce(ixData.Sender, common.NilHash)
+			if err != nil {
+				return nil, err
+			}
 
-	if args.FuelPrice != nil {
-		data.Input.FuelPrice = args.FuelPrice
-	}
+			ixData.Nonce = nonce
 
-	if args.FuelLimit != 0 {
-		data.Input.FuelLimit = args.FuelLimit
-	}
-
-	if data.Input.Type == common.IxLogicDeploy || data.Input.Type == common.IxAssetCreate {
-		nonce, err := sm.GetNonce(args.Sender, common.NilHash)
-		if err != nil {
-			return nil, err
+			break
 		}
-
-		data.Input.Nonce = nonce
 	}
 
-	return common.NewInteraction(data, sign)
+	return common.NewInteraction(*ixData, sign)
 }
 
-func createSendIXArgs(sendIx *rpcargs.IxArgs) (*common.SendIXArgs, error) {
-	sendIXArgs := &common.SendIXArgs{
-		Type:      sendIx.Type,
-		Nonce:     0,
-		Sender:    sendIx.Sender,
-		Receiver:  sendIx.Receiver,
-		Payer:     sendIx.Payer,
-		FuelPrice: sendIx.FuelPrice.ToInt(),
-		FuelLimit: uint64(sendIx.FuelLimit),
-		Payload:   sendIx.Payload.Bytes(),
+func createIxData(ixArgs *rpcargs.IxArgs) *common.IxData {
+	ixData := &common.IxData{
+		Sender: ixArgs.Sender,
+		Payer:  ixArgs.Payer,
+		Nonce:  ixArgs.Nonce.ToUint64(),
+
+		FuelPrice:  ixArgs.FuelPrice.ToInt(),
+		FuelLimit:  uint64(ixArgs.FuelLimit),
+		Perception: ixArgs.Perception.Bytes(),
 	}
 
-	if len(sendIx.TransferValues) > 0 {
-		sendIXArgs.TransferValues = make(map[identifiers.AssetID]*big.Int)
-		for asset, amount := range sendIx.TransferValues {
-			sendIXArgs.TransferValues[asset] = amount.ToInt()
+	if len(ixArgs.Funds) > 0 {
+		ixData.Funds = make([]common.IxFund, len(ixArgs.Funds))
+		for idx, asset := range ixArgs.Funds {
+			ixData.Funds[idx] = common.IxFund{
+				AssetID: asset.AssetID,
+				Amount:  asset.Amount.ToInt(),
+			}
 		}
 	}
 
-	if len(sendIx.PerceivedValues) > 0 {
-		sendIXArgs.PerceivedValues = make(map[identifiers.AssetID]*big.Int)
-		for asset, amount := range sendIx.PerceivedValues {
-			sendIXArgs.PerceivedValues[asset] = amount.ToInt()
+	if len(ixArgs.IxOps) > 0 {
+		ixData.IxOps = make([]common.IxOpRaw, len(ixArgs.IxOps))
+		for idx, op := range ixArgs.IxOps {
+			ixData.IxOps[idx] = common.IxOpRaw{
+				Type:    op.Type,
+				Payload: op.Payload.Bytes(),
+			}
 		}
 	}
 
-	return sendIXArgs, nil
+	if len(ixArgs.Participants) > 0 {
+		ixData.Participants = make([]common.IxParticipant, len(ixArgs.Participants))
+		for idx, participant := range ixArgs.Participants {
+			ixData.Participants[idx] = common.IxParticipant{
+				Address:  participant.Address,
+				LockType: participant.LockType,
+			}
+		}
+	}
+
+	if ixArgs.Preferences != nil {
+		ixData.Preferences = &common.IxPreferences{
+			Compute: ixArgs.Preferences.Compute.Bytes(),
+			Consensus: &common.IxConsensusPreference{
+				MTQ:        ixArgs.Preferences.Consensus.MTQ.ToInt(),
+				TrustNodes: ixArgs.Preferences.Consensus.TrustNodes,
+			},
+		}
+	}
+
+	return ixData
 }

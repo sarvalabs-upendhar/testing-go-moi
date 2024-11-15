@@ -142,9 +142,11 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 	id identifiers.Address,
 	height uint64,
 	tesseractHash common.Hash,
-	stateHash common.Hash,
-	contextHash common.Hash,
+	stateHash, contextHash common.Hash,
+	commitHash common.Hash,
 	accType common.AccountType,
+	shouldUpdateContextSetPosition bool,
+	positionInContextSet int,
 ) (int32, bool, error) {
 	if id.IsNil() {
 		return 0, false, common.ErrInvalidAddress
@@ -167,12 +169,17 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			return -1, false, common.ErrHashMismatch
 		}
 
+		if shouldUpdateContextSetPosition {
+			accMetaInfo.PositionInContextSet = positionInContextSet
+		}
+
 		if height >= accMetaInfo.Height {
 			accMetaInfo.TesseractHash = tesseractHash
 			accMetaInfo.StateHash = stateHash
 			accMetaInfo.ContextHash = contextHash
 			accMetaInfo.Address = id
 			accMetaInfo.Height = height
+			accMetaInfo.CommitHash = commitHash
 		}
 
 		rawData, err := accMetaInfo.Bytes()
@@ -183,12 +190,14 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 		return int32(bucketID), false, p.UpdateEntry(key, rawData)
 	} else if errors.Is(err, common.ErrKeyNotFound) {
 		msg := common.AccountMetaInfo{
-			TesseractHash: tesseractHash,
-			StateHash:     stateHash,
-			ContextHash:   contextHash,
-			Type:          accType,
-			Address:       id,
-			Height:        height,
+			TesseractHash:        tesseractHash,
+			StateHash:            stateHash,
+			ContextHash:          contextHash,
+			Type:                 accType,
+			Address:              id,
+			Height:               height,
+			CommitHash:           commitHash,
+			PositionInContextSet: positionInContextSet,
 		}
 
 		rawData, err := msg.Bytes()
@@ -222,40 +231,6 @@ func (p *PersistenceManager) Close() {
 // CreateEntry stores the given k-v entry in database
 func (p *PersistenceManager) CreateEntry(key []byte, value []byte) error {
 	return p.db.Insert(key, value)
-}
-
-// UpdateTesseractStatus is used to update the tesseract state after syncing
-func (p *PersistenceManager) UpdateTesseractStatus(
-	addr identifiers.Address,
-	height uint64,
-	tsHash common.Hash,
-) error {
-	key, _ := BucketKeyAndID(addr)
-
-	data, err := p.ReadEntry(key)
-	if err != nil {
-		return err
-	}
-
-	accMetaInfo := new(common.AccountMetaInfo)
-	if err := accMetaInfo.FromBytes(data); err != nil {
-		return err
-	}
-
-	if height < accMetaInfo.Height {
-		return nil
-	}
-
-	if tsHash != accMetaInfo.TesseractHash {
-		return common.ErrHashMismatch
-	}
-
-	rawData, err := accMetaInfo.Bytes()
-	if err != nil {
-		return err
-	}
-
-	return p.UpdateEntry(key, rawData)
 }
 
 // UpdateEntry updates the value associated with the given key
@@ -395,7 +370,7 @@ func (p *PersistenceManager) GetStorage(addr identifiers.Address, hash common.Ha
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetTesseract(tsHash common.Hash) ([]byte, error) {
+func (p *PersistenceManager) GetRawTesseract(tsHash common.Hash) ([]byte, error) {
 	key := dbKey(identifiers.NilAddress, Tesseract, tsHash.Bytes())
 
 	return p.ReadEntry(key)
@@ -412,7 +387,7 @@ func (p *PersistenceManager) HasTesseract(tsHash common.Hash) bool {
 
 	exists, err := p.db.Has(key)
 	if err != nil {
-		p.logger.Error("Failed to check for tesseract", "err", err)
+		p.logger.Error("failed to check for tesseract", "err", err)
 	}
 
 	return exists
@@ -453,6 +428,12 @@ func (p *PersistenceManager) GetIXLookup(ixHash common.Hash) ([]byte, error) {
 // SetReceipts stores tesseract hash and raw receipt data as key value pair
 func (p *PersistenceManager) SetReceipts(tsHash common.Hash, data []byte) error {
 	key := dbKey(identifiers.NilAddress, Receipt, tsHash.Bytes())
+
+	return p.CreateEntry(key, data)
+}
+
+func (p *PersistenceManager) SetCommitInfo(tsHash common.Hash, data []byte) error {
+	key := TesseractCommitInfoKey(tsHash)
 
 	return p.CreateEntry(key, data)
 }
@@ -642,29 +623,30 @@ func (p *PersistenceManager) GetAccountsSyncStatus() ([]*common.AccountSyncStatu
 	return syncInfos, nil
 }
 
-func (p *PersistenceManager) FetchTesseractFromDB(
-	hash common.Hash,
-	withInteractions bool,
+func (p *PersistenceManager) GetTesseract(
+	tsHash common.Hash,
+	withInteractions, withCommitInfo bool,
 ) (*common.Tesseract, error) {
-	// Fetch Tesseract from DB
-	rawTesseract, err := p.GetTesseract(hash)
+	// Fetch ts from DB
+	rawTesseract, err := p.GetRawTesseract(tsHash)
 	if err != nil {
 		return nil, err
 	}
 
-	// canonicalTesseract is a clone of the tesseract. The only difference is that it won't have the interactions field.
-	canonicalTesseract := new(common.CanonicalTesseract)
+	// ts is a clone of the tesseract. The only difference is that it won't have the interaction's
+	ts := new(common.Tesseract)
 
-	if err = canonicalTesseract.FromBytes(rawTesseract); err != nil {
+	if err = ts.FromBytes(rawTesseract); err != nil {
 		return nil, err
 	}
 
 	interactions := new(common.Interactions)
 	receipts := new(common.Receipts)
+	commitInfo := new(common.CommitInfo)
 
 	// Fetch interactions for non-genesis tesseracts from DB
-	if withInteractions && canonicalTesseract.ConsensusInfo.ClusterID != common.GenesisIdentifier {
-		rawIxns, err := p.GetInteractions(hash)
+	if withInteractions && ts.ConsensusInfo().View != common.GenesisView {
+		rawIxns, err := p.GetInteractions(tsHash)
 		if err != nil {
 			return nil, errors.Wrap(err, common.ErrFetchingInteractions.Error())
 		}
@@ -673,7 +655,7 @@ func (p *PersistenceManager) FetchTesseractFromDB(
 			return nil, err
 		}
 
-		rawReceipts, err := p.GetReceipts(hash)
+		rawReceipts, err := p.GetReceipts(tsHash)
 		if err != nil {
 			return nil, errors.Wrap(err, common.ErrReceiptNotFound.Error())
 		}
@@ -685,7 +667,18 @@ func (p *PersistenceManager) FetchTesseractFromDB(
 		}
 	}
 
-	ts := canonicalTesseract.ToTesseract(*interactions, *receipts)
+	if withCommitInfo {
+		rawCommitInfo, err := p.GetCommitInfo(tsHash)
+		if err != nil {
+			return nil, errors.Wrap(err, common.ErrCommitInfoNotFound.Error())
+		}
+
+		if err = commitInfo.FromBytes(rawCommitInfo); err != nil {
+			return nil, err
+		}
+	}
+
+	ts.WithIxnAndReceipts(*interactions, *receipts, commitInfo)
 
 	return ts, nil
 }
@@ -696,6 +689,10 @@ func (p *PersistenceManager) GetAssetRegistry(addr identifiers.Address, registry
 
 func (p *PersistenceManager) DropPrefix(prefix []byte) error {
 	return p.db.DropWithPrefix(prefix)
+}
+
+func (p *PersistenceManager) GetCommitInfo(tsHash common.Hash) ([]byte, error) {
+	return p.db.Get(TesseractCommitInfoKey(tsHash))
 }
 
 func (p *PersistenceManager) UpdatePrimarySyncStatus(address identifiers.Address) error {
@@ -730,4 +727,45 @@ func (p *PersistenceManager) UpdatePrincipalSyncStatus() error {
 
 func (p *PersistenceManager) GetLastActiveTimeStamp() uint64 {
 	return p.db.GetLastActiveTimeStamp()
+}
+
+func (p *PersistenceManager) SetConsensusProposalInfo(tsHash common.Hash, raw []byte) error {
+	return p.CreateEntry(ConsensusProposalKey(tsHash), raw)
+}
+
+func (p *PersistenceManager) DeleteConsensusProposalInfo(tsHash common.Hash) error {
+	return p.DeleteEntry(ConsensusProposalKey(tsHash))
+}
+
+func (p *PersistenceManager) GetConsensusProposalInfo(tsHash common.Hash) ([]byte, error) {
+	return p.ReadEntry(ConsensusProposalKey(tsHash))
+}
+
+func (p *PersistenceManager) GetAllConsensusProposalInfo(ctx context.Context) ([][]byte, error) {
+	values := make([][]byte, 0)
+
+	prefix := append([]byte(NonAccountPrefix), ConsensusProposals.Byte())
+
+	entries, err := p.GetEntriesWithPrefix(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+
+	for entry := range entries {
+		values = append(values, entry.Value)
+	}
+
+	return values, nil
+}
+
+func (p *PersistenceManager) GetSafetyData(addr identifiers.Address) ([]byte, error) {
+	return p.ReadEntry(AccountSafetyInfoKey(addr))
+}
+
+func (p *PersistenceManager) SetSafetyData(addr identifiers.Address, data []byte) error {
+	return p.UpdateEntry(AccountSafetyInfoKey(addr), data)
+}
+
+func (p *PersistenceManager) DeleteSafetyData(addr identifiers.Address) error {
+	return p.DeleteEntry(AccountSafetyInfoKey(addr))
 }

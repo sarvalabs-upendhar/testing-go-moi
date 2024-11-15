@@ -36,6 +36,7 @@ type account struct {
 func (a *account) incrementCounter(baseTime time.Duration) {
 	a.waitLock.Lock()
 	defer a.waitLock.Unlock()
+
 	a.delayCounter++
 	a.waitTime = time.Now().Add(utils.ExponentialTimeout(baseTime, a.delayCounter))
 }
@@ -115,7 +116,7 @@ func (a *account) enqueue(ix *common.Interaction, replace bool) {
 // Eligible Interactions are all sequential in order of nonce
 // and the first one has to have nonce less (or equal) to the account's
 // nextNonce.
-func (a *account) promote() (uint64, common.Interactions) {
+func (a *account) promote() (uint64, []*common.Interaction) {
 	currentNonce := a.getNonce()
 	if a.enqueued.length() == 0 ||
 		a.enqueued.peek().Nonce() > currentNonce {
@@ -124,7 +125,7 @@ func (a *account) promote() (uint64, common.Interactions) {
 	}
 
 	promoted := uint64(0)
-	promotedIxns := make(common.Interactions, 0)
+	promotedIxns := make([]*common.Interaction, 0)
 	nextNonce := a.enqueued.peek().Nonce()
 
 	for {

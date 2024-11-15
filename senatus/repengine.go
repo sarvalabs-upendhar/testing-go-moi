@@ -41,7 +41,7 @@ type stateManager interface {
 }
 
 type chainManager interface {
-	GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error)
+	GetTesseract(hash common.Hash, withInteractions bool, withCommitInfo bool) (*common.Tesseract, error)
 }
 
 type ReputationEngine struct {
@@ -103,6 +103,13 @@ func NewReputationEngine(
 // subscribeToEvent subscribes to system accounts sync event
 func subscribeToEvent(eventMux *utils.TypeMux) *utils.Subscription {
 	return eventMux.Subscribe(utils.SystemAccountsSyncedEvent{})
+}
+
+func (r *ReputationEngine) addToDirtyEntriesList(peerID peer.ID, info *NodeMetaInfo) {
+	_, ok := r.dirtyEntries[peerID]
+	if !ok {
+		r.dirtyEntries[peerID] = info
+	}
 }
 
 func (r *ReputationEngine) nodeMetaInfo(peerID peer.ID) (*NodeMetaInfo, error) {
@@ -190,7 +197,7 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 	r.dirtyLock.Lock()
 	defer r.dirtyLock.Unlock()
 
-	r.dirtyEntries[peerID] = info
+	r.addToDirtyEntriesList(peerID, info)
 
 	r.logger.Debug("dirty entries count", len(r.dirtyEntries))
 
@@ -272,6 +279,7 @@ func (r *ReputationEngine) UpdateWalletCount(kramaID kramaid.KramaID, delta int3
 	defer r.dirtyLock.Unlock()
 
 	r.dirtyEntries[peerID] = info
+	r.UpdatePeerCount(1)
 
 	return nil
 }
@@ -469,14 +477,14 @@ func (r *ReputationEngine) isGuardianRegisterd(kramaID kramaid.KramaID) bool {
 
 	accMetaInfo, err := r.State.GetAccountMetaInfo(common.GuardianLogicID.Address())
 	if err != nil {
-		r.logger.Error("Failed to get account meta info", "err", err)
+		r.logger.Error("failed to get account meta info", "err", err)
 
 		return false
 	}
 
-	ts, err := r.Chain.GetTesseract(accMetaInfo.TesseractHash, false)
+	ts, err := r.Chain.GetTesseract(accMetaInfo.TesseractHash, false, false)
 	if err != nil {
-		r.logger.Error("Failed to fetch tesseract", "err", err)
+		r.logger.Error("failed to fetch tesseract", "err", err)
 
 		return false
 	}
@@ -497,7 +505,7 @@ func (r *ReputationEngine) isGuardianRegisterd(kramaID kramaid.KramaID) bool {
 		return false
 	}
 
-	r.logger.Error("Failed to fetch guardian info", "err", err)
+	r.logger.Error("failed to fetch guardian info", "err", err)
 
 	return false
 }
@@ -557,7 +565,7 @@ func (r *ReputationEngine) Close() {
 	r.ctxCancel()
 
 	if err := r.flushDirtyEntries(); err != nil {
-		r.logger.Error("Failed to flush dirty entries", "err", err)
+		r.logger.Error("failed to flush dirty entries", "err", err)
 	}
 }
 

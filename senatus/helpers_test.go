@@ -185,7 +185,9 @@ func (m MockChain) setTesseract(t *testing.T, hash common.Hash, ts *common.Tesse
 	m.tesseractsByHash[hash] = ts
 }
 
-func (m MockChain) GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (m MockChain) GetTesseract(hash common.Hash, withInteractions bool,
+	withCommitInfo bool,
+) (*common.Tesseract, error) {
 	ts, ok := m.tesseractsByHash[hash]
 	if !ok {
 		return nil, common.ErrFetchingTesseract

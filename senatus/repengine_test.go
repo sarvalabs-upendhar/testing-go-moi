@@ -248,6 +248,7 @@ func TestReputationEngine_UpdatePeer(t *testing.T) {
 
 			peerID := tests.DecodePeerIDFromKramaID(t, test.nodeMetaInfo.KramaID)
 			nodeInfo, ok := reputationEngine.dirtyEntries[peerID]
+
 			if !test.shouldSkip { // FIXME: This is just a temporary fix, need to update senatus logic
 				require.True(t, ok)
 				require.Equal(t, test.nodeMetaInfo, nodeInfo)
@@ -1095,16 +1096,16 @@ func TestReputationEngine_IsGuardianRegistered(t *testing.T) {
 		expectedResult bool
 	}{
 		{
-			name: "Failed to get account meta info",
+			name: "failed to get account meta info",
 		},
 		{
-			name:           "Failed to fetch tesseract",
+			name:           "failed to fetch tesseract",
 			setAccMetaInfo: true,
 			// tesseract hash different from the one in accMetaInfo
 			guardianTSHash: tests.RandomHash(t),
 		},
 		{
-			name:           "Failed to fetch logic storage tree",
+			name:           "failed to fetch logic storage tree",
 			setAccMetaInfo: true,
 			guardianTSHash: testTesseract.Hash(),
 			logicID:        tests.GetLogicID(t, tests.RandomAddress(t)),

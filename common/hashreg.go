@@ -9,9 +9,9 @@ type HashRegistry struct {
 }
 
 // NewHashRegistry creates a new HashRegistry with a max capacity.
-func NewHashRegistry(max int) *HashRegistry {
+func NewHashRegistry(capacity int) *HashRegistry {
 	return &HashRegistry{
-		max:    max,
+		max:    capacity,
 		hashes: mapset.NewSet(),
 	}
 }

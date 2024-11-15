@@ -344,6 +344,7 @@ func DefaultBabylonConfig(path string) *Config {
 			MaxIxGroupSize:          config.DefaultMaxIxGroupSize,
 			EnableIxFlooding:        false,
 			EnableRawIxFiltering:    true,
+			ViewTimeout:             6,
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
@@ -432,6 +433,7 @@ func DefaultDevnetConfig(path string) *Config {
 			MaxIxGroupSize:          config.DefaultMaxIxGroupSize,
 			EnableIxFlooding:        false,
 			EnableRawIxFiltering:    true,
+			ViewTimeout:             2,
 		},
 		Telemetry: Telemetry{
 			PrometheusAddr: "",
@@ -489,6 +491,7 @@ type IxPoolConfig struct {
 	MaxIxGroupSize          int         `json:"max_ix_group_size"`
 	EnableIxFlooding        bool        `json:"enable_ix_flooding"`
 	EnableRawIxFiltering    bool        `json:"enable_raw_ix_filtering"`
+	ViewTimeout             int64       `json:"view_timeout"`
 }
 
 type DBConfig struct {

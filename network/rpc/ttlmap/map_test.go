@@ -348,9 +348,9 @@ func TestMapWaitExpired(t *testing.T) {
 	defer m.Drain()
 
 	start := time.Now()
-	n, min := 10, 100
+	n, minimum := 10, 100
 
-	testMapSetNIncreasing(t, m, n, min, start)
+	testMapSetNIncreasing(t, m, n, minimum, start)
 
 	time.Sleep(500 * time.Millisecond)
 
@@ -366,7 +366,7 @@ func TestMapWaitExpired(t *testing.T) {
 
 	for i, eitem := range expired {
 		diff := eitem.timestamp.Sub(start)
-		diff -= time.Duration(i+min) * time.Millisecond
+		diff -= time.Duration(i+minimum) * time.Millisecond
 		key := fmt.Sprintf("%d", i)
 
 		if eitem.key != key {
@@ -385,7 +385,7 @@ func TestMapWaitExpired(t *testing.T) {
 	}
 }
 
-func testMapSetNIncreasing(t *testing.T, m *Map, n, min int, start time.Time) {
+func testMapSetNIncreasing(t *testing.T, m *Map, n, minimum int, start time.Time) {
 	t.Helper()
 
 	nx := &SetOptions{KeyExist: KeyExistNotYet}
@@ -393,7 +393,7 @@ func testMapSetNIncreasing(t *testing.T, m *Map, n, min int, start time.Time) {
 	for i := 0; i < n; i++ {
 		key := fmt.Sprintf("%d", i)
 		value := fmt.Sprintf("value for %s", key)
-		ttl := time.Duration(i+min) * time.Millisecond
+		ttl := time.Duration(i+minimum) * time.Millisecond
 		expiration := start.Add(ttl)
 		item := NewItem(value, WithExpiration(expiration))
 
@@ -664,6 +664,7 @@ func BenchmarkMapSetNX1(b *testing.B) {
 			b.Fatal("Expecting already exists")
 		}
 	}
+
 	b.StopTimer()
 	m.Drain()
 }
@@ -687,6 +688,7 @@ func BenchmarkMapSetXX1(b *testing.B) {
 			b.Fatal("Expecting already exists")
 		}
 	}
+
 	b.StopTimer()
 	m.Drain()
 }
@@ -703,6 +705,7 @@ func BenchmarkMapDelete1(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+
 	b.StopTimer()
 	m.Drain()
 }
@@ -724,6 +727,7 @@ func BenchmarkMapSetDelete1(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+
 	b.StopTimer()
 	m.Drain()
 }
@@ -745,10 +749,12 @@ func BenchmarkMapSetDrainN(b *testing.B) {
 			b.Fatal(err)
 		}
 	}
+
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
 		m.Drain()
 	}
+
 	b.StopTimer()
 }

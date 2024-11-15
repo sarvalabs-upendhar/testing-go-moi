@@ -32,25 +32,19 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 	executor.Interactions = ixs
 	executor.execContext = ctx
 
-	checkpoint := executor.transition.Copy()
+	checkpoint := executor.transition.Snapshot()
 
-	for _, ix := range executor.Interactions {
+	for _, ix := range executor.Interactions.IxList() {
 		// Execute the interaction using the transition state
 		if err := executor.executeInteraction(ix, ctx); err != nil {
-			// If the receiver account is new, delete the object
-			if executor.transition.IsGenesis(ix.Receiver()) {
-				executor.deleteObject(ix.Receiver())
-				checkpoint.Delete(ix.Receiver())
-			}
-
-			executor.transition = checkpoint
+			executor.transition.UpdateSnapshot(checkpoint)
 			executor.metrics.captureNumOfExecutionFailure(1)
 
 			return errors.Wrap(err, "execution failed")
 		}
 
 		// After successful execution, update the executor checkpoint
-		checkpoint = executor.transition.Copy()
+		checkpoint = executor.transition.Snapshot()
 	}
 
 	// Update the context for participants
@@ -71,13 +65,15 @@ func (executor *IxExecutor) executeInteraction(
 	ctx *common.ExecutionContext,
 ) error {
 	// Run the interaction
+	snapshot := executor.transition.Snapshot()
+
 	receipt, err := executor.mgr.runInteraction(ix, ctx, executor.transition, true)
 	if err != nil {
 		return err
 	}
 
 	if receipt.Status >= common.ReceiptStateReverted {
-		return errors.New("state must be reverted")
+		executor.transition.UpdateSnapshot(snapshot)
 	}
 
 	// Increment the nonce of the sender address
@@ -88,13 +84,11 @@ func (executor *IxExecutor) executeInteraction(
 	// Set the receipt to the transition
 	executor.transition.SetReceipt(ix.Hash(), receipt)
 
-	// Deduct fuel for the ix execution from the sender
-	executor.transition.DeductFuel(ix.Sender(), new(big.Int).Mul(ix.FuelPrice(), new(big.Int).SetUint64(receipt.FuelUsed)))
-
-	// Update Sarga state if the interaction receiver if it is an unregistered (new) account
-	if err := executor.updateSargaState(ix); err != nil {
-		return errors.Wrap(err, "execution failed")
-	}
+	// Deduct fuel for the ix execution from the senderx
+	executor.transition.DeductFuel(
+		ix.Sender(),
+		new(big.Int).Mul(ix.FuelPrice(), new(big.Int).SetUint64(receipt.FuelUsed)),
+	)
 
 	return nil
 }
@@ -125,41 +119,39 @@ func (executor *IxExecutor) UpdateContext() error {
 	return nil
 }
 
-// updateSargaState will update the Sarga Object with the account genesis
-// information for the receiver of an Interaction if it has not been registered.
-// If the receiver address is already registered, no change is performed.
-func (executor *IxExecutor) updateSargaState(ix *common.Interaction) error {
-	// If account is registered, sarga state does not need to be updated
-	if !executor.transition.IsGenesis(ix.Receiver()) {
-		return nil
-	}
-
-	// Get dirty object for sarga
-	sargaObject := executor.transition.GetObject(common.SargaAddress)
-	if sargaObject == nil {
-		return errors.New("sarga object not found")
-	}
-
-	// Add the account genesis information for the new account
-	return sargaObject.AddAccountGenesisInfo(ix.Receiver(), ix.Hash())
-}
-
 // CommitStateObjects commits all StateObjects of the interaction participants to the state db.
 // If the interaction receiver is a new account, the Object of the sarga account is also committed.
 func (executor *IxExecutor) CommitStateObjects() error {
-	for address, object := range executor.transition.Objects() {
-		h, err := object.Commit()
+	for addr, ps := range executor.Interactions.Participants() {
+		obj := executor.transition.GetObject(addr)
+
+		previousHash, err := obj.Data().Hash()
 		if err != nil {
 			return err
 		}
 
-		executor.commitHashes.SetStateHash(address, h)
-		executor.commitHashes.SetContextHash(address, object.ContextHash())
+		if ps.LockType > common.MutateLock {
+			executor.commitHashes.SetStateHash(addr, previousHash)
+			executor.commitHashes.SetContextHash(addr, obj.Data().ContextHash)
+
+			continue
+		}
+
+		newHash, err := obj.Commit()
+		if err != nil {
+			return err
+		}
+
+		if newHash == previousHash {
+			executor.commitHashes.SetStateHash(addr, common.NilHash)
+			executor.commitHashes.SetContextHash(addr, common.NilHash)
+
+			continue
+		}
+
+		executor.commitHashes.SetStateHash(addr, newHash)
+		executor.commitHashes.SetContextHash(addr, obj.ContextHash())
 	}
 
 	return nil
-}
-
-func (executor *IxExecutor) deleteObject(addr identifiers.Address) {
-	executor.transition.Delete(addr)
 }

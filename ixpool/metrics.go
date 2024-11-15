@@ -28,7 +28,7 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 		PendingIxs: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
 			Subsystem: "ixpool",
-			Name:      "pending_transactions",
+			Name:      "pending_interactions",
 			Help:      "Pending interactions in the pool",
 		}, labels).With(labelsWithValues...),
 		IxPoolSize: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{

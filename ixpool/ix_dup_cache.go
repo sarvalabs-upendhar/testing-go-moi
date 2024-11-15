@@ -17,7 +17,7 @@ var saltedPool = sync.Pool{
 		// 2 x MaxAvailableAppProgramLen that covers
 		// max approve + clear state programs with max args for app create ixn.
 		// other transactions are much smaller.
-		return make([]byte, ixMaxSize+100)
+		return make([]byte, IxMaxSize+100)
 	},
 }
 

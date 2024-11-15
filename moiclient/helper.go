@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/crypto"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
@@ -24,7 +26,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
-	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
@@ -35,10 +36,10 @@ const (
 	InitialSyncQueryTime = 5 * time.Second
 )
 
-func CreateSendIXFromSendIXArgs(t *testing.T, sendIxArgs *common.SendIXArgs, mnemonic string) *rpcargs.SendIX {
+func CreateSendIXFromIxData(t *testing.T, ixData *common.IxData, mnemonic string) *rpcargs.SendIX {
 	t.Helper()
 
-	bz, err := polo.Polorize(sendIxArgs)
+	bz, err := polo.Polorize(ixData)
 	require.NoError(t, err)
 
 	sign, err := crypto.GetSignature(bz, mnemonic)
@@ -145,7 +146,7 @@ func GetTesseract(t *testing.T, client *Client, addr identifiers.Address, height
 }
 
 // GetLogicID returns logicID for the given senderAddr and height
-func GetLogicID(t *testing.T, client *Client, addr identifiers.Address, height int64) identifiers.LogicID {
+func GetLogicID(t *testing.T, client *Client, txnID int, addr identifiers.Address, height int64) identifiers.LogicID {
 	t.Helper()
 
 	ts := GetTesseract(t, client, addr, height)
@@ -157,9 +158,9 @@ func GetLogicID(t *testing.T, client *Client, addr identifiers.Address, height i
 	receipt, err := client.InteractionReceipt(context.Background(), receiptArgs)
 	require.NoError(t, err)
 
-	var logicReceipt common.LogicDeployReceipt
+	var logicReceipt common.LogicDeployResult
 
-	err = json.Unmarshal(receipt.ExtraData, &logicReceipt)
+	err = json.Unmarshal(receipt.IxOps[txnID].Data, &logicReceipt)
 	require.NoError(t, err)
 
 	return logicReceipt.LogicID

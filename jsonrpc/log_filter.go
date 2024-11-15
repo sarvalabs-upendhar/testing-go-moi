@@ -63,7 +63,7 @@ func (f *logFilter) createRPCLogs(
 	logs := make([]*args.RPCLog, 0)
 
 	for _, receipt := range ts.Receipts() {
-		for _, log := range receipt.Logs {
+		for _, log := range receipt.Logs() {
 			if f.query.MatchTopics(log) {
 				logs = append(logs,
 					&args.RPCLog{

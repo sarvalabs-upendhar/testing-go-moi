@@ -3,7 +3,7 @@ package compute
 import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -44,7 +44,7 @@ func (manager *Manager) SpawnExecutor(transition *state.Transition) *IxExecutor 
 }
 
 // ExecuteInteractions executes the given interactions with an IxExecutor.
-// The generated executor instances is indexed by the given Cluster ID.
+// The executor instance is indexed by the given Cluster ID.
 func (manager *Manager) ExecuteInteractions(
 	transition *state.Transition,
 	ixs common.Interactions,
@@ -80,14 +80,15 @@ func (manager *Manager) runInteraction(
 ) {
 	var tank *FuelTank
 
+	receipt = common.NewReceipt(ix)
+
 	if useIxFuelLimit {
 		// Determine the tank limit from the interaction
 		tank = NewFuelTank(ix.FuelLimit())
 
 		// Check that the sender has sufficient balance
 		if ok, _ := transition.HasSufficientFuel(ix.Sender(), ix.Cost()); !ok {
-			receipt = common.NewReceipt(ix)
-			receipt.Status = common.ReceiptFuelExhausted
+			receipt.Status = common.ReceiptInsufficientFuel
 
 			return receipt, nil
 		}
@@ -95,10 +96,6 @@ func (manager *Manager) runInteraction(
 		// Determine the tank limit from the node configuration
 		tank = NewFuelTank(manager.config.FuelLimit)
 	}
-
-	ixtype := ix.Type()
-	// Lookup the runner for the interaction type
-	runner := lookupIxRunner(ixtype)
 
 	// Set up a defer function to recover from any panic
 	// that may occur while executing the interaction
@@ -110,8 +107,55 @@ func (manager *Manager) runInteraction(
 		}
 	}()
 
-	// Call the interaction runner and get the receipt
-	receipt = runner(ix, ctx, tank, transition)
+	receipt.IxOps = make([]*common.IxOpResult, 0)
 
-	return receipt, nil
+	for idx, op := range ix.Ops() {
+		// Lookup the runner for the operation type
+		runner := lookupTxRunner(op.Type())
+		// Call the interaction runner and get the result
+		opResult := runner(ix.GetIxOp(idx), ctx, tank, transition)
+
+		receipt.AddIxOpResult(opResult)
+
+		if opResult.Status >= common.ResultStateReverted {
+			manager.logger.Trace("ixOp reverted", "op-hash", op.Hash(), "status", opResult.Status)
+
+			receipt.SetStatus(common.ReceiptStateReverted)
+			// in case of any error while executing the ixOp, we should consume total full
+			receipt.SetFuelUsed(ix.FuelLimit())
+
+			break
+		}
+	}
+
+	receipt.SetFuelUsed(tank.Consumed)
+
+	return receipt, err
+}
+
+func addNewAccountsToSargaAccount(
+	transition *state.Transition,
+	ixHash common.Hash,
+	addrs ...identifiers.Address,
+) error {
+	// get sarga object
+	sargaObject := transition.GetObject(common.SargaAddress)
+
+	for _, addr := range addrs {
+		if !transition.IsGenesis(addr) {
+			continue
+		}
+
+		if sargaObject == nil {
+			return errors.New("sarga object not found")
+		}
+
+		// Add the genesis account information of the new account
+		err := sargaObject.AddAccountGenesisInfo(addr, ixHash)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

@@ -168,7 +168,7 @@ func (s *Server) handleWs(w http.ResponseWriter, req *http.Request) {
 	// Upgrade the HTTP connection to the WebSocket protocol
 	currentWSConn, err := wsUpgrader.Upgrade(w, req, nil)
 	if err != nil {
-		s.logger.Error("Failed to upgrade to a websocket connection", "err", err)
+		s.logger.Error("failed to upgrade to a websocket connection", "err", err)
 
 		return
 	}
@@ -176,7 +176,7 @@ func (s *Server) handleWs(w http.ResponseWriter, req *http.Request) {
 	// Handle websocket connection closure
 	defer func() {
 		if err := currentWSConn.Close(); err != nil {
-			s.logger.Error("Failed to gracefully close websocket connection", "err", err)
+			s.logger.Error("failed to gracefully close websocket connection", "err", err)
 		}
 	}()
 
@@ -197,7 +197,7 @@ func (s *Server) handleWs(w http.ResponseWriter, req *http.Request) {
 			) {
 				s.logger.Info("Closing websocket connection")
 			} else {
-				s.logger.Error("Failed to read websocket message", "err", err)
+				s.logger.Error("failed to read websocket message", "err", err)
 				s.logger.Info("Closing websocket connection with error")
 			}
 
@@ -210,7 +210,7 @@ func (s *Server) handleWs(w http.ResponseWriter, req *http.Request) {
 			go func() {
 				resp, handleErr := s.dispatcher.handleWs(message, connManager)
 				if handleErr != nil {
-					s.logger.Error("Failed to handle websocket request", "err", handleErr)
+					s.logger.Error("failed to handle websocket request", "err", handleErr)
 
 					writeErr := connManager.WriteMessage(
 						messageType,
@@ -218,7 +218,7 @@ func (s *Server) handleWs(w http.ResponseWriter, req *http.Request) {
 					)
 
 					if writeErr != nil {
-						s.logger.Error("Failed to send the response to client", "err", writeErr)
+						s.logger.Error("failed to send the response to client", "err", writeErr)
 					}
 
 					return
@@ -226,7 +226,7 @@ func (s *Server) handleWs(w http.ResponseWriter, req *http.Request) {
 
 				writeErr := connManager.WriteMessage(messageType, resp)
 				if writeErr != nil {
-					s.logger.Error("Failed to send the response to client", "err", writeErr)
+					s.logger.Error("failed to send the response to client", "err", writeErr)
 				}
 			}()
 		}

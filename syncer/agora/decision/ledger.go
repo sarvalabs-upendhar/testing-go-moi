@@ -200,7 +200,7 @@ func (l *Ledger) worker() {
 			for _, job := range jobs {
 				rawData, err := job.value.Bytes()
 				if err != nil {
-					l.logger.Error("Failed to polorize peer list", "err", err)
+					l.logger.Error("failed to polorize peer list", "err", err)
 
 					continue
 				}

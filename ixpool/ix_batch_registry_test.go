@@ -1,0 +1,540 @@
+package ixpool
+
+import (
+	"testing"
+
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/tests"
+	"github.com/stretchr/testify/require"
+)
+
+func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
+	addresses := tests.GetAddresses(t, 2)
+
+	ixns := tests.CreateIxns(t, 3, map[int]*tests.CreateIxParams{
+		1: {
+			IxDataCallback: func(ix *common.IxData) {
+				ix.Participants = append(ix.Participants, []common.IxParticipant{
+					{
+						Address: addresses[0],
+					},
+					{
+						Address: addresses[1],
+					},
+				}...)
+			},
+		},
+		2: {
+			IxDataCallback: func(ix *common.IxData) {
+				ix.IxOps = []common.IxOpRaw{
+					{
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetCreatePayload(t),
+					},
+				}
+			},
+		},
+	})
+
+	testcases := []struct {
+		name            string
+		batchID         int
+		ix              *common.Interaction
+		preTestFn       func(batch *IxBatchRegistry)
+		expectedAdd     bool
+		expectedIxCount int
+		expectedPsCount int
+	}{
+		{
+			name:            "add ixn to batch successfully",
+			batchID:         0,
+			ix:              ixns[0],
+			expectedAdd:     true,
+			expectedIxCount: 1,
+			expectedPsCount: 2,
+		},
+		{
+			name:    "failed to add ixn to batch",
+			batchID: 0,
+			ix:      ixns[1],
+			preTestFn: func(batch *IxBatchRegistry) {
+				require.True(t, batch.addIxToBatch(0, ixns[0]))
+			},
+			expectedAdd:     false,
+			expectedIxCount: 1,
+			expectedPsCount: 2,
+		},
+		{
+			name:            "add ixn where one of the participant is genesis account",
+			ix:              ixns[2],
+			expectedAdd:     true,
+			expectedIxCount: 1,
+			expectedPsCount: 2,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			batchRegistry := newBatchRegistry()
+			batchRegistry.appendEmptyBatch()
+
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(batchRegistry)
+			}
+
+			added := batchRegistry.addIxToBatch(testcase.batchID, testcase.ix)
+			require.Equal(t, testcase.expectedAdd, added)
+
+			require.Equal(t, testcase.expectedIxCount, batchRegistry.batches[testcase.batchID].IxCount())
+			require.Equal(t, testcase.expectedPsCount, batchRegistry.batches[testcase.batchID].PsCount())
+
+			if testcase.expectedAdd {
+				ixns := batchRegistry.batches[testcase.batchID].IxList()
+				require.Equal(t, testcase.ix, ixns[len(ixns)-1])
+
+				psBatchLookup := batchRegistry.ParticipantBatchLookup
+				ps := testcase.ix.Participants()
+
+				for addr, p := range ps {
+					id, found := psBatchLookup[addr]
+					if p.IsGenesis {
+						require.False(t, found)
+					} else {
+						require.True(t, found)
+						require.Equal(t, testcase.batchID, id)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestIxBatchRegistry_findBatchID(t *testing.T) {
+	ixns := tests.CreateIxns(t, 2, map[int]*tests.CreateIxParams{
+		1: {
+			IxDataCallback: func(ix *common.IxData) {
+				ix.IxOps = []common.IxOpRaw{
+					{
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetCreatePayload(t),
+					},
+				}
+			},
+		},
+	})
+
+	testcases := []struct {
+		name            string
+		ps              map[identifiers.Address]*common.ParticipantInfo
+		preTestFn       func(batch *IxBatchRegistry)
+		expectedBatchID int
+	}{
+		{
+			name: "found batch id successfully",
+			ps:   ixns[1].Participants(),
+			preTestFn: func(batch *IxBatchRegistry) {
+				batch.appendEmptyBatch()
+				require.True(t, batch.addIxToBatch(0, ixns[0]))
+				batch.appendEmptyBatch()
+				require.True(t, batch.addIxToBatch(1, ixns[1]))
+			},
+			expectedBatchID: 1,
+		},
+		{
+			name: "conflicting batch id's among participants",
+			ps: map[identifiers.Address]*common.ParticipantInfo{
+				ixns[0].Sender(): {Address: ixns[0].Sender()},
+
+				ixns[1].Sender(): {Address: ixns[1].Sender()},
+			},
+			preTestFn: func(batch *IxBatchRegistry) {
+				batch.appendEmptyBatch()
+				require.True(t, batch.addIxToBatch(0, ixns[0]))
+				batch.appendEmptyBatch()
+				require.True(t, batch.addIxToBatch(1, ixns[1]))
+			},
+			expectedBatchID: conflictBatchID,
+		},
+		{
+			name: "batch id not found",
+			ps:   ixns[1].Participants(),
+			preTestFn: func(batch *IxBatchRegistry) {
+				batch.appendEmptyBatch()
+				require.True(t, batch.addIxToBatch(0, ixns[0]))
+			},
+			expectedBatchID: BatchIDNotFound,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			batchRegistry := newBatchRegistry()
+
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(batchRegistry)
+			}
+
+			id := batchRegistry.findBatchID(testcase.ps)
+			require.Equal(t, testcase.expectedBatchID, id)
+		})
+	}
+}
+
+func TestIxBatchRegistry_addIx(t *testing.T) {
+	addresses := tests.GetAddresses(t, 2)
+
+	ixns := tests.CreateIxns(t, 3, map[int]*tests.CreateIxParams{
+		0: {
+			IxDataCallback: func(ix *common.IxData) {
+				ix.IxOps = []common.IxOpRaw{
+					{
+						Type:    common.IxAssetTransfer,
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					},
+				}
+				ix.Participants = append(ix.Participants, []common.IxParticipant{
+					{
+						Address: addresses[0],
+					},
+				}...)
+			},
+		},
+		1: {
+			IxDataCallback: func(ix *common.IxData) {
+				ix.IxOps = []common.IxOpRaw{
+					{
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetCreatePayload(t),
+					},
+				}
+				ix.Participants = append(ix.Participants, []common.IxParticipant{
+					{
+						Address: addresses[1],
+					},
+				}...)
+			},
+		},
+		2: {
+			IxDataCallback: func(ix *common.IxData) {
+				ix.IxOps = []common.IxOpRaw{
+					{
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetCreatePayload(t),
+					},
+				}
+				ix.Participants = append(ix.Participants, []common.IxParticipant{
+					{
+						Address: addresses[0],
+					},
+					{
+						Address: addresses[1],
+					},
+				}...)
+			},
+		},
+	})
+
+	testcases := []struct {
+		name            string
+		ix              *common.Interaction
+		preTestFn       func(batch *IxBatchRegistry)
+		expectedBatchID int
+		expectedAdd     bool
+	}{
+		{
+			name:            "add ixn to new batch",
+			ix:              ixns[0],
+			expectedBatchID: 0,
+			expectedAdd:     true,
+		},
+		{
+			name: "add ixn to existing batch",
+			ix:   ixns[0],
+			preTestFn: func(batch *IxBatchRegistry) {
+				batch.appendEmptyBatch()
+				batch.addIxToBatch(0, ixns[0])
+			},
+			expectedAdd: true,
+		},
+		{
+			name: "failed to add ixn due to conflicting batch id",
+			ix:   ixns[2],
+			preTestFn: func(batch *IxBatchRegistry) {
+				batch.appendEmptyBatch()
+				batch.addIxToBatch(0, ixns[0])
+				batch.appendEmptyBatch()
+				batch.addIxToBatch(1, ixns[1])
+			},
+			expectedAdd: false,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			batchRegistry := newBatchRegistry()
+
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(batchRegistry)
+			}
+
+			added := batchRegistry.addIx(testcase.ix)
+			require.Equal(t, testcase.expectedAdd, added)
+
+			if testcase.expectedAdd {
+				ixns := batchRegistry.batches[testcase.expectedBatchID].IxList()
+				require.Equal(t, testcase.ix, ixns[len(ixns)-1])
+			}
+		})
+	}
+}
+
+func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
+	testcases := []struct {
+		name               string
+		batchesList        []CreateBatches
+		expectedBatchList  []CreateBatches
+		expectedBatchCount int
+	}{
+		{
+			name: "select batches after merging",
+			batchesList: []CreateBatches{
+				{
+					batchCount: 6,
+					batch: CreateBatch{
+						ixnCount: 1,
+						psCount:  2,
+					},
+				},
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 3,
+					batch: CreateBatch{
+						ixnCount: 2,
+						psCount:  4,
+					},
+				},
+			},
+			expectedBatchCount: 3,
+		},
+		{
+			name: "select max no of batches",
+			batchesList: []CreateBatches{
+				{
+					batchCount: 46,
+					batch: CreateBatch{
+						ixnCount: 1,
+						psCount:  2,
+					},
+				},
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 20,
+					batch: CreateBatch{
+						ixnCount: 2,
+						psCount:  4,
+					},
+				},
+			},
+			expectedBatchCount: 20,
+		},
+		{
+			name: "select batches having max no of ixns",
+			batchesList: []CreateBatches{
+				{
+					batchCount: 10,
+					batch: CreateBatch{
+						ixnCount: 1,
+						psCount:  3,
+					},
+				},
+				{
+					batchCount: 10,
+					batch: CreateBatch{
+						ixnCount: 2,
+						psCount:  4,
+					},
+				},
+				{
+					batchCount: 10,
+					batch: CreateBatch{
+						ixnCount: 1,
+						psCount:  3,
+					},
+				},
+				{
+					batchCount: 10,
+					batch: CreateBatch{
+						ixnCount: 2,
+						psCount:  4,
+					},
+				},
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 20,
+					batch: CreateBatch{
+						ixnCount: 2,
+						psCount:  4,
+					},
+				},
+			},
+			expectedBatchCount: 20,
+		},
+		{
+			name: "select batches in sorted fashion after merging",
+			batchesList: []CreateBatches{
+				{
+					batchCount: 4,
+					batch: CreateBatch{
+						ixnCount: 3,
+						psCount:  2,
+					},
+				},
+				{
+					batchCount: 19,
+					batch: CreateBatch{
+						ixnCount: 4,
+						psCount:  3,
+					},
+				},
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 2,
+					batch: CreateBatch{
+						ixnCount: 6,
+						psCount:  4,
+					},
+				},
+				{
+					batchCount: 18,
+					batch: CreateBatch{
+						ixnCount: 4,
+						psCount:  3,
+					},
+				},
+			},
+			expectedBatchCount: 20,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			batchRegistry := newBatchRegistry()
+
+			addBatches(t, batchRegistry, testcase.batchesList)
+
+			result := batchRegistry.selectOptimalBatches()
+			require.Equal(t, testcase.expectedBatchCount, len(result))
+
+			index := 0
+
+			for _, batches := range testcase.expectedBatchList {
+				for i := 0; i < batches.batchCount; i++ {
+					require.Equal(t, batches.batch.psCount, result[index].PsCount())
+					require.Equal(t, batches.batch.ixnCount, result[index].IxCount())
+
+					index++
+				}
+			}
+		})
+	}
+}
+
+func TestIxBatchRegistry_sort(t *testing.T) {
+	testcases := []struct {
+		name               string
+		batchesList        []CreateBatches
+		expectedBatchList  []CreateBatches
+		expectedBatchCount int
+	}{
+		{
+			name: "ensure batches are sorted by ixn count and participant count",
+			batchesList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 4,
+						psCount:  2,
+					},
+				},
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 3,
+						psCount:  4,
+					},
+				},
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 3,
+						psCount:  2,
+					},
+				},
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 6,
+						psCount:  4,
+					},
+				},
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 6,
+						psCount:  4,
+					},
+				},
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 4,
+						psCount:  2,
+					},
+				},
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 3,
+						psCount:  2,
+					},
+				},
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 3,
+						psCount:  4,
+					},
+				},
+			},
+			expectedBatchCount: 20,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			batchRegistry := newBatchRegistry()
+
+			addBatches(t, batchRegistry, testcase.batchesList)
+
+			batchRegistry.sort()
+
+			index := 0
+
+			for _, batches := range testcase.expectedBatchList {
+				for i := 0; i < batches.batchCount; i++ {
+					require.Equal(t, batches.batch.psCount, batchRegistry.batches[index].PsCount())
+					require.Equal(t, batches.batch.ixnCount, batchRegistry.batches[index].IxCount())
+
+					index++
+				}
+			}
+		})
+	}
+}

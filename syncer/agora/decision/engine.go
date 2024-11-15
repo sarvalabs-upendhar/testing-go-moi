@@ -161,6 +161,7 @@ func (e *Engine) worker() {
 	defer func() {
 		e.workerLock.Lock()
 		defer e.workerLock.Unlock()
+
 		e.requestWorkerCount--
 	}()
 
@@ -241,6 +242,7 @@ func (e *Engine) responseWorker() {
 	defer func() {
 		e.workerLock.Lock()
 		defer e.workerLock.Unlock()
+
 		e.responseWorkerCount--
 	}()
 

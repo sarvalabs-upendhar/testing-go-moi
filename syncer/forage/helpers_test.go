@@ -108,7 +108,7 @@ func NewTestSyncer(
 		mux:            mux,
 		agora:          agora,
 		db:             db,
-		krama:          krama,
+		consensus:      krama,
 		lattice:        newMockLattice(db, logger),
 		state:          newMockStateManager(db),
 		jobWorkerCount: 5,
@@ -176,7 +176,35 @@ type MockKramaEngine struct {
 	mtx                sync.RWMutex
 }
 
-func (m *MockKramaEngine) AddActiveAccount(addr identifiers.Address) bool {
+func NewMockKramaEngine(db store, logger hclog.Logger) *MockKramaEngine {
+	return &MockKramaEngine{
+		db:                 db,
+		logger:             logger,
+		executedTesseracts: make(map[string]*common.Tesseract),
+		activeAccounts:     make(map[identifiers.Address]struct{}),
+	}
+}
+
+func (m *MockKramaEngine) GetICSCommittee(ts *common.Tesseract, info *common.CommitInfo) (*ktypes.ICSCommittee, error) {
+	return &ktypes.ICSCommittee{
+		Sets: []*ktypes.NodeSet{
+			{
+				Infos: []*ktypes.NodeInfo{{ID: "k1"}, {ID: "k2"}, {ID: "k3"}},
+			},
+		},
+	}, nil
+}
+
+func (m *MockKramaEngine) GetICSCommitteeFromRawContext(ts *common.Tesseract,
+	rawContext map[string][]byte, info *common.CommitInfo,
+) (*ktypes.ICSCommittee, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockKramaEngine) AddActiveAccount(addr identifiers.Address,
+	lockType common.LockType, id common.ClusterID,
+) bool {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
@@ -189,26 +217,17 @@ func (m *MockKramaEngine) AddActiveAccount(addr identifiers.Address) bool {
 	return true
 }
 
-func (m *MockKramaEngine) ClearActiveAccount(addr identifiers.Address) {
+func (m *MockKramaEngine) ClearActiveAccount(addr identifiers.Address, id common.ClusterID) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
 	delete(m.activeAccounts, addr)
 }
 
-func NewMockKramaEngine(db store, logger hclog.Logger) *MockKramaEngine {
-	return &MockKramaEngine{
-		db:                 db,
-		logger:             logger,
-		executedTesseracts: make(map[string]*common.Tesseract),
-		activeAccounts:     make(map[identifiers.Address]struct{}),
-	}
-}
-
 func (m *MockKramaEngine) ValidateTesseract(
 	addr identifiers.Address,
 	ts *common.Tesseract,
-	ics *common.ICSNodeSet,
+	ics *ktypes.ICSCommittee,
 	allParticipants bool,
 ) error {
 	if !allParticipants && addr.IsNil() {
@@ -239,7 +258,6 @@ func (m *MockKramaEngine) ValidateTesseract(
 func (m *MockKramaEngine) ExecuteAndValidate(
 	ts *common.Tesseract,
 	transition *state.Transition,
-	ps map[identifiers.Address]common.IxParticipant,
 ) error {
 	for addr, s := range ts.Participants() {
 		key := addr.Hex() + strconv.FormatUint(s.Height, 10)
@@ -308,13 +326,21 @@ func (m *MockLattice) AddTesseractWithState(
 		m.setTesseractByHeight(addr, p.Height, ts)
 		m.setTesseractHeightEntry(addr, p.Height, ts.Hash())
 
+		accountType, err := ts.Interactions().AccountType(ts.AnyAddress())
+		if err != nil {
+			return err
+		}
+
 		if _, _, err := m.db.UpdateAccMetaInfo(
 			addr,
 			p.Height,
 			ts.Hash(),
 			ts.StateHash(ts.AnyAddress()),
 			ts.LatestContextHash(ts.AnyAddress()),
-			common.AccTypeFromIxType(ts.Interactions()[0].Type()),
+			ts.CommitHash(),
+			accountType,
+			true,
+			1,
 		); err != nil {
 			return err
 		}
@@ -341,7 +367,16 @@ func (m *MockLattice) AddTesseractWithState(
 			return err
 		}
 
-		rawTS, err := ts.Canonical().Bytes()
+		rawCommitInfo, err := ts.CommitInfo().Bytes()
+		if err != nil {
+			return err
+		}
+
+		if err = m.db.SetCommitInfo(ts.Hash(), rawCommitInfo); err != nil {
+			return err
+		}
+
+		rawTS, err := ts.Bytes()
 		if err != nil {
 			return err
 		}
@@ -359,13 +394,21 @@ func (m *MockLattice) AddAccountMetaInfo(tesseracts ...*common.Tesseract) error 
 		for addr, s := range ts.Participants() {
 			m.logger.Trace("adding account meta info ", "addr", addr, "height", s.Height)
 
+			accountType, err := ts.Interactions().AccountType(ts.AnyAddress())
+			if err != nil {
+				return err
+			}
+
 			if _, _, err := m.db.UpdateAccMetaInfo(
 				addr,
 				s.Height,
 				ts.Hash(),
 				ts.StateHash(ts.AnyAddress()),
 				ts.LatestContextHash(ts.AnyAddress()),
-				common.AccTypeFromIxType(ts.Interactions()[0].Type()),
+				ts.CommitHash(),
+				accountType,
+				true,
+				1,
 			); err != nil {
 				return err
 			}
@@ -389,6 +432,7 @@ func (m *MockLattice) insertTesseractsByHash(
 func (m *MockLattice) GetTesseract(
 	hash common.Hash,
 	withInteractions bool,
+	withCommitInfo bool,
 ) (*common.Tesseract, error) {
 	ts, ok := m.tesseractsByHash[hash]
 	if !ok {
@@ -418,6 +462,7 @@ func (m *MockLattice) GetTesseractByHeight(
 	address identifiers.Address,
 	height uint64,
 	withInteractions bool,
+	withCommitInfo bool,
 ) (*common.Tesseract, error) {
 	m.lock.RLock()
 	defer func() {
@@ -482,17 +527,19 @@ type MockStateManager struct {
 	context          map[common.Hash]*Context
 }
 
+func newMockStateManager(db store) *MockStateManager {
+	return &MockStateManager{
+		db:               db,
+		sealedTesseracts: make(map[common.Hash]bool),
+		context:          make(map[common.Hash]*Context),
+	}
+}
+
 func (m *MockStateManager) RemoveCachedObject(addr identifiers.Address) {
 }
 
-func (m *MockStateManager) GetICSParticipants(
-	ixns common.Interactions,
-) (map[identifiers.Address]common.IxParticipant, error) {
-	return nil, nil
-}
-
 func (m *MockStateManager) LoadTransitionObjects(
-	ps map[identifiers.Address]common.IxParticipant,
+	ps map[identifiers.Address]common.ParticipantInfo,
 ) (*state.Transition, error) {
 	// Create a new objects map
 	objects := make(state.ObjectMap)
@@ -515,14 +562,6 @@ func (m *MockStateManager) LoadTransitionObjects(
 	}
 
 	return state.NewTransition(objects), nil
-}
-
-func newMockStateManager(db store) *MockStateManager {
-	return &MockStateManager{
-		db:               db,
-		sealedTesseracts: make(map[common.Hash]bool),
-		context:          make(map[common.Hash]*Context),
-	}
 }
 
 func (m *MockStateManager) CreateStateObject(address identifiers.Address,
@@ -615,25 +654,6 @@ func (m *MockStateManager) GetParticipantContextRaw(
 	rawContext map[string][]byte,
 ) error {
 	return nil
-}
-
-func (m *MockStateManager) FetchICSNodeSet(ts *common.Tesseract,
-	info *common.ICSClusterInfo,
-) (*common.ICSNodeSet, error) {
-	return &common.ICSNodeSet{
-		Sets: []*common.NodeSet{
-			{
-				Ids: []kramaid.KramaID{"k1", "k2", "k3"},
-			},
-		},
-	}, nil
-}
-
-func (m *MockStateManager) GetICSNodeSetFromRawContext(ts *common.Tesseract,
-	rawContext map[string][]byte, clusterInfo *common.ICSClusterInfo,
-) (*common.ICSNodeSet, error) {
-	// TODO implement me
-	panic("implement me")
 }
 
 type MockAgora struct {
@@ -1008,14 +1028,6 @@ func storeTesseractInDB(t *testing.T, ts *common.Tesseract, syncers ...*Syncer) 
 		err := s.lattice.AddTesseractWithState(identifiers.NilAddress, nil, ts, nil, true)
 		require.NoError(t, err)
 
-		info := common.ICSClusterInfo{}
-
-		rawInfo, err := info.Bytes()
-		require.NoError(t, err)
-
-		err = s.db.CreateEntry(ts.ICSHash().Bytes(), rawInfo)
-		require.NoError(t, err)
-
 		for addr, participant := range ts.Participants() {
 			acc := common.Account{
 				ContextHash: participant.LatestContext,
@@ -1070,14 +1082,6 @@ func storeAccountMetaInfoAndSnapInDB(t *testing.T, ts *common.Tesseract, syncers
 			err = s.db.CreateEntry(dbKeyFromCID(addr, cid.ContextCID(acc.ContextHash)), mctxVal)
 			require.NoError(t, err)
 		}
-
-		info := common.ICSClusterInfo{}
-
-		rawInfo, err := info.Bytes()
-		require.NoError(t, err)
-
-		err = s.db.CreateEntry(ts.ICSHash().Bytes(), rawInfo)
-		require.NoError(t, err)
 	}
 }
 
@@ -1157,20 +1161,9 @@ func broadcastTesseracts(t *testing.T, clientSyncer, serverSyncer *Syncer, tesse
 				"ts-hash", tesseracts[i].Hash(),
 			)
 
-			info := common.ICSClusterInfo{
-				RandomSet: []kramaid.KramaID{serverSyncer.network.GetKramaID()},
-			}
-
-			rawInfo, err := info.Bytes()
-			require.NoError(t, err)
-
 			tsInfo := &TesseractInfo{
 				tesseract:     tesseracts[i],
 				shouldExecute: clientSyncer.cfg.ShouldExecute,
-				clusterInfo:   &info,
-				delta: map[string][]byte{
-					tesseracts[i].ICSHash().Hex(): rawInfo,
-				},
 			}
 
 			err = clientSyncer.msgHandler(&pubsub.Message{
@@ -1227,6 +1220,7 @@ func defaultSyncerConfig() *config.SyncerConfig {
 
 func generateTesseracts(
 	t *testing.T,
+	serverID kramaid.KramaID,
 	startHeight, endHeight int,
 	prevHash common.Hash,
 	addresses ...identifiers.Address,
@@ -1252,25 +1246,44 @@ func generateTesseracts(
 			heights = append(heights, uint64(i))
 		}
 
+		txns := make([]common.IxOpRaw, len(addresses))
+
+		for i, addr := range addresses {
+			txns[i] = common.IxOpRaw{
+				Type:    common.IxAssetTransfer,
+				Payload: tests.CreateRawAssetActionPayload(t, addr),
+			}
+		}
+
 		tesseractParams := &tests.CreateTesseractParams{
 			Addresses:    addresses,
 			Heights:      heights,
 			Participants: participants,
 			TSDataCallback: func(ts *tests.TesseractData) {
-				ts.ConsensusInfo.ICSHash = tests.RandomHash(t)
 				ts.ReceiptsHash = tests.RandomHash(t)
+				ts.ConsensusInfo.AccountLocks = make(map[identifiers.Address]common.LockType)
+
+				for _, addr := range addresses {
+					ts.ConsensusInfo.AccountLocks[addr] = common.MutateLock
+				}
 			},
-			Ixns: common.Interactions{ // ixns are needed as we are accessing account type from ixn for initial tesseract
+			// ixns are needed as we are accessing account type from ixn for initial tesseract
+			Ixns: common.NewInteractionsWithLeaderCheck(
+				false,
 				tests.CreateIX(t, &tests.CreateIxParams{
 					IxDataCallback: func(ix *common.IxData) {
-						ix.Input.Type = common.IxValueTransfer
+						ix.IxOps = txns
 					},
 				}),
-			},
+			),
 			Receipts: map[common.Hash]*common.Receipt{
 				tests.RandomHash(t): {
 					IxHash: tests.RandomHash(t),
 				},
+			},
+			CommitInfo: &common.CommitInfo{
+				Operator:  tests.RandomKramaID(t, 1),
+				RandomSet: []kramaid.KramaID{serverID},
 			},
 		}
 
@@ -1301,7 +1314,7 @@ func generateTesseractsGridByMap(t *testing.T, addrHeights map[identifiers.Addre
 		addresses = append(addresses, addr)
 	}
 
-	tesseracts := generateTesseracts(t, 0, height, common.NilHash, addresses...)
+	tesseracts := generateTesseracts(t, "", 0, height, common.NilHash, addresses...)
 
 	return tesseracts
 }
@@ -1312,7 +1325,7 @@ func generateTesseractsByMap(t *testing.T, addrHeights map[identifiers.Address]i
 	tesseracts := make([]*common.Tesseract, 0)
 
 	for addr, height := range addrHeights {
-		tesseracts = append(tesseracts, generateTesseracts(t, 0, height, common.NilHash, addr)...)
+		tesseracts = append(tesseracts, generateTesseracts(t, "", 0, height, common.NilHash, addr)...)
 	}
 
 	return tesseracts
@@ -1558,7 +1571,7 @@ func checkIfTesseractsSynced(
 
 		for addr, participant := range ts.Participants() {
 			// check if tesseract is added
-			actualTS, err := s.lattice.GetTesseractByHeight(addr, participant.Height, true)
+			actualTS, err := s.lattice.GetTesseractByHeight(addr, participant.Height, true, true)
 			require.NoError(t, err)
 
 			require.Equal(t, ts.Hash(), actualTS.Hash())
@@ -1566,7 +1579,7 @@ func checkIfTesseractsSynced(
 			if execution {
 				// check for execution
 				key := addr.Hex() + strconv.FormatUint(participant.Height, 10)
-				executedTS, ok := s.krama.(*MockKramaEngine).executedTesseracts[key]
+				executedTS, ok := s.consensus.(*MockKramaEngine).executedTesseracts[key]
 				require.True(t, ok)
 				require.Equal(t, executedTS.Hash(), ts.Hash())
 			} else {
@@ -1584,6 +1597,33 @@ type MockDB struct {
 	interactions      map[common.Hash][]byte
 }
 
+func NewMockDB() *MockDB {
+	return &MockDB{
+		accountSyncStatus: make(map[identifiers.Address][]byte),
+		accMetaInfo:       make(map[string]struct{}),
+		receipts:          make(map[common.Hash][]byte),
+		interactions:      make(map[common.Hash][]byte),
+	}
+}
+
+func (m MockDB) UpdateAccMetaInfo(id identifiers.Address, height uint64, tesseractHash common.Hash,
+	stateHash, contextHash common.Hash, commitHash common.Hash,
+	accType common.AccountType, shouldUpdateContextSetPosition bool, positionInContextSet int,
+) (int32, bool, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) SetCommitInfo(tsHash common.Hash, data []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m MockDB) GetCommitInfo(tsHash common.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (m MockDB) GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
@@ -1594,15 +1634,6 @@ func (m MockDB) StreamSnapshot(ctx context.Context, address identifiers.Address,
 ) (uint64, error) {
 	// TODO implement me
 	panic("implement me")
-}
-
-func NewMockDB() *MockDB {
-	return &MockDB{
-		accountSyncStatus: make(map[identifiers.Address][]byte),
-		accMetaInfo:       make(map[string]struct{}),
-		receipts:          make(map[common.Hash][]byte),
-		interactions:      make(map[common.Hash][]byte),
-	}
 }
 
 func (m MockDB) NewBatchWriter() db.BatchWriter {
@@ -1775,18 +1806,6 @@ func (m MockDB) SetTesseractHeightEntry(addr identifiers.Address, height uint64,
 	panic("implement me")
 }
 
-func (m MockDB) UpdateAccMetaInfo(
-	id identifiers.Address,
-	height uint64,
-	tesseractHash common.Hash,
-	stateHash common.Hash,
-	contextHash common.Hash,
-	accType common.AccountType,
-) (int32, bool, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (m *MockDB) setAccMetaInfoAt(addr identifiers.Address, height uint64) {
 	key := addr.Hex() + strconv.FormatUint(height, 10)
 	m.accMetaInfo[key] = struct{}{}
@@ -1797,11 +1816,6 @@ func (m MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool {
 	_, ok := m.accMetaInfo[key]
 
 	return ok
-}
-
-func (m MockDB) UpdateTesseractStatus(addr identifiers.Address, height uint64, tsHash common.Hash) error {
-	// TODO implement me
-	panic("implement me")
 }
 
 func getDeltaGroup(t *testing.T, behaviouralCount int, randomCount int, replaceCount int) *common.DeltaGroup {
@@ -1867,11 +1881,11 @@ func checkForReceipts(t *testing.T, expectedReceipts, receipts common.Receipts) 
 		receivedReceipt, ok := receipts[hash]
 		require.True(t, ok)
 
-		require.Equal(t, expectedReceipt.IxType, receivedReceipt.IxType)
+		require.Equal(t, expectedReceipt.IxOps[0].IxType, receivedReceipt.IxOps[0].IxType)
 		require.Equal(t, expectedReceipt.Status, receivedReceipt.Status)
 		require.Equal(t, expectedReceipt.IxHash, receivedReceipt.IxHash)
 		require.Equal(t, expectedReceipt.FuelUsed, receivedReceipt.FuelUsed)
-		require.Equal(t, expectedReceipt.ExtraData, receivedReceipt.ExtraData)
+		require.Equal(t, expectedReceipt.IxOps[0].Data, receivedReceipt.IxOps[0].Data)
 	}
 }
 
@@ -1906,7 +1920,7 @@ func fetchContextFromLattice(
 			break
 		}
 
-		t, err := s.lattice.GetTesseract(ts.TransitiveLink(address), false)
+		t, err := s.lattice.GetTesseract(ts.TransitiveLink(address), false, false)
 		if err != nil {
 			return nil
 		}

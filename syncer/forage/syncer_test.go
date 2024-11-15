@@ -9,13 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/multiformats/go-multiaddr"
-
-	"github.com/sarvalabs/go-moi/syncer/agora/block"
-
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
+	"github.com/multiformats/go-multiaddr"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
@@ -27,6 +24,7 @@ import (
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
 	"github.com/sarvalabs/go-moi/syncer"
+	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/cid"
 	"github.com/stretchr/testify/require"
 )
@@ -224,9 +222,9 @@ func TestFullSync_SyncPeers(t *testing.T) {
 		addr:                     10,
 	}
 
-	ts1 := generateTesseracts(t, 0, accountsToSync[common.GuardianLogicAddr], common.NilHash, common.GuardianLogicAddr)
-	ts2 := generateTesseracts(t, 0, accountsToSync[common.SargaAddress], common.NilHash, common.SargaAddress)
-	ts3 := generateTesseracts(t, 0, accountsToSync[addr], common.NilHash, addr)
+	ts1 := generateTesseracts(t, "", 0, accountsToSync[common.GuardianLogicAddr], common.NilHash, common.GuardianLogicAddr)
+	ts2 := generateTesseracts(t, "", 0, accountsToSync[common.SargaAddress], common.NilHash, common.SargaAddress)
+	ts3 := generateTesseracts(t, "", 0, accountsToSync[addr], common.NilHash, addr)
 
 	storeTesseractsInDB(t, serverSyncers[0], ts1...)
 	storeTesseractsInDB(t, serverSyncers[0], ts2...)
@@ -347,9 +345,9 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 		addr:                     10,
 	}
 
-	ts1 := generateTesseracts(t, 0, accountsToSync[common.GuardianLogicAddr], common.NilHash, common.GuardianLogicAddr)
-	ts2 := generateTesseracts(t, 0, accountsToSync[common.SargaAddress], common.NilHash, common.SargaAddress)
-	ts3 := generateTesseracts(t, 0, accountsToSync[addr], common.NilHash, addr)
+	ts1 := generateTesseracts(t, "", 0, accountsToSync[common.GuardianLogicAddr], common.NilHash, common.GuardianLogicAddr)
+	ts2 := generateTesseracts(t, "", 0, accountsToSync[common.SargaAddress], common.NilHash, common.SargaAddress)
+	ts3 := generateTesseracts(t, "", 0, accountsToSync[addr], common.NilHash, addr)
 
 	storeTesseractsInDB(t, serverSyncers[0], ts1...)
 	storeTesseractsInDB(t, serverSyncers[0], ts2...)
@@ -476,7 +474,8 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 		addresses[2]: 3,
 	}
 
-	newTesseracts := generateTesseracts(t, 0, 3, common.NilHash, addresses[2])
+	newTesseracts := generateTesseracts(t, serverSyncer.network.GetKramaID(), 0, 3,
+		common.NilHash, addresses[2])
 
 	clientSyncer.agora = newMockAgora()
 	storeTesseractsInSession(t, clientSyncer, newTesseracts...)
@@ -604,9 +603,9 @@ func TestSync_FromRejoining(t *testing.T) {
 	metaInfo, err := serverSyncer.db.GetAccountMetaInfo(common.SargaAddress)
 	require.NoError(t, err)
 
-	sargaTesseracts := generateTesseracts(t, int(metaInfo.Height+1), 8, metaInfo.TesseractHash, common.SargaAddress)
+	sargaTesseracts := generateTesseracts(t, "", int(metaInfo.Height+1), 8, metaInfo.TesseractHash, common.SargaAddress)
 
-	newTesseracts := generateTesseracts(t, 0, 4, common.NilHash, addresses[2])
+	newTesseracts := generateTesseracts(t, "", 0, 4, common.NilHash, addresses[2])
 	storeTesseractsInDB(t, serverSyncer, newTesseracts...)
 	storeTesseractsInDB(t, serverSyncer, sargaTesseracts...)
 
@@ -988,7 +987,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 		addr: expectedHeight,
 	}
 
-	ts := generateTesseracts(t, 0, accountsToSync[addr], common.NilHash, addr)
+	ts := generateTesseracts(t, "", 0, accountsToSync[addr], common.NilHash, addr)
 
 	storeTesseractsInDB(t, serverSyncers[0], ts[:8]...)
 	storeTesseractsInDB(t, serverSyncers[1], ts...)
@@ -1105,6 +1104,7 @@ func TestPendingAccounts_AddJob(t *testing.T) {
 		}
 
 		pendingAddrs := jobQueue.GetPendingAccounts()
+
 		sortAddresses(addrs)
 		sortAddresses(pendingAddrs)
 
@@ -1282,7 +1282,7 @@ func TestTesseractValidator(t *testing.T) {
 	testTesseract := tests.CreateTesseract(t, nil)
 
 	// polorize canonical tesseract
-	rawTS, err := testTesseract.Canonical().Bytes()
+	rawTS, err := testTesseract.Bytes()
 	require.NoError(t, err)
 
 	kramaID := s.network.GetKramaID()
@@ -1292,24 +1292,11 @@ func TestTesseractValidator(t *testing.T) {
 	from, err := peerID.Marshal()
 	require.NoError(t, err)
 
-	// create dummy ICS cluster info
-	info := common.ICSClusterInfo{
-		RandomSet: []kramaid.KramaID{kramaID},
-	}
-
-	// polorize ICS cluster info
-	rawInfo, err := info.Bytes()
-	require.NoError(t, err)
-
 	tsMsg := message.TesseractMsg{
 		RawTesseract: rawTS,
 		IxnsHashes:   tests.GetHashes(t, 1),
-		Extra: map[string][]byte{
-			testTesseract.ICSHash().String(): rawInfo,
-		},
 	}
 
-	// polorize tesseract message
 	rawData, err := tsMsg.Bytes()
 	require.NoError(t, err)
 
@@ -1345,19 +1332,19 @@ func TestTesseractValidator(t *testing.T) {
 			expectedError:    "failed to depolorize tesseract message",
 		},
 		{
-			name:             "Failed to depolorize tesseract-message",
+			name:             "failed to depolorize tesseract-message",
 			msgData:          []byte{1},
 			expectedResponse: pubsub.ValidationReject,
 			expectedError:    "failed to depolorize tesseract message",
 		},
 		{
-			name:             "Failed to verify tesseract signature",
+			name:             "failed to verify tesseract signature",
 			msgData:          rawData,
 			expectedResponse: pubsub.ValidationReject,
 			expectedError:    "tesseract seal does not exist",
 		},
 		{
-			name:    "Message already exists in Tesseract Registry",
+			name:    "Message already exists in ts Registry",
 			msgData: rawData,
 			preTestFn: func(tesseract *common.Tesseract) {
 				// set mock tesseract seal
@@ -1381,9 +1368,6 @@ func TestTesseractValidator(t *testing.T) {
 				// Storing tesseract in DB
 				err = pm.SetTesseract(tesseract.Hash(), rawTS)
 				require.NoError(t, err)
-			},
-			postTestFn: func(tesseract *common.Tesseract) {
-				sm.removeTSSeal(tesseract)
 			},
 			expectedResponse: pubsub.ValidationIgnore,
 		},
@@ -1432,8 +1416,17 @@ func TestIsAnyOtherParticipantStored(t *testing.T) {
 	heights := []uint64{99, 33, 21}
 
 	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
-		Addresses: addresses,
-		Heights:   heights,
+		Addresses:    addresses,
+		Heights:      heights,
+		Participants: make(map[identifiers.Address]common.State),
+		ParticipantsCallback: func(participants common.ParticipantsState) {
+			for i, addr := range addresses {
+				participants[addr] = common.State{
+					Height:    heights[i],
+					StateHash: tests.RandomHash(t),
+				}
+			}
+		},
 	})
 
 	for i := 0; i < 2; i++ {
@@ -1616,7 +1609,9 @@ func TestFetchInteractions(t *testing.T) {
 	mockSession := newMockSession(tests.RandomAddress(t))
 
 	hashes := tests.GetHashes(t, 2)
-	ixns := tests.CreateIxns(t, 1, nil)
+	ixnsList := tests.CreateIxns(t, 1, nil)
+
+	ixns := common.NewInteractionsWithLeaderCheck(false, ixnsList...)
 
 	rawIxns, err := ixns.Bytes()
 	require.NoError(t, err)
@@ -1636,28 +1631,28 @@ func TestFetchInteractions(t *testing.T) {
 		name         string
 		hash         common.Hash
 		session      syncer.Session
-		expectedIxns common.Interactions
+		expectedIxns []*common.Interaction
 	}{
 		{
 			name:         "interactions fetched successfully from the db",
 			hash:         hashes[0],
 			session:      nil,
-			expectedIxns: ixns,
+			expectedIxns: ixns.IxList(),
 		},
 		{
 			name:         "interactions fetched successfully from agora when not found in db",
 			hash:         hashes[1],
 			session:      mockSession,
-			expectedIxns: ixns,
+			expectedIxns: ixns.IxList(),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ixns, err = s.fetchInteractions(context.Background(), test.session, test.hash)
+			ixnsList, err = s.fetchInteractions(context.Background(), test.session, test.hash)
 			require.NoError(t, err)
 
-			require.Equal(t, test.expectedIxns, ixns)
+			require.Equal(t, test.expectedIxns, ixnsList)
 		})
 	}
 }

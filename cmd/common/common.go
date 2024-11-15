@@ -37,7 +37,7 @@ func WaitForReceipts(ctx context.Context, client *moiclient.Client, ixHash commo
 	for {
 		select {
 		case <-ctx.Done():
-			fmt.Printf("Failed to fetch receipt please try after some time IxHash %s \n", ixHash)
+			fmt.Printf("failed to fetch receipt please try after some time IxHash %s \n", ixHash)
 
 			return nil, ctx.Err()
 		default:

@@ -2,7 +2,12 @@ package args
 
 import (
 	"encoding/json"
+	"math/big"
 	"testing"
+
+	"github.com/sarvalabs/go-moi/common/hexutil"
+
+	"github.com/sarvalabs/go-moi/common/tests"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -10,8 +15,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 // CheckForRPCTesseract validates fields of rpc tesseract
@@ -28,13 +31,13 @@ func CheckForRPCTesseract(
 	require.Equal(t, ts.ReceiptsHash(), rpcTS.ReceiptsHash)
 	require.Equal(t, ts.Epoch(), rpcTS.Epoch.ToInt())
 	require.Equal(t, ts.Timestamp(), rpcTS.TimeStamp.ToUint64())
-	require.Equal(t, ts.Operator(), rpcTS.Operator)
+	require.Equal(t, string(ts.Operator()), rpcTS.Operator)
 	require.Equal(t, ts.FuelUsed(), rpcTS.FuelUsed.ToUint64())
 	require.Equal(t, ts.FuelLimit(), rpcTS.FuelLimit.ToUint64())
 	require.Equal(t, ts.Seal(), rpcTS.Seal.Bytes())
 	require.Equal(t, ts.Hash(), rpcTS.Hash)
 
-	if ts.ClusterID() == common.GenesisIdentifier {
+	if ts.ConsensusInfo().View == common.GenesisView {
 		for _, ix := range rpcTS.Ixns {
 			require.Nil(t, ix)
 		}
@@ -42,11 +45,35 @@ func CheckForRPCTesseract(
 		return
 	}
 
-	require.Equal(t, len(ts.Interactions()), len(rpcTS.Ixns))
+	require.Equal(t, len(ts.Interactions().IxList()), len(rpcTS.Ixns))
 
-	for i, ixn := range ts.Interactions() {
+	for i, ixn := range ts.Interactions().IxList() {
 		CheckForRPCIxn(t, ixn, ts.Hash(), nil, rpcTS.Ixns[i])
 	}
+
+	CheckForRPCCommitInfo(t, ts.CommitInfo(), &rpcTS.CommitInfo)
+}
+
+func CheckForRPCCommitInfo(t *testing.T, info *common.CommitInfo, rpcInfo *RPCCommitInfo) {
+	t.Helper()
+
+	if info == nil {
+		return
+	}
+
+	require.Equal(t, info.QC.Type, rpcInfo.QC.Type)
+	require.Equal(t, info.QC.Address, rpcInfo.QC.Address)
+	require.Equal(t, info.QC.LockType, rpcInfo.QC.LockType)
+	require.Equal(t, info.QC.View, rpcInfo.QC.View)
+	require.Equal(t, info.QC.TSHash, rpcInfo.QC.TSHash)
+	require.Equal(t, info.QC.SignerIndices.String(), rpcInfo.QC.SignerIndices)
+	require.Equal(t, info.QC.Signature, rpcInfo.QC.Signature)
+
+	require.Equal(t, info.Operator, rpcInfo.Operator)
+	require.Equal(t, info.ClusterID, rpcInfo.ClusterID)
+	require.Equal(t, info.View, rpcInfo.View)
+	require.Equal(t, info.RandomSet, rpcInfo.RandomSet)
+	require.Equal(t, info.RandomSetSizeWithoutDelta, rpcInfo.RandomSetSizeWithoutDelta)
 }
 
 // CheckForRPCIxn validates a field from input, compute, trust, and verifies payload.
@@ -62,107 +89,96 @@ func CheckForRPCIxn(
 	require.Equal(t, tsHash, rpcIxn.TSHash)
 	CheckForRPCParticipants(t, participants, rpcIxn.Participants)
 
-	input := ix.Input()
-	compute := ix.Compute()
-	trust := ix.Trust()
+	input := ix.IXData()
 
 	require.Equal(t, ix.Hash(), rpcIxn.Hash)
 	require.Equal(t, ix.Signature(), rpcIxn.Signature.Bytes())
 
-	require.Equal(t, input.Type, rpcIxn.Type)
 	require.Equal(t, input.Nonce, rpcIxn.Nonce.ToUint64())
 
 	require.Equal(t, input.Sender, rpcIxn.Sender)
-	require.Equal(t, input.Receiver, rpcIxn.Receiver)
 	require.Equal(t, input.Payer, rpcIxn.Payer)
 
-	require.Equal(t, len(input.TransferValues), len(rpcIxn.TransferValues))
-	require.Equal(t, len(input.PerceivedValues), len(rpcIxn.PerceivedValues))
-
-	for assetID, amount := range input.TransferValues {
-		flag := false
-
-		for rpcAssetID, rpcAmount := range rpcIxn.TransferValues {
-			if assetID.String() == rpcAssetID {
-				flag = true
-
-				require.Equal(t, amount, rpcAmount.ToInt())
-			}
-		}
-
-		require.True(t, flag)
-	}
-
-	for assetID, amount := range input.PerceivedValues {
-		flag := false
-
-		for rpcAssetID, rpcAmount := range rpcIxn.PerceivedValues {
-			if assetID.String() == rpcAssetID {
-				flag = true
-
-				require.Equal(t, amount, rpcAmount.ToInt())
-			}
-		}
-
-		require.True(t, flag)
-	}
-
-	require.Equal(t, input.PerceivedProofs, rpcIxn.PerceivedProofs.Bytes())
-
+	require.Equal(t, len(input.IxOps), len(rpcIxn.IxOps))
 	require.Equal(t, input.FuelLimit, uint64(rpcIxn.FuelLimit))
 	require.Equal(t, input.FuelPrice, rpcIxn.FuelPrice.ToInt())
 
-	require.Equal(t, compute.Mode, rpcIxn.Mode.ToUint64())
-	require.Equal(t, compute.Hash, rpcIxn.ComputeHash)
-	require.Equal(t, compute.ComputeNodes, rpcIxn.ComputeNodes)
+	for idx, op := range input.IxOps {
+		require.Equal(t, op.Type, rpcIxn.IxOps[idx].Type)
 
-	require.Equal(t, trust.MTQ, uint(rpcIxn.MTQ.ToUint64()))
-	require.Equal(t, trust.TrustNodes, rpcIxn.TrustNodes)
+		switch op.Type {
+		case common.IxParticipantCreate:
+			participantCreatePayload := new(common.ParticipantCreatePayload)
+			err := participantCreatePayload.FromBytes(op.Payload)
+			require.NoError(t, err)
 
-	switch ix.Type() {
-	case common.IxValueTransfer:
-		require.Equal(t, json.RawMessage(nil), rpcIxn.Payload)
+			rpcAssetActionPayload := RPCParticipantCreate{
+				Address: participantCreatePayload.Address,
+				Amount:  (*hexutil.Big)(participantCreatePayload.Amount),
+			}
 
-	case common.IxAssetCreate:
-		assetCreationPayload := new(common.AssetCreatePayload)
-		err := assetCreationPayload.FromBytes(ix.Payload())
-		require.NoError(t, err)
+			expectedPayload, err := json.Marshal(rpcAssetActionPayload)
+			require.NoError(t, err)
 
-		rpcAssetCreationPayload := RPCAssetCreation{
-			Symbol:     assetCreationPayload.Symbol,
-			Supply:     (*hexutil.Big)(assetCreationPayload.Supply),
-			Dimension:  (*hexutil.Uint8)(&assetCreationPayload.Dimension),
-			Standard:   (*hexutil.Uint16)(&assetCreationPayload.Standard),
-			IsLogical:  assetCreationPayload.IsLogical,
-			IsStateful: assetCreationPayload.IsStateFul,
+			require.Equal(t, expectedPayload, []byte(rpcIxn.IxOps[idx].Payload))
 
-			Logic: RPClogicPayloadFromLogicPayload(assetCreationPayload.LogicPayload),
+		case common.IxAssetTransfer:
+			assetCreationPayload := new(common.AssetActionPayload)
+			err := assetCreationPayload.FromBytes(op.Payload)
+			require.NoError(t, err)
+
+			rpcAssetActionPayload := RPCAssetAction{
+				Beneficiary: assetCreationPayload.Beneficiary,
+				AssetID:     assetCreationPayload.AssetID,
+				Amount:      (*hexutil.Big)(assetCreationPayload.Amount),
+			}
+
+			expectedPayload, err := json.Marshal(rpcAssetActionPayload)
+			require.NoError(t, err)
+
+			require.Equal(t, expectedPayload, []byte(rpcIxn.IxOps[idx].Payload))
+
+		case common.IxAssetCreate:
+			assetCreationPayload := new(common.AssetCreatePayload)
+			err := assetCreationPayload.FromBytes(op.Payload)
+			require.NoError(t, err)
+
+			rpcAssetCreationPayload := RPCAssetCreation{
+				Symbol:     assetCreationPayload.Symbol,
+				Supply:     (*hexutil.Big)(assetCreationPayload.Supply),
+				Dimension:  (*hexutil.Uint8)(&assetCreationPayload.Dimension),
+				Standard:   (*hexutil.Uint16)(&assetCreationPayload.Standard),
+				IsLogical:  assetCreationPayload.IsLogical,
+				IsStateful: assetCreationPayload.IsStateFul,
+
+				Logic: RPCLogicPayloadFromLogicPayload(assetCreationPayload.LogicPayload),
+			}
+
+			expectedPayload, err := json.Marshal(rpcAssetCreationPayload)
+			require.NoError(t, err)
+
+			require.Equal(t, expectedPayload, []byte(rpcIxn.IxOps[idx].Payload))
+
+		case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
+			logicPayload := new(common.LogicPayload)
+
+			err := logicPayload.FromBytes(op.Payload)
+			require.NoError(t, err)
+
+			rpcLogicPayload := &RPCLogicPayload{
+				Manifest: (hexutil.Bytes)(logicPayload.Manifest),
+				LogicID:  string(logicPayload.Logic),
+				Callsite: logicPayload.Callsite,
+				Calldata: (hexutil.Bytes)(logicPayload.Calldata),
+			}
+
+			expectedPayload, err := json.Marshal(rpcLogicPayload)
+			require.NoError(t, err)
+
+			require.Equal(t, expectedPayload, []byte(rpcIxn.IxOps[idx].Payload))
+		default:
+			require.FailNow(t, "invalid ix type")
 		}
-
-		expectedPayload, err := json.Marshal(rpcAssetCreationPayload)
-		require.NoError(t, err)
-
-		require.Equal(t, expectedPayload, []byte(rpcIxn.Payload))
-
-	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
-		logicPayload := new(common.LogicPayload)
-
-		err := logicPayload.FromBytes(ix.Payload())
-		require.NoError(t, err)
-
-		rpcLogicPayload := &RPCLogicPayload{
-			Manifest: (hexutil.Bytes)(logicPayload.Manifest),
-			LogicID:  string(logicPayload.Logic),
-			Callsite: logicPayload.Callsite,
-			Calldata: (hexutil.Bytes)(logicPayload.Calldata),
-		}
-
-		expectedPayload, err := json.Marshal(rpcLogicPayload)
-		require.NoError(t, err)
-
-		require.Equal(t, expectedPayload, []byte(rpcIxn.Payload))
-	default:
-		require.FailNow(t, "invalid ix type")
 	}
 }
 
@@ -195,16 +211,15 @@ func CheckForRPCParticipants(t *testing.T, participants common.ParticipantsState
 func CheckForRPCPoxtData(t *testing.T, poxt common.PoXtData, rpcPoxt RPCPoXtData) {
 	t.Helper()
 
+	require.Equal(t, poxt.Proposer, rpcPoxt.Proposer)
 	require.Equal(t, poxt.EvidenceHash, rpcPoxt.EvidenceHash)
 	require.Equal(t, poxt.BinaryHash, rpcPoxt.BinaryHash)
 	require.Equal(t, poxt.IdentityHash, rpcPoxt.IdentityHash)
-	require.Equal(t, poxt.ICSHash, rpcPoxt.ICSHash)
-	require.Equal(t, string(poxt.ClusterID), rpcPoxt.ClusterID)
-	require.Equal(t, poxt.ICSSignature, rpcPoxt.ICSSignature.Bytes())
-	require.Equal(t, poxt.ICSVoteset.String(), rpcPoxt.ICSVoteset)
-	require.Equal(t, uint64(poxt.Round), rpcPoxt.Round.ToUint64())
-	require.Equal(t, poxt.CommitSignature, rpcPoxt.CommitSignature.Bytes())
-	require.Equal(t, poxt.BFTVoteSet.String(), rpcPoxt.BFTVoteSet)
+	require.Equal(t, poxt.View, rpcPoxt.View.ToUint64())
+	require.Equal(t, poxt.LastCommit, rpcPoxt.LastCommit)
+	require.Equal(t, poxt.AccountLocks, rpcPoxt.AccountLocks)
+	require.Equal(t, poxt.ICSSeed, rpcPoxt.ICSSeed)
+	require.Equal(t, poxt.ICSProof, rpcPoxt.ICSProof.Bytes())
 }
 
 func CheckForRPCReceipt(
@@ -220,23 +235,37 @@ func CheckForRPCReceipt(
 
 	require.Equal(t, tsHash, rpcReceipt.TSHash)
 	CheckForRPCParticipants(t, participants, rpcReceipt.Participants)
-	require.Equal(t, uint64(receipt.IxType), rpcReceipt.IxType.ToUint64())
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
 	require.Equal(t, receipt.FuelUsed, uint64(rpcReceipt.FuelUsed))
-	require.Equal(t, receipt.ExtraData, rpcReceipt.ExtraData)
 	require.Equal(t, ix.Sender(), rpcReceipt.From)
-	require.Equal(t, ix.Receiver(), rpcReceipt.To)
 	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToUint64())
+	require.Len(t, rpcReceipt.IxOps, len(receipt.IxOps))
+
+	for idx, op := range receipt.IxOps {
+		require.Equal(t, uint64(op.IxType), rpcReceipt.IxOps[idx].TxType.ToUint64())
+		require.Equal(t, op.Status, rpcReceipt.IxOps[idx].Status)
+		require.Equal(t, op.Data, rpcReceipt.IxOps[idx].Data)
+	}
 }
 
-func CreateInteractionWithTestData(t *testing.T, ixType common.IxType, payload []byte) *common.Interaction {
+func CreateInteractionWithTestData(t *testing.T, ixType common.IxOpType, payload []byte) *common.Interaction {
 	t.Helper()
 
 	ixData := common.IxData{
-		Input:   tests.CreateIXInputWithTestData(t, ixType, payload, []byte{187, 1, 29, 103}),
-		Compute: tests.CreateComputeWithTestData(t, tests.RandomHash(t), tests.RandomKramaIDs(t, 2)),
-		Trust:   tests.CreateTrustWithTestData(t),
+		Sender:    tests.RandomAddress(t),
+		Payer:     tests.RandomAddress(t),
+		Nonce:     2,
+		FuelLimit: 1043,
+		FuelPrice: new(big.Int).SetUint64(1),
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    ixType,
+				Payload: payload,
+			},
+		},
 	}
+
+	tests.AppendParticipantsInIxData(t, &ixData)
 
 	ix, err := common.NewInteraction(ixData, tests.RandomHash(t).Bytes())
 	require.NoError(t, err)

@@ -11,7 +11,7 @@ import (
 	"github.com/sarvalabs/go-moi/common/hexutil"
 )
 
-const GenesisIdentifier = "genesis"
+const GenesisView = 0
 
 // GenesisFile is Genesis file with V1 version
 type GenesisFile struct {

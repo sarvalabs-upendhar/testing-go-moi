@@ -30,7 +30,7 @@ func TestVerifyHelloMsg(t *testing.T) {
 			msg: &message.HelloMsg{
 				KramaID: "",
 			},
-			expectedError: errors.New("Failed to get peer id from krama id"),
+			expectedError: errors.New("failed to get peer id from krama id"),
 		},
 		{
 			name: "Signature verification failed",

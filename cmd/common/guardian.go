@@ -95,7 +95,7 @@ func RegisterWithWatchDog(rpcURL string, watchdogURL string, vault *crypto.Krama
 		return errors.New("failed to marshal request params")
 	}
 
-	httpResponse, err := http.Post(watchdogURL, "application/json", bytes.NewBuffer(jsonData)) //nolint
+	httpResponse, err := http.Post(watchdogURL, "application/json", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return errors.Wrap(err, "failed to register with watchdog")
 	}
