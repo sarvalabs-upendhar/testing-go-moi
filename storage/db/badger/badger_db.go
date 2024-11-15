@@ -125,7 +125,6 @@ func (b *BadgerDB) Has(key []byte) (bool, error) {
 func (b *BadgerDB) Update(key []byte, value []byte) error {
 	b.metrics.CaptureDBWrites(1)
 
-	// 1. If key exists try to update the entry
 	err := b.db.Update(func(txn *badger.Txn) error {
 		return txn.Set(key, value)
 	})

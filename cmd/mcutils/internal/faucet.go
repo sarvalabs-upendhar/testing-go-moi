@@ -91,17 +91,50 @@ func runFaucetCommand(cmd *cobra.Command, args []string) {
 		cmdcommon.Err(errors.Wrap(err, "failed to fetch nonce"))
 	}
 
-	wallet, _ := identifiers.NewAddressFromHex(walletAddress)
+	sender := identifiers.NewAddressFromBytes(faucetWalletPublicKey)
 
-	ixArgs := common.SendIXArgs{
-		Type:      common.IxValueTransfer,
-		Sender:    identifiers.NewAddressFromBytes(faucetWalletPublicKey),
-		Receiver:  wallet,
+	beneficiary, err := identifiers.NewAddressFromHex(walletAddress)
+	if err != nil {
+		cmdcommon.Err(errors.Wrap(err, "failed to create beneficiary address"))
+	}
+
+	assetActionPayload := &common.AssetActionPayload{
+		Beneficiary: beneficiary,
+		AssetID:     common.KMOITokenAssetID,
+		Amount:      new(big.Int).SetUint64(amount),
+	}
+
+	rawPayload, err := assetActionPayload.Bytes()
+	if err != nil {
+		cmdcommon.Err(err)
+	}
+
+	ixArgs := common.IxData{
+		Sender:    sender,
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 1000,
-		TransferValues: map[identifiers.AssetID]*big.Int{
-			common.KMOITokenAssetID: new(big.Int).SetUint64(amount),
+		Funds: []common.IxFund{
+			{
+				AssetID: common.KMOITokenAssetID,
+				Amount:  new(big.Int).SetUint64(amount),
+			},
+		},
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetTransfer,
+				Payload: rawPayload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  sender,
+				LockType: common.MutateLock,
+			},
+			{
+				Address:  beneficiary,
+				LockType: common.MutateLock,
+			},
 		},
 	}
 

@@ -57,8 +57,8 @@ func PreImageKey(address identifiers.Address, hash common.Hash) []byte {
 	return dbKey(address, PreImage, hash.Bytes())
 }
 
-func SenatusPeerCountKey() []byte {
-	return dbKey(identifiers.NilAddress, SenatusPeerCount, nil)
+func AccountSafetyInfoKey(address identifiers.Address) []byte {
+	return dbKey(identifiers.NilAddress, ConsensusSafetyInfo, address.Bytes())
 }
 
 func InteractionsKey(tsHash common.Hash) []byte {
@@ -71,6 +71,14 @@ func ReceiptsKey(tsHash common.Hash) []byte {
 
 func TesseractKey(tsHash common.Hash) []byte {
 	return dbKey(identifiers.NilAddress, Tesseract, tsHash.Bytes())
+}
+
+func TesseractCommitInfoKey(tsHash common.Hash) []byte {
+	return dbKey(identifiers.NilAddress, TesseractCommitInfo, tsHash.Bytes())
+}
+
+func ConsensusProposalKey(tsHash common.Hash) []byte {
+	return dbKey(identifiers.NilAddress, ConsensusProposals, tsHash.Bytes())
 }
 
 func tesseractHeightKey(addr identifiers.Address, height uint64) []byte {

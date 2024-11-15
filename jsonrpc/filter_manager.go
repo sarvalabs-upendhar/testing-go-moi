@@ -131,7 +131,7 @@ func (f *FilterManager) Run() {
 		select {
 		case event := <-watchCh:
 			if err := f.dispatchEvent(event); err != nil {
-				f.logger.Error("Failed to dispatch event", "err", err)
+				f.logger.Error("failed to dispatch event", "err", err)
 			}
 
 		case <-timeoutCh:
@@ -238,12 +238,12 @@ func (f *FilterManager) GetLogsForQuery(query LogQuery) ([]*rpcargs.RPCLog, erro
 			break
 		}
 
-		tesseract, err := f.getTesseractByHash(hash, true)
+		tesseract, err := f.getTesseractByHash(hash, true, true)
 		if err != nil {
 			break
 		}
 
-		if len(tesseract.Interactions()) == 0 {
+		if tesseract.Interactions().Len() == 0 {
 			// no txs in tesseract, return empty response
 			continue
 		}
@@ -438,7 +438,7 @@ func (f *FilterManager) processPendingIxnsEvent(data *utils.AddedInteractionEven
 
 	for _, filter := range f.filters {
 		if pendingIxSub, ok := filter.(*pendingIxnsFilter); ok {
-			pendingIxSub.appendPendingIxHashes(data.Ixs)
+			pendingIxSub.appendPendingIxHashes(common.NewInteractionsWithLeaderCheck(false, data.Ixs...))
 		}
 	}
 
@@ -474,7 +474,7 @@ func (f *FilterManager) flushWsFilters(subType subscriptionType) error {
 				continue
 			}
 
-			f.logger.Error("Failed to send update", "err", err)
+			f.logger.Error("failed to send update", "err", err)
 		}
 	}
 
@@ -535,8 +535,9 @@ func (f *FilterManager) getTesseractHashByHeight(address identifiers.Address, he
 func (f *FilterManager) getTesseractByHash(
 	hash common.Hash,
 	withInteractions bool,
+	withCommitInfo bool,
 ) (*common.Tesseract, error) {
-	return f.backend.Chain.GetTesseract(hash, withInteractions)
+	return f.backend.Chain.GetTesseract(hash, withInteractions, withCommitInfo)
 }
 
 // getLogsFromTesseract filters tesseract logs based on filter topics, and returns logs to API
@@ -551,7 +552,7 @@ func (f *FilterManager) getLogsFromTesseract(
 	tsHash := ts.Hash()
 
 	for _, receipt := range ts.Receipts() {
-		for _, log := range receipt.Logs {
+		for _, log := range receipt.Logs() {
 			if filter.MatchTopics(log) {
 				logs = append(logs, &rpcargs.RPCLog{
 					Address:      log.Address,
@@ -632,7 +633,7 @@ func sendLogs(logs []*rpcargs.RPCLog, filterBase *filterBase) error {
 	return nil
 }
 
-// filter is an interface that Tesseract, Log and Pending Ixns Filters implement
+// filter is an interface that ts, Log and Pending Ixns Filters implement
 type filter interface {
 	// hasWSConn returns the flag indicating the filter has web socket stream
 	hasWSConn() bool

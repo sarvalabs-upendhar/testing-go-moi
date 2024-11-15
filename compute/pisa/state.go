@@ -166,6 +166,10 @@ func (slot *Slot) Write(key pisastate.StorageKey, val []byte) error {
 
 func (slot *Slot) Flush(tank drivers.FuelTank) (pisastate.AccessReceipt, error) {
 	// Create an access receipt with the read count
+	if ok := tank.Exhaust(slot.Meter() * StorageReadCost); !ok {
+		return pisastate.AccessReceipt{}, errors.New("out of fuel")
+	}
+
 	receipt := pisastate.AccessReceipt{Read: slot.readCount}
 
 	for key, val := range slot.dirty {
@@ -182,7 +186,7 @@ func (slot *Slot) Flush(tank drivers.FuelTank) (pisastate.AccessReceipt, error) 
 			receipt.Delete += uint64(len(entry))
 
 			// Delete exhausts 2 fuel per byte
-			if ok := tank.Exhaust(uint64(size * StorageDeleteCost)); !ok {
+			if ok := tank.Exhaust(uint64(size) * StorageDeleteCost); !ok {
 				return receipt, errors.New("out of fuel")
 			}
 
@@ -193,7 +197,7 @@ func (slot *Slot) Flush(tank drivers.FuelTank) (pisastate.AccessReceipt, error) 
 		}
 
 		// Write exhausts 3 fuel per byte
-		if ok := tank.Exhaust(uint64(size * StorageWriteCost)); !ok {
+		if ok := tank.Exhaust(uint64(size) * StorageWriteCost); !ok {
 			return receipt, errors.New("out of fuel")
 		}
 

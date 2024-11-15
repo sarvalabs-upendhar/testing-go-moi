@@ -142,6 +142,7 @@ func (n *Node) setupIxPool() error {
 		n.cfg.IxPool,
 		n.nodeMetrics.ixpool,
 		crypto.Verify,
+		n.cfg.Consensus.GenesisTimestamp,
 	)
 
 	return nil
@@ -186,7 +187,7 @@ func (n *Node) setupRandomizer() {
 	n.handlers.flux = flux.NewRandomizer(n.logger, n.network, n.senatus, n.nodeMetrics.flux)
 }
 
-// setupChainManager creates new Chain Manager object and setups it to node
+// setupChainManager creates a new Chain Manager object
 func (n *Node) setupChainManager() (err error) {
 	if n.chain, err = lattice.NewChainManager(
 		n.db,
@@ -208,7 +209,7 @@ func (n *Node) setupChainManagerToSenatus() {
 	n.senatus.Chain = n.chain
 }
 
-// setupKramaEngine creates new Krama Engine object and setups it to node
+// setupKramaEngine instantiates transport and krama engine
 func (n *Node) setupKramaEngine(sm *state.StateManager) (err error) {
 	kramaTransport := transport.NewKramaTransport(
 		n.network.GetKramaID(),
@@ -242,7 +243,7 @@ func (n *Node) setupKramaEngine(sm *state.StateManager) (err error) {
 	return nil
 }
 
-// setupSyncer creates new Syncer object and setups it to node
+// setupSyncer creates a syncer object which includes agora and forage services
 func (n *Node) setupSyncer(sm *state.StateManager) (err error) {
 	agoraInstance, err := agora.NewAgora(n.logger, n.db, n.network, n.nodeMetrics.agora)
 	if err != nil {

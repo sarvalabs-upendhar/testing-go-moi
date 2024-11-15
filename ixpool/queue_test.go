@@ -14,12 +14,12 @@ func TestPricedQueue_Push(t *testing.T) {
 
 	testcases := []struct {
 		name     string
-		ixs      common.Interactions
+		ixs      []*common.Interaction
 		expected []uint64
 	}{
 		{
 			name: "Push ixs into the priced queue",
-			ixs: common.Interactions{
+			ixs: []*common.Interaction{
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 2),
 			},
@@ -47,24 +47,24 @@ func TestPricedQueue_Push(t *testing.T) {
 func TestPricedQueue_Pop(t *testing.T) {
 	testcases := []struct {
 		name     string
-		ixs      common.Interactions
-		testFn   func(pq *pricedQueue, ixs common.Interactions)
+		ixs      []*common.Interaction
+		testFn   func(pq *pricedQueue, ixs []*common.Interaction)
 		expected []uint64
 	}{
 		{
 			name: "Empty priced queue",
-			ixs:  common.Interactions{},
+			ixs:  []*common.Interaction{},
 		},
 		{
 			name: "Pop the ixs by highest cost in order",
-			ixs: common.Interactions{
+			ixs: []*common.Interaction{
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 2),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 4),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 12),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
 			},
-			testFn: func(pq *pricedQueue, ixs common.Interactions) {
+			testFn: func(pq *pricedQueue, ixs []*common.Interaction) {
 				for _, ix := range ixs {
 					pq.Push(ix)
 				}
@@ -102,24 +102,24 @@ func TestPricedQueue_Pop(t *testing.T) {
 func TestPricedQueue_Peek(t *testing.T) {
 	testcases := []struct {
 		name     string
-		ixs      common.Interactions
-		testFn   func(pq *pricedQueue, ixs common.Interactions)
+		ixs      []*common.Interaction
+		testFn   func(pq *pricedQueue, ixs []*common.Interaction)
 		expected []uint64
 	}{
 		{
 			name: "Empty priced queue",
-			ixs:  common.Interactions{},
+			ixs:  []*common.Interaction{},
 		},
 		{
 			name: "Peek the ixs by highest cost in order",
-			ixs: common.Interactions{
+			ixs: []*common.Interaction{
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 2),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 4),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 12),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
 			},
-			testFn: func(pq *pricedQueue, ixs common.Interactions) {
+			testFn: func(pq *pricedQueue, ixs []*common.Interaction) {
 				for _, ix := range ixs {
 					pq.Push(ix)
 				}
@@ -155,22 +155,22 @@ func TestPricedQueue_Peek(t *testing.T) {
 func TestPricedQueue_Len(t *testing.T) {
 	testcases := []struct {
 		name     string
-		ixs      common.Interactions
-		testFn   func(pq *pricedQueue, ixs common.Interactions)
+		ixs      []*common.Interaction
+		testFn   func(pq *pricedQueue, ixs []*common.Interaction)
 		expected int
 	}{
 		{
 			name:     "Empty priced queue",
-			ixs:      common.Interactions{},
+			ixs:      []*common.Interaction{},
 			expected: 0,
 		},
 		{
 			name: "should return the expected length",
-			ixs: common.Interactions{
+			ixs: []*common.Interaction{
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 8),
 				newIxWithFuelPrice(t, 0, identifiers.NilAddress, 2),
 			},
-			testFn: func(pq *pricedQueue, ixs common.Interactions) {
+			testFn: func(pq *pricedQueue, ixs []*common.Interaction) {
 				for _, ix := range ixs {
 					pq.Push(ix)
 				}

@@ -7,6 +7,7 @@ import (
 
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/stretchr/testify/require"
@@ -72,61 +73,11 @@ func TestCopyParticipant(t *testing.T) {
 	}
 }
 
-func TestCopyPoXtData(t *testing.T) {
-	testcases := []struct {
-		name string
-		poxt common.PoXtData
-	}{
-		{
-			name: "copy tesseract poxt data",
-			poxt: tests.CreatePoXtWithTestData(t),
-		},
-		{
-			name: "empty signatures and votesets",
-			poxt: common.PoXtData{
-				ClusterID: "cluster",
-				Round:     5,
-			},
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			expectedPoXt := test.poxt
-
-			copiedPoXt := test.poxt.Copy()
-
-			require.Equal(t, expectedPoXt, copiedPoXt)
-
-			if expectedPoXt.BFTVoteSet != nil {
-				require.False(t, &expectedPoXt.BFTVoteSet.Elements[0] == &copiedPoXt.BFTVoteSet.Elements[0])
-			}
-
-			if expectedPoXt.ICSVoteset != nil {
-				require.False(t, &expectedPoXt.ICSVoteset.Elements[0] == &copiedPoXt.ICSVoteset.Elements[0])
-			}
-
-			if len(expectedPoXt.CommitSignature) > 0 {
-				require.NotEqual(t,
-					reflect.ValueOf(expectedPoXt.CommitSignature).Pointer(),
-					reflect.ValueOf(copiedPoXt.CommitSignature).Pointer(),
-				)
-			}
-
-			if len(expectedPoXt.ICSSignature) > 0 {
-				require.NotEqual(t,
-					reflect.ValueOf(expectedPoXt.ICSSignature).Pointer(),
-					reflect.ValueOf(copiedPoXt.ICSSignature).Pointer(),
-				)
-			}
-		})
-	}
-}
-
 func TestNewTesseract(t *testing.T) {
 	var (
 		address  = tests.RandomAddress(t)
 		ixParams = tests.GetIxParamsMapWithAddresses(
+			t,
 			[]identifiers.Address{tests.RandomAddress(t)},
 			[]identifiers.Address{tests.RandomAddress(t)},
 		)
@@ -139,7 +90,6 @@ func TestNewTesseract(t *testing.T) {
 		receiptHash      common.Hash
 		epoch            *big.Int
 		timestamp        uint64
-		operator         string
 		fuelUsed         uint64
 		fuelLimit        uint64
 		consensusInfo    common.PoXtData
@@ -147,6 +97,7 @@ func TestNewTesseract(t *testing.T) {
 		sealBy           kramaid.KramaID
 		ixns             common.Interactions
 		receipts         common.Receipts
+		commitInfo       common.CommitInfo
 	}{
 		{
 			name: "create new tesseract",
@@ -157,14 +108,15 @@ func TestNewTesseract(t *testing.T) {
 			receiptHash:      tests.RandomHash(t),
 			epoch:            big.NewInt(3),
 			timestamp:        44,
-			operator:         "operator",
 			fuelUsed:         34,
 			fuelLimit:        33,
-			consensusInfo:    tests.CreatePoXtWithTestData(t),
+			consensusInfo:    tests.CreatePoXtWithTestData(t, 1),
 			seal:             []byte{1, 2, 3},
 			sealBy:           tests.RandomKramaIDs(t, 1)[0],
-			ixns:             tests.CreateIxns(t, 1, ixParams),
-			receipts:         tests.CreateReceiptsWithTestData(t, tests.RandomHash(t)),
+			ixns: common.NewInteractionsWithLeaderCheck(false,
+				tests.CreateIxns(t, 1, ixParams)...),
+			receipts:   tests.CreateReceiptsWithTestData(t, tests.RandomHash(t)),
+			commitInfo: tests.CreateCommitInfoWithTestData(t),
 		},
 	}
 
@@ -176,7 +128,6 @@ func TestNewTesseract(t *testing.T) {
 				test.receiptHash,
 				test.epoch,
 				test.timestamp,
-				test.operator,
 				test.fuelUsed,
 				test.fuelLimit,
 				test.consensusInfo,
@@ -184,6 +135,7 @@ func TestNewTesseract(t *testing.T) {
 				test.sealBy,
 				test.ixns,
 				test.receipts,
+				&test.commitInfo,
 			)
 
 			require.Equal(t, test.participants, tesseract.Participants())
@@ -191,7 +143,6 @@ func TestNewTesseract(t *testing.T) {
 			require.Equal(t, test.receiptHash, tesseract.ReceiptsHash())
 			require.Equal(t, test.epoch, tesseract.Epoch())
 			require.Equal(t, test.timestamp, tesseract.Timestamp())
-			require.Equal(t, test.operator, tesseract.Operator())
 			require.Equal(t, test.fuelUsed, tesseract.FuelUsed())
 			require.Equal(t, test.fuelLimit, tesseract.FuelLimit())
 			require.Equal(t, test.consensusInfo, tesseract.ConsensusInfo())
@@ -199,16 +150,11 @@ func TestNewTesseract(t *testing.T) {
 			require.Equal(t, test.sealBy, tesseract.SealBy())
 			require.Equal(t, test.ixns, tesseract.Interactions())
 			require.Equal(t, test.receipts, tesseract.Receipts())
+			require.Equal(t, test.commitInfo, *tesseract.CommitInfo())
 
 			// modifying values is the only way to check if values are copied, as methods on copied value
 			// always return copy regardless of whether value copied or not in new tesseract
 			// make sure consensus info is copied
-			test.consensusInfo.CommitSignature[0] = 22
-			require.NotEqual(t,
-				test.consensusInfo.CommitSignature,
-				tesseract.ConsensusInfo().CommitSignature,
-			)
-
 			// make sure epoch is copied
 			test.epoch = big.NewInt(100)
 			require.NotEqual(t,

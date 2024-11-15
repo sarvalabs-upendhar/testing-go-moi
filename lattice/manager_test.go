@@ -6,14 +6,15 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-moi/storage"
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/storage"
 )
 
 func TestHasTesseract(t *testing.T) {
@@ -69,7 +70,13 @@ func TestUpdateNodeInclusivity(t *testing.T) {
 
 func TestGetTesseract(t *testing.T) {
 	// set the interactions to nil for first tesseract
-	ts := tests.CreateTesseracts(t, 1, nil)
+	ts := tests.CreateTesseracts(t, 1, map[int]*tests.CreateTesseractParams{
+		0: {
+			CommitInfo: &common.CommitInfo{
+				Operator: tests.RandomKramaID(t, 0),
+			},
+		},
+	})
 	tsWithInteractions := tests.CreateTesseracts(t, 2, getTesseractParamsMapWithIxns(t, 3))
 	ts = append(ts, tsWithInteractions...)
 
@@ -89,6 +96,7 @@ func TestGetTesseract(t *testing.T) {
 		address          identifiers.Address
 		tsHash           common.Hash
 		withInteractions bool
+		withCommitInfo   bool
 		expectedTS       *common.Tesseract
 		expectedError    error
 	}{
@@ -105,22 +113,42 @@ func TestGetTesseract(t *testing.T) {
 			expectedTS:       ts[0],
 		},
 		{
-			name:             "fetch tesseract without interactions from db",
+			name:             "fetch tesseract without interactions and with commit info from cache",
+			tsHash:           ts[0].Hash(),
+			withInteractions: false,
+			withCommitInfo:   true,
+			expectedTS:       ts[0],
+		},
+		{
+			name:             "fetch tesseract without interactions and without commit info from db",
 			tsHash:           ts[1].Hash(),
 			withInteractions: false,
 			expectedTS:       ts[1],
 		},
 		{
-			name:             "fetch tesseract with interactions from db",
+			name:             "fetch tesseract with interactions and without commit info from db",
 			tsHash:           ts[2].Hash(),
 			withInteractions: true,
+			expectedTS:       ts[2],
+		},
+		{
+			name:             "fetch tesseract with interactions and with commit info from db",
+			tsHash:           ts[2].Hash(),
+			withInteractions: true,
+			expectedTS:       ts[2],
+		},
+		{
+			name:             "fetch tesseract without interactions and with commit info from cache",
+			tsHash:           ts[2].Hash(),
+			withInteractions: false,
+			withCommitInfo:   true,
 			expectedTS:       ts[2],
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualTS, err := c.GetTesseract(test.tsHash, test.withInteractions)
+			actualTS, err := c.GetTesseract(test.tsHash, test.withInteractions, test.withCommitInfo)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -130,8 +158,7 @@ func TestGetTesseract(t *testing.T) {
 
 			require.NoError(t, err)
 
-			tests.CheckForTesseract(t, test.expectedTS, actualTS, test.withInteractions)
-
+			tests.ValidateTesseract(t, test.expectedTS, actualTS, test.withInteractions, test.withCommitInfo)
 			checkIfTesseractCachedInCM(t, c, test.withInteractions, test.tsHash)
 		})
 	}
@@ -142,6 +169,7 @@ func TestGetTesseractByHeight(t *testing.T) {
 		address          identifiers.Address
 		height           uint64
 		withInteractions bool
+		withCommitInfo   bool
 	}
 
 	ts := tests.CreateTesseract(t, getTesseractParamsMapWithIxns(t, 1)[0])
@@ -162,16 +190,17 @@ func TestGetTesseractByHeight(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name: "fetch tesseract with Interactions for a valid height",
+			name: "fetch tesseract with Interactions and with commit info for a valid height",
 			args: args{
 				address:          ts.AnyAddress(),
 				height:           ts.Height(ts.AnyAddress()),
 				withInteractions: true,
+				withCommitInfo:   true,
 			},
 			expectedTS: ts,
 		},
 		{
-			name: "fetch tesseract without Interactions for a valid height",
+			name: "fetch tesseract without Interactions and without commit info for a valid height",
 			args: args{
 				address:          ts.AnyAddress(),
 				height:           ts.Height(ts.AnyAddress()),
@@ -192,7 +221,11 @@ func TestGetTesseractByHeight(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualTS, err := c.GetTesseractByHeight(test.args.address, test.args.height, test.args.withInteractions)
+			actualTS, err := c.GetTesseractByHeight(
+				test.args.address,
+				test.args.height,
+				test.args.withInteractions,
+				test.args.withCommitInfo)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -201,7 +234,7 @@ func TestGetTesseractByHeight(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			tests.CheckForTesseract(t, test.expectedTS, actualTS, test.args.withInteractions)
+			tests.ValidateTesseract(t, test.expectedTS, actualTS, test.args.withInteractions, test.args.withCommitInfo)
 			checkIfTesseractCachedInCM(t, c, test.args.withInteractions, ts.Hash())
 		})
 	}
@@ -377,7 +410,7 @@ func TestGetReceiptByIxHash(t *testing.T) {
 }
 
 func TestAddParticipantData(t *testing.T) {
-	addresses := tests.GetAddresses(t, 2)
+	addresses := tests.GetAddresses(t, 3)
 	objects := make(map[identifiers.Address]*state.Object)
 	keys := getHexEntries(t, 2)
 	values := getHexEntries(t, 2)
@@ -386,10 +419,15 @@ func TestAddParticipantData(t *testing.T) {
 		Addresses: addresses,
 		Participants: common.ParticipantsState{
 			addresses[0]: {
-				Height: 11,
+				Height:    11,
+				StateHash: tests.RandomHash(t),
 			},
 			addresses[1]: {
-				Height: 23,
+				Height:    23,
+				StateHash: tests.RandomHash(t),
+			},
+			addresses[2]: {
+				Height: 28,
 			},
 		},
 	}
@@ -502,6 +540,13 @@ func TestAddParticipantData(t *testing.T) {
 			}
 
 			for addr, participant := range participants {
+				if participant.StateHash == common.NilHash {
+					_, found := db.GetAccMetaInfo(addr)
+					require.False(t, found)
+
+					continue
+				}
+
 				_, ok := pool.removedObjects[addr]
 				require.True(t, ok)
 
@@ -599,6 +644,68 @@ func TestStoreReceipts(t *testing.T) {
 	}
 }
 
+func TestStoreCommitInfo(t *testing.T) {
+	c := createTestChainManager(t, nil)
+
+	testcases := []struct {
+		name               string
+		batchWriterSetHook func() error
+		params             *tests.CreateTesseractParams
+		expectedError      error
+	}{
+		{
+			name: "commit info stored successfully",
+			params: &tests.CreateTesseractParams{
+				CommitInfo: &common.CommitInfo{
+					Operator: tests.RandomKramaID(t, 1),
+				},
+			},
+		},
+		{
+			name: "failed to store commit info",
+			batchWriterSetHook: func() error {
+				return errors.New("failed to write commit info")
+			},
+			params: &tests.CreateTesseractParams{
+				CommitInfo: &common.CommitInfo{
+					Operator: tests.RandomKramaID(t, 1),
+				},
+			},
+			expectedError: errors.New("failed to write commit info"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			ts := tests.CreateTesseract(t, test.params)
+
+			bw := newMockBatchWriter()
+			bw.setHook = test.batchWriterSetHook
+
+			err := c.storeCommitInfo(bw, ts)
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// check if receipts are stored in batch writer
+			val, found := bw.Get(storage.TesseractCommitInfoKey(ts.Hash()))
+			require.True(t, found)
+
+			info := new(common.CommitInfo)
+
+			err = info.FromBytes(val)
+			require.NoError(t, err)
+
+			require.Equal(t, ts.CommitInfo(), info)
+		})
+	}
+}
+
 func TestStoreInteractions(t *testing.T) {
 	ixns := tests.CreateIxns(t, 2, nil)
 	c := createTestChainManager(t, nil)
@@ -610,18 +717,18 @@ func TestStoreInteractions(t *testing.T) {
 		expectedError      error
 	}{
 		{
-			name: "receipts stored successfully",
+			name: "interactions stored successfully",
 			params: &tests.CreateTesseractParams{
-				Ixns: ixns,
+				Ixns: common.NewInteractionsWithLeaderCheck(false, ixns...),
 			},
 		},
 		{
-			name: "failed to store receipts",
+			name: "failed to store interactions",
 			batchWriterSetHook: func() error {
 				return errors.New("failed to write ixns")
 			},
 			params: &tests.CreateTesseractParams{
-				Ixns: ixns,
+				Ixns: common.NewInteractionsWithLeaderCheck(false, ixns...),
 			},
 			expectedError: errors.New("failed to write ixns"),
 		},
@@ -653,10 +760,10 @@ func TestStoreInteractions(t *testing.T) {
 			err = actualIxns.FromBytes(val)
 			require.NoError(t, err)
 
-			require.Equal(t, ts.Interactions(), *actualIxns)
+			require.Equal(t, ts.Interactions().IxList(), actualIxns.IxList())
 
 			// check if ixnHash ==> tsHash pair stored in batch writer
-			for _, ixn := range ts.Interactions() {
+			for _, ixn := range ts.Interactions().IxList() {
 				val, found := bw.Get(ixn.Hash().Bytes())
 				require.True(t, found)
 
@@ -680,8 +787,11 @@ func TestAddTesseractData(t *testing.T) {
 		{
 			name: "tesseract added successfully",
 			params: &tests.CreateTesseractParams{
-				Ixns:     ixns,
+				Ixns:     common.NewInteractionsWithLeaderCheck(false, ixns...),
 				Receipts: receipts,
+				CommitInfo: &common.CommitInfo{
+					Operator: tests.RandomKramaID(t, 1),
+				},
 			},
 		},
 		{
@@ -715,12 +825,12 @@ func TestAddTesseractData(t *testing.T) {
 			val, found := bw.Get(storage.TesseractKey(ts.Hash()))
 			require.True(t, found)
 
-			actualTS := new(common.CanonicalTesseract)
+			actualTS := new(common.Tesseract)
 
 			err = actualTS.FromBytes(val)
 			require.NoError(t, err)
 
-			require.Equal(t, ts.Canonical(), actualTS)
+			tests.ValidateTesseract(t, ts, actualTS, false, false)
 
 			// check if ixns are stored in batch writer
 			_, found = bw.Get(storage.InteractionsKey(ts.Hash()))
@@ -728,6 +838,10 @@ func TestAddTesseractData(t *testing.T) {
 
 			// check if receipts are stored in batch writer
 			_, found = bw.Get(storage.ReceiptsKey(ts.Hash()))
+			require.True(t, found)
+
+			// check if commit info are stored in batch writer
+			_, found = bw.Get(storage.TesseractCommitInfoKey(ts.Hash()))
 			require.True(t, found)
 		})
 	}
@@ -745,14 +859,16 @@ func TestAddTesseract(t *testing.T) {
 		Participants: common.ParticipantsState{
 			addresses[0]: {
 				Height:       11,
+				StateHash:    tests.RandomHash(t),
 				ContextDelta: getDeltaGroup(t, 1, 1, 1),
 			},
 			addresses[1]: {
 				Height:       23,
+				StateHash:    tests.RandomHash(t),
 				ContextDelta: getDeltaGroup(t, 1, 1, 1),
 			},
 		},
-		Ixns:     ixns,
+		Ixns:     common.NewInteractionsWithLeaderCheck(false, ixns...),
 		Receipts: receipts,
 	}
 
@@ -908,26 +1024,34 @@ func TestAddTesseractWithState(t *testing.T) {
 		tests.RandomHash(t): {4, 5, 6},
 	}
 
+	commitInfo := &common.CommitInfo{
+		Operator: tests.RandomKramaID(t, 1),
+	}
+
 	tsParams := &tests.CreateTesseractParams{
 		Addresses: addresses,
 		Participants: common.ParticipantsState{
 			addresses[0]: {
 				Height:       11,
+				StateHash:    tests.RandomHash(t),
 				ContextDelta: getDeltaGroup(t, 1, 1, 1),
 			},
 			addresses[1]: {
 				Height:       23,
+				StateHash:    tests.RandomHash(t),
 				ContextDelta: getDeltaGroup(t, 1, 1, 1),
 			},
 		},
 		TSDataCallback: func(ts *tests.TesseractData) {
-			ts.ConsensusInfo.ICSHash = icsHash
+			// ts.ConsensusInfo.ICSHash = icsHash
 		},
+		CommitInfo: commitInfo,
 	}
 
 	testcases := []struct {
 		name            string
 		address         identifiers.Address
+		tsParams        *tests.CreateTesseractParams
 		dirtyStorage    map[common.Hash][]byte
 		allParticipants bool
 		dbCallback      func(db *MockDB)
@@ -936,17 +1060,20 @@ func TestAddTesseractWithState(t *testing.T) {
 		{
 			name:            "added tesseract with state successfully",
 			address:         identifiers.NilAddress,
+			tsParams:        tsParams,
 			dirtyStorage:    dirtyStorage,
 			allParticipants: true,
 		},
 		{
 			name:            "added tesseract's participant successfully",
 			address:         addresses[0],
+			tsParams:        tsParams,
 			dirtyStorage:    dirtyStorage,
 			allParticipants: false,
 		},
 		{
-			name: "failed to add tesseract",
+			name:     "failed to add tesseract",
+			tsParams: tsParams,
 			dbCallback: func(db *MockDB) {
 				db.setTesseractHeightEntryHook = func() error {
 					return errors.New("failed to set tesseract height entry")
@@ -957,12 +1084,13 @@ func TestAddTesseractWithState(t *testing.T) {
 			expectedError:   errors.New("failed to set tesseract height entry"),
 		},
 		{
-			name:            "empty dirty storage",
+			name:            "commit info not found",
 			allParticipants: true,
-			expectedError:   errors.New("empty dirty storage"),
+			expectedError:   common.ErrCommitInfoNotFound,
 		},
 		{
-			name: "failed to write dirty keys",
+			name:     "failed to write dirty keys",
+			tsParams: tsParams,
 			dbCallback: func(db *MockDB) {
 				db.createEntryHook = func() error {
 					return errors.New("failed to write dirty keys")
@@ -976,7 +1104,7 @@ func TestAddTesseractWithState(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ts := tests.CreateTesseract(t, tsParams)
+			ts := tests.CreateTesseract(t, test.tsParams)
 
 			db := mockDB()
 
@@ -1054,6 +1182,7 @@ func TestGetInteractionsByTSHash(t *testing.T) {
 	var (
 		tsHash    = tests.RandomHash(t)
 		paramsMap = tests.GetIxParamsMapWithAddresses(
+			t,
 			[]identifiers.Address{tests.RandomAddress(t)},
 			[]identifiers.Address{tests.RandomAddress(t)},
 		)
@@ -1061,7 +1190,7 @@ func TestGetInteractionsByTSHash(t *testing.T) {
 		c    = createTestChainManager(t, nil)
 	)
 
-	rawIxns, err := ixns.Bytes()
+	rawIxns, err := polo.Polorize(ixns)
 	require.NoError(t, err)
 
 	err = c.db.SetInteractions(tsHash, rawIxns)
@@ -1070,7 +1199,7 @@ func TestGetInteractionsByTSHash(t *testing.T) {
 	testcases := []struct {
 		name                 string
 		tsHash               common.Hash
-		expectedInteractions common.Interactions
+		expectedInteractions []*common.Interaction
 		expectedError        error
 	}{
 		{
@@ -1125,7 +1254,7 @@ func TestGetInteractionByTSHash(t *testing.T) {
 			tsHash:               ts[0].Hash(),
 			ixIndex:              1,
 			expectedParticipants: ts[0].Participants(),
-			expectedInteraction:  ts[0].Interactions()[1],
+			expectedInteraction:  ts[0].Interactions().IxList()[1],
 		},
 		{
 			name:          "tesseract not found",
@@ -1182,7 +1311,7 @@ func TestGetInteractionByIxHash(t *testing.T) {
 	err := c.db.SetIXLookup(ixHash1, ts[0].Hash())
 	require.NoError(t, err)
 
-	err = c.db.SetIXLookup(ts[1].Interactions()[1].Hash(), ts[1].Hash())
+	err = c.db.SetIXLookup(ts[1].Interactions().IxList()[1].Hash(), ts[1].Hash())
 	require.NoError(t, err)
 
 	err = c.db.SetIXLookup(ixHash2, tests.RandomHash(t))
@@ -1198,9 +1327,9 @@ func TestGetInteractionByIxHash(t *testing.T) {
 	}{
 		{
 			name:                 "fetch interactions successfully",
-			ixHash:               ts[1].Interactions()[1].Hash(),
+			ixHash:               ts[1].Interactions().IxList()[1].Hash(),
 			expectedParticipants: ts[1].Participants(),
-			expectedInteraction:  ts[1].Interactions()[1],
+			expectedInteraction:  ts[1].Interactions().IxList()[1],
 			expectedIndex:        1,
 		},
 		{

@@ -5,10 +5,6 @@ import (
 	"fmt"
 
 	"github.com/mr-tron/base58"
-	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-polo"
 )
 
 // ClusterID ...
@@ -28,10 +24,9 @@ func (c ClusterID) Hash() Hash {
 }
 
 type ExecutionContext struct {
-	Participants map[identifiers.Address]IxParticipant // TODO: This should be replaced with transition object
-	CtxDelta     ContextDelta
-	Cluster      ClusterID
-	Time         uint64
+	CtxDelta ContextDelta
+	Cluster  ClusterID
+	Time     uint64
 }
 
 func (ctx ExecutionContext) Timestamp() uint64 {
@@ -44,30 +39,6 @@ func (ctx ExecutionContext) ClusterID() string {
 
 func (ctx ExecutionContext) ContextDelta() ContextDelta {
 	return ctx.CtxDelta
-}
-
-type ICSClusterInfo struct {
-	RandomSet                 []kramaid.KramaID
-	RandomSetSizeWithoutDelta uint32
-	ObserverSet               []kramaid.KramaID
-	Responses                 []*ArrayOfBits
-}
-
-func (ci *ICSClusterInfo) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(ci)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize ics cluster info")
-	}
-
-	return rawData, nil
-}
-
-func (ci *ICSClusterInfo) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(ci, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize ics cluster info")
-	}
-
-	return nil
 }
 
 type LotteryKey [64]byte

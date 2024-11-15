@@ -97,6 +97,8 @@ func (r *Randomizer) addPeers(slot int) {
 		cancel()
 	}()
 
+	r.peers[slot].pendingCount = PEERSCOUNT
+
 	// Retrieve the keys and values from the db
 	peerInfos, err := r.senatus.StreamPeerInfos(ctx)
 	if err != nil {
@@ -144,10 +146,12 @@ func (r *Randomizer) addPeers(slot int) {
 				continue
 			}
 
-			r.peers[slot].pendingCount--
-			desiredCount++
+			if _, ok := nonUtilized[info.KramaID]; !ok {
+				r.peers[slot].pendingCount--
+				desiredCount++
 
-			nonUtilized[info.KramaID] = 1
+				nonUtilized[info.KramaID] = 1
+			}
 		}
 
 		counter++
@@ -263,7 +267,7 @@ func (r *Randomizer) GetRandomNodes(
 
 		default:
 			if requiredNo <= 0 {
-				return
+				return randomPeers, err
 			}
 
 			s1 := rand.NewSource(time.Now().UnixNano())
@@ -277,7 +281,7 @@ func (r *Randomizer) GetRandomNodes(
 
 			randomPeers = append(randomPeers, peers...)
 			if len(randomPeers) >= count {
-				return
+				return randomPeers, err
 			}
 
 			avoidPeers = append(avoidPeers, randomPeers...)

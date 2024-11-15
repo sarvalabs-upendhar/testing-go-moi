@@ -333,6 +333,7 @@ func (b *ArrayOfBits) GetTrueIndices() []int {
 			if (elem & (uint64(1) << uint64(j))) > 0 {
 				trueIndices = append(trueIndices, curBit)
 			}
+
 			curBit++
 		}
 	}
@@ -344,6 +345,7 @@ func (b *ArrayOfBits) GetTrueIndices() []int {
 		if (lastElem & (uint64(1) << uint64(i))) > 0 {
 			trueIndices = append(trueIndices, curBit)
 		}
+
 		curBit++
 	}
 
@@ -370,6 +372,7 @@ func (b *ArrayOfBits) GetTrueIndicesMap() map[int]struct{} {
 			if (elem & (uint64(1) << uint64(j))) > 0 {
 				trueIndices[curBit] = struct{}{}
 			}
+
 			curBit++
 		}
 	}
@@ -381,6 +384,7 @@ func (b *ArrayOfBits) GetTrueIndicesMap() map[int]struct{} {
 		if (lastElem & (uint64(1) << uint64(i))) > 0 {
 			trueIndices[curBit] = struct{}{}
 		}
+
 		curBit++
 	}
 

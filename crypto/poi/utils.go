@@ -83,8 +83,10 @@ func GetPrivateKeyAtPath(mnemonic, hdPath string) ([]byte, []byte, error) {
 				if err != nil {
 					return nil, nil, err
 				}
+
 				nodeNumbers[counter] = uint32(num)
 			}
+
 			counter++
 		}
 	}

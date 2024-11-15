@@ -500,7 +500,6 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 				require.True(tm.T(), rpcTS[1].HasParticipant(assetAddresses[1]))
 
 			case rpcargs.NewTesseractsByAccount:
-
 				rpcTS := getRPCTesseractUntilTimeout(
 					tm.T(),
 					ctx,
@@ -533,6 +532,7 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 			case rpcargs.NewLogsByFilter:
 				resp, err := tm.moiClient.GetFilterChanges(ctx, test.filterQueryArgs, test.subscriptionType)
 				require.NoError(tm.T(), err)
+
 				logs, ok := resp.([]*rpcargs.RPCLog)
 				require.True(tm.T(), ok)
 				require.Equal(tm.T(), 0, len(logs))

@@ -95,6 +95,17 @@ type MockChainManager struct {
 	TSHashByHeight   map[string]common.Hash
 }
 
+func NewMockChainManager(t *testing.T) *MockChainManager {
+	t.Helper()
+
+	mockChain := new(MockChainManager)
+
+	mockChain.tesseractsByHash = make(map[common.Hash]*common.Tesseract)
+	mockChain.TSHashByHeight = make(map[string]common.Hash)
+
+	return mockChain
+}
+
 func (m *MockChainManager) GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (*common.Interaction,
 	common.Hash, common.ParticipantsState, int, error,
 ) {
@@ -107,17 +118,6 @@ func (m *MockChainManager) GetInteractionAndParticipantsByTSHash(tsHash common.H
 ) {
 	// TODO implement me
 	panic("implement me")
-}
-
-func NewMockChainManager(t *testing.T) *MockChainManager {
-	t.Helper()
-
-	mockChain := new(MockChainManager)
-
-	mockChain.tesseractsByHash = make(map[common.Hash]*common.Tesseract)
-	mockChain.TSHashByHeight = make(map[string]common.Hash)
-
-	return mockChain
 }
 
 func (m *MockChainManager) GetLatestTesseract(_ identifiers.Address, _ bool) (*common.Tesseract, error) {
@@ -137,6 +137,7 @@ func (m *MockChainManager) setTesseractByHash(
 func (m *MockChainManager) GetTesseract(
 	hash common.Hash,
 	withInteractions bool,
+	withCommitInfo bool,
 ) (*common.Tesseract, error) {
 	ts, ok := m.tesseractsByHash[hash]
 	if !ok {
@@ -147,6 +148,10 @@ func (m *MockChainManager) GetTesseract(
 
 	if !withInteractions {
 		tsCopy = *tsCopy.GetTesseractWithoutIxns()
+	}
+
+	if !withCommitInfo {
+		tsCopy = *tsCopy.GetTesseractWithoutCommitInfo()
 	}
 
 	return &tsCopy, nil
@@ -303,8 +308,12 @@ func createReceipt(t *testing.T, callBack func(r *common.Receipt)) *common.Recei
 	t.Helper()
 
 	receipt := &common.Receipt{
-		IxType: 2,
 		IxHash: tests.RandomHash(t),
+		IxOps: []*common.IxOpResult{
+			{
+				IxType: 2,
+			},
+		},
 	}
 
 	if callBack != nil {
@@ -337,7 +346,7 @@ func createTSandLogs(
 
 	// create dummy receipts with logs
 	receipts := createReceipt(t, func(r *common.Receipt) {
-		r.Logs = []common.Log{logs}
+		r.IxOps[0].Logs = []common.Log{logs}
 		r.IxHash = hashes[0]
 	})
 
@@ -348,19 +357,19 @@ func createTSandLogs(
 			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{6},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:      common.Interactions{ixns},
+			Ixns:      common.NewInteractionsWithLeaderCheck(false, ixns),
 		},
 		1: {
 			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{10},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:      common.Interactions{ixns},
+			Ixns:      common.NewInteractionsWithLeaderCheck(false, ixns),
 		},
 		2: {
 			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{14},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:      common.Interactions{ixns},
+			Ixns:      common.NewInteractionsWithLeaderCheck(false, ixns),
 		},
 	}
 	tesseracts := tests.CreateTesseracts(t, 3, paramsMap)
@@ -400,7 +409,7 @@ func postTesseractAddedEvents(t *testing.T, eventMux *utils.TypeMux, tesseracts 
 	}
 }
 
-func postPendingIxnsEvent(t *testing.T, eventMux *utils.TypeMux, interactions common.Interactions) {
+func postPendingIxnsEvent(t *testing.T, eventMux *utils.TypeMux, interactions []*common.Interaction) {
 	t.Helper()
 
 	err := eventMux.Post(utils.AddedInteractionEvent{Ixs: interactions})
@@ -436,6 +445,7 @@ func readWSMessage(
 			return
 		case data := <-connManager.readMessage():
 			resp <- tests.Result{Data: data, Err: nil}
+
 			receivedEvents++
 
 			if receivedEvents >= expectedEvents {
@@ -579,6 +589,7 @@ func setupTestHTTPServer(t *testing.T) (*gorillaWS.Conn, *http.Response) {
 
 	_, err = tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
 		dialer := gorillaWS.Dialer{}
+
 		conn, resp, err = dialer.Dial("ws://"+s.addr.String()+"/ws", nil)
 		if err != nil {
 			return nil, true

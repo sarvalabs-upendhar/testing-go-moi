@@ -63,7 +63,7 @@ func slotsRequired(ixns ...*common.Interaction) uint64 {
 			log.Panic(err)
 		}
 
-		slots += (size + ixSlotSize - 1) / ixSlotSize
+		slots += (size + IxSlotSize - 1) / IxSlotSize
 	}
 
 	return slots

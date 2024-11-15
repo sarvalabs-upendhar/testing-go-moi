@@ -11,25 +11,25 @@ import (
 	"github.com/sarvalabs/go-moi/state"
 )
 
-// RunLogicDeploy performs the given IxLogicDeploy interaction.
-// The stateObjectRetriever must contain state objects for the sender and receiver of the Interaction.
+// RunLogicDeploy performs the given IxLogicDeploy Operation.
+// The stateObjectRetriever must contain state objects for the sender and Target of the op.
 //
-// The Interaction must have a LogicPayload with a Manifest and the output receipt will have a LogicDeployReceipt.
+// The IxOp must have a LogicPayload with a Manifest and the output receipt will have a LogicDeployResult.
 // The logic manifest is verified, compiled and deployed on to a new account and any deployer call is executed.
 func RunLogicDeploy(
-	ix *common.Interaction,
+	op *common.IxOp,
 	ctx *common.ExecutionContext,
 	tank *FuelTank,
-	objects *state.Transition,
-) *common.Receipt {
-	// Generate a new receipt
-	receipt := common.NewReceipt(ix)
+	transition *state.Transition,
+) *common.IxOpResult {
+	status := common.ResultOk
 
-	// Generate the address of the target logic account
-	logicAddress := common.NewAccountAddress(ix.Nonce(), ix.Sender())
+	// Create a new op result
+	opResult := common.NewIxOpResult(op.Type())
+
 	// Obtain the deployer and logic account state objects
-	deployer := objects.GetObject(ix.Sender())
-	logicacc := objects.GetObject(logicAddress)
+	deployer := transition.GetObject(op.Sender())
+	logicacc := transition.GetObject(op.Target())
 
 	// Create an options chain
 	options := make([]LogicDeployOption, 0, 3)
@@ -37,35 +37,37 @@ func RunLogicDeploy(
 	options = append(options, DeployFuelLimit(tank.Level()))
 
 	// Create an event stream to emit the events on
-	eventstream := NewEventStream(ix.LogicID())
+	eventstream := NewEventStream(op.LogicID())
 
-	consumption, receiptPayload, err := DeployLogic(ctx, ix, logicacc, deployer, eventstream, options...)
+	consumption, receiptPayload, err := DeployLogic(ctx, op, logicacc, deployer, eventstream, options...)
 	if err != nil {
-		receipt.Status = common.ReceiptStateReverted
+		status = common.ResultStateReverted
 	}
 
 	// Exhaust fuel from tank
 	if !tank.Exhaust(consumption) {
-		receipt.Status = common.ReceiptFuelExhausted
+		status = common.ResultFuelExhausted
 	}
 
-	// Set the fuel consumption
-	receipt.SetFuelUsed(tank.Consumed)
-
-	// Set the extra data of the receipt
+	// Set the result payload
 	if receiptPayload != nil {
-		common.SetReceiptExtraData(receipt, *receiptPayload)
+		common.SetResultPayload(opResult, *receiptPayload)
 
 		// Set the status of the receipt based on the error stat
 		if receiptPayload.Error != nil {
-			receipt.Status = common.ReceiptExceptionRaised
+			status = common.ResultExceptionRaised
 		}
 	}
 
-	// Set the logs in the receipt
-	receipt.SetLogs(eventstream.Collect())
+	if err = addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
+		status = common.ResultStateReverted
+	}
 
-	return receipt
+	// Set the logs in the receipt
+	opResult.SetLogs(eventstream.Collect())
+	opResult.SetStatus(status)
+
+	return opResult
 }
 
 // LogicDeployOption is an option for DeployLogic and modifies the logic deployment behaviour
@@ -87,17 +89,17 @@ func DeployFuelLimit(limit uint64) LogicDeployOption {
 // Does not perform a call to deployer callsite unless specified with DeploymentCall.
 func DeployLogic(
 	ctx *common.ExecutionContext,
-	ix *common.Interaction,
+	op *common.IxOp,
 	logicState *state.Object,
 	deployerState *state.Object,
 	eventstream *EventStream,
 	opts ...LogicDeployOption,
 ) (
-	uint64, *common.LogicDeployReceipt, error,
+	uint64, *common.LogicDeployResult, error,
 ) {
 	// Generate basic deployment config
 	deployer := &logicDeployer{
-		manifest:      ix.Manifest(),
+		manifest:      op.Manifest(),
 		logicState:    logicState,
 		deployerState: deployerState,
 		fueltank:      NewFuelTank(math.MaxUint64),
@@ -123,23 +125,23 @@ func DeployLogic(
 	}
 
 	// If no callsite is provided -> return the logic ID and fuel consumption
-	if ix.Callsite() == "" {
-		return deployer.fueltank.Consumed, &common.LogicDeployReceipt{LogicID: logicObject.ID}, nil
+	if op.Callsite() == "" {
+		return deployer.fueltank.Consumed, &common.LogicDeployResult{LogicID: logicObject.ID}, nil
 	}
 
 	// Call the logic deployer to set up logic state
-	result, err := deployer.callDeployer(ix, ctx, logicObject, eventstream)
+	result, err := deployer.callDeployer(op, ctx, logicObject, eventstream)
 	if err != nil {
 		return 0, nil, err
 	}
 
 	// Check the execution result
 	if !result.Ok() {
-		return deployer.fueltank.Consumed, &common.LogicDeployReceipt{Error: result.Error()}, nil
+		return deployer.fueltank.Consumed, &common.LogicDeployResult{Error: result.Error()}, nil
 	}
 
 	// Return the total fuel consumed and the logic ID
-	return deployer.fueltank.Consumed, &common.LogicDeployReceipt{LogicID: logicObject.ID}, nil
+	return deployer.fueltank.Consumed, &common.LogicDeployResult{LogicID: logicObject.ID}, nil
 }
 
 type logicDeployer struct {
@@ -199,7 +201,7 @@ func (deployer logicDeployer) deployLogicObject(descriptor *engineio.LogicDescri
 }
 
 func (deployer logicDeployer) callDeployer(
-	ixn *common.Interaction,
+	op *common.IxOp,
 	ctx *common.ExecutionContext,
 	logic *state.LogicObject,
 	eventstream *EventStream,
@@ -239,7 +241,7 @@ func (deployer logicDeployer) callDeployer(
 	}
 
 	// Perform execution call on the engine
-	result, err := instance.Call(context.Background(), ixn, deployerCtx)
+	result, err := instance.Call(context.Background(), op, deployerCtx)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not perform call")
 	}
@@ -252,9 +254,9 @@ func (deployer logicDeployer) callDeployer(
 	return result, nil
 }
 
-func (manager *Manager) ValidateLogicDeploy(ix *common.Interaction) error {
+func (manager *Manager) ValidateLogicDeploy(op *common.IxOp) error {
 	// Check that the manifest decodes correctly
-	manifest, err := engineio.NewManifest(ix.Manifest(), common.POLO)
+	manifest, err := engineio.NewManifest(op.Manifest(), common.POLO)
 	if err != nil {
 		return err
 	}
@@ -265,19 +267,19 @@ func (manager *Manager) ValidateLogicDeploy(ix *common.Interaction) error {
 	}
 
 	// Attempt to compile the manifest into logic descriptor with fuel limit
-	descriptor, _, err := runtime.CompileManifest(manifest, ix.FuelLimit())
+	descriptor, _, err := runtime.CompileManifest(manifest, op.FuelLimit())
 	if err != nil {
 		return err
 	}
 
-	if ix.Callsite() == "" {
+	if op.Callsite() == "" {
 		// If no callsite is provided, skip calldata validation
 		return nil
 	}
 
 	// Create a logic object from the descriptor
-	logic := state.NewLogicObject(ix.Receiver(), descriptor)
+	logic := state.NewLogicObject(op.Target(), descriptor)
 	// TODO: this logic object is wasted after creation, consider caching somewhere?
 
-	return runtime.ValidateCalldata(logic, ix)
+	return runtime.ValidateCalldata(logic, op)
 }

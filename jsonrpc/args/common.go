@@ -27,122 +27,128 @@ var (
 )
 
 // CreateRPCInteraction creates an RPC Interaction by copying all fields of the interaction into the RPC Interaction,
-// depolarizing the payload based on the interaction type, JSON marshalling it, and storing it in the input payload.
+// depolarizing the payload based on the operation type, JSON marshalling it, and storing it in the input payload.
 func CreateRPCInteraction(
 	ix *common.Interaction,
 	tsHash common.Hash,
 	participants common.ParticipantsState,
 	ixIndex int,
 ) (*RPCInteraction, error) {
-	input := ix.Input()
-	compute := ix.Compute()
-	trust := ix.Trust()
+	data := ix.IXData()
 
-	rpcIX := &RPCInteraction{
+	ops := make([]RPCIxOp, len(ix.IXData().IxOps))
+
+	for idx, op := range ix.Ops() {
+		var rawPayload []byte
+
+		switch op.Type() {
+		case common.IxParticipantCreate:
+			payload, err := op.GetParticipantCreatePayload()
+			if err != nil {
+				return nil, err
+			}
+
+			rpcPayload := RPCParticipantCreate{
+				Address: payload.Address,
+				Amount:  (*hexutil.Big)(payload.Amount),
+			}
+
+			rawPayload, err = json.Marshal(rpcPayload)
+			if err != nil {
+				return nil, err
+			}
+
+		case common.IxAssetCreate:
+			payload, err := op.GetAssetCreatePayload()
+			if err != nil {
+				return nil, err
+			}
+
+			rpcPayload := RPCAssetCreation{
+				Symbol:    payload.Symbol,
+				Supply:    (*hexutil.Big)(payload.Supply),
+				Dimension: (*hexutil.Uint8)(&payload.Dimension),
+				Standard:  (*hexutil.Uint16)(&payload.Standard),
+
+				IsLogical:  payload.IsLogical,
+				IsStateful: payload.IsStateFul,
+				Logic:      RPCLogicPayloadFromLogicPayload(payload.LogicPayload),
+			}
+
+			rawPayload, err = json.Marshal(rpcPayload)
+			if err != nil {
+				return nil, err
+			}
+		case common.IxAssetTransfer:
+			payload, err := op.GetAssetActionPayload()
+			if err != nil {
+				return nil, err
+			}
+
+			rpcPayload := RPCAssetAction{
+				Benefactor:  payload.Benefactor,
+				Beneficiary: payload.Beneficiary,
+				AssetID:     payload.AssetID,
+				Amount:      (*hexutil.Big)(payload.Amount),
+			}
+
+			rawPayload, err = json.Marshal(rpcPayload)
+			if err != nil {
+				return nil, err
+			}
+		case common.IxAssetMint, common.IxAssetBurn:
+			payload, err := op.GetAssetSupplyPayload()
+			if err != nil {
+				return nil, err
+			}
+
+			rpcPayload := RPCAssetSupply{
+				AssetID: payload.AssetID,
+				Amount:  (*hexutil.Big)(payload.Amount),
+			}
+
+			rawPayload, err = json.Marshal(rpcPayload)
+			if err != nil {
+				return nil, err
+			}
+		case common.IxLogicDeploy, common.IxLogicEnlist, common.IxLogicInvoke:
+			payload, err := op.GetLogicPayload()
+			if err != nil {
+				return nil, err
+			}
+
+			rawPayload, err = json.Marshal(RPCLogicPayloadFromLogicPayload(payload))
+			if err != nil {
+				return nil, err
+			}
+		default:
+			return nil, common.ErrInvalidInteractionType
+		}
+
+		ops[idx] = RPCIxOp{
+			Type:    op.Type(),
+			Payload: rawPayload,
+		}
+	}
+
+	return &RPCInteraction{
 		TSHash:       tsHash,
 		Participants: CreateRPCParticipants(participants),
 
 		IxIndex: hexutil.Uint64(ixIndex),
-		Type:    input.Type,
-		Nonce:   hexutil.Uint64(input.Nonce),
+		Nonce:   hexutil.Uint64(data.Nonce),
 
-		Sender:   input.Sender,
-		Receiver: input.Receiver,
-		Payer:    input.Payer,
+		Sender: data.Sender,
+		Payer:  data.Payer,
 
-		FuelPrice: (*hexutil.Big)(input.FuelPrice),
-		FuelLimit: hexutil.Uint64(input.FuelLimit),
+		FuelPrice: (*hexutil.Big)(data.FuelPrice),
+		FuelLimit: hexutil.Uint64(data.FuelLimit),
 
-		Mode:         hexutil.Uint64(compute.Mode),
-		ComputeHash:  compute.Hash,
-		ComputeNodes: compute.ComputeNodes,
-
-		MTQ:        hexutil.Uint64(trust.MTQ),
-		TrustNodes: trust.TrustNodes,
+		IxOps: ops,
 
 		Hash:      ix.Hash(),
 		Signature: ix.Signature(),
-	}
-
-	if len(input.TransferValues) > 0 {
-		rpcIX.TransferValues = make(map[string]*hexutil.Big)
-		for asset, amount := range input.TransferValues {
-			rpcIX.TransferValues[asset.String()] = (*hexutil.Big)(amount)
-		}
-	}
-
-	if len(input.PerceivedValues) > 0 {
-		rpcIX.PerceivedValues = make(map[string]*hexutil.Big)
-		for asset, amount := range input.PerceivedValues {
-			rpcIX.PerceivedValues[asset.String()] = (*hexutil.Big)(amount)
-		}
-	}
-
-	if len(input.PerceivedProofs) > 0 {
-		rpcIX.PerceivedProofs = input.PerceivedProofs
-	}
-
-	var err error
-
-	switch ix.Type() {
-	case common.IxValueTransfer:
-		break
-
-	case common.IxAssetBurn, common.IxAssetMint:
-		assetPayload := new(common.AssetMintOrBurnPayload)
-		if err = assetPayload.FromBytes(ix.Payload()); err != nil {
-			return nil, err
-		}
-
-		rpcPayload := RPCAssetMintOrBurn{
-			AssetID: assetPayload.Asset,
-			Amount:  (*hexutil.Big)(assetPayload.Amount),
-		}
-
-		rpcIX.Payload, err = json.Marshal(rpcPayload)
-		if err != nil {
-			return nil, err
-		}
-
-	case common.IxAssetCreate:
-		assetPayload := new(common.AssetCreatePayload)
-		if err = assetPayload.FromBytes(ix.Payload()); err != nil {
-			return nil, err
-		}
-
-		rpcAssetPayload := RPCAssetCreation{
-			Symbol:    assetPayload.Symbol,
-			Supply:    (*hexutil.Big)(assetPayload.Supply),
-			Dimension: (*hexutil.Uint8)(&assetPayload.Dimension),
-			Standard:  (*hexutil.Uint16)(&assetPayload.Standard),
-
-			IsLogical:  assetPayload.IsLogical,
-			IsStateful: assetPayload.IsStateFul,
-			Logic:      RPClogicPayloadFromLogicPayload(assetPayload.LogicPayload),
-		}
-
-		rpcIX.Payload, err = json.Marshal(rpcAssetPayload)
-		if err != nil {
-			return nil, err
-		}
-
-	case common.IxLogicInvoke, common.IxLogicDeploy, common.IxLogicEnlist:
-		logicPayload := new(common.LogicPayload)
-
-		if err = logicPayload.FromBytes(ix.Payload()); err != nil {
-			return nil, err
-		}
-
-		rpcIX.Payload, err = json.Marshal(RPClogicPayloadFromLogicPayload(logicPayload))
-		if err != nil {
-			return nil, err
-		}
-
-	default:
-		return nil, common.ErrInvalidInteractionType
-	}
-
-	return rpcIX, nil
+	}, nil
 }
 
 func CreateRPCPeersScore(peers map[peer.ID]*pubsub.PeerScoreSnapshot) RPCPeersScore {
@@ -202,18 +208,18 @@ func CreateRPCParticipants(participants common.ParticipantsState) RPCParticipant
 	return rpcParticipants
 }
 
+// TODO: Update more fields here
 func CreateRPCPoXtData(p common.PoXtData) RPCPoXtData {
 	return RPCPoXtData{
-		EvidenceHash:    p.EvidenceHash,
-		BinaryHash:      p.BinaryHash,
-		IdentityHash:    p.IdentityHash,
-		ICSHash:         p.ICSHash,
-		ClusterID:       p.ClusterID.String(),
-		ICSSignature:    p.ICSSignature,
-		ICSVoteset:      p.ICSVoteset.String(),
-		Round:           hexutil.Uint64(p.Round),
-		CommitSignature: p.CommitSignature,
-		BFTVoteSet:      p.BFTVoteSet.String(),
+		Proposer:     p.Proposer,
+		EvidenceHash: p.EvidenceHash,
+		BinaryHash:   p.BinaryHash,
+		IdentityHash: p.IdentityHash,
+		View:         hexutil.Uint64(p.View),
+		LastCommit:   p.LastCommit,
+		AccountLocks: p.AccountLocks,
+		ICSSeed:      p.ICSSeed,
+		ICSProof:     p.ICSProof,
 	}
 }
 
@@ -224,10 +230,10 @@ func CreateRPCTesseract(ts *common.Tesseract) (*RPCTesseract, error) {
 		err     error
 	)
 
-	if ts.ClusterID() != common.GenesisIdentifier && len(ts.Interactions()) > 0 {
-		rpcIxns = make([]*RPCInteraction, len(ts.Interactions()))
+	if ts.ConsensusInfo().View != common.GenesisView && len(ts.Interactions().IxList()) > 0 {
+		rpcIxns = make([]*RPCInteraction, len(ts.Interactions().IxList()))
 
-		for ixIndex, ixn := range ts.Interactions() {
+		for ixIndex, ixn := range ts.Interactions().IxList() {
 			// avoid sending participants as they can be found in tesseract
 			rpcIxns[ixIndex], err = CreateRPCInteraction(ixn, ts.Hash(), nil, ixIndex)
 			if err != nil {
@@ -242,14 +248,14 @@ func CreateRPCTesseract(ts *common.Tesseract) (*RPCTesseract, error) {
 		ReceiptsHash:     ts.ReceiptsHash(),
 		Epoch:            (*hexutil.Big)(ts.Epoch()),
 		TimeStamp:        hexutil.Uint64(ts.Timestamp()),
-		Operator:         ts.Operator(),
 		FuelUsed:         hexutil.Uint64(ts.FuelUsed()),
 		FuelLimit:        hexutil.Uint64(ts.FuelLimit()),
 		ConsensusInfo:    CreateRPCPoXtData(ts.ConsensusInfo()),
 		Seal:             ts.Seal(),
 
-		Hash: ts.Hash(),
-		Ixns: rpcIxns,
+		Hash:       ts.Hash(),
+		Ixns:       rpcIxns,
+		CommitInfo: CreateRPCCommitInfo(ts.CommitInfo()),
 	}, nil
 }
 
@@ -262,13 +268,23 @@ func CreateRPCReceipt(
 	ixIndex int,
 ) *RPCReceipt {
 	return &RPCReceipt{
-		IxType:       hexutil.Uint64(receipt.IxType),
-		IxHash:       receipt.IxHash,
-		Status:       receipt.Status,
-		FuelUsed:     hexutil.Uint64(receipt.FuelUsed),
-		ExtraData:    receipt.ExtraData,
+		IxHash:   receipt.IxHash,
+		Status:   receipt.Status,
+		FuelUsed: hexutil.Uint64(receipt.FuelUsed),
+		IxOps: func() []*RPCIxOpResult {
+			opResults := make([]*RPCIxOpResult, len(receipt.IxOps))
+
+			for idx, op := range receipt.IxOps {
+				opResults[idx] = &RPCIxOpResult{
+					TxType: hexutil.Uint64(op.IxType),
+					Status: op.Status,
+					Data:   op.Data,
+				}
+			}
+
+			return opResults
+		}(),
 		From:         ix.Sender(),
-		To:           ix.Receiver(),
 		IXIndex:      hexutil.Uint64(ixIndex),
 		TSHash:       tsHash,
 		Participants: CreateRPCParticipants(participants),
@@ -335,20 +351,20 @@ func addTopic(queryTopic *[][]common.Hash, set ...string) error {
 	return nil
 }
 
-// GetIxParamsWithInputComputeTrust returns ixparams initialized with ixType, payload, mtq, and mode
+// GetIxParamsWithIxData returns ixparams initialized with ixType, payload.
 // We initialize at least one field in input, compute, and trust.
-func GetIxParamsWithInputComputeTrust(
-	ixType common.IxType,
+func GetIxParamsWithIxData(
+	ixType common.IxOpType,
 	payload json.RawMessage,
-	mtq uint,
-	mode uint64,
 ) *tests.CreateIxParams {
 	return &tests.CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.Input.Type = ixType
-			ix.Input.Payload = payload
-			ix.Compute.Mode = mode
-			ix.Trust.MTQ = mtq
+			ix.IxOps = []common.IxOpRaw{
+				{
+					Type:    ixType,
+					Payload: payload,
+				},
+			}
 		},
 	}
 }

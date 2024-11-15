@@ -51,6 +51,7 @@ type Object struct {
 	logicTreeTxn    *iradix.Txn
 
 	files   map[common.Hash][]byte
+	context *ContextObject
 	metrics *Metrics
 }
 
@@ -389,6 +390,7 @@ func (object *Object) commitAccount() (common.Hash, error) {
 	hash := common.GetHash(data)
 
 	key := common.BytesToHex(storage.AccountKey(object.address, hash))
+
 	object.SetDirtyEntry(key, data)
 
 	return hash, nil
@@ -667,8 +669,11 @@ func (object *Object) CreateContext(behaviouralNodes, randomNodes []kramaid.Kram
 
 	// TODO:journal this
 	object.cache.Add(bHash, behaviouralContextObject)
-	object.cache.Add(mHash, metaContextObject)
 	object.cache.Add(rHash, randomContextObject)
+	object.cache.Add(mHash, metaContextObject)
+
+	// we set this object for temporary retrieval
+	object.context = behaviouralContextObject
 
 	object.data.ContextHash = mHash
 
@@ -1070,4 +1075,8 @@ func (object *Object) HasSufficientFuel(amount *big.Int) (bool, error) {
 func (object *Object) DeductFuel(amount *big.Int) {
 	// Remove amount from sender balance for asset
 	object.SubBalance(common.KMOITokenAssetID, amount)
+}
+
+func (object *Object) BehaviourContextObj() *ContextObject {
+	return object.context
 }

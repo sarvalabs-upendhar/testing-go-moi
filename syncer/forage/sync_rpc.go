@@ -78,7 +78,7 @@ func (service *SYNCRPCService) SyncSnap(
 
 	sentSnapSize, err := service.syncer.db.StreamSnapshot(ctx, snapReq.Address, 0, resp)
 	if err != nil {
-		service.syncer.logger.Error("Failed to fetch account snap shot", "addr", snapReq.Address,
+		service.syncer.logger.Error("failed to fetch account snap shot", "addr", snapReq.Address,
 			"error", err)
 
 		return err
@@ -179,7 +179,7 @@ func (service *SYNCRPCService) GetLatestAccountInfo(
 	metaInfo, err := service.syncer.db.GetAccountMetaInfo(addr)
 	if err != nil {
 		service.syncer.logger.Error(
-			"Failed to fetch account meta information",
+			"failed to fetch account meta information",
 			"addr", addr,
 			"err", err,
 		)
@@ -247,26 +247,27 @@ func (service *SYNCRPCService) SyncLattice(
 			return errors.Wrap(err, fmt.Sprintf("failed to fetch tesseract %d", height))
 		}
 
+		var commitInfo []byte
+
+		if ts.ConsensusInfo().View != 0 {
+			commitInfo, err = service.syncer.db.GetCommitInfo(ts.Hash())
+			if err != nil {
+				return err
+			}
+		}
+
 		msg := &networkmsg.TesseractSyncMsg{
 			RawTesseract: make([]byte, 0),
 			Ixns:         ixns,
 			Receipts:     receipts,
 			Delta:        make(map[string][]byte),
+			CommitInfo:   commitInfo,
 		}
 
-		msg.RawTesseract, err = ts.Canonical().Bytes()
+		// FIXME: We can avoid polorising the ts again
+		msg.RawTesseract, err = ts.Bytes()
 		if err != nil {
 			return err
-		}
-
-		if ts.ICSHash() != common.NilHash {
-			icsClusterInfoRaw, err := service.syncer.db.ReadEntry(ts.ICSHash().Bytes())
-			if err != nil {
-				return errors.Wrap(err, fmt.Sprintf("failed to fetch ics cluster info %v for address %v ",
-					ts.ICSHash(), req.Address))
-			}
-
-			msg.Delta[ts.ICSHash().String()] = icsClusterInfoRaw
 		}
 
 		for addr, contextHash := range ts.PreviousContext() {
@@ -331,7 +332,7 @@ func (service *SYNCRPCService) SyncBuckets(
 		go func() {
 			if err = service.syncer.db.StreamAccountMetaInfosRaw(ctx, req.BucketID, dbResponse); err != nil {
 				service.syncer.logger.Error(
-					"Failed to stream account meta information from DB",
+					"failed to stream account meta information from DB",
 					"err", err,
 				)
 			}

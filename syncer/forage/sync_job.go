@@ -134,7 +134,7 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 	delete(jq.jobs, job.address)
 
 	// unlock the account as it is synced
-	jq.krama.ClearActiveAccount(job.address)
+	jq.krama.ClearActiveAccount(job.address, "syncer")
 
 	if err := jq.mux.Post(utils.PendingAccountEvent{Address: job.address, Count: -1}); err != nil {
 		log.Println("Error sending pending account event", "err", err)

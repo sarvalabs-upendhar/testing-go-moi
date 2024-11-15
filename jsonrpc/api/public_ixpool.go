@@ -117,16 +117,6 @@ func (p *PublicIXPoolAPI) Inspect() (*rpcargs.InspectResponse, error) {
 
 	// Define a formatter to flatten an interaction into a string
 	format := func(ix *common.Interaction) string {
-		if receiver := ix.Receiver(); !receiver.IsNil() {
-			return fmt.Sprintf(
-				"%s: %d kmoi + %d fuel × %d kmoi",
-				ix.Receiver().Hex(),
-				ix.Cost(),
-				ix.FuelLimit(),
-				ix.FuelPrice(),
-			)
-		}
-
 		return fmt.Sprintf(
 			"%d kmoi + %d fuel × %d kmoi",
 			ix.Cost(),

@@ -1,7 +1,7 @@
 package bls
 
 import (
-	"github.com/sarvalabs/go-legacy-kramaid"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	blst "github.com/supranational/blst/bindings/go"
 
 	"github.com/sarvalabs/go-moi/crypto/common"
@@ -107,4 +107,21 @@ func VerifyAggregateSignature(data []byte, aggSignature []byte, multiplePubKeys 
 	aggBLSSig := new(blst.P2Affine).Uncompress(aggSignature)
 
 	return aggBLSSig.FastAggregateVerify(true, rawBLSPubKeys, data, dstMinSig), nil
+}
+
+// VerifyMultiSig, verifies the multi-signature generated using different messages from different signers
+func VerifyMultiSig(aggSignature []byte, allMsgs [][]byte, allPubKeys [][]byte) (bool, error) {
+	if len(allPubKeys) == 0 {
+		return false, common.ErrEmpty
+	}
+
+	if len(allMsgs) == 0 {
+		return false, common.ErrEmpty
+	}
+
+	if len(allMsgs) != len(allPubKeys) {
+		return false, common.ErrNotSameLength
+	}
+
+	return new(blst.P2Affine).AggregateVerifyCompressed(aggSignature, true, allPubKeys, true, allMsgs, dstMinSig), nil
 }

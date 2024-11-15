@@ -70,6 +70,10 @@ func (q *accountQueue) peek() *common.Interaction {
 	return q.queue.Peek()
 }
 
+func (q *accountQueue) list() []*common.Interaction {
+	return q.queue.List()
+}
+
 // pop removes the first Interactions from the queue and returns it.
 func (q *accountQueue) pop() *common.Interaction {
 	if q.length() == 0 {
@@ -88,6 +92,14 @@ func (q *accountQueue) length() uint64 {
 type minNonceQueue []*common.Interaction
 
 /* Queue methods required by the heap interface */
+
+func (q *minNonceQueue) List() []*common.Interaction {
+	if q.Len() == 0 {
+		return nil
+	}
+
+	return (*q)[:]
+}
 
 func (q *minNonceQueue) Peek() *common.Interaction {
 	if q.Len() == 0 {

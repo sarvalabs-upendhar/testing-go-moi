@@ -242,15 +242,19 @@ func TestAllSubscriptions(t *testing.T) {
 		switch resp.Params.Subscription {
 		case tsSubID:
 			assertRPCTesseract(t, tesseracts[tsSubCount], resp)
+
 			tsSubCount++
 		case tsByAccountSubID:
 			assertRPCTesseract(t, tesseracts[tsByAccSubCount], resp)
+
 			tsByAccSubCount++
 		case logSubID:
 			assertRPCLogs(t, tesseracts[logSubCount], logs, hashes[0], resp)
+
 			logSubCount++
 		case pendingIxnsSubID:
 			assertIxHashes(t, interactions[ixnsSubCount], resp)
+
 			ixnsSubCount++
 		default:
 			require.FailNow(t, "unknown subscription type")
@@ -299,7 +303,7 @@ func TestGetNumericTesseractNumber(t *testing.T) {
 		expectedError  error
 	}{
 		{
-			name:           "Latest Tesseract Height",
+			name:           "Latest ts Height",
 			height:         -1,
 			address:        acc.Address,
 			expectedHeight: 5,
@@ -364,7 +368,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 
 	// create dummy receipts with logs
 	receipts := createReceipt(t, func(r *common.Receipt) {
-		r.Logs = []common.Log{
+		r.IxOps[0].Logs = []common.Log{
 			log,
 			{
 				Address: address,
@@ -445,7 +449,7 @@ func TestGetLogsForQuery(t *testing.T) {
 	}
 
 	receipts := createReceipt(t, func(r *common.Receipt) {
-		r.Logs = []common.Log{
+		r.IxOps[0].Logs = []common.Log{
 			log,
 			{
 				Address: address,
@@ -464,13 +468,13 @@ func TestGetLogsForQuery(t *testing.T) {
 			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{0},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:      tests.CreateIxns(t, 1, nil),
+			Ixns:      common.NewInteractionsWithLeaderCheck(false, tests.CreateIxns(t, 1, nil)...),
 		},
 		1: {
 			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{1},
 			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:      tests.CreateIxns(t, 1, nil),
+			Ixns:      common.NewInteractionsWithLeaderCheck(false, tests.CreateIxns(t, 1, nil)...),
 		},
 		2: {
 			Addresses: []identifiers.Address{address},
@@ -479,7 +483,7 @@ func TestGetLogsForQuery(t *testing.T) {
 		3: {
 			Addresses: []identifiers.Address{address},
 			Heights:   []uint64{3},
-			Ixns:      tests.CreateIxns(t, 1, nil),
+			Ixns:      common.NewInteractionsWithLeaderCheck(false, tests.CreateIxns(t, 1, nil)...),
 		},
 	}
 

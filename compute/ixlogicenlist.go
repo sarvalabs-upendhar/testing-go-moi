@@ -10,60 +10,57 @@ import (
 	"github.com/sarvalabs/go-moi/state"
 )
 
-// RunLogicEnlist performs the given IxLogicEnlist interaction.
-// The state.Transition must contain state objects for the sender and receiver of the Interaction.
+// RunLogicEnlist performs the given IxLogicEnlist Operation.
+// The state.Transition must contain state objects for the sender and Target of the op.
 //
-// The Interaction must have a LogicPayload and the output receipt will have a LogicEnlistReceipt.
-// The logic call is verified and executed with the output/error being returned in the receipt.
+// The IxOp must have a LogicPayload and the output receipt will have a LogicEnlistResult.
+// The logic call is verified and executed with the output/error being returned as the result.
 func RunLogicEnlist(
-	ix *common.Interaction,
+	op *common.IxOp,
 	ctx *common.ExecutionContext,
 	tank *FuelTank,
 	objects *state.Transition,
-) *common.Receipt {
-	// Obtain the Logic Payload from the Interaction
-	payload, _ := ix.GetLogicPayload()
+) *common.IxOpResult {
+	status := common.ResultOk
 
-	// Generate a new receipt
-	receipt := common.NewReceipt(ix)
+	// Create a new op result
+	opResult := common.NewIxOpResult(op.Type())
 
-	// Generate the address of the target logic account from the LogicID
-	logicAddress := payload.Logic.Address()
 	// Obtain the invoker and logic account state objects
-	invoker := objects.GetObject(ix.Sender())
-	logicacc := objects.GetObject(logicAddress)
+	invoker := objects.GetObject(op.Sender())
+	logicacc := objects.GetObject(op.Target())
 
 	// Create an event stream to emit the events on
-	eventstream := NewEventStream(ix.LogicID())
-	fueltank := NewFuelTank(ix.FuelLimit())
+	eventstream := NewEventStream(op.LogicID())
+	fueltank := NewFuelTank(op.FuelLimit())
 
-	consumption, receiptPayload, err := EnlistLogic(ix, ctx, logicacc, invoker, fueltank, eventstream)
+	consumption, receiptPayload, err := EnlistLogic(op, ctx, logicacc, invoker, fueltank, eventstream)
 	if err != nil {
-		receipt.Status = common.ReceiptStateReverted
+		status = common.ResultStateReverted
 	}
 
 	// Exhaust fuel from tank
 	if !tank.Exhaust(consumption) {
-		receipt.Status = common.ReceiptFuelExhausted
+		status = common.ResultFuelExhausted
 	}
 
-	// Set the fuel consumption
-	receipt.SetFuelUsed(tank.Consumed)
-	// Set the extra data of the receipt
-	common.SetReceiptExtraData(receipt, *receiptPayload)
-	// Set the logs in the receipt
-	receipt.SetLogs(eventstream.Collect())
+	// Set the result payload
+	common.SetResultPayload(opResult, *receiptPayload)
 
 	// Set the status of the receipt
 	if receiptPayload.Error != nil {
-		receipt.Status = common.ReceiptExceptionRaised
+		status = common.ResultExceptionRaised
 	}
 
-	return receipt
+	// Set the logs in the receipt
+	opResult.SetLogs(eventstream.Collect())
+	opResult.SetStatus(status)
+
+	return opResult
 }
 
 func EnlistLogic(
-	ixn *common.Interaction,
+	op *common.IxOp,
 	ctx *common.ExecutionContext,
 
 	logicState *state.Object,
@@ -72,14 +69,14 @@ func EnlistLogic(
 	fueltank *FuelTank,
 	eventstream *EventStream,
 ) (
-	uint64, *common.LogicEnlistReceipt, error,
+	uint64, *common.LogicEnlistResult, error,
 ) {
 	// Verify that the callsite is not empty
-	if ixn.Callsite() == "" {
+	if op.Callsite() == "" {
 		return 0, nil, errors.New("callsite cannot be empty")
 	}
 
-	logicID := ixn.LogicID()
+	logicID := op.LogicID()
 
 	// Fetch the logic object from the state object
 	logicObject, err := logicState.FetchLogicObject(logicID)
@@ -88,8 +85,8 @@ func EnlistLogic(
 	}
 
 	// Check that the logic contains the payload callsite
-	if _, ok := logicObject.GetCallsite(ixn.Callsite()); !ok {
-		return 0, nil, errors.Errorf("callsite '%v' does not exist for logic", ixn.Callsite())
+	if _, ok := logicObject.GetCallsite(op.Callsite()); !ok {
+		return 0, nil, errors.Errorf("callsite '%v' does not exist for logic", op.Callsite())
 	}
 
 	// Obtain the runtime engine for the logic object
@@ -118,7 +115,7 @@ func EnlistLogic(
 	senderCtx := senderState.GenerateLogicStorageObject(logicID)
 
 	// Perform execution call on the engine
-	result, err := instance.Call(context.Background(), ixn, senderCtx)
+	result, err := instance.Call(context.Background(), op, senderCtx)
 	if err != nil {
 		return 0, nil, errors.Wrap(err, "could not perform call")
 	}
@@ -130,16 +127,18 @@ func EnlistLogic(
 
 	// Check the execution result
 	if !result.Ok() {
-		return fueltank.Consumed, &common.LogicEnlistReceipt{Error: result.Error()}, nil
+		return fueltank.Consumed, &common.LogicEnlistResult{Error: result.Error()}, nil
 	}
 
 	// Return the total fuel consumed and the return data
-	return fueltank.Consumed, &common.LogicEnlistReceipt{Outputs: result.Outputs()}, nil
+	return fueltank.Consumed, &common.LogicEnlistResult{Outputs: result.Outputs()}, nil
 }
 
-func (manager *Manager) ValidateLogicEnlist(ix *common.Interaction, callerAcc, logicAcc *state.Object) error {
+func (manager *Manager) ValidateLogicEnlist(
+	op *common.IxOp, callerAcc, logicAcc *state.Object,
+) error {
 	// Fetch logic ID
-	logicID := ix.LogicID()
+	logicID := op.LogicID()
 
 	// If the caller already has a storage tree for the logic ID,
 	// then they are already enlisted.
@@ -163,5 +162,5 @@ func (manager *Manager) ValidateLogicEnlist(ix *common.Interaction, callerAcc, l
 		return errors.New("failed to get runtime for logic")
 	}
 
-	return runtime.ValidateCalldata(logic, ix)
+	return runtime.ValidateCalldata(logic, op)
 }

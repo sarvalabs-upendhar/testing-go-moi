@@ -1,0 +1,31 @@
+package common
+
+import (
+	"github.com/sarvalabs/go-moi-identifiers"
+)
+
+type Qc struct {
+	Type          ConsensusMsgType
+	Address       identifiers.Address
+	LockType      LockType
+	View          uint64
+	TSHash        Hash
+	SignerIndices *ArrayOfBits
+	Signature     []byte
+}
+
+func (qc *Qc) Copy() *Qc {
+	// TODO: Implement deep copy
+	return nil
+}
+
+type (
+	ConsensusMsgType int
+	WALMsgType       int
+)
+
+const (
+	PROPOSAL ConsensusMsgType = iota + 1
+	PREVOTE
+	PRECOMMIT
+)

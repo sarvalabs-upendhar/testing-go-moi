@@ -12,8 +12,7 @@ import (
 
 func TestCopyReceipt(t *testing.T) {
 	receiptWithNilData := tests.CreateReceiptWithTestData(t)
-	receiptWithNilData.ExtraData = nil
-	receiptWithNilData.Logs = nil
+	receiptWithNilData.IxOps = nil
 
 	testcases := []struct {
 		name           string
@@ -25,9 +24,8 @@ func TestCopyReceipt(t *testing.T) {
 			receipt: tests.CreateReceiptWithTestData(t),
 		},
 		{
-			name:           "copy receipt with nil extra data and logs",
-			receipt:        receiptWithNilData,
-			isExtraDataNil: true,
+			name:    "copy receipt with empty ops",
+			receipt: receiptWithNilData,
 		},
 	}
 
@@ -38,20 +36,13 @@ func TestCopyReceipt(t *testing.T) {
 
 			require.Equal(t, expectedReceipt, copiedReceipt)
 
-			if !test.isExtraDataNil {
-				require.NotEqual(t,
-					reflect.ValueOf(expectedReceipt.ExtraData).Pointer(),
-					reflect.ValueOf(copiedReceipt.ExtraData).Pointer(),
-				)
-			}
+			if test.receipt.IxOps != nil {
+				require.Len(t, copiedReceipt.IxOps, len(expectedReceipt.IxOps))
 
-			if test.receipt.Logs != nil {
-				require.Len(t, expectedReceipt.Logs, len(copiedReceipt.Logs))
-
-				for i := 0; i < len(expectedReceipt.Logs); i++ {
+				for i := 0; i < len(expectedReceipt.IxOps); i++ {
 					require.NotEqual(t,
-						reflect.ValueOf(expectedReceipt.Logs[i]),
-						reflect.ValueOf(copiedReceipt.Logs[i]),
+						reflect.ValueOf(expectedReceipt.IxOps[i]),
+						reflect.ValueOf(copiedReceipt.IxOps[i]),
 					)
 				}
 			}
@@ -134,8 +125,8 @@ func TestCopyReceipts(t *testing.T) {
 
 			require.NotEqual(t, reflect.ValueOf(test.receipts).Pointer(), reflect.ValueOf(receipts).Pointer())
 			require.NotEqual(t,
-				reflect.ValueOf(test.receipts[hash].ExtraData).Pointer(),
-				reflect.ValueOf(receipts[hash].ExtraData).Pointer(),
+				reflect.ValueOf(test.receipts[hash].IxOps).Pointer(),
+				reflect.ValueOf(receipts[hash].IxOps).Pointer(),
 			)
 		})
 	}

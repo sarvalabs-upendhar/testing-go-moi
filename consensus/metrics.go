@@ -3,8 +3,6 @@ package consensus
 import (
 	"time"
 
-	"github.com/sarvalabs/go-moi/common"
-
 	"github.com/go-kit/kit/metrics"
 	"github.com/go-kit/kit/metrics/discard"
 	"github.com/go-kit/kit/metrics/prometheus"
@@ -14,16 +12,15 @@ import (
 type Metrics struct {
 	AvailableOperatorSlots       metrics.Gauge
 	AvailableValidatorSlots      metrics.Gauge
-	ClusterSize                  metrics.Histogram
-	ICSJoiningTime               metrics.Histogram
+	CurrentView                  metrics.Gauge
+	ActiveICSClusters            metrics.Gauge
+	ProposalValidationTime       metrics.Histogram
 	RequestTurnaroundTime        metrics.Histogram
 	RandomNodesQueryTime         metrics.Histogram
 	ICSCreationTime              metrics.Histogram
 	ICSCreationFailureCount      metrics.Counter
 	ICSParticipationFailureCount metrics.Counter
-	ICSRequestCount              metrics.Counter
-	OperatorSelectionCount       metrics.Counter
-	GridGenerationTime           metrics.Histogram
+	PrepareQcSigAggregationTime  metrics.Histogram
 	AgreementTime                metrics.Histogram
 	AgreementFailureCount        metrics.Counter
 	SignatureVerificationTime    metrics.Histogram
@@ -50,14 +47,19 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "available_validator_slots",
 			Help:      "Number of validator slots available",
 		}, labels).With(labelsWithValues...),
-		ClusterSize: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+		CurrentView: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
 			Namespace: namespace,
-			Subsystem: "ics",
-			Name:      "cluster_size",
-			Help:      "Number of nodes in the ICS cluster.",
-			Buckets:   []float64{20, 40, 60, 80, 100, 120},
+			Subsystem: "krama",
+			Name:      "current_view",
+			Help:      "Current view ID",
 		}, labels).With(labelsWithValues...),
-		ICSJoiningTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+		ActiveICSClusters: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "krama",
+			Name:      "active_ics_clusters",
+			Help:      "Number of active ICS clusters",
+		}, labels).With(labelsWithValues...),
+		ProposalValidationTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "ics",
 			Name:      "joining_time",
@@ -97,19 +99,7 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "participation_failure_count",
 			Help:      "ICS participation failure count.",
 		}, labels).With(labelsWithValues...),
-		ICSRequestCount: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "ics",
-			Name:      "ix_request_count",
-			Help:      "ICS request received per ix",
-		}, append(labels, []string{"ix_hash", "peer_id"}...)).With(labelsWithValues...),
-		OperatorSelectionCount: prometheus.NewCounterFrom(stdprometheus.CounterOpts{
-			Namespace: namespace,
-			Subsystem: "ics",
-			Name:      "operator_selection_count",
-			Help:      "ICS operator selection count",
-		}, append(labels, []string{"ix_hash", "peer_id"}...)).With(labelsWithValues...),
-		GridGenerationTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+		PrepareQcSigAggregationTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "krama",
 			Name:      "execution_time",
@@ -149,16 +139,13 @@ func NilMetrics() *Metrics {
 	return &Metrics{
 		AvailableOperatorSlots:       discard.NewGauge(),
 		AvailableValidatorSlots:      discard.NewGauge(),
-		ClusterSize:                  discard.NewHistogram(),
-		ICSJoiningTime:               discard.NewHistogram(),
+		ProposalValidationTime:       discard.NewHistogram(),
 		RequestTurnaroundTime:        discard.NewHistogram(),
 		RandomNodesQueryTime:         discard.NewHistogram(),
 		ICSCreationTime:              discard.NewHistogram(),
 		ICSCreationFailureCount:      discard.NewCounter(),
 		ICSParticipationFailureCount: discard.NewCounter(),
-		ICSRequestCount:              discard.NewCounter(),
-		OperatorSelectionCount:       discard.NewCounter(),
-		GridGenerationTime:           discard.NewHistogram(),
+		PrepareQcSigAggregationTime:  discard.NewHistogram(),
 		AgreementTime:                discard.NewHistogram(),
 		AgreementFailureCount:        discard.NewCounter(),
 		SignatureVerificationTime:    discard.NewHistogram(),
@@ -173,20 +160,24 @@ func (metrics *Metrics) initMetrics(operatorSlotsCount float64, validatorSlotCou
 	metrics.TesseractMissCount.Add(0)
 }
 
-func (metrics *Metrics) captureAvailableOperatorSlots(delta float64) {
-	metrics.AvailableOperatorSlots.Add(delta)
+func (metrics *Metrics) captureSlotCount(slotType int, delta float64) {
+	if slotType == 0 { // Operator slot
+		metrics.AvailableOperatorSlots.Add(delta)
+	} else {
+		metrics.AvailableValidatorSlots.Add(delta)
+	}
 }
 
-func (metrics *Metrics) captureAvailableValidatorSlots(delta float64) {
-	metrics.AvailableValidatorSlots.Add(delta)
+func (metrics *Metrics) captureActiveICSClusters(delta float64) {
+	metrics.ActiveICSClusters.Add(delta)
 }
 
-func (metrics *Metrics) captureClusterSize(clusterSize float64) {
-	metrics.ClusterSize.Observe(clusterSize)
+func (metrics *Metrics) captureCurrentView(viewID uint64) {
+	metrics.CurrentView.Set(float64(viewID))
 }
 
-func (metrics *Metrics) captureICSJoiningTime(requestTime time.Time) {
-	metrics.ICSJoiningTime.Observe(float64(time.Since(requestTime).Milliseconds()))
+func (metrics *Metrics) captureProposalValidationTime(requestTime time.Time) {
+	metrics.ProposalValidationTime.Observe(float64(time.Since(requestTime).Milliseconds()))
 }
 
 func (metrics *Metrics) captureRequestTurnaroundTime(requestTS time.Time) {
@@ -209,8 +200,8 @@ func (metrics *Metrics) captureICSParticipationFailureCount(delta float64) {
 	metrics.ICSParticipationFailureCount.Add(delta)
 }
 
-func (metrics *Metrics) captureGridGenerationTime(executionReqTS time.Time) {
-	metrics.GridGenerationTime.Observe(float64(time.Since(executionReqTS).Milliseconds()))
+func (metrics *Metrics) capturePrepareQCSigAggregationTime(initTime time.Time) {
+	metrics.PrepareQcSigAggregationTime.Observe(float64(time.Since(initTime).Milliseconds()))
 }
 
 func (metrics *Metrics) captureAgreementTime(consensusInitTS time.Time) {
@@ -224,14 +215,6 @@ func (metrics *Metrics) captureAgreementFailureCount(delta float64) {
 // methods to capture telemetry metrics
 func (metrics *Metrics) captureSignatureVerificationTime(verificationInitTime time.Time) {
 	metrics.SignatureVerificationTime.Observe(time.Since(verificationInitTime).Seconds())
-}
-
-func (metrics *Metrics) captureOperatorSelectionCount(ixHash common.Hash, peerID string, delta float64) {
-	metrics.OperatorSelectionCount.With("ix_hash", ixHash.Hex(), "peer_id", peerID).Add(delta)
-}
-
-func (metrics *Metrics) captureICSRequestCount(ixHash common.Hash, peerID string, delta float64) {
-	metrics.ICSRequestCount.With("ix_hash", ixHash.Hex(), "peer_id", peerID).Add(delta)
 }
 
 func (metrics *Metrics) AddTesseractMissCount(delta float64) {

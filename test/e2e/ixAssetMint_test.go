@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 
@@ -14,26 +13,47 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
+//nolint:dupl
 func (te *TestEnvironment) mintAsset(
 	acc tests.AccountWithMnemonic,
-	assetMintPayload *common.AssetMintOrBurnPayload,
+	assetSupplyPayload *common.AssetSupplyPayload,
 ) (common.Hash, error) {
 	te.logger.Debug("mint asset ",
-		"sender", acc.Addr, "asset", assetMintPayload.Asset, "amount", assetMintPayload.Amount)
+		"sender", acc.Addr, "asset", assetSupplyPayload.AssetID, "amount", assetSupplyPayload.Amount)
 
-	payload, err := assetMintPayload.Bytes()
+	payload, err := assetSupplyPayload.Bytes()
 	te.Suite.NoError(err)
 
-	sendIXArgs := &common.SendIXArgs{
-		Type:      common.IxAssetMint,
+	ixData := &common.IxData{
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Payload:   payload,
+		Funds: []common.IxFund{
+			{
+				AssetID: assetSupplyPayload.AssetID,
+				Amount:  assetSupplyPayload.Amount,
+			},
+		},
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetMint,
+				Payload: payload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  acc.Addr,
+				LockType: common.MutateLock,
+			},
+			{
+				Address:  assetSupplyPayload.AssetID.Address(),
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
-	sendIX := moiclient.CreateSendIXFromSendIXArgs(te.T(), sendIXArgs, acc.Mnemonic)
+	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, acc.Mnemonic)
 
 	return te.moiClient.SendInteractions(context.Background(), sendIX)
 }
@@ -43,15 +63,15 @@ func (te *TestEnvironment) mintAsset(
 func validateAssetMint(
 	te *TestEnvironment,
 	sender identifiers.Address,
-	payload common.AssetMintOrBurnPayload,
+	payload common.AssetSupplyPayload,
 	ixHash common.Hash,
 ) {
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 	senderHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, sender)
 
-	senderPrevBal := getBalance(te, sender, payload.Asset, int64(senderHeight-1))
-	senderCurBal := getBalance(te, sender, payload.Asset, args.LatestTesseractHeight)
+	senderPrevBal := getBalance(te, sender, payload.AssetID, int64(senderHeight-1))
+	senderCurBal := getBalance(te, sender, payload.AssetID, args.LatestTesseractHeight)
 
 	require.Equal(te.T(), payload.Amount.Uint64(), senderCurBal-senderPrevBal)
 }
@@ -79,18 +99,20 @@ func (te *TestEnvironment) TestAssetMint() {
 		nil,
 	))
 
-	transferAsset(te, sender, nonOperator.Addr, map[identifiers.AssetID]*big.Int{
-		MAS0AssetID: big.NewInt(100),
+	transferAsset(te, sender, &common.AssetActionPayload{
+		Beneficiary: nonOperator.Addr,
+		AssetID:     MAS0AssetID,
+		Amount:      big.NewInt(100),
 	})
 
 	testcases := []struct {
-		name             string
-		sender           tests.AccountWithMnemonic
-		assetMintPayload *common.AssetMintOrBurnPayload
-		postTest         func(
+		name               string
+		sender             tests.AccountWithMnemonic
+		assetSupplyPayload *common.AssetSupplyPayload
+		postTest           func(
 			te *TestEnvironment,
 			sender identifiers.Address,
-			payload common.AssetMintOrBurnPayload,
+			payload common.AssetSupplyPayload,
 			ixHash common.Hash,
 		)
 		expectedError error
@@ -98,45 +120,36 @@ func (te *TestEnvironment) TestAssetMint() {
 		{
 			name:   "mint MAS0 asset",
 			sender: sender,
-			assetMintPayload: &common.AssetMintOrBurnPayload{
-				Asset:  MAS0AssetID,
-				Amount: big.NewInt(100),
+			assetSupplyPayload: &common.AssetSupplyPayload{
+				AssetID: MAS0AssetID,
+				Amount:  big.NewInt(100),
 			},
 			postTest: validateAssetMint,
 		},
 		{
 			name:   "cannot mint MAS1 asset",
 			sender: sender,
-			assetMintPayload: &common.AssetMintOrBurnPayload{
-				Asset:  MAS1AssetID,
-				Amount: big.NewInt(1),
+			assetSupplyPayload: &common.AssetSupplyPayload{
+				AssetID: MAS1AssetID,
+				Amount:  big.NewInt(1),
 			},
 			expectedError: common.ErrMintNonFungibleToken,
 		},
 		{
 			name:   "asset not found",
 			sender: sender,
-			assetMintPayload: &common.AssetMintOrBurnPayload{
-				Asset:  tests.GetRandomAssetID(te.T(), tests.RandomAddress(te.T())),
-				Amount: big.NewInt(1),
+			assetSupplyPayload: &common.AssetSupplyPayload{
+				AssetID: tests.GetRandomAssetID(te.T(), tests.RandomAddress(te.T())),
+				Amount:  big.NewInt(1),
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
-			name:   "invalid assetID version",
-			sender: sender,
-			assetMintPayload: &common.AssetMintOrBurnPayload{
-				Asset:  identifiers.AssetID(""),
-				Amount: big.NewInt(1),
-			},
-			expectedError: errors.New("invalid asset ID: missing version prefix"),
-		},
-		{
 			name:   "operator address mismatch (sender is not the asset operator)",
 			sender: nonOperator,
-			assetMintPayload: &common.AssetMintOrBurnPayload{
-				Asset:  MAS0AssetID,
-				Amount: big.NewInt(1),
+			assetSupplyPayload: &common.AssetSupplyPayload{
+				AssetID: MAS0AssetID,
+				Amount:  big.NewInt(1),
 			},
 			expectedError: common.ErrOperatorMismatch,
 		},
@@ -144,15 +157,16 @@ func (te *TestEnvironment) TestAssetMint() {
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.mintAsset(test.sender, test.assetMintPayload)
+			ixHash, err := te.mintAsset(test.sender, test.assetSupplyPayload)
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
 
 				return
 			}
+
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.Addr, *test.assetMintPayload, ixHash)
+			test.postTest(te, test.sender.Addr, *test.assetSupplyPayload, ixHash)
 		})
 	}
 }

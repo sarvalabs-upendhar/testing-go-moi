@@ -28,7 +28,7 @@ func TestInterfaces(t *testing.T) {
 		require.Implements(t, (*state.Driver)(nil), &State{})
 		require.Implements(t, (*logic.Driver)(nil), &Logic{})
 
-		require.Implements(t, (*drivers.Interaction)(nil), Ixn{})
+		require.Implements(t, (*drivers.Interaction)(nil), Txn{})
 		require.Implements(t, (*drivers.Environment)(nil), Env{})
 		require.Implements(t, (*drivers.Cryptography)(nil), Crypto(0))
 	})

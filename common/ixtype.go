@@ -2,13 +2,13 @@ package common
 
 import "fmt"
 
-type IxType int
+type IxOpType int
 
 const (
-	IxInvalid IxType = iota
-	IxValueTransfer
-	IxFuelSupply
-
+	IxInvalid IxOpType = iota
+	IxParticipantCreate
+	IxAssetTransfer
+	TxFuelSupply // TODO: Remove this
 	IxAssetCreate
 	IxAssetApprove
 	IxAssetRevoke
@@ -18,33 +18,33 @@ const (
 	IxLogicDeploy
 	IxLogicInvoke
 	IxLogicEnlist
-	IxLogicInteract
-	IxLogicUpgrade
+	TxLogicInteract
+	TxLogicUpgrade
 )
 
-var ixTypeToString = map[IxType]string{
-	IxInvalid:       "IxInvalid",
-	IxValueTransfer: "IxValueTransfer",
-	IxFuelSupply:    "IxFuelSupply",
-	IxAssetCreate:   "IxAssetCreate",
-	IxAssetApprove:  "IxAssetApprove",
-	IxAssetRevoke:   "IxAssetRevoke",
-	IxAssetMint:     "IxAssetMint",
-	IxAssetBurn:     "IxAssetBurn",
-	IxLogicDeploy:   "IxLogicDeploy",
-	IxLogicInvoke:   "IxLogicInvoke",
-	IxLogicEnlist:   "IxLogicEnlist",
+var txTypeToString = map[IxOpType]string{
+	IxInvalid:           "IxInvalid",
+	IxParticipantCreate: "IxParticipantCreate",
+	IxAssetTransfer:     "IxAssetTransfer",
+	IxAssetCreate:       "IxAssetCreate",
+	IxAssetApprove:      "IxAssetApprove",
+	IxAssetRevoke:       "IxAssetRevoke",
+	IxAssetMint:         "IxAssetMint",
+	IxAssetBurn:         "IxAssetBurn",
+	IxLogicDeploy:       "IxLogicDeploy",
+	IxLogicInvoke:       "IxLogicInvoke",
+	IxLogicEnlist:       "IxLogicEnlist",
 }
 
-func (ixtype IxType) String() string {
-	str, ok := ixTypeToString[ixtype]
+func (ixType IxOpType) String() string {
+	str, ok := txTypeToString[ixType]
 	if !ok {
-		return fmt.Sprintf("unknown ixn: %d", ixtype)
+		return fmt.Sprintf("unknown ixn: %d", ixType)
 	}
 
 	return str
 }
 
-func (ixtype IxType) IxnID() int {
-	return int(ixtype)
+func (ixType IxOpType) TxnID() int {
+	return int(ixType)
 }

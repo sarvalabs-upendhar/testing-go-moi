@@ -20,23 +20,28 @@ func NewTransition(objects ObjectMap) *Transition {
 	}
 }
 
-func (t *Transition) Copy() *Transition {
-	transition := &Transition{
+func (t *Transition) Snapshot() *Transition {
+	snap := &Transition{
 		objects:  make(ObjectMap),
 		receipts: make(common.Receipts),
 	}
 
 	if len(t.objects) > 0 {
 		for addr, object := range t.objects {
-			transition.objects[addr] = object.Copy()
+			snap.objects[addr] = object.Copy()
 		}
 	}
 
 	if len(t.receipts) > 0 {
-		transition.receipts = t.receipts.Copy()
+		snap.receipts = t.receipts.Copy()
 	}
 
-	return transition
+	return snap
+}
+
+func (t *Transition) UpdateSnapshot(snap *Transition) {
+	t.objects = snap.objects
+	t.receipts = snap.receipts
 }
 
 func (t *Transition) Objects() ObjectMap {

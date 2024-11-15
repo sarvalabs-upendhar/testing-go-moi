@@ -59,11 +59,14 @@ func (mux *TypeMux) Subscribe(types ...interface{}) *Subscription {
 		for _, t := range types {
 			rtyp := reflect.TypeOf(t)
 			oldsubs := mux.submapping[rtyp]
+
 			if search(oldsubs, sub) != -1 {
 				panic(fmt.Sprintf("event: duplicate type %s in Subscribe", rtyp))
 			}
+
 			subs := make([]*Subscription, len(oldsubs)+1)
 			copy(subs, oldsubs)
+
 			subs[len(oldsubs)] = sub
 			mux.submapping[rtyp] = subs
 		}
@@ -175,14 +178,6 @@ func (s *Subscription) Unsubscribe() {
 	s.closeWait()
 }
 
-// isClosed returns the status of the subscription
-func (s *Subscription) isClosed() bool { //nolint
-	s.closeMultiplexer.Lock()
-	defer s.closeMultiplexer.Unlock()
-
-	return s.closed
-}
-
 // closeWait will wait  and close the subscription
 func (s *Subscription) closeWait() {
 	s.closeMultiplexer.Lock()
@@ -232,6 +227,7 @@ func HandleMuxEvents(ctx context.Context, s *Subscription, resp chan tests.Resul
 			return
 		case data := <-s.Chan():
 			resp <- tests.Result{Data: data.Data, Err: nil}
+
 			receivedEvents++
 
 			if receivedEvents >= expectedEvents {

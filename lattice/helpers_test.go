@@ -77,7 +77,8 @@ func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMeta
 	return metaInfo, nil
 }
 
-func (m *MockDB) FetchTesseractFromDB(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (m *MockDB) GetTesseract(hash common.Hash, withInteractions, withCommitInfo bool) (*common.Tesseract, error) {
+	// FIXME: check for commitInfo
 	ts, ok := m.tesseracts[hash]
 	if !ok {
 		return nil, common.ErrFetchingTesseract
@@ -87,6 +88,10 @@ func (m *MockDB) FetchTesseractFromDB(hash common.Hash, withInteractions bool) (
 
 	if !withInteractions {
 		tsCopy = *tsCopy.GetTesseractWithoutIxns()
+	}
+
+	if !withCommitInfo {
+		tsCopy = *tsCopy.GetTesseractWithoutCommitInfo()
 	}
 
 	return &tsCopy, nil
@@ -138,7 +143,10 @@ func (m *MockDB) UpdateAccMetaInfo(
 	tesseractHash common.Hash,
 	stateHash common.Hash,
 	contextHash common.Hash,
+	commitHash common.Hash,
 	accType common.AccountType,
+	shouldUpdateContextSetPosition bool,
+	positionInContextSet int,
 ) (int32, bool, error) {
 	if m.updateMetaInfoHook != nil {
 		return m.updateMetaInfoHook()
@@ -151,6 +159,11 @@ func (m *MockDB) UpdateAccMetaInfo(
 		TesseractHash: tesseractHash,
 		StateHash:     stateHash,
 		ContextHash:   contextHash,
+		CommitHash:    commitHash,
+	}
+
+	if shouldUpdateContextSetPosition {
+		m.accMetaInfos[id].PositionInContextSet = positionInContextSet
 	}
 
 	return 8, true, nil
@@ -162,7 +175,7 @@ func (m *MockDB) GetAccMetaInfo(id identifiers.Address) (*common.AccountMetaInfo
 	return val, ok
 }
 
-func (m *MockDB) GetTesseract(hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetRawTesseract(hash common.Hash) ([]byte, error) {
 	data, ok := m.dbStorage[hash.String()]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -458,6 +471,7 @@ func (i *MockIXPool) IsReset(hash common.Hash) bool {
 
 type CreateIxParams struct {
 	ixDataCallback func(ix *common.IxData)
+	Sign           []byte
 }
 
 func createIX(t *testing.T, params *CreateIxParams) *common.Interaction {
@@ -468,11 +482,21 @@ func createIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 	}
 
 	data := &common.IxData{
-		Input: common.IxInput{},
+		Participants: []common.IxParticipant{},
 	}
 
 	if params.ixDataCallback != nil {
 		params.ixDataCallback(data)
+	}
+
+	if data.Sender == identifiers.NilAddress {
+		data.Sender = tests.RandomAddress(t)
+	}
+
+	tests.AppendParticipantsInIxData(t, data)
+
+	if len(params.Sign) == 0 {
+		params.Sign = []byte{}
 	}
 
 	ix, err := common.NewInteraction(*data, []byte{})
@@ -488,33 +512,41 @@ func createIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) comm
 		paramsMap = map[int]*CreateIxParams{}
 	}
 
-	ixns := make(common.Interactions, count)
-
+	ixns := make([]*common.Interaction, count)
 	for i := 0; i < count; i++ {
 		ixns[i] = createIX(t, paramsMap[i])
 	}
 
-	return ixns
+	return common.NewInteractionsWithLeaderCheck(false, ixns...)
 }
 
-func getIxParamsWithAddress(from identifiers.Address, to identifiers.Address) *CreateIxParams {
+func getIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifiers.Address) *CreateIxParams {
+	t.Helper()
+
 	return &CreateIxParams{
 		ixDataCallback: func(ix *common.IxData) {
-			ix.Input.Sender = from
-			ix.Input.Receiver = to
-			ix.Input.Type = common.IxValueTransfer
+			ix.Sender = from
+			ix.IxOps = []common.IxOpRaw{
+				{
+					Type:    common.IxAssetCreate,
+					Payload: tests.CreateRawAssetCreatePayload(t),
+				},
+			}
 		},
 	}
 }
 
 func getIxParamsMapWithAddresses(
+	t *testing.T,
 	from []identifiers.Address,
 	to []identifiers.Address,
 ) map[int]*CreateIxParams {
+	t.Helper()
+
 	ixParams := make(map[int]*CreateIxParams, len(from))
 
 	for i := 0; i < len(from); i++ {
-		ixParams[i] = getIxParamsWithAddress(from[i], to[i])
+		ixParams[i] = getIxParamsWithAddress(t, from[i], to[i])
 	}
 
 	return ixParams
@@ -660,10 +692,14 @@ func insertTesseractByHeight(t *testing.T, db store, ts *common.Tesseract) {
 
 func getReceipt(ixHash common.Hash) *common.Receipt {
 	return &common.Receipt{
-		IxType:    1,
-		IxHash:    ixHash,
-		FuelUsed:  rand.Uint64(),
-		ExtraData: make(json.RawMessage, 0),
+		IxHash:   ixHash,
+		FuelUsed: rand.Uint64(),
+		IxOps: []*common.IxOpResult{
+			{
+				IxType: 1,
+				Data:   make(json.RawMessage, 0),
+			},
+		},
 	}
 }
 
@@ -672,7 +708,7 @@ func getIX(t *testing.T) *common.Interaction {
 
 	return createIX(
 		t,
-		getIxParamsWithAddress(tests.RandomAddress(t), tests.RandomAddress(t)),
+		getIxParamsWithAddress(t, tests.RandomAddress(t), tests.RandomAddress(t)),
 	)
 }
 
@@ -710,11 +746,15 @@ func getTesseractParamsMapWithIxns(t *testing.T, tsCount int) map[int]*tests.Cre
 
 	tesseractParams := make(map[int]*tests.CreateTesseractParams, tsCount)
 	addresses := tests.GetAddresses(t, 4*tsCount) // for each interaction, sender and receiver addresses needed
-	ixns := createIxns(t, 2*tsCount, getIxParamsMapWithAddresses(addresses[:2*tsCount], addresses[2*tsCount:]))
+	ixns := createIxns(t, 2*tsCount, getIxParamsMapWithAddresses(t, addresses[:2*tsCount], addresses[2*tsCount:]))
 
 	for i := 0; i < tsCount; i++ {
 		tesseractParams[i] = &tests.CreateTesseractParams{
-			Ixns: ixns[i*2 : i*2+2], // allocate two interactions per tesseract
+			// allocate two interactions per tesseract
+			Ixns: common.NewInteractionsWithLeaderCheck(false, ixns.IxList()[i*2:i*2+2]...),
+		}
+		tesseractParams[i].CommitInfo = &common.CommitInfo{
+			Operator: tests.RandomKramaID(t, 0),
 		}
 	}
 
@@ -851,7 +891,7 @@ func checkIfTesseractCachedInCM(t *testing.T, c *ChainManager, withInteractions 
 	require.True(t, ok)
 
 	// make sure tesseract in cache doesn't have interactions
-	require.Equal(t, 0, len(cachedTS.Interactions()))
+	require.Equal(t, 0, cachedTS.Interactions().Len())
 }
 
 func validateTSAddedEvent(t *testing.T, tsAddedResp chan tests.Result, ts *common.Tesseract) {

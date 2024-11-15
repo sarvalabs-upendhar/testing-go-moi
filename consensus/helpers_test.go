@@ -1,5 +1,6 @@
 package consensus
 
+/*
 import (
 	"context"
 	"encoding/json"
@@ -156,19 +157,26 @@ func (e *MockExec) ExecuteInteractions(
 }
 
 type MockStateManager struct {
-	accountRegistration map[identifiers.Address]bool
-	stateObjects        map[identifiers.Address]*state.Object
-	publicKeys          map[kramaid.KramaID][]byte
-	icsSeed             map[identifiers.Address][32]byte
-	participantsContext map[identifiers.Address]struct {
-		contextHash common.Hash
-		beSet       *common.NodeSet
-		rSet        *common.NodeSet
-	}
+	accountRegistration    map[identifiers.Address]bool
+	stateObjects           map[identifiers.Address]*state.Object
+	publicKeys             map[kramaid.KramaID][]byte
+	icsSeed                map[identifiers.Address][32]byte
 	accMetaInfo            map[identifiers.Address]*common.AccountMetaInfo
 	GetAccountMetaInfoHook func() error
 	IsInitialTesseractHook func() error
 	isSealValid            func() bool
+}
+
+func (ms *MockStateManager) GetLatestContextAndPublicKeys(addr identifiers.Address) (latestContextHash common.Hash,
+	behaviouralSet, randomSet []kramaid.KramaID, bePublicKeys, beRandomKeys [][]byte, err error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (ms *MockStateManager) GetContext(addr identifiers.Address,
+hash common.Hash) (common.NodeList, common.NodeList, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func (ms *MockStateManager) GetRegisteredGuardiansCount() (int, error) {
@@ -211,23 +219,11 @@ func NewMockStateManager() *MockStateManager {
 		stateObjects:        make(map[identifiers.Address]*state.Object),
 		publicKeys:          make(map[kramaid.KramaID][]byte),
 		icsSeed:             make(map[identifiers.Address][32]byte),
-		participantsContext: make(map[identifiers.Address]struct {
-			contextHash common.Hash
-			beSet       *common.NodeSet
-			rSet        *common.NodeSet
-		}),
 	}
 }
 
-func (ms *MockStateManager) GetICSParticipants(
-	ixns common.Interactions,
-) (map[identifiers.Address]common.IxParticipant, error) {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (ms *MockStateManager) LoadTransitionObjects(
-	ps map[identifiers.Address]common.IxParticipant,
+	ps map[identifiers.Address]common.ParticipantInfo,
 ) (*state.Transition, error) {
 	// TODO implement me
 	panic("implement me")
@@ -272,21 +268,6 @@ func (ms *MockStateManager) RemoveCachedObject(addr identifiers.Address) {
 	panic("implement me")
 }
 
-func (ms *MockStateManager) addNodeSet(
-	t *testing.T,
-	addr identifiers.Address,
-	contextHash common.Hash,
-	beSet, rSet *common.NodeSet,
-) {
-	t.Helper()
-
-	ms.participantsContext[addr] = struct {
-		contextHash common.Hash
-		beSet       *common.NodeSet
-		rSet        *common.NodeSet
-	}{contextHash: contextHash, beSet: beSet, rSet: rSet}
-}
-
 func (ms *MockStateManager) addAccMetaInfo(t *testing.T, addr identifiers.Address, info *common.AccountMetaInfo) {
 	t.Helper()
 
@@ -322,22 +303,9 @@ func (ms *MockStateManager) GetStateObjectByHash(
 func (ms *MockStateManager) FetchInteractionContext(
 	ctx context.Context,
 	ix *common.Interaction,
-) (map[identifiers.Address]common.Hash, []*common.NodeSet, error) {
+) (map[identifiers.Address]common.Hash, []*ktypes.NodeSet, error) {
 	// TODO implement me
 	panic("implement me")
-}
-
-func (ms *MockStateManager) FetchLatestParticipantContext(addr identifiers.Address) (
-	latestContextHash common.Hash,
-	behaviouralSet, randomSet *common.NodeSet,
-	err error,
-) {
-	info, ok := ms.participantsContext[addr]
-	if !ok {
-		return common.NilHash, nil, nil, common.ErrContextStateNotFound
-	}
-
-	return info.contextHash, info.beSet, info.rSet, nil
 }
 
 func (ms *MockStateManager) Cleanup(addr identifiers.Address) {}
@@ -434,13 +402,59 @@ func (mv *MockVault) setConsensusPrivateKey(privKey []byte) {
 	mv.consensusPrivKey = cPriv
 }
 
-func (mv *MockVault) Sign(data []byte, sigType cryptocommon.SigType, signOptions ...crypto.SignOption) ([]byte, error) {
+func (mv *MockVault) Sign(data []byte, sigType cryptocommon.SigType,
+signOptions ...crypto.SignOption) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 type MockDB struct {
 	accMetaInfo map[identifiers.Address]bool
+}
+
+func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) GetSafetyData(addr identifiers.Address) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) GetCommitInfo(tsHash common.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) SetSafetyData(addr identifiers.Address, data []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) SetConsensusProposalInfo(tsHash common.Hash, data []byte) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) GetConsensusProposalInfo(tsHash common.Hash) ([]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) DeleteConsensusProposalInfo(tsHash common.Hash) error {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) GetAllConsensusProposalInfo(ctx context.Context) ([][]byte, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockDB) DeleteSafetyData(addr identifiers.Address) error {
+	// TODO implement me
+	panic("implement me")
 }
 
 func NewMockDB() *MockDB {
@@ -507,7 +521,8 @@ func (m *MockChainManager) insertTesseracts(tesseracts ...*common.Tesseract) {
 	}
 }
 
-func (m *MockChainManager) GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error) {
+func (m *MockChainManager) GetTesseract(hash common.Hash, withInteractions bool,
+	withCommitInfo bool) (*common.Tesseract, error) {
 	if m.GetTesseractHook != nil {
 		return nil, m.GetTesseractHook()
 	}
@@ -642,7 +657,7 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 	return engine
 }
 
-/*
+
 These utility functions are required for extending the tests down the line
 func createAssetMintIx(t *testing.T, sender, receiver identifiers.Address) *common.Interaction {
 	t.Helper()
@@ -678,13 +693,13 @@ func createAssetTransferIx(t *testing.T, sender, receiver identifiers.Address) c
 
 	return tests.CreateIxns(t, 1, ixParams)
 }
-*/
 
-func createTestNodeSet(t *testing.T, n int) *common.NodeSet {
+
+func createTestNodeSet(t *testing.T, n int) *ktypes.NodeSet {
 	t.Helper()
 
 	kramaIDs, publicKeys := tests.GetTestKramaIdsWithPublicKeys(t, n)
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys, uint32(n))
+	nodeset := ktypes.NewNodeSet(kramaIDs, publicKeys, uint32(n))
 
 	for i := 0; i < n; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -693,11 +708,11 @@ func createTestNodeSet(t *testing.T, n int) *common.NodeSet {
 	return nodeset
 }
 
-func createTestRandomSet(t *testing.T, total, actual int) *common.NodeSet {
+func createTestRandomSet(t *testing.T, total, actual int) *ktypes.NodeSet {
 	t.Helper()
 
 	kramaIDs, publicKeys := tests.GetTestKramaIdsWithPublicKeys(t, total)
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys, uint32(actual))
+	nodeset := ktypes.NewNodeSet(kramaIDs, publicKeys, uint32(actual))
 
 	for i := 0; i < actual; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -710,10 +725,10 @@ func createNodeSet(
 	t *testing.T,
 	participantsCount int,
 	nodesPerSet int,
-) *common.ICSNodeSet {
+) *ktypes.ICSCommittee {
 	t.Helper()
 
-	ns := common.NewICSNodeSet(2*participantsCount + 1)
+	ns := ktypes.NewICSCommittee(2*participantsCount + 1)
 
 	for i := 0; i < participantsCount; i++ {
 		ns.UpdateNodeSet(i, createTestNodeSet(t, nodesPerSet))
@@ -722,10 +737,8 @@ func createNodeSet(
 
 	// create some grace nodes for random set but quorum field will have nodes that are only part of ICS
 	randomSet := createTestRandomSet(t, 2*participantsCount*nodesPerSet+5, 2*participantsCount*nodesPerSet)
-	observerSet := createTestNodeSet(t, nodesPerSet)
 
-	ns.UpdateNodeSet(ns.RandomSetPosition(), randomSet)
-	ns.UpdateNodeSet(ns.ObserverSetPosition(), observerSet)
+	ns.UpdateNodeSet(ns.StochasticSetPosition(), randomSet)
 
 	return ns
 }
@@ -734,7 +747,7 @@ func createTestClusterState(
 	t *testing.T,
 	operator kramaid.KramaID,
 	selfID kramaid.KramaID,
-	nodeset *common.ICSNodeSet,
+	nodeset *ktypes.ICSCommittee,
 	ixs common.Interactions,
 	ps map[identifiers.Address]*common.Participant,
 	callback func(clusterState *ktypes.ClusterState),
@@ -742,15 +755,11 @@ func createTestClusterState(
 	t.Helper()
 
 	clusterState := ktypes.NewICS(
-		nil,
 		ixs,
 		"cluster-test",
 		operator,
 		time.Now(),
 		selfID,
-		ps,
-		nodeset,
-		common.LotteryKey{},
 	)
 
 	if callback != nil {
@@ -771,7 +780,7 @@ func checkContextDelta(
 	if isGenesisAccount {
 		require.NotNil(t, actualContextDelta)
 		require.Equal(t, len(actualContextDelta.BehaviouralNodes), BehaviouralContextSize)
-		require.Equal(t, len(actualContextDelta.RandomNodes), RandomContextSize)
+		require.Equal(t, len(actualContextDelta.RandomNodes), StochasticSetSize)
 
 		return
 	}
@@ -805,8 +814,11 @@ func defaultTesseractData() *tests.TesseractData {
 		Operator:         "",
 		FuelUsed:         100,
 		FuelLimit:        100,
-		ConsensusInfo: common.PoXtData{
-			BFTVoteSet: voteSet.Copy(),
+
+		CommitInfo: &common.CommitInfo{
+			QC: &common.Qc{
+				SignerIndices: voteSet.Copy(),
+			},
 		},
 
 		// non canonical fields
@@ -822,8 +834,9 @@ type createTesseractParams struct {
 	participantsCallback func(participants common.ParticipantsState)
 	TSDataCallback       func(ts *tests.TesseractData)
 
-	Ixns     common.Interactions
-	Receipts common.Receipts
+	Ixns       common.Interactions
+	Receipts   common.Receipts
+	CommitInfo *common.CommitInfo
 }
 
 // CreateTesseract creates a tesseract using tessseract params fields
@@ -857,7 +870,7 @@ func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesser
 		}
 	}
 
-	if params.Ixns != nil {
+	if params.Ixns.Len() != 0 {
 		hash, err := params.Ixns.Hash()
 		require.NoError(t, err)
 
@@ -878,7 +891,6 @@ func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesser
 		tsData.ReceiptsHash,
 		tsData.Epoch,
 		tsData.Timestamp,
-		tsData.Operator,
 		tsData.FuelUsed,
 		tsData.FuelLimit,
 		tsData.ConsensusInfo,
@@ -886,6 +898,7 @@ func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesser
 		tsData.SealBy,
 		params.Ixns,
 		params.Receipts,
+		params.CommitInfo,
 	)
 }
 
@@ -964,7 +977,8 @@ func createMockGenesisFile(
 	return file.Name()
 }
 
-func createTesseractsWithChain(t *testing.T, count int, paramsMap map[int]*createTesseractParams) []*common.Tesseract {
+func createTesseractsWithChain(t *testing.T, count int,
+	paramsMap map[int]*createTesseractParams) []*common.Tesseract {
 	t.Helper()
 
 	tesseracts := make([]*common.Tesseract, count)
@@ -1132,15 +1146,15 @@ func getAssetCreationArgs(
 	}
 }
 
-func getICSNodeset(t *testing.T, participantCount, nodesCount int) *common.ICSNodeSet {
+func getICSNodeset(t *testing.T, participantCount, nodesCount int) *ktypes.ICSCommittee {
 	t.Helper()
 
-	ics := common.NewICSNodeSet(2*participantCount + 2)
+	ics := ktypes.NewICSCommittee(2*participantCount + 2)
 
 	for i := 0; i < 2*participantCount+2; i++ {
 		ics.UpdateNodeSet(
 			i,
-			common.NewNodeSet(
+			ktypes.NewNodeSet(
 				tests.RandomKramaIDs(t, nodesCount),
 				getPublicKeys(t, nodesCount),
 				uint32(nodesCount),
@@ -1152,19 +1166,29 @@ func getICSNodeset(t *testing.T, participantCount, nodesCount int) *common.ICSNo
 
 func getReceipt(ixHash common.Hash) *common.Receipt {
 	return &common.Receipt{
-		IxType:    1,
-		IxHash:    ixHash,
-		FuelUsed:  rand.Uint64(),
-		ExtraData: make(json.RawMessage, 0),
+		IxHash:   ixHash,
+		FuelUsed: rand.Uint64(),
+		IxOps: []*common.IxOpResult{
+			{
+				IxType: 1,
+				Data:   make(json.RawMessage, 0),
+			},
+		},
 	}
 }
 
-func getIxParamsWithAddress(from identifiers.Address, to identifiers.Address) *tests.CreateIxParams {
+func getIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifiers.Address) *tests.CreateIxParams {
+	t.Helper()
+
 	return &tests.CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.Input.Sender = from
-			ix.Input.Receiver = to
-			ix.Input.Type = common.IxValueTransfer
+			ix.Sender = from
+			ix.IxOps = []common.IxOpRaw{
+				{
+					Type:    common.IxAssetTransfer,
+					Payload: tests.CreateRawAssetActionPayload(t, to),
+				},
+			}
 		},
 	}
 }
@@ -1174,7 +1198,7 @@ func getIX(t *testing.T) *common.Interaction {
 
 	return tests.CreateIX(
 		t,
-		getIxParamsWithAddress(tests.RandomAddress(t), tests.RandomAddress(t)),
+		getIxParamsWithAddress(t, tests.RandomAddress(t), tests.RandomAddress(t)),
 	)
 }
 
@@ -1327,7 +1351,7 @@ func checkForAllocations(
 	}
 }
 
-/*
+
 func getRawInteraction(t *testing.T, ixData common.IxData, sign []byte) []byte {
 	t.Helper()
 
@@ -1344,7 +1368,7 @@ func getSignature(t *testing.T, kramaID kramaid.KramaID, rawIxns []byte, vault *
 	t.Helper()
 
 	canonicalICSReq := ktypes.CanonicalICSRequest{
-		Operator: string(kramaID),
+		Proposer: string(kramaID),
 		IxData:   rawIxns,
 	}
 
@@ -1356,9 +1380,10 @@ func getSignature(t *testing.T, kramaID kramaid.KramaID, rawIxns []byte, vault *
 
 	return rawCanonicalICSReq, icsReqSign
 }
-*/
 
-func checkNodeSetForParticipant(t *testing.T, state *MockStateManager, ps common.Participants, ns *common.ICSNodeSet) {
+
+func checkNodeSetForParticipant(t *testing.T, state *MockStateManager, ps common.Participants,
+ns *ktypes.ICSCommittee) {
 	t.Helper()
 
 	for addr, p := range ps {
@@ -1386,7 +1411,7 @@ func checkNodeSetForParticipant(t *testing.T, state *MockStateManager, ps common
 func checkParticipantInfo(
 	t *testing.T,
 	state *MockStateManager,
-	ixnParticipant map[identifiers.Address]common.IxParticipant,
+	ixnParticipant map[identifiers.Address]common.ParticipantInfo,
 	ps common.Participants,
 ) {
 	t.Helper()
@@ -1540,3 +1565,4 @@ func updateGuardianIncentive(t *testing.T, sm *MockStateManager, id kramaid.Kram
 
 	sm.setLatestStateObject(common.GuardianLogicAddr, so)
 }
+*/

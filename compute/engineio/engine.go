@@ -68,9 +68,9 @@ type Engine interface {
 	// DecodeErrorResult decodes the given bytes into an
 	// ErrorResult that is suitable for the engine runtime
 	DecodeErrorResult([]byte) (ErrorResult, error)
-	// ValidateCalldata verifies the calldata and callsite in an InteractionDriver.
+	// ValidateCalldata verifies the calldata and callsite in an IxDriver.
 	// The Logic must describe a callsite which accepts the calldata.
-	ValidateCalldata(LogicDriver, InteractionDriver) error
+	ValidateCalldata(LogicDriver, IxDriver) error
 
 	// SpawnInstance returns a new EngineInstance instance and initializes it with some
 	// EngineFuel, a LogicDriver, the StateDriver associated with the logic and an EnvironmentDriver.
@@ -83,16 +83,16 @@ type Engine interface {
 // A new EngineRunner instance can be spawned from an EngineRuntime with its
 // Spawn method and is bound to a specific Logic and EnvironmentDriver.
 //
-// An Engine can be used to perform calls on its Logic with an InteractionDriver
+// An Engine can be used to perform calls on its Logic with an IxDriver
 // and some optional participants with their StateDriver objects.
 type EngineInstance interface {
 	// Kind returns the kind of engine
 	Kind() EngineKind
 
 	// Call calls a logical callsite on the Engine's Logic.
-	// The callsite and input calldata are provided in the given InteractionDriver.
-	// Optionally accepts some participant StateDriver objects based on the interaction type.
-	Call(context.Context, InteractionDriver, StateDriver, ...StateDriver) (CallResult, error)
+	// The callsite and input calldata are provided in the given IxDriver.
+	// Optionally accepts some participant StateDriver objects based on the operation type.
+	Call(context.Context, IxDriver, StateDriver, ...StateDriver) (CallResult, error)
 }
 
 // registry is an in-memory registry of supported EngineRuntime instances.

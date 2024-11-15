@@ -202,6 +202,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			MaxIxGroupSize:          config.DefaultMaxIxGroupSize,
 			EnableIxFlooding:        false,
 			EnableRawIxFiltering:    true,
+			ViewTimeout:             1,
 		},
 		Telemetry: cmdCommon.Telemetry{
 			PrometheusAddr: ":" + strconv.Itoa(config.DefaultPrometheusPort+index),

@@ -96,7 +96,7 @@ func StoreKeystore(privKeyBytesOfValidator []byte, nodePassPhrase, dataDir strin
 
 	path := filepath.Join(dataDir, "/keystore.json")
 
-	return os.WriteFile(path, ksPayloadInBytes, os.ModePerm)
+	return os.WriteFile(path, ksPayloadInBytes, 0o600)
 }
 
 // mParseInt helper for `getKDFKeyForKeystore` to parse the int/float64 to int

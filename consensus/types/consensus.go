@@ -10,31 +10,21 @@ import (
 	networkmsgs "github.com/sarvalabs/go-moi/network/message"
 )
 
-type (
-	ConsensusMsgType int
-	WALMsgType       int
-)
-
-const (
-	PROPOSAL ConsensusMsgType = iota
-	PREVOTE
-	PRECOMMIT
-)
-
 type Vote struct {
-	Type             ConsensusMsgType
-	Round            int32
-	ValidatorIndex   int32
-	Timestamp        int64
-	Heights          map[identifiers.Address]uint64
-	TSHash           common.Hash
-	ValidatorKramaID kramaid.KramaID
-	Signature        []byte
+	Type          common.ConsensusMsgType
+	IsQC          bool
+	View          uint64
+	SignerIndex   int32
+	Timestamp     int64
+	Heights       map[identifiers.Address]uint64
+	TSHash        common.Hash
+	SignerIndices *common.ArrayOfBits
+	Signature     []byte
 }
 
 type CanonicalVote struct {
-	Type   ConsensusMsgType
-	Round  int32
+	Type   common.ConsensusMsgType
+	View   uint64
 	TSHash common.Hash
 }
 
@@ -53,8 +43,8 @@ func (cv *CanonicalVote) Bytes() ([]byte, error) {
 func (v *Vote) SignBytes() ([]byte, error) {
 	canonicalVote := CanonicalVote{
 		Type:   v.Type,
-		Round:  v.Round,
 		TSHash: v.TSHash,
+		View:   v.View,
 	}
 
 	rawData, err := polo.Polorize(canonicalVote)
@@ -122,30 +112,99 @@ func (twm *TimedWALMessage) FromBytes(bytes []byte) error {
 	return nil
 }
 
-type Proposal struct {
-	Type      ConsensusMsgType
-	Height    map[identifiers.Address]uint64
-	Round     int32
-	POLRound  int32
-	Tesseract *common.Tesseract
-	Timestamp int64
-	Signature []byte
+type PreparedInfo struct {
+	View          uint64
+	PeerViews     []common.Views
+	SignerIndices *common.ArrayOfBits
+	Signature     []byte
 }
 
-// NewProposal is a constructor function that generates and returns a new Proposal.
-// Accepts the heights, round, POL round and a tesseract.
-// Timestamp of the proposal is set to Now()
-func NewProposal(
-	heights map[identifiers.Address]uint64,
-	round int32,
-	polround int32,
-	ts *common.Tesseract,
-) *Proposal {
+type Proposal struct {
+	Type      common.ConsensusMsgType
+	PrepareQc *PreparedInfo
+	Tesseract *common.Tesseract
+}
+
+func (p *Proposal) Ixs() common.Interactions {
+	return p.Tesseract.Interactions()
+}
+
+func (p Proposal) ProposalMsg() *ProposalMsg {
+	ixn := p.Tesseract.Interactions()
+	receipts := p.Tesseract.Receipts()
+
+	return &ProposalMsg{
+		Type:         p.Type,
+		PrepareQc:    p.PrepareQc,
+		Tesseract:    p.Tesseract,
+		Interactions: ixn.IxList(),
+		Receipts:     &receipts,
+		CommitInfo:   p.Tesseract.CommitInfo(),
+	}
+}
+
+type ProposalMsg struct {
+	Type         common.ConsensusMsgType
+	PrepareQc    *PreparedInfo
+	Tesseract    *common.Tesseract
+	Interactions []*common.Interaction
+	Receipts     *common.Receipts
+	CommitInfo   *common.CommitInfo
+}
+
+func (pmsg *ProposalMsg) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(pmsg)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize proposal message")
+	}
+
+	return rawData, nil
+}
+
+func (pmsg *ProposalMsg) FromBytes(rawData []byte) error {
+	if err := polo.Depolorize(pmsg, rawData); err != nil {
+		return errors.Wrap(err, "failed to depolorize proposal message")
+	}
+
+	return nil
+}
+
+func (pmsg *ProposalMsg) Proposal() *Proposal {
+	// TODO: Check if we need to deep copy on Tesseract
+	ixns := common.NewInteractionsWithLeaderCheck(true, pmsg.Interactions...)
+	pmsg.Tesseract.WithIxnAndReceipts(ixns, *pmsg.Receipts, pmsg.CommitInfo)
+
 	return &Proposal{
-		Type:      PROPOSAL,
-		Height:    heights,
-		Round:     round,
-		POLRound:  polround,
+		Type:      pmsg.Type,
+		PrepareQc: pmsg.PrepareQc,
+		Tesseract: pmsg.Tesseract,
+	}
+}
+
+func (p *Proposal) Validate() error {
+	return nil
+}
+
+func (p *Proposal) Heights() map[identifiers.Address]uint64 {
+	return p.Tesseract.Heights()
+}
+
+func (p *Proposal) View() uint64 {
+	return p.PrepareQc.View
+}
+
+func (p *Proposal) ClusterID() common.ClusterID {
+	return p.Tesseract.ClusterID()
+}
+
+func (p *Proposal) Locks() map[identifiers.Address]common.LockType {
+	return p.Tesseract.ConsensusInfo().AccountLocks
+}
+
+func NewProposal(prepareQc *PreparedInfo, ts *common.Tesseract) *Proposal {
+	return &Proposal{
+		Type:      common.PROPOSAL,
+		PrepareQc: prepareQc,
 		Tesseract: ts,
 	}
 }
@@ -160,30 +219,30 @@ func (p *Proposal) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
-// Cmessage is an interface that represents messages used in achieving consensus
-type Cmessage interface {
-	// Validate is a method that validates the message
+// ConsensusPayload is an interface that all consensus message types should implement
+type ConsensusPayload interface {
 	Validate() error
 	Bytes() ([]byte, error)
 }
 
 // ConsensusMessage is a struct that represents an envelope for a consensus message.
-// Implements the Cmessage interface and wraps another message satisfying this interface.
+// Implements the ConsensusPayload interface and wraps another message satisfying this interface.
 type ConsensusMessage struct {
-	PeerID kramaid.KramaID
-
+	PeerID    kramaid.KramaID
+	Recipient kramaid.KramaID
 	// Represents the wrapped message
-	Message Cmessage
+	Payload ConsensusPayload
 }
 
 // ICSMsg returns a new instance of ICSMSG
 func (c *ConsensusMessage) ICSMsg(clusterID common.ClusterID) (*ICSMSG, error) {
-	msgType, msg, err := getRawMessage(c.Message)
+	msgType, msg, err := getRawMessage(c.Payload)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ICSMSG{
+		Sender:    c.PeerID,
 		ClusterID: clusterID,
 		MsgType:   msgType,
 		Payload:   msg,
@@ -192,7 +251,7 @@ func (c *ConsensusMessage) ICSMsg(clusterID common.ClusterID) (*ICSMSG, error) {
 
 // WALMsg returns a new instance of WALMsg
 func (c *ConsensusMessage) WALMsg() (*WALMsg, error) {
-	msgType, msg, err := getRawMessage(c.Message)
+	msgType, msg, err := getRawMessage(c.Payload)
 	if err != nil {
 		return nil, err
 	}
@@ -205,28 +264,33 @@ func (c *ConsensusMessage) WALMsg() (*WALMsg, error) {
 }
 
 // getRawMessage returns the message type and raw message.
-func getRawMessage(message Cmessage) (networkmsgs.MsgType, []byte, error) {
+func getRawMessage(message ConsensusPayload) (networkmsgs.MsgType, []byte, error) {
 	switch msg := message.(type) {
-	case *VoteMessage:
-		rawData, err := msg.Vote.Bytes()
+	case *Vote:
+		rawData, err := msg.Bytes()
 		if err != nil {
 			return -1, nil, err
 		}
 
 		return networkmsgs.VOTEMSG, rawData, nil
-	case *ProposalMessage:
-		rawData, err := msg.Proposal.Bytes()
+	case *Proposal:
+		// we create a proposal message from the proposal
+		if len(msg.Tesseract.Interactions().IxList()) == 0 {
+			panic("interactions length is 0")
+		}
+
+		rawData, err := msg.ProposalMsg().Bytes()
 		if err != nil {
 			return -1, nil, err
 		}
 
-		return networkmsgs.PROPOSALMSG, rawData, nil
+		return networkmsgs.PROPOSAL, rawData, nil
 	default:
 		return -1, nil, errors.New("invalid message type")
 	}
 }
 
-// Validate is a method of ConsensusMessage to implement the Cmessage interface.
+// Validate is a method of ConsensusMessage to implement the ConsensusPayload interface.
 // Returns an error if message is not valid or could not be validated.
 func (c *ConsensusMessage) Validate() error {
 	return nil
@@ -234,59 +298,59 @@ func (c *ConsensusMessage) Validate() error {
 
 type WantMessage struct {
 	PeerID   kramaid.KramaID
-	MsgType  ConsensusMsgType
+	MsgType  common.ConsensusMsgType
 	MsgIdxs  []int32
 	RespChan chan []*Vote
-}
-
-// ProposalMessage is a struct that represents a Proposal consensus message.
-// Implements the Cmessage interface.
-type ProposalMessage struct {
-	// Represents the wrapped proposal message
-	Proposal *Proposal
-}
-
-// Validate is a method of ProposalMessage to implement the Cmessage interface.
-// Returns an error if message is not valid or could not be validated.
-func (m *ProposalMessage) Validate() error {
-	return nil
-}
-
-// Bytes is a method of ProposalMessage to implement the Cmessage interface.
-// Returns either the ProposalMessage in bytes or an error if failed to polorize.
-func (m *ProposalMessage) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(m)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize vote message")
-	}
-
-	return rawData, err
-}
-
-// VoteMessage is a struct that represents a Vote consensus message.
-// Implements the Cmessage interface.
-type VoteMessage struct {
-	Vote *Vote
-}
-
-// Validate is a method of VoteMessage to implement the Cmessage interface.
-// Returns an error if message is not valid or could not be validated.
-func (m *VoteMessage) Validate() error {
-	return m.Vote.Validate()
-}
-
-// Bytes is a method of VoteMessage to implement the Cmessage interface.
-// Returns either the VoteMessage in bytes or an error if failed to polorize.
-func (m *VoteMessage) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(m)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize vote message")
-	}
-
-	return rawData, err
 }
 
 type VoteBitSet struct {
 	Prevotes   *common.ArrayOfBits
 	Precommits *common.ArrayOfBits
+}
+
+type SafetyData struct {
+	Qc       []*common.Qc
+	TSHashes []common.Hash
+}
+
+func (sd *SafetyData) UpdateQc(qc *common.Qc) {
+	if len(sd.Qc) > 0 {
+		// TODO: Make sure we save the qc for read lock accounts
+		if sd.Qc[len(sd.Qc)-1].View < qc.View {
+			sd.Qc = []*common.Qc{qc}
+			sd.TSHashes = []common.Hash{qc.TSHash}
+
+			return
+		}
+
+		if sd.Qc[len(sd.Qc)-1].View == qc.View && sd.Qc[len(sd.Qc)-1].Type == common.PREVOTE {
+			sd.Qc[len(sd.Qc)-1] = qc
+
+			return
+		}
+	}
+
+	sd.Qc = append(sd.Qc, qc)
+	sd.TSHashes = append(sd.TSHashes, qc.TSHash)
+}
+
+func (sd *SafetyData) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(sd)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize safety data")
+	}
+
+	return rawData, nil
+}
+
+func (sd *SafetyData) FromBytes(raw []byte) error {
+	if err := polo.Depolorize(sd, raw); err != nil {
+		return errors.Wrap(err, "failed to depolorize safety data")
+	}
+
+	return nil
+}
+
+func (sd *SafetyData) LastView() uint64 {
+	return sd.Qc[len(sd.Qc)-1].View
 }

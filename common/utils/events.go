@@ -16,13 +16,6 @@ type NewMinedTesseractEvent struct {
 	Delta     map[common.Hash][]byte
 }
 
-// TesseractReceivedEvent occurs when a new block is received from the peer
-type TesseractReceivedEvent struct {
-	Tesseract   *common.Tesseract
-	ClusterInfo *common.ICSClusterInfo
-	Sender      kramaid.KramaID
-}
-
 // TesseractAddedEvent occurs when a new block is added to the lattice
 type TesseractAddedEvent struct {
 	Tesseract *common.Tesseract
@@ -35,14 +28,6 @@ type TSTrackerEvent struct {
 	TSHash     common.Hash
 	Msg        *networkmsg.TesseractMsg
 	ExpiryTime time.Time
-}
-
-// TesseractSyncEvent is fired when a new tesseract received and needs to be synced up
-type TesseractSyncEvent struct {
-	Tesseract   *common.Tesseract
-	ClusterInfo *common.ICSClusterInfo
-	Delta       map[common.Hash][]byte
-	Context     []kramaid.KramaID
 }
 
 // SyncRequestEvent is fired by krama engine to sync the tesseract lattice
@@ -60,27 +45,27 @@ type PendingAccountEvent struct {
 
 // AddedInteractionEvent emits added interactions in the account queue
 type AddedInteractionEvent struct {
-	Ixs common.Interactions
+	Ixs []*common.Interaction
 }
 
 // PromotedInteractionEvent emits promoted interactions in the account queue
 type PromotedInteractionEvent struct {
-	Ixs common.Interactions
+	Ixs []*common.Interaction
 }
 
 // PrunedEnqueuedInteractionEvent emits pruned enqueue in the account queue
 type PrunedEnqueuedInteractionEvent struct {
-	Ixs common.Interactions
+	Ixs []*common.Interaction
 }
 
 // PrunedPromotedInteractionEvent emits pruned promoted interactions in the account queue
 type PrunedPromotedInteractionEvent struct {
-	Ixs common.Interactions
+	Ixs []*common.Interaction
 }
 
 // DroppedInteractionEvent emits dropped interactions in the account queue
 type DroppedInteractionEvent struct {
-	Ixs common.Interactions
+	Ixs []*common.Interaction
 }
 
 // SystemAccountsSyncedEvent signals system account's syncing done

@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
@@ -345,6 +345,16 @@ func VerifyAggregateSignature(data []byte, aggSignature []byte, multiplePubKeys 
 	return bls.VerifyAggregateSignature(data, aggSignature, multiplePubKeys)
 }
 
+func VerifyMultiSig(aggSignature []byte, allMsgs [][]byte, allPubKeys [][]byte) (bool, error) {
+	for i := 0; i < len(allPubKeys); i++ {
+		if len(allPubKeys[i]) != 48 {
+			return false, cryptocommon.ErrInvalidBLSPublicKeyLength
+		}
+	}
+
+	return bls.VerifyMultiSig(aggSignature, allMsgs, allPubKeys)
+}
+
 // GetSignature generates EcdsaSecp256k1 signature using DefaultMOIWallet IGCPath
 func GetSignature(bz []byte, mnemonic string) (string, error) {
 	cfg := &VaultConfig{
@@ -369,17 +379,17 @@ func GetSignature(bz []byte, mnemonic string) (string, error) {
 func VerifySignatureUsingKramaID(id kramaid.KramaID, rawData []byte, signature []byte) error {
 	peerID, err := id.DecodedPeerID()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to get peer id from krama id")
+		return errors.Wrapf(err, "failed to get peer id from krama id")
 	}
 
 	pk, err := peerID.ExtractPublicKey()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to get public key from peer id")
+		return errors.Wrapf(err, "failed to get public key from peer id")
 	}
 
 	rawPK, err := pk.Raw()
 	if err != nil {
-		return errors.Wrapf(err, "Failed to get raw public key from public key")
+		return errors.Wrapf(err, "failed to get raw public key from public key")
 	}
 
 	verified, err := Verify(rawData, signature, rawPK)

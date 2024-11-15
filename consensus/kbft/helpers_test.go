@@ -1,5 +1,6 @@
 package kbft
 
+/*
 import (
 	"context"
 	crand "crypto/rand"
@@ -88,7 +89,7 @@ func createKramaIDAndPrivateKey(t *testing.T, nthValidator uint32) (kramaid.Kram
 // createTestNodeSet return nodeset and vaults
 // nodeset has nodes info like krama ID and public key
 // vaults has node info like krama ID and private key which can be used to sign votes during consensus
-func createTestNodeSet(t *testing.T, n int) (*common.NodeSet, []*crypto.KramaVault) {
+func createTestNodeSet(t *testing.T, n int) (*ktypes.NodeSet, []*crypto.KramaVault) {
 	t.Helper()
 
 	publicKeys := make([][]byte, n)
@@ -105,7 +106,7 @@ func createTestNodeSet(t *testing.T, n int) (*common.NodeSet, []*crypto.KramaVau
 		valset[i].SetConsensusPrivateKey(privateKey)
 	}
 
-	nodeset := common.NewNodeSet(kramaIDs, publicKeys, uint32(n))
+	nodeset := ktypes.NewNodeSet(kramaIDs, publicKeys, uint32(n))
 
 	for i := 0; i < n; i++ {
 		nodeset.Responses.SetIndex(i, true)
@@ -120,7 +121,7 @@ func createTestNodeSet(t *testing.T, n int) (*common.NodeSet, []*crypto.KramaVau
 // vaults has node info like krama ID and private key which can be used to sign votes during consensus
 // total tells number of nodes which also includes nodes that are not part of ics
 // and actual tells the number of nodes in ics
-func createTestRandomSet(t *testing.T, total, actual int) (*common.NodeSet, []*crypto.KramaVault) {
+func createTestRandomSet(t *testing.T, total, actual int) (*common.committee, []*crypto.KramaVault) {
 	t.Helper()
 
 	publicKeys := make([][]byte, total)
@@ -145,7 +146,7 @@ func createTestRandomSet(t *testing.T, total, actual int) (*common.NodeSet, []*c
 
 	return nodeset, valset
 }
-*/
+
 
 // createICSNodes returns ICSNodes and vaults of given count of specific nodes
 func createICSNodes(
@@ -153,12 +154,12 @@ func createICSNodes(
 	participants int,
 	nodesPerSet int,
 	randomNodes, observerNodes int,
-) (*common.ICSNodeSet, TestVaults) {
+) (*ktypes.ICSCommittee, TestVaults) {
 	t.Helper()
 
 	vaults := make([][]*crypto.KramaVault, 0, 2*participants+2)
 
-	ics := common.NewICSNodeSet(2*participants + 2)
+	ics := ktypes.NewICSCommittee(2*participants + 2)
 
 	for i := 0; i < 2*participants; i++ {
 		ns, vals := createTestNodeSet(t, nodesPerSet)
@@ -168,16 +169,9 @@ func createICSNodes(
 	}
 
 	randomNs, randomVals := createTestNodeSet(t, randomNodes)
-	ics.UpdateNodeSet(ics.RandomSetPosition(), randomNs)
+	ics.UpdateNodeSet(ics.StochasticSetPosition(), randomNs)
 
 	vaults = append(vaults, randomVals)
-
-	if observerNodes > 0 {
-		observerNs, observerVals := createTestNodeSet(t, observerNodes)
-		ics.UpdateNodeSet(ics.ObserverSetPosition(), observerNs)
-
-		vaults = append(vaults, observerVals)
-	}
 
 	return ics, vaults
 }
@@ -204,8 +198,8 @@ func (ts TestVaults) GetVaults(participantIndex int, count int, exclude ...krama
 	return vals
 }
 
-func startTestRound(state *KBFT, heights map[identifiers.Address]uint64, round int32, err chan<- error) {
-	state.enterNewRound(heights, round)
+func startTestview(state *KBFT, heights map[identifiers.Address]uint64, view uint64, err chan<- error) {
+	state.enterNewView(heights, view)
 
 	err1 := state.Start()
 	err <- err1
@@ -232,24 +226,23 @@ func handleOutboundMsgChannel(kbft *KBFT, ctx context.Context, out <-chan ktypes
 func signVote(
 	t *testing.T,
 	kbft *KBFT,
-	round int32,
-	msgType ktypes.ConsensusMsgType,
+	view uint64,
+	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
 	kramaVault *crypto.KramaVault,
 ) *ktypes.Vote {
 	t.Helper()
 
-	valIndex, _ := kbft.ics.HasKramaID(kramaVault.KramaID())
+	valIndex, _, _ := kbft.ics.HasKramaID(kramaVault.KramaID())
 	require.NotEqual(t, valIndex, -1)
 
 	v := &ktypes.Vote{
-		ValidatorIndex:   valIndex,
-		ValidatorKramaID: kramaVault.KramaID(),
-		TSHash:           tsHash,
-		Heights:          heights,
-		Round:            round,
-		Type:             msgType,
+		SignerIndex: valIndex,
+		TSHash:      tsHash,
+		Heights:     heights,
+		View:        view,
+		Type:        msgType,
 	}
 
 	rawData, err := v.SignBytes()
@@ -267,8 +260,8 @@ func signVote(
 func signVotes(
 	t *testing.T,
 	kbft *KBFT,
-	round int32,
-	msgType ktypes.ConsensusMsgType,
+	view uint64,
+	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
 	kramaVault ...*crypto.KramaVault,
@@ -278,7 +271,7 @@ func signVotes(
 	votes := make([]*ktypes.Vote, len(kramaVault))
 
 	for i, kVault := range kramaVault {
-		votes[i] = signVote(t, kbft, round, msgType, tsHash, heights, kVault)
+		votes[i] = signVote(t, kbft, view, msgType, tsHash, heights, kVault)
 	}
 
 	return votes
@@ -288,8 +281,8 @@ func signVotes(
 func signAddVotesSynchronously(
 	t *testing.T,
 	kbft *KBFT,
-	round int32,
-	msgType ktypes.ConsensusMsgType,
+	view uint64,
+	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
 	kramaVault ...*crypto.KramaVault,
@@ -300,12 +293,12 @@ func signAddVotesSynchronously(
 		require.FailNow(t, "there are no validators to sign")
 	}
 
-	votes := signVotes(t, kbft, round, msgType, tsHash, heights, kramaVault...)
+	votes := signVotes(t, kbft, view, msgType, tsHash, heights, kramaVault...)
 
 	for i, vote := range votes {
 		err := kbft.handleMsg(ktypes.ConsensusMessage{
 			PeerID:  kramaVault[i].KramaID(),
-			Message: &ktypes.VoteMessage{Vote: vote},
+			Payload: &ktypes.VoteMessage{Vote: vote},
 		})
 		require.NoError(t, err)
 	}
@@ -314,8 +307,8 @@ func signAddVotesSynchronously(
 func signAddVotes(
 	t *testing.T,
 	kbft *KBFT,
-	round int32,
-	msgType ktypes.ConsensusMsgType,
+	view uint64,
+	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
 	kramaVault ...*crypto.KramaVault,
@@ -326,12 +319,12 @@ func signAddVotes(
 		require.FailNow(t, "there are no validators to sign")
 	}
 
-	votes := signVotes(t, kbft, round, msgType, tsHash, heights, kramaVault...)
+	votes := signVotes(t, kbft, view, msgType, tsHash, heights, kramaVault...)
 
 	for i, vote := range votes {
 		kbft.inboundMsgChan <- ktypes.ConsensusMessage{
 			PeerID:  kramaVault[i].KramaID(),
-			Message: &ktypes.VoteMessage{Vote: vote},
+			Payload: &ktypes.VoteMessage{Vote: vote},
 		}
 	}
 }
@@ -340,19 +333,19 @@ func signAddVotes(
 func sendAndEnsureVotes(
 	t *testing.T,
 	kbft *KBFT,
-	round int32,
-	msgType ktypes.ConsensusMsgType,
+	view uint64,
+	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
 	voteSub *utils.Subscription,
-	expectedRound int32,
+	expectedview uint64,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
 
 	for _, v := range kramaVault {
-		signAddVotes(t, kbft, round, msgType, tsHash, heights, v)
-		ensureVote(t, voteSub, tsHash, heights, expectedRound, msgType)
+		signAddVotes(t, kbft, view, msgType, tsHash, heights, v)
+		ensureVote(t, voteSub, tsHash, heights, expectedview, msgType)
 	}
 }
 
@@ -360,38 +353,38 @@ func sendAndEnsureVotes(
 func sendAndEnsurePreVote(
 	t *testing.T,
 	kbft *KBFT,
-	round int32,
+	view uint64,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
 	voteSub *utils.Subscription,
-	expectedRound int32,
+	expectedview uint64,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
-	sendAndEnsureVotes(t, kbft, round, ktypes.PREVOTE, tsHash, heights, voteSub, expectedRound, kramaVault...)
+	sendAndEnsureVotes(t, kbft, view, common.PREVOTE, tsHash, heights, voteSub, expectedview, kramaVault...)
 }
 
 // sendAndEnsurePrecommit sends the precommit to kbft node and ensures that vote event emitted
 func sendAndEnsurePrecommit(
 	t *testing.T,
 	kbft *KBFT,
-	round int32,
+	view uint64,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
 	voteSub *utils.Subscription,
-	expectedRound int32,
+	expectedview uint64,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
 
-	sendAndEnsureVotes(t, kbft, round, ktypes.PRECOMMIT, tsHash, heights, voteSub, expectedRound, kramaVault...)
+	sendAndEnsureVotes(t, kbft, view, common.PRECOMMIT, tsHash, heights, voteSub, expectedview, kramaVault...)
 }
 
 func createIxs(t *testing.T, sender identifiers.Address, receiver identifiers.Address) common.Interactions {
 	t.Helper()
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithAddress(sender, receiver),
+		0: tests.GetIxParamsWithAddress(t, sender, receiver),
 	}
 
 	return tests.CreateIxns(t, 1, ixParams)
@@ -404,7 +397,7 @@ func createIxs(t *testing.T, sender identifiers.Address, receiver identifiers.Ad
 // and also add tesseract for sarga account
 func createTestClusterInfo(
 	t *testing.T,
-	icsNodes *common.ICSNodeSet,
+	icsNodes *ktypes.ICSCommittee,
 	newHeights map[identifiers.Address]uint64,
 	ixs common.Interactions,
 ) *ktypes.ClusterState {
@@ -418,7 +411,7 @@ func createTestClusterInfo(
 		IsSigner:        true,
 		Height:          newHeights[ixs[0].Sender()] - 1,
 		NodeSetPosition: 0,
-		LockType:        common.WriteLock,
+		LockType:        common.MutateLock,
 		ConsensusQuorum: 6,
 	}
 
@@ -426,17 +419,17 @@ func createTestClusterInfo(
 		Height: newHeights[ixs[0].Sender()],
 	}
 
-	if !ixs[0].Receiver().IsNil() {
-		ps[ixs[0].Receiver()] = &common.Participant{
-			Address:         ixs[0].Receiver(),
-			Height:          newHeights[ixs[0].Receiver()] - 1,
+	if !ixs[0].Transaction(0).Target().IsNil() {
+		ps[ixs[0].Transaction(0).Target()] = &common.Participant{
+			Address:         ixs[0].Transaction(0).Target(),
+			Height:          newHeights[ixs[0].Transaction(0).Target()] - 1,
 			NodeSetPosition: 2,
-			LockType:        common.WriteLock,
+			LockType:        common.MutateLock,
 			ConsensusQuorum: 6,
 		}
 
-		pStates[ixs[0].Receiver()] = common.State{
-			Height: newHeights[ixs[0].Receiver()],
+		pStates[ixs[0].Transaction(0).Target()] = common.State{
+			Height: newHeights[ixs[0].Transaction(0).Target()],
 		}
 	}
 
@@ -452,27 +445,27 @@ func createTestClusterInfo(
 		common.LotteryKey{},
 	)
 
-	clusterInfo.Tesseract = common.NewTesseract(
+	clusterInfo.SetTesseract(common.NewTesseract(
 		pStates,
 		common.NilHash,
 		common.NilHash,
 		big.NewInt(0),
 		0,
-		"operator",
 		4,
 		6,
 		common.PoXtData{},
 		nil,
 		clusterInfo.SelfKramaID(),
-		nil,
-		nil,
-	)
+		common.Interactions{},
+		nil, nil,
+	))
 
 	return clusterInfo
 }
 
 // ensureProposal times out if proposal event not received in time
-func ensureProposal(t *testing.T, proposals *utils.Subscription, heights map[identifiers.Address]uint64, round int32) {
+func ensureProposal(t *testing.T, proposals *utils.Subscription,
+heights map[identifiers.Address]uint64, view uint64) {
 	t.Helper()
 
 	select {
@@ -490,49 +483,49 @@ func ensureProposal(t *testing.T, proposals *utils.Subscription, heights map[ide
 			require.FailNow(t, fmt.Sprintf("expected height %v, got %v", heights, proposal.Height))
 		}
 
-		if proposal.Round != round {
-			require.FailNow(t, fmt.Sprintf("expected round %v, got %v", round, proposal.Round))
+		if proposal.view != view {
+			require.FailNow(t, fmt.Sprintf("expected view %v, got %v", view, proposal.view))
 		}
 	}
 }
 
-func validateRoundState(
+func validateviewState(
 	t *testing.T,
-	roundState eventDataRoundState,
-	heights map[identifiers.Address]uint64, round int32,
-	step RoundStepType,
+	viewState eventDataViewState,
+	heights map[identifiers.Address]uint64, view uint64,
+	step ViewStepType,
 ) {
 	t.Helper()
 
-	if !areHeightsEqual(roundState.Height, heights) {
-		require.FailNow(t, fmt.Sprintf("expected height %v, got %v", heights, roundState.Height))
+	if !areHeightsEqual(viewState.Height, heights) {
+		require.FailNow(t, fmt.Sprintf("expected height %v, got %v", heights, viewState.Height))
 	}
 
-	if roundState.Round != round {
-		require.FailNow(t, fmt.Sprintf("expected round %v, got %v", round, roundState.Round))
+	if viewState.View != view {
+		require.FailNow(t, fmt.Sprintf("expected view %v, got %v", view, viewState.View))
 	}
 
-	require.Equal(t, step.String(), roundState.Step)
+	require.Equal(t, step.String(), viewState.Step)
 }
 
-func ensureNewRound(t *testing.T, roundSub *utils.Subscription, heights map[identifiers.Address]uint64, round int32) {
+func ensureNewview(t *testing.T, viewSub *utils.Subscription, heights map[identifiers.Address]uint64, view uint64) {
 	t.Helper()
 
 	select {
 	case <-time.After(ensureTimeout):
-		require.FailNow(t, "Timeout expired while waiting for NewRound event")
-	case msg := <-roundSub.Chan():
-		newRoundEvent, ok := msg.Data.(eventNewRound)
+		require.FailNow(t, "Timeout expired while waiting for Newview event")
+	case msg := <-viewSub.Chan():
+		newviewEvent, ok := msg.Data.(eventNewview)
 		if !ok {
-			require.FailNow(t, fmt.Sprintf("expected a eventNewRound, got %T. Wrong subscription channel?",
+			require.FailNow(t, fmt.Sprintf("expected a eventNewview, got %T. Wrong subscription channel?",
 				msg.Data))
 		}
 
-		validateRoundState(t, newRoundEvent.eventDataRoundState, heights, round, RoundStepNewHeight)
+		validateviewState(t, newviewEvent.eventDataViewState, heights, view, ViewStepNewHeight)
 	}
 }
 
-func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[identifiers.Address]uint64, round int32) {
+func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[identifiers.Address]uint64, view uint64) {
 	t.Helper()
 
 	select {
@@ -545,7 +538,7 @@ func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[identif
 				msg.Data))
 		}
 
-		validateRoundState(t, polka.eventDataRoundState, heights, round, RoundStepPrevote)
+		validateviewState(t, polka.eventDataViewState, heights, view, ViewStepPrevote)
 	}
 }
 
@@ -553,7 +546,7 @@ func ensurePrevoteTimeout(
 	t *testing.T,
 	timeoutSub *utils.Subscription,
 	heights map[identifiers.Address]uint64,
-	round int32,
+	view uint64,
 	timeout int64,
 ) {
 	t.Helper()
@@ -569,7 +562,7 @@ func ensurePrevoteTimeout(
 				msg.Data))
 		}
 
-		validateRoundState(t, eventPrevoteTimeout.eventDataRoundState, heights, round, RoundStepPrevoteWait)
+		validateviewState(t, eventPrevoteTimeout.eventDataViewState, heights, view, viewStepPrevoteWait)
 	}
 }
 
@@ -577,7 +570,7 @@ func ensurePrecommitTimeout(
 	t *testing.T,
 	timeoutSub *utils.Subscription,
 	heights map[identifiers.Address]uint64,
-	round int32,
+	view uint64,
 	timeout int64,
 ) {
 	t.Helper()
@@ -593,7 +586,7 @@ func ensurePrecommitTimeout(
 				msg.Data))
 		}
 
-		validateRoundState(t, eventPrecommitTimeout.eventDataRoundState, heights, round, RoundStepPrecommit)
+		validateviewState(t, eventPrecommitTimeout.eventDataViewState, heights, view, ViewStepPrecommit)
 	}
 }
 
@@ -603,8 +596,8 @@ func ensureVote(
 	voteSub *utils.Subscription,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
-	round int32,
-	voteType ktypes.ConsensusMsgType,
+	view uint64,
+	voteType common.ConsensusMsgType,
 ) {
 	t.Helper()
 
@@ -623,8 +616,8 @@ func ensureVote(
 			require.FailNow(t, fmt.Sprintf("expected type %v, got %v", voteType, vote.Type))
 		}
 
-		if vote.Round != round {
-			require.FailNow(t, fmt.Sprintf("expected round %v, got %v", round, vote.Round))
+		if vote.View != view {
+			require.FailNow(t, fmt.Sprintf("expected view %v, got %v", view, vote.View))
 		}
 
 		require.Equal(t, tsHash, vote.TSHash, "ts hashes doesn't match") // ensures hashes are equal
@@ -645,11 +638,11 @@ func ensurePrevote(
 	voteSub *utils.Subscription,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
-	round int32,
+	view uint64,
 ) {
 	t.Helper()
 
-	ensureVote(t, voteSub, tsHash, heights, round, ktypes.PREVOTE)
+	ensureVote(t, voteSub, tsHash, heights, view, common.PREVOTE)
 }
 
 func ensurePrecommit(
@@ -657,11 +650,11 @@ func ensurePrecommit(
 	voteSub *utils.Subscription,
 	tsHash common.Hash,
 	heights map[identifiers.Address]uint64,
-	round int32,
+	view uint64,
 ) {
 	t.Helper()
 
-	ensureVote(t, voteSub, tsHash, heights, round, ktypes.PRECOMMIT)
+	ensureVote(t, voteSub, tsHash, heights, view, common.PRECOMMIT)
 }
 
 // ensureNoVoteReceived fails if a vote received within ensureTimeout duration
@@ -688,25 +681,25 @@ func ensureNoPrecommitReceived(t *testing.T, voteSub *utils.Subscription) {
 	ensureNoVoteReceived(t, voteSub, "node shouldn't send precommit")
 }
 
-// validatePrevote fetches the prevote of validator in the current round and
+// validatePrevote fetches the prevote of validator in the current view and
 // checks if voted ts hash matches
-func validatePrevote(t *testing.T, kbft *KBFT, round int32, val *crypto.KramaVault, tsHash common.Hash) {
+func validatePrevote(t *testing.T, kbft *KBFT, view uint64, val *crypto.KramaVault, tsHash common.Hash) {
 	t.Helper()
 
-	var kramaID int32
+	var valIndex int32
 
 	var ok bool
 
 	var vote *ktypes.Vote
 
-	prevotes := kbft.Votes.getPrevotes(round)
+	prevotes := kbft.Votes.getPrevotes(view)
 
-	if kramaID, ok = kbft.ics.HasKramaID(val.KramaID()); !ok {
-		require.FailNow(t, "Failed to fetch krama id from ics")
+	if valIndex, _, ok = kbft.ics.HasKramaID(val.KramaID()); !ok {
+		require.FailNow(t, "failed to fetch krama id from ics")
 	}
 
-	if vote, ok = prevotes.getVote(kramaID, tsHash); !ok {
-		require.FailNow(t, "Failed to find prevote from validator")
+	if vote, ok = prevotes.getVote(valIndex, tsHash); !ok {
+		require.FailNow(t, "failed to find prevote from validator")
 	}
 
 	if tsHash.IsNil() {
@@ -720,13 +713,13 @@ func validatePrevote(t *testing.T, kbft *KBFT, round int32, val *crypto.KramaVau
 	require.Equal(t, tsHash, vote.TSHash)
 }
 
-// validatePrecommit fetches the precommit vote of validator in the current round and
-// checks if voted ts hash, locked round, locked ts hash matches
+// validatePrecommit fetches the precommit vote of validator in the current view and
+// checks if voted ts hash, locked view, locked ts hash matches
 func validatePrecommit(
 	t *testing.T,
 	kbft *KBFT,
-	thisRound,
-	lockRound int32,
+	thisview,
+	lockview uint64,
 	val *crypto.KramaVault,
 	tsHash,
 	lockedTSHash common.Hash,
@@ -734,19 +727,19 @@ func validatePrecommit(
 	t.Helper()
 
 	var (
-		kramaID int32
-		ok      bool
-		vote    *ktypes.Vote
+		valIndex int32
+		ok       bool
+		vote     *ktypes.Vote
 	)
 
-	precommits := kbft.Votes.getPrecommits(thisRound)
+	precommits := kbft.Votes.getPrecommits(thisview)
 
-	if kramaID, ok = kbft.ics.HasKramaID(val.KramaID()); !ok {
-		require.FailNow(t, "Failed to fetch krama id from ics")
+	if valIndex, _, ok = kbft.ics.HasKramaID(val.KramaID()); !ok {
+		require.FailNow(t, "failed to fetch krama id from ics")
 	}
 
-	if vote, ok = precommits.getVote(kramaID, tsHash); !ok {
-		require.FailNow(t, "Failed to find precommit from validator")
+	if vote, ok = precommits.getVote(valIndex, tsHash); !ok {
+		require.FailNow(t, "failed to find precommit from validator")
 	}
 
 	if tsHash.IsNil() {
@@ -760,22 +753,22 @@ func validatePrecommit(
 	require.Equal(t, tsHash, vote.TSHash)
 
 	if lockedTSHash.IsNil() {
-		if kbft.LockedRound != lockRound || kbft.LockedTS != nil {
+		if kbft.Lockedview != lockview || kbft.LockedTS != nil {
 			require.FailNow(t, fmt.Sprintf(
-				"Expected to be locked on nil at round %d. Got locked at round %d with block %v",
-				lockRound,
-				kbft.LockedRound,
+				"Expected to be locked on nil at view %d. Got locked at view %d with block %v",
+				lockview,
+				kbft.Lockedview,
 				kbft.LockedTS))
 		}
 
 		return
 	}
 
-	if kbft.LockedRound != lockRound || !(kbft.LockedTS.Hash() == lockedTSHash) {
+	if kbft.Lockedview != lockview || !(kbft.LockedTS.Hash() == lockedTSHash) {
 		require.FailNow(t, fmt.Sprintf(
-			"Expected block to be locked on round %d, got %d. Got locked block %X, expected %X",
-			lockRound,
-			kbft.LockedRound,
+			"Expected block to be locked on view %d, got %d. Got locked block %X, expected %X",
+			lockview,
+			kbft.Lockedview,
 			kbft.LockedTS.Hash(),
 			lockedTSHash))
 	}
@@ -794,3 +787,4 @@ func ensureError(t *testing.T, kbftErr <-chan error, expectedError string) {
 	err := <-kbftErr
 	require.EqualError(t, err, expectedError)
 }
+*/

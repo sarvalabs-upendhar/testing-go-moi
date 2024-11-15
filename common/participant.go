@@ -1,16 +1,22 @@
 package common
 
-import "github.com/sarvalabs/go-moi-identifiers"
+import (
+	"sort"
+
+	"github.com/sarvalabs/go-moi-identifiers"
+)
 
 type LockType int
 
 const (
-	ReadLock LockType = iota // TODO: Should improve lock types
-	WriteLock
+	MutateLock LockType = iota
+	ReadLock
+	NoLock
 )
 
-// IxParticipant holds all basic information of the participant account
-type IxParticipant struct {
+// ParticipantInfo holds all basic information of the participant account
+type ParticipantInfo struct {
+	Address   identifiers.Address
 	AccType   AccountType
 	IsSigner  bool
 	LockType  LockType
@@ -27,16 +33,18 @@ type Participant struct {
 	ContextHash   Hash
 	TesseractHash Hash
 	// The participants within an ICS file are arranged by their addresses.
-	// This field indicates the initial index of the participant's nodeSet.
+	// This field indicates the index of the participant's nodeSet.
 	NodeSetPosition int
 	LockType        LockType
 	ContextDelta    *DeltaGroup
 	// ConsensusQuorum represents the minimum required consensus votes
 	ConsensusQuorum uint32
+	CommitHash      Hash
+	ExcludeFromICS  bool
 }
 
 func (p *Participant) NewHeight() uint64 {
-	if p.IsGenesis {
+	if p.IsGenesis || p.LockType > MutateLock || p.ExcludeFromICS {
 		return p.Height
 	}
 
@@ -56,13 +64,17 @@ func (p *Participant) IsContextUpdateRequired() bool {
 	return true
 }
 
+func (p *Participant) ExcludedFromICS() bool {
+	return p.ExcludeFromICS
+}
+
 type Participants map[identifiers.Address]*Participant
 
-func (ps Participants) IxnParticipants() map[identifiers.Address]IxParticipant {
-	ixnParticipants := make(map[identifiers.Address]IxParticipant)
+func (ps Participants) IxnParticipants() map[identifiers.Address]ParticipantInfo {
+	ixnParticipants := make(map[identifiers.Address]ParticipantInfo)
 
 	for k, v := range ps {
-		ixnParticipants[k] = IxParticipant{
+		ixnParticipants[k] = ParticipantInfo{
 			IsGenesis: v.IsGenesis,
 			IsSigner:  v.IsSigner,
 			AccType:   v.AccType,
@@ -80,4 +92,42 @@ func (ps Participants) HasSystemAccounts() bool {
 	}
 
 	return false
+}
+
+func (ps Participants) LockInfo(activeParticipantsOnly bool) map[identifiers.Address]LockType {
+	lockInfo := make(map[identifiers.Address]LockType)
+
+	for addr, info := range ps {
+		if !activeParticipantsOnly {
+			lockInfo[addr] = info.LockType
+
+			continue
+		}
+
+		if !info.ExcludedFromICS() {
+			lockInfo[addr] = info.LockType
+		}
+	}
+
+	return lockInfo
+}
+
+func (ps Participants) ExcludeFromICS(addrs Addresses) {
+	for _, addr := range addrs {
+		if info := ps[addr]; info != nil {
+			info.ExcludeFromICS = true
+		}
+	}
+}
+
+func (ps Participants) Addrs() Addresses {
+	addrs := make(Addresses, 0, len(ps))
+
+	for addr := range ps {
+		addrs = append(addrs, addr)
+	}
+
+	sort.Sort(addrs)
+
+	return addrs
 }

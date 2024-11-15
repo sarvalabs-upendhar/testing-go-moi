@@ -182,8 +182,8 @@ func (state debugStateDriver) Copy() *debugStateDriver {
 	return clone
 }
 
-type debugIxnDriver struct {
-	kind     common.IxType
+type debugTxnDriver struct {
+	kind     common.IxOpType
 	hash     common.Hash
 	price    *big.Int
 	limit    uint64
@@ -191,14 +191,15 @@ type debugIxnDriver struct {
 	calldata []byte
 }
 
-func newDebugIxnDriver(t *testing.T,
-	kind common.IxType, hash common.Hash,
+func newDebugTxnDriver(
+	t *testing.T, kind common.IxOpType,
+	hash common.Hash,
 	callsite string, calldata []byte,
 	limit uint64, price *big.Int,
-) debugIxnDriver {
+) debugTxnDriver {
 	t.Helper()
 
-	return debugIxnDriver{
+	return debugTxnDriver{
 		kind:     kind,
 		hash:     hash,
 		price:    price,
@@ -208,12 +209,12 @@ func newDebugIxnDriver(t *testing.T,
 	}
 }
 
-func (ixn debugIxnDriver) Type() common.IxType { return ixn.kind }
-func (ixn debugIxnDriver) Hash() common.Hash   { return ixn.hash }
-func (ixn debugIxnDriver) FuelPrice() *big.Int { return ixn.price }
-func (ixn debugIxnDriver) FuelLimit() uint64   { return ixn.limit }
-func (ixn debugIxnDriver) Callsite() string    { return ixn.callsite }
-func (ixn debugIxnDriver) Calldata() []byte    { return ixn.calldata }
+func (txn debugTxnDriver) Type() common.IxOpType { return txn.kind }
+func (txn debugTxnDriver) Hash() common.Hash     { return txn.hash }
+func (txn debugTxnDriver) FuelPrice() *big.Int   { return txn.price }
+func (txn debugTxnDriver) FuelLimit() uint64     { return txn.limit }
+func (txn debugTxnDriver) Callsite() string      { return txn.callsite }
+func (txn debugTxnDriver) Calldata() []byte      { return txn.calldata }
 
 type debugEnvDriver struct {
 	timestamp uint64

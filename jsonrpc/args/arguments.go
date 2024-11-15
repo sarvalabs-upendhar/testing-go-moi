@@ -9,10 +9,11 @@ import (
 
 // Public core args
 
-// TesseractArgs is an argument wrapper for retrieving the latest Tesseract
+// TesseractArgs is an argument wrapper for retrieving the latest ts
 type TesseractArgs struct {
-	Address          identifiers.Address   `json:"address"` // Address for which to retrieve the latest Tesseract
+	Address          identifiers.Address   `json:"address"` // Address for which to retrieve the latest ts
 	WithInteractions bool                  `json:"with_interactions"`
+	WithCommitInfo   bool                  `json:"with_commit_info"`
 	Options          TesseractNumberOrHash `json:"options"`
 }
 
@@ -22,19 +23,19 @@ type GetAssetInfoArgs struct {
 }
 
 type QueryArgs struct {
-	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest Tesseract
+	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest ts
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 // BalArgs is an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
 	Address identifiers.Address   `json:"address"`  // Address for which to retrieve the balance
-	AssetID identifiers.AssetID   `json:"asset_id"` // Asset for which to retrieve balance
+	AssetID identifiers.AssetID   `json:"asset_id"` // AssetID for which to retrieve balance
 	Options TesseractNumberOrHash `json:"options"`
 }
 
 type ContextInfoArgs struct {
-	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest Tesseract
+	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest ts
 	Options TesseractNumberOrHash `json:"options"`
 }
 
@@ -127,20 +128,47 @@ type SendIX struct {
 	Signature string `json:"signature"`
 }
 
+type IxFund struct {
+	AssetID identifiers.AssetID `json:"asset_id"`
+	Amount  *hexutil.Big        `json:"amount"`
+}
+
+type IxOp struct {
+	Type    common.IxOpType `json:"type"`
+	Payload hexutil.Bytes   `json:"payload"`
+}
+
+type IxParticipant struct {
+	Address  identifiers.Address `json:"address"`
+	LockType common.LockType     `json:"lock_type"`
+}
+
+type IxConsensusPreference struct {
+	MTQ        hexutil.Uint      `json:"mtq"`
+	TrustNodes []kramaid.KramaID `json:"trust_nodes"`
+}
+
+type IxPreferences struct {
+	Compute   hexutil.Bytes          `json:"compute"`
+	Consensus *IxConsensusPreference `json:"consensus"`
+}
+
 type IxArgs struct {
-	Type common.IxType `json:"type"`
+	Sender identifiers.Address `json:"sender"`
+	Payer  identifiers.Address `json:"payer"`
 
-	Sender   identifiers.Address `json:"sender"`
-	Receiver identifiers.Address `json:"receiver"`
-	Payer    identifiers.Address `json:"payer"`
-
-	TransferValues  map[identifiers.AssetID]*hexutil.Big `json:"transfer_values"`
-	PerceivedValues map[identifiers.AssetID]*hexutil.Big `json:"perceived_values"`
+	Nonce hexutil.Uint64 `json:"nonce"`
 
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 
-	Payload hexutil.Bytes `json:"payload"`
+	Funds        []IxFund        `json:"funds"`
+	IxOps        []IxOp          `json:"ix_operations"`
+	Participants []IxParticipant `json:"participants"`
+
+	Perception hexutil.Bytes `json:"perception"`
+
+	Preferences *IxPreferences `json:"preferences"`
 }
 
 // Public ixpool args
@@ -179,9 +207,21 @@ type RPCAssetCreation struct {
 	Logic *RPCLogicPayload `json:"logic_code,omitempty"`
 }
 
-type RPCAssetMintOrBurn struct {
+type RPCAssetSupply struct {
 	AssetID identifiers.AssetID `json:"asset_id"`
 	Amount  *hexutil.Big        `json:"amount"`
+}
+
+type RPCParticipantCreate struct {
+	Address identifiers.Address `json:"address"`
+	Amount  *hexutil.Big        `json:"amount"`
+}
+
+type RPCAssetAction struct {
+	Benefactor  identifiers.Address `json:"benefactor"`
+	Beneficiary identifiers.Address `json:"beneficiary"`
+	AssetID     identifiers.AssetID `json:"asset_id"`
+	Amount      *hexutil.Big        `json:"amount"`
 }
 
 type RPCLogicPayload struct {
@@ -193,14 +233,13 @@ type RPCLogicPayload struct {
 
 func (l *RPCLogicPayload) LogicPayload() *common.LogicPayload {
 	return &common.LogicPayload{
-		Manifest: l.Manifest.Bytes(),
 		Logic:    identifiers.LogicID(l.LogicID),
 		Calldata: l.Calldata,
 		Callsite: l.Callsite,
 	}
 }
 
-func RPClogicPayloadFromLogicPayload(payload *common.LogicPayload) *RPCLogicPayload {
+func RPCLogicPayloadFromLogicPayload(payload *common.LogicPayload) *RPCLogicPayload {
 	if payload == nil {
 		return nil
 	}

@@ -24,7 +24,7 @@ func (f *pendingIxnsFilter) appendPendingIxHashes(ixns common.Interactions) {
 	f.Lock()
 	defer f.Unlock()
 
-	for _, ixn := range ixns {
+	for _, ixn := range ixns.IxList() {
 		f.ixHashes = append(f.ixHashes, ixn.Hash())
 	}
 }
@@ -41,14 +41,14 @@ func (f *pendingIxnsFilter) takePendingIxnsUpdates() []common.Hash {
 	return ixHashes
 }
 
-// getUpdates returns stored pending tx hashes
+// getUpdates returns stored pending op hashes
 func (f *pendingIxnsFilter) getUpdates() (interface{}, error) {
 	pendingIxHashes := f.takePendingIxnsUpdates()
 
 	return pendingIxHashes, nil
 }
 
-// sendUpdates write the hashes for all pending transactions to web socket stream
+// sendUpdates write the hashes for all pending interactions to web socket stream
 func (f *pendingIxnsFilter) sendUpdates() error {
 	pendingIxHashes := f.takePendingIxnsUpdates()
 	for _, ixHash := range pendingIxHashes {

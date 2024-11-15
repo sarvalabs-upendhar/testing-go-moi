@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/storage/db/badger"
@@ -235,7 +237,10 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 			AccMetaInfo.TesseractHash,
 			AccMetaInfo.StateHash,
 			AccMetaInfo.ContextHash,
+			AccMetaInfo.CommitHash,
 			AccMetaInfo.Type,
+			true,
+			AccMetaInfo.PositionInContextSet,
 		)
 		require.NoError(t, err)
 
@@ -346,7 +351,11 @@ func getRandomReceipts(t *testing.T, receiptHash common.Hash, count int) common.
 	for i := 0; i < count; i++ {
 		receipts[receiptHash] = &common.Receipt{
 			IxHash: tests.RandomHash(t),
-			IxType: 2,
+			IxOps: []*common.IxOpResult{
+				{
+					IxType: 2,
+				},
+			},
 		}
 	}
 
@@ -367,7 +376,7 @@ func insertTesseracts(t *testing.T, pm *PersistenceManager, tesseracts ...*commo
 	t.Helper()
 
 	for i := 0; i < len(tesseracts); i++ {
-		rawBytes, err := tesseracts[i].Canonical().Bytes()
+		rawBytes, err := tesseracts[i].Bytes()
 		require.NoError(t, err)
 
 		err = pm.SetTesseract(tesseracts[i].Hash(), rawBytes)
@@ -379,7 +388,9 @@ func insertIxns(t *testing.T, pm *PersistenceManager, tesseracts ...*common.Tess
 	t.Helper()
 
 	for i := 0; i < len(tesseracts); i++ {
-		rawBytes, err := tesseracts[i].Interactions().Bytes()
+		interactions := tesseracts[i].Interactions()
+
+		rawBytes, err := interactions.Bytes()
 		require.NoError(t, err)
 
 		err = pm.SetInteractions(tesseracts[i].Hash(), rawBytes)
@@ -399,17 +410,43 @@ func insertReceiptsInDB(t *testing.T, pm *PersistenceManager, tesseracts ...*com
 	}
 }
 
-func validateTesseract(t *testing.T, ts *common.Tesseract, expectedTS *common.Tesseract, withInteractions bool) {
+func insertCommitInfosInDB(t *testing.T, pm *PersistenceManager, tesseracts ...*common.Tesseract) {
 	t.Helper()
 
-	if !withInteractions || ts.ClusterID() == common.GenesisIdentifier { // check if tesseracts matches
-		require.Equal(t, expectedTS.Canonical(), ts.Canonical())
-		require.Equal(t, 0, len(ts.Interactions())) // make sure returned tesseract has zero ixns
-		require.Equal(t, 0, len(ts.Receipts()))
+	for i := 0; i < len(tesseracts); i++ {
+		rawBytes, err := tesseracts[i].CommitInfo().Bytes()
+		require.NoError(t, err)
 
-		return
+		err = pm.SetCommitInfo(tesseracts[i].Hash(), rawBytes)
+		require.NoError(t, err)
+	}
+}
+
+func validateTesseract(t *testing.T, expectedTS *common.Tesseract, ts *common.Tesseract,
+	withInteractions bool, withCommitInfo bool,
+) {
+	t.Helper()
+
+	require.Equal(t, expectedTS.Participants(), ts.Participants())
+	require.Equal(t, expectedTS.Epoch(), ts.Epoch())
+	require.Equal(t, expectedTS.Timestamp(), ts.Timestamp())
+	require.Equal(t, expectedTS.FuelUsed(), ts.FuelUsed())
+	require.Equal(t, expectedTS.FuelLimit(), ts.FuelLimit())
+	require.Equal(t, expectedTS.ConsensusInfo(), ts.ConsensusInfo())
+	require.Equal(t, expectedTS.Seal(), ts.Seal())
+	require.Equal(t, expectedTS.SealBy(), ts.SealBy())
+
+	if !withInteractions || ts.ConsensusInfo().View == common.GenesisView { // check if tesseracts matches
+		require.Equal(t, 0, ts.Interactions().Len()) // make sure returned tesseract has zero ixns
+		require.Equal(t, 0, len(ts.Receipts()))
+	} else {
+		require.Equal(t, expectedTS.Interactions().IxList(), ts.Interactions().IxList())
+		require.Equal(t, expectedTS.Receipts(), ts.Receipts())
 	}
 
-	ts.Hash() // calculate hash to fill hash field in tesseract
-	require.Equal(t, expectedTS, ts)
+	if !withCommitInfo {
+		require.Equal(t, kramaid.KramaID(""), ts.CommitInfo().Operator)
+	} else {
+		require.Equal(t, expectedTS.CommitInfo(), ts.CommitInfo())
+	}
 }

@@ -1,6 +1,6 @@
 module github.com/sarvalabs/go-moi
 
-go 1.20
+go 1.22
 
 require (
 	github.com/VictoriaMetrics/fastcache v1.12.2
@@ -24,7 +24,6 @@ require (
 	github.com/hashicorp/go-hclog v1.5.0
 	github.com/hashicorp/go-immutable-radix v1.3.1
 	github.com/hashicorp/golang-lru v1.0.2
-	github.com/hashicorp/golang-lru/v2 v2.0.5
 	github.com/ipfs/go-ds-badger v0.3.0
 	github.com/libp2p/go-buffer-pool v0.1.0
 	github.com/libp2p/go-libp2p v0.32.2
@@ -103,6 +102,7 @@ require (
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.5 // indirect
 	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

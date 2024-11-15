@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sync"
 	"testing"
+	"time"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/sarvalabs/go-legacy-kramaid"
@@ -41,6 +42,7 @@ type MockStateManager struct {
 	logicRegistration        map[identifiers.LogicID]bool
 	removedCacheStateObjects map[identifiers.Address]struct{}
 	latestStateObjects       map[identifiers.Address]*state.Object
+	accMetaInfos             map[identifiers.Address]*common.AccountMetaInfo
 }
 
 // NewMockStateManager returns a new instance of MockStateManager
@@ -55,7 +57,23 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 		logicRegistration:        make(map[identifiers.LogicID]bool),
 		removedCacheStateObjects: make(map[identifiers.Address]struct{}),
 		latestStateObjects:       make(map[identifiers.Address]*state.Object),
+		accMetaInfos:             make(map[identifiers.Address]*common.AccountMetaInfo),
 	}
+}
+
+func (ms *MockStateManager) SetAccountMetaInfo(addr identifiers.Address, accMetaInfo *common.AccountMetaInfo) {
+	ms.accMetaInfos[addr] = accMetaInfo
+}
+
+func (ms *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
+	accMetaInfo, ok := ms.accMetaInfos[addr]
+	if !ok {
+		return &common.AccountMetaInfo{
+			PositionInContextSet: common.NodeNotFound,
+		}, nil
+	}
+
+	return accMetaInfo, nil
 }
 
 func (ms *MockStateManager) setLatestStateObject(addr identifiers.Address, obj *state.Object) {
@@ -134,6 +152,8 @@ func (ms *MockStateManager) setBalance(
 	ms.balance[addrs][assetID] = amount
 }
 
+const viewTimeOut = 10 * time.Second
+
 // CreateTestIxpool returns a new instance of IxPool
 func CreateTestIxpool(
 	t *testing.T,
@@ -151,6 +171,8 @@ func CreateTestIxpool(
 	if sm == nil {
 		sm = NewMockStateManager(t)
 	}
+
+	cfg.ViewTimeout = viewTimeOut
 
 	if cfgCallback != nil {
 		cfgCallback(cfg)
@@ -171,6 +193,7 @@ func CreateTestIxpool(
 		cfg,
 		NilMetrics(),
 		verifier,
+		0,
 	)
 }
 
@@ -187,6 +210,12 @@ func (ms *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool,
 	_, ok := ms.accountRegistration[addr]
 
 	return ok, nil
+}
+
+func (ms *MockStateManager) registerAccounts(addrs ...identifiers.Address) {
+	for _, addr := range addrs {
+		ms.accountRegistration[addr] = true
+	}
 }
 
 func (ms *MockStateManager) IsLogicRegistered(logicID identifiers.LogicID) error {
@@ -215,7 +244,9 @@ type MockExecutionManager struct {
 	validateLogicInvokeHook func() error
 }
 
-func (ms *MockExecutionManager) ValidateLogicInvoke(ix *common.Interaction, calleracc, logicacc *state.Object) error {
+func (ms *MockExecutionManager) ValidateLogicInvoke(
+	op *common.IxOp, calleracc, logicacc *state.Object,
+) error {
 	if ms.validateLogicInvokeHook != nil {
 		return ms.validateLogicInvokeHook()
 	}
@@ -223,7 +254,10 @@ func (ms *MockExecutionManager) ValidateLogicInvoke(ix *common.Interaction, call
 	return nil
 }
 
-func (ms *MockExecutionManager) ValidateLogicEnlist(ix *common.Interaction, calleracc, logicacc *state.Object) error {
+func (ms *MockExecutionManager) ValidateLogicEnlist(
+	op *common.IxOp, calleracc, logicacc *state.Object,
+) error {
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -235,7 +269,7 @@ func NewMockExecutionManager(t *testing.T) *MockExecutionManager {
 	return exec
 }
 
-func (ms *MockExecutionManager) ValidateLogicDeploy(ix *common.Interaction) error {
+func (ms *MockExecutionManager) ValidateLogicDeploy(op *common.IxOp) error {
 	if ms.validateLogicDeployHook != nil {
 		return ms.validateLogicDeployHook()
 	}
@@ -329,27 +363,182 @@ func (p *saltedCachePusher) push() {
 
 func getIXParams(
 	address identifiers.Address,
-	ixType common.IxType,
+	ixType common.IxOpType,
 	fuelPrice *big.Int,
-	transferValues map[identifiers.AssetID]*big.Int,
+	actionPayload common.AssetActionPayload,
 	sign []byte,
 ) *tests.CreateIxParams {
 	return &tests.CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.Input.Type = ixType
-			ix.Input.Sender = address
-			ix.Input.FuelPrice = fuelPrice
-			ix.Input.FuelLimit = 1
-			ix.Input.TransferValues = transferValues
+			ix.Sender = address
+			ix.FuelPrice = fuelPrice
+			ix.FuelLimit = 1
+			ix.Funds = []common.IxFund{
+				{
+					AssetID: actionPayload.AssetID,
+					Amount:  actionPayload.Amount,
+				},
+			}
+			ix.IxOps = []common.IxOpRaw{
+				{
+					Type: ixType,
+					Payload: func() []byte {
+						payload, _ := actionPayload.Bytes()
+
+						return payload
+					}(),
+				},
+			}
+			ix.Participants = []common.IxParticipant{
+				{
+					Address:  address,
+					LockType: common.MutateLock,
+				},
+				{
+					Address:  actionPayload.Beneficiary,
+					LockType: common.MutateLock,
+				},
+			}
 		},
 		Sign: sign,
+	}
+}
+
+// getTransactionInfo determines and returns the relevant IxOpRaw, IxFund, and IxParticipant
+// based on the given ix type and payload.
+func getTransactionInfo(
+	t *testing.T, ixType common.IxOpType,
+	txPayload interface{},
+) (*common.IxOpRaw, *common.IxFund, *common.IxParticipant) {
+	t.Helper()
+
+	switch ixType {
+	case common.IxInvalid:
+		ixTransaction := &common.IxOpRaw{
+			Type: ixType,
+		}
+
+		return ixTransaction, nil, nil
+
+	case common.IxParticipantCreate:
+		payload, ok := txPayload.(common.ParticipantCreatePayload)
+		require.True(t, ok)
+
+		rawPayload, err := payload.Bytes()
+		require.NoError(t, err)
+
+		ixTransaction := &common.IxOpRaw{
+			Type:    ixType,
+			Payload: rawPayload,
+		}
+
+		ixParticipant := &common.IxParticipant{
+			Address:  payload.Address,
+			LockType: common.MutateLock,
+		}
+
+		return ixTransaction, nil, ixParticipant
+
+	case common.IxAssetTransfer:
+		payload, ok := txPayload.(common.AssetActionPayload)
+		require.True(t, ok)
+
+		rawPayload, err := payload.Bytes()
+		require.NoError(t, err)
+
+		ixTransaction := &common.IxOpRaw{
+			Type:    ixType,
+			Payload: rawPayload,
+		}
+
+		ixFund := &common.IxFund{
+			AssetID: payload.AssetID,
+			Amount:  payload.Amount,
+		}
+
+		ixParticipant := &common.IxParticipant{
+			Address:  payload.Beneficiary,
+			LockType: common.MutateLock,
+		}
+
+		return ixTransaction, ixFund, ixParticipant
+	case common.IxAssetCreate:
+		payload, ok := txPayload.(common.AssetCreatePayload)
+		require.True(t, ok)
+
+		rawPayload, err := payload.Bytes()
+		require.NoError(t, err)
+
+		ixTransaction := &common.IxOpRaw{
+			Type:    ixType,
+			Payload: rawPayload,
+		}
+
+		return ixTransaction, nil, nil
+	case common.IxAssetMint, common.IxAssetBurn:
+		payload, ok := txPayload.(common.AssetSupplyPayload)
+		require.True(t, ok)
+
+		rawPayload, err := payload.Bytes()
+		require.NoError(t, err)
+
+		ixTransaction := &common.IxOpRaw{
+			Type:    ixType,
+			Payload: rawPayload,
+		}
+
+		ixFund := &common.IxFund{
+			AssetID: payload.AssetID,
+			Amount:  payload.Amount,
+		}
+
+		ixParticipant := &common.IxParticipant{
+			Address:  payload.AssetID.Address(),
+			LockType: common.MutateLock,
+		}
+
+		return ixTransaction, ixFund, ixParticipant
+	case common.IxLogicDeploy:
+		payload, ok := txPayload.(common.LogicPayload)
+		require.True(t, ok)
+
+		rawPayload, err := payload.Bytes()
+		require.NoError(t, err)
+
+		ixTransaction := &common.IxOpRaw{
+			Type:    ixType,
+			Payload: rawPayload,
+		}
+
+		return ixTransaction, nil, nil
+	case common.IxLogicInvoke, common.IxLogicEnlist:
+		payload, ok := txPayload.(common.LogicPayload)
+		require.True(t, ok)
+
+		rawPayload, err := payload.Bytes()
+		require.NoError(t, err)
+
+		ixTransaction := &common.IxOpRaw{
+			Type:    ixType,
+			Payload: rawPayload,
+		}
+
+		ixParticipant := &common.IxParticipant{
+			Address:  payload.Logic.Address(),
+			LockType: common.MutateLock,
+		}
+
+		return ixTransaction, nil, ixParticipant
+	default:
+		panic(common.ErrInvalidInteractionType)
 	}
 }
 
 // newTestInteraction returns a new instance of types.Interaction with the input
 func newTestInteraction(
 	t *testing.T,
-	ixType common.IxType,
+	ixType common.IxOpType,
+	txPayload interface{},
 	nonce int,
 	address identifiers.Address,
 	cb func(ixData *common.IxData),
@@ -361,16 +550,30 @@ func newTestInteraction(
 	}
 
 	ixData := &common.IxData{
-		Input: common.IxInput{
-			Type:      ixType,
-			Sender:    address,
-			Nonce:     uint64(nonce),
-			FuelPrice: big.NewInt(1),
-			FuelLimit: 1,
-			TransferValues: map[identifiers.AssetID]*big.Int{
-				common.KMOITokenAssetID: big.NewInt(1),
+		Sender:    address,
+		Nonce:     uint64(nonce),
+		FuelPrice: big.NewInt(1),
+		FuelLimit: 1,
+		Funds:     []common.IxFund{},
+		IxOps:     []common.IxOpRaw{},
+		Participants: []common.IxParticipant{
+			{
+				Address:  address,
+				LockType: common.MutateLock,
 			},
 		},
+	}
+
+	ixTransaction, ixFund, ixParticipant := getTransactionInfo(t, ixType, txPayload)
+
+	ixData.IxOps = append(ixData.IxOps, *ixTransaction)
+
+	if ixFund != nil {
+		ixData.Funds = append(ixData.Funds, *ixFund)
+	}
+
+	if ixParticipant != nil {
+		ixData.Participants = append(ixData.Participants, *ixParticipant)
 	}
 
 	if cb != nil {
@@ -386,17 +589,44 @@ func newTestInteraction(
 // createTestIxs creates and returns multiple instances of types.Interactions based on the given range
 func createTestIxs(
 	t *testing.T,
-	ixType common.IxType,
 	startNonce int,
 	endNonce int,
 	address identifiers.Address,
-) common.Interactions {
+) []*common.Interaction {
 	t.Helper()
 
-	ixs := make(common.Interactions, 0)
+	ixs := make([]*common.Interaction, 0)
 
 	for nonce := startNonce; nonce < endNonce; nonce++ {
-		ixs = append(ixs, newTestInteraction(t, ixType, nonce, address, nil))
+		ixs = append(ixs, newTestInteraction(
+			t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
+			nonce, address, nil,
+		))
+	}
+
+	return ixs
+}
+
+// createTestIxs creates and returns multiple instances of types.Interactions based on the given range
+func createTestAssetTransferIxs(
+	t *testing.T,
+	startNonce int,
+	endNonce int,
+	address identifiers.Address,
+	sm *MockStateManager,
+) []*common.Interaction {
+	t.Helper()
+
+	ixs := make([]*common.Interaction, 0)
+
+	for nonce := startNonce; nonce < endNonce; nonce++ {
+		ben := tests.RandomAddress(t)
+		ixs = append(ixs, newTestInteraction(
+			t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, ben),
+			nonce, address, nil,
+		))
+
+		sm.registerAccounts(ben)
 	}
 
 	return ixs
@@ -406,14 +636,15 @@ func createTestIxs(
 func getTesseractWithIxs(t *testing.T, address identifiers.Address, nonce int) *common.Tesseract {
 	t.Helper()
 
-	ixns := common.Interactions{
-		newTestInteraction(t, common.IxValueTransfer, nonce, address, nil),
-	}
+	ixs := common.NewInteractionsWithLeaderCheck(false, newTestInteraction(
+		t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+		nonce, address, nil,
+	))
 
 	tsParams := &tests.CreateTesseractParams{
 		Addresses: []identifiers.Address{address},
 		Heights:   []uint64{0},
-		Ixns:      ixns,
+		Ixns:      ixs,
 	}
 
 	ts := tests.CreateTesseract(t, tsParams)
@@ -421,29 +652,26 @@ func getTesseractWithIxs(t *testing.T, address identifiers.Address, nonce int) *
 	return ts
 }
 
-// newIxWithoutAddress returns a new instance of types.Interaction without sender address
-func newIxWithoutAddress(t *testing.T, nonce int) *common.Interaction {
-	t.Helper()
-
-	return newTestInteraction(t, common.IxValueTransfer, nonce, identifiers.NilAddress, func(ixData *common.IxData) {
-		ixData.Input.Sender = identifiers.NilAddress
-	})
-}
-
 // newIxWithFuelPrice returns a new instance of types.Interaction with the given fuelPrice
 func newIxWithFuelPrice(t *testing.T, nonce int, address identifiers.Address, fuelPrice int64) *common.Interaction {
 	t.Helper()
 
-	return newTestInteraction(t, common.IxValueTransfer, nonce, address, func(ixData *common.IxData) {
-		ixData.Input.FuelPrice = big.NewInt(fuelPrice)
-	})
+	return newTestInteraction(
+		t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+		nonce, address, func(ixData *common.IxData) {
+			ixData.FuelPrice = big.NewInt(fuelPrice)
+		},
+	)
 }
 
 // newIxWithWaitCounter returns a new instance of WaitInteractions with the given waitCounter and new interaction
 func newIxWithWaitCounter(t *testing.T, nonce int, address identifiers.Address, waitCounter int32) *WaitInteractions {
 	t.Helper()
 
-	ix := newTestInteraction(t, common.IxValueTransfer, nonce, address, nil)
+	ix := newTestInteraction(
+		t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
+		nonce, address, nil,
+	)
 
 	return &WaitInteractions{waitCounter, ix}
 }
@@ -451,35 +679,40 @@ func newIxWithWaitCounter(t *testing.T, nonce int, address identifiers.Address, 
 // newIxWithPayload returns a new instance of types.Interaction with the given payload
 func newIxWithPayload(
 	t *testing.T,
-	ixType common.IxType,
+	ixType common.IxOpType,
 	nonce int,
 	address identifiers.Address,
 	payload []byte,
 ) *common.Interaction {
 	t.Helper()
 
-	return newTestInteraction(t, ixType, nonce, address, func(ixData *common.IxData) {
-		ixData.Input.Payload = payload
+	return newTestInteraction(t, common.IxInvalid, nil, nonce, address, func(ixData *common.IxData) {
+		ixData.IxOps = []common.IxOpRaw{
+			{
+				Type:    ixType,
+				Payload: payload,
+			},
+		}
 	})
 }
 
 // addAndProcessIxs enqueues and promotes the ixs based on nonce
-func addAndProcessIxs(t *testing.T, sm *MockStateManager, ixPool *IxPool, ixs common.Interactions) {
+func addAndProcessIxs(t *testing.T, sm *MockStateManager, ixPool *IxPool, ixs ...*common.Interaction) {
 	t.Helper()
 
 	for _, v := range ixs {
 		sm.setTestMOIBalance(t, v.Sender())
 	}
 
-	errs := ixPool.AddLocalInteractions(ixs)
+	errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(false, ixs...))
 	require.Len(t, errs, 0)
 }
 
 // mintIxs mints and returns the interactions from the interactionQueue
-func mintIxs(t *testing.T, ixPool *IxPool) common.Interactions {
+func mintIxs(t *testing.T, ixPool *IxPool) []*common.Interaction {
 	t.Helper()
 
-	mintedIxs := make(common.Interactions, 0)
+	mintedIxs := make([]*common.Interaction, 0)
 
 	interactionQueue := ixPool.Executables()
 
@@ -495,10 +728,10 @@ func mintIxs(t *testing.T, ixPool *IxPool) common.Interactions {
 }
 
 // getSuccessfulIxs mints and returns the expected number of interactions from the interactionQueue
-func getSuccessfulIxs(t *testing.T, ixPool *IxPool, noOfExpectedIxs int) common.Interactions {
+func getSuccessfulIxs(t *testing.T, ixPool *IxPool, noOfExpectedIxs int) []*common.Interaction {
 	t.Helper()
 
-	successfulIxs := make(common.Interactions, 0)
+	successfulIxs := make([]*common.Interaction, 0)
 
 	for len(successfulIxs) < noOfExpectedIxs {
 		successfulIxs = append(successfulIxs, mintIxs(t, ixPool)...)
@@ -518,7 +751,7 @@ func setDelayCounter(t *testing.T, acc *account, delayCount int32) {
 }
 
 // getIxNonce returns a map of ix sender address to nonce
-func getIxNonce(t *testing.T, ixs common.Interactions) map[identifiers.Address]uint64 {
+func getIxNonce(t *testing.T, ixs []*common.Interaction) map[identifiers.Address]uint64 {
 	t.Helper()
 
 	ixNonce := make(map[identifiers.Address]uint64)
@@ -559,5 +792,66 @@ func benchmarkDigestCache(b *testing.B, m cacheMaker, numThreads int) {
 			}
 		}()
 	}
+
 	wg.Wait()
+}
+
+type CreateBatch struct {
+	ixnCount int
+	psCount  int
+}
+
+type CreateBatches struct {
+	batchCount int
+	batch      CreateBatch
+}
+
+func addBatch(t *testing.T, registry *IxBatchRegistry, ixnCount int, psCount int) {
+	t.Helper()
+
+	ix := tests.CreateIX(t, &tests.CreateIxParams{
+		IxDataCallback: func(ix *common.IxData) {
+			ix.IxOps = []common.IxOpRaw{
+				{
+					Type:    common.IxAssetTransfer,
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+				},
+			}
+
+			for i := 0; i < psCount-2; i++ {
+				ix.Participants = append(ix.Participants, common.IxParticipant{
+					Address: tests.RandomAddress(t),
+				})
+			}
+		},
+	})
+
+	for i := 0; i < ixnCount; i++ {
+		registry.addIx(ix)
+	}
+}
+
+func addBatches(t *testing.T, registry *IxBatchRegistry, batchesList []CreateBatches) {
+	t.Helper()
+
+	for _, batches := range batchesList {
+		for i := 0; i < batches.batchCount; i++ {
+			addBatch(t, registry, batches.batch.ixnCount, batches.batch.psCount)
+		}
+	}
+}
+
+func insertIxnsInPromotedQueue(ixPool *IxPool, input []*common.Interaction) {
+	for _, ix := range input {
+		acc := ixPool.accounts.initOnce(ix.Sender(), 0)
+		acc.promoted.push(ix)
+	}
+}
+
+func validateAllocatedView(t *testing.T, allocatedView uint64, currentView uint64, nodePos uint64) {
+	t.Helper()
+
+	require.Equal(t, nodePos, allocatedView%TotalContextNodes)
+	require.GreaterOrEqual(t, allocatedView, currentView)
+	require.Less(t, allocatedView, currentView+TotalContextNodes)
 }

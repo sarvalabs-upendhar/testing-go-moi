@@ -22,7 +22,7 @@ type Peer struct {
 	kramaID   kramaid.KramaID  // Represents the KramaID of the peer
 	networkID peer.ID          // Represents the libp2p-peer-id of the peer
 	stream    network.Stream   // Represents peer's stream
-	rtt       int64            // Represents the Round trip time of the peer
+	rtt       int64            // Represents the View trip time of the peer
 	rw        bufio.ReadWriter // Represents the peer's read/write buffer
 	knownIXs  mapset.Set       // Represents the set of interactions known to the peer
 	logger    hclog.Logger
@@ -137,10 +137,10 @@ func (p *Peer) InitHandshake(s *Server) error {
 	return nil
 }
 
-// SendIXs ships the ixn to the peer and  marks as know
+// SendIXs ships the ixn to the peer and marks as know
 func (p *Peer) SendIXs(id kramaid.KramaID, ixs common.Interactions) error {
 	// Mark the given Interactions as 'known'
-	for _, ix := range ixs {
+	for _, ix := range ixs.IxList() {
 		p.markInteraction(ix.Hash())
 	}
 

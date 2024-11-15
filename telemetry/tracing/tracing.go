@@ -53,6 +53,8 @@ func buildExporters(ctx context.Context, otlpAddress, token string) ([]trace.Spa
 		otlpExporterOpts = append(otlpExporterOpts, otlptracehttp.WithHeaders(map[string]string{
 			"Authorization": fmt.Sprintf("Bearer %s", token),
 		}))
+	} else {
+		otlpExporterOpts = append(otlpExporterOpts, otlptracehttp.WithInsecure())
 	}
 
 	otlpExporter, err := otlptracehttp.New(ctx, otlpExporterOpts...)

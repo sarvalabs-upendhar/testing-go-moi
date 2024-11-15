@@ -1,0 +1,605 @@
+package consensus
+
+import (
+	"bytes"
+	"context"
+	"sort"
+	"time"
+
+	"github.com/pkg/errors"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/consensus/kbft"
+	ktypes "github.com/sarvalabs/go-moi/consensus/types"
+	"github.com/sarvalabs/go-moi/crypto"
+)
+
+// icsHandler is the main handler for ICS Cluster.It handles the timeout events and messages
+func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
+	slot := k.slots.GetSlot(clusterID)
+	cs := slot.ClusterState()
+
+	k.metrics.captureActiveICSClusters(1)
+
+	k.metrics.captureSlotCount(int(slot.SlotType), 1)
+
+	defer func() {
+		// signal the core handler to close the slot
+		k.metrics.captureActiveICSClusters(-1)
+		k.metrics.captureSlotCount(int(slot.SlotType), -1)
+
+		k.closeICS(clusterID)
+	}()
+
+	for {
+		select {
+		case <-time.After(k.viewTimeOutDuration.Load().(time.Duration)): //nolint
+			// we should handle this time out if bft is not started
+			if slot.Stage.Load() == 0 {
+				if slot.SlotType == ktypes.OperatorSlot {
+					k.metrics.captureICSCreationFailureCount(1)
+				}
+
+				return
+			}
+
+		case msg := <-slot.BftOutboundChan:
+			k.handleOutboundMessage(ctx, slot.ClusterID(), msg)
+		case <-slot.NewICSChan:
+			if err := k.sendPrepare(ctx, cs); err != nil {
+				k.logger.Error("failed to send prepare msg", "error", err, "cluster-id", clusterID)
+
+				return
+			}
+		case err := <-slot.BftStopChan:
+			if err != nil {
+				k.logger.Error("error occurred in bft", "cluster-id", clusterID)
+
+				k.metrics.captureAgreementFailureCount(1)
+			}
+
+			return
+		case msg := <-slot.Msgs:
+			cMsg := msg.Payload
+
+			switch m := cMsg.(type) {
+			case *ktypes.Prepared:
+				if err := k.handlePrepared(ctx, clusterID, m, msg.PeerID); err != nil {
+					k.logger.Error("failed to handle prepared msg", "error", err)
+				}
+
+			case *ktypes.Proposal:
+				if slot.SlotType == ktypes.ValidatorSlot {
+					if err := k.handleProposal(ctx, slot.ClusterState(), m); err != nil {
+						k.logger.Error("failed to handle proposal msg", "error", err)
+
+						return
+					}
+				}
+
+				slot.Stage.CompareAndSwap(0, 1)
+
+				// Start the BFT handler
+				icsEvidence := kbft.NewEvidence(cs.IxnHash(), cs.Operator(), cs.Size())
+				bft := kbft.NewKBFTService( //nolint
+					ctx,
+					msg.PeerID,
+					k.viewTimeOutDuration.Load().(time.Duration),
+					k.cfg,
+					k.vault, cs.VoteSet(), slot, k.safety, k.finalizedTesseractHandler,
+					kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
+					kbft.WithWal(kbft.NullWal{}),
+					kbft.WithEvidence(icsEvidence))
+
+				go k.startBFT(bft)
+
+				slot.ForwardMsgToKBFTHandler(msg)
+
+			default:
+				slot.ForwardMsgToKBFTHandler(msg)
+			}
+		}
+	}
+}
+
+func (k *Engine) startBFT(bft *kbft.KBFT) {
+	agreementInitTime := time.Now()
+
+	bft.Start()
+
+	k.metrics.captureAgreementTime(agreementInitTime)
+}
+
+// handleOutboundMessage processes the outbound vote messages.
+func (k *Engine) handleOutboundMessage(
+	ctx context.Context,
+	clusterID common.ClusterID,
+	msg ktypes.ConsensusMessage,
+) {
+	icsMsg, err := msg.ICSMsg(clusterID)
+	if err != nil {
+		k.logger.Error(
+			"failed to create ICS msg from consensus msg",
+			"krama-id", msg.Recipient,
+			"error",
+			err)
+
+		return
+	}
+
+	k.logger.Debug("Handling outbound message", "cluster-id", clusterID,
+		"recipient", msg.Recipient, "msg-type", icsMsg.MsgType)
+
+	// we should broadcast the message if the recipient is empty
+	if msg.Recipient == "" {
+		k.transport.BroadcastMessage(ctx, icsMsg)
+	}
+
+	if err = k.transport.SendMessage(ctx, msg.Recipient, icsMsg); err != nil {
+		k.logger.Error("failed to send message to peer", "krama-id", msg.Recipient)
+	}
+}
+
+// handleProposal processes a proposal message by validating its aggregated signature,
+// verifying quorum conditions, validating the highest QC, and executing the tesseract.
+/*
+	- validate aggregated signature
+	- verify quorum conditions
+	- verify highest Qc
+	- validate tesseract
+*/
+func (k *Engine) handleProposal(ctx context.Context, cs *ktypes.ClusterState, proposal *ktypes.Proposal) error {
+	k.logger.Debug("Handling proposal", "cluster-id", cs.ClusterID, "view", proposal.View())
+
+	initTime := time.Now()
+	defer k.metrics.captureProposalValidationTime(initTime)
+
+	trueIndices := proposal.PrepareQc.SignerIndices.GetTrueIndices()
+	rawPreparedMsgs := make([][]byte, 0, len(trueIndices))
+
+	for _, index := range trueIndices {
+		view := proposal.PrepareQc.PeerViews[index]
+		if view == nil {
+			continue
+		}
+
+		pm := &ktypes.Prepared{
+			View:  proposal.View(),
+			Infos: proposal.PrepareQc.PeerViews[index],
+		}
+
+		rawData, err := pm.SignBytes()
+		if err != nil {
+			return err
+		}
+
+		rawPreparedMsgs = append(rawPreparedMsgs, rawData)
+	}
+
+	publicKeys, err := cs.Committee().UpdateValidatorResponse(trueIndices)
+	if err != nil {
+		return errors.Wrap(err, "failed to update node responses")
+	}
+
+	if !cs.IsContextQuorum() {
+		return common.ErrContextQuorumFailed
+	}
+
+	if !cs.IsRandomQuorum() {
+		return common.ErrRandomQuorumFailed
+	}
+
+	verified, err := crypto.VerifyMultiSig(proposal.PrepareQc.Signature, rawPreparedMsgs, publicKeys)
+	if err != nil {
+		return errors.Wrap(err, "failed to verify prepare QC")
+	}
+
+	if !verified {
+		return errors.Wrap(common.ErrSignatureVerificationFailed, "failed to verify prepare QC")
+	}
+
+	for peerIndex, info := range proposal.PrepareQc.PeerViews {
+		_, _, peerID, _ := cs.Committee().GetKramaID(int32(peerIndex))
+		if err = k.updateHighestVI(cs, info, peerID); err != nil {
+			k.logger.Error("failed to validate highest QC", "error", err)
+		}
+	}
+
+	// create a transition object with latest participant objects
+	transition, err := k.state.LoadTransitionObjects(proposal.Ixs().Participants())
+	if err != nil {
+		return errors.Wrap(err, "failed to load transition objects")
+	}
+
+	if err = k.ExecuteAndValidate(proposal.Tesseract, transition); err != nil {
+		return err
+	}
+
+	cs.SetStateTransition(transition)
+
+	return nil
+}
+
+/*
+- Validate the viewID
+- Validate the BLS signature of the prepareQc
+- Update the highest view info by validating the peer info view and qc
+- If Quorum conditions are met, execute the interactions and start the BFT system
+*/
+func (k *Engine) handlePrepared(
+	ctx context.Context,
+	clusterID common.ClusterID,
+	msg *ktypes.Prepared,
+	sender kramaid.KramaID,
+) error {
+	k.logger.Debug("Handling prepared", "cluster-id", clusterID, "sender", sender)
+
+	if k.view.Load() != msg.View {
+		// leader view and the local view should match
+		return errors.New("invalid view")
+	}
+
+	slot := k.slots.GetSlot(clusterID)
+	cs := k.slots.GetSlot(clusterID).ClusterState()
+
+	valIndex, publicKey, conflictingVote := cs.HasKramaID(sender)
+	if conflictingVote {
+		return common.ErrConflictingVote
+	}
+
+	if valIndex == -1 {
+		return common.ErrPublicKeyNotFound
+	}
+
+	signBytes, err := msg.SignBytes()
+	if err != nil {
+		return err
+	}
+
+	verified, err := crypto.Verify(signBytes, msg.Signature, publicKey)
+	if !verified || err != nil {
+		return common.ErrSignatureVerificationFailed
+	}
+
+	if err = k.updateHighestVI(cs, msg.Infos, sender); err != nil {
+		return errors.Wrap(err, "failed to update highest view info")
+	}
+
+	// save the view info sent by the peer
+	cs.Committee().UpdateNodePreparedMsg(sender, msg)
+
+	if !cs.IsContextQuorum() || !cs.IsRandomQuorum() {
+		return nil
+	}
+
+	swapped := slot.Stage.CompareAndSwap(0, 1)
+
+	if !swapped {
+		return nil
+	}
+
+	localVI := slot.ClusterState().LocalViewInfo()
+
+	lockedTS := make(map[identifiers.Address]*common.Tesseract)
+
+	for index, highestVI := range slot.ClusterState().HighestViewInfo() {
+		// Qc will be NIL for new accounts
+		if highestVI.Qc == nil && localVI[index].Qc == nil {
+			continue
+		}
+
+		highestViewTS, err := k.getTS(highestVI.Qc[0].TSHash, "")
+		if err != nil {
+			k.logger.Error("failed to load highest view tesseract", "ts-hash", highestVI.Qc[0].TSHash)
+
+			return err
+		}
+
+		currentViewTS, err := k.getTS(localVI[index].Qc[0].TSHash, "")
+		if err != nil {
+			k.logger.Error("failed to load local view tesseract", "ts-hash", localVI[index].Qc[0].TSHash)
+
+			return err
+		}
+
+		heightDiff := highestViewTS.Height(highestVI.Addr) - currentViewTS.Height(highestVI.Addr)
+
+		if heightDiff == 0 {
+			continue
+		}
+
+		if heightDiff > 1 {
+			// TODO: Trigger sync
+			return nil
+		}
+
+		if highestVI.Qc[0].Type == common.PRECOMMIT {
+			return nil // TODO: Trigger sync
+		}
+
+		if highestVI.Qc[0].Type == common.PREVOTE {
+			lockedTS[highestVI.Qc[0].Address] = highestViewTS
+
+			continue
+		}
+	}
+
+	ts, err := k.createProposalTS(lockedTS, slot.ClusterState())
+	if err != nil {
+		k.logger.Error("Error creating proposal", "error", err)
+
+		return err
+	}
+
+	prepareQc, err := k.createPrepareQc(ctx, slot.ClusterState())
+	if err != nil {
+		return err
+	}
+
+	// update the cluster state with prepareQC and tesseract
+	cs.SetPrepareQc(prepareQc)
+	cs.SetTesseract(ts)
+
+	k.metrics.captureICSCreationTime(slot.InitTime)
+
+	// Start the BFT system
+	bft := kbft.NewKBFTService( //nolint
+		ctx,
+		k.selfID,
+		k.viewTimeOutDuration.Load().(time.Duration),
+		k.cfg,
+		k.vault, cs.VoteSet(), slot, k.safety, k.finalizedTesseractHandler,
+		kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
+		kbft.WithWal(kbft.NullWal{}),
+		kbft.WithEvidence(kbft.NewEvidence(cs.IxnHash(), cs.Operator(), cs.Size())))
+
+	go k.startBFT(bft)
+
+	return nil
+}
+
+func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error {
+	k.logger.Debug(
+		"send prepare",
+		"ix-Hash", cs.Ixns().Hashes(),
+		"cluster-id", cs.ClusterID,
+		"address", cs.Participants.Addrs(),
+	)
+
+	prepareMsg := &ktypes.Prepare{
+		View: cs.CurrentView(),
+		Ixns: cs.Ixns().Hashes(),
+		Ps:   cs.Participants.Addrs(),
+	}
+
+	if k.trustedPeersPresent {
+		// Choose 5 trusted nodes, as a maximum of 3 nodes are required while updating the context
+		cs.TrustedPeers = k.getTrustedPeers(5)
+	}
+
+	// choose the stochastic nodes using flux
+	contextNodes, _, _ := ktypes.DistinctNodes(k.selfID, cs.Committee().Sets)
+
+	stochasticNodes, err := k.getStochasticNodes(ctx, StochasticSetSize, contextNodes)
+	if err != nil {
+		return errors.Wrap(err, "unable to retrieve random nodes")
+	}
+
+	publicKeys, err := k.state.GetPublicKeys(context.Background(), stochasticNodes...)
+	if err != nil {
+		return errors.Wrap(err, "failed to fetch the public key of random nodes.")
+	}
+
+	// update the committee with the stochastic node set
+	cs.UpdateNodeSet(
+		cs.Committee().StochasticSetPosition(),
+		ktypes.NewNodeSet(stochasticNodes, publicKeys, uint32(StochasticSetSize)),
+	)
+
+	failedCount, err := k.sendPrepareMsg(ctx, cs.ClusterID, prepareMsg, cs.Committee())
+	if err != nil {
+		return nil
+	}
+
+	k.logger.Error("failed to send prepare msg", "count", failedCount)
+
+	return nil
+}
+
+func (k *Engine) loadViewInfo(ps []identifiers.Address) ([]*common.ViewInfo, error) {
+	infos := make([]*common.ViewInfo, 0, len(ps))
+
+	for _, addr := range ps {
+		isRegistered, err := k.state.IsAccountRegistered(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		if !isRegistered {
+			infos = append(infos, &common.ViewInfo{
+				Addr:        addr,
+				LastView:    0,
+				CurrentLock: k.accountLockStatus(addr),
+				Qc:          nil,
+			})
+
+			continue
+		}
+
+		safetyData, err := k.safety.GetLatestSafetyInfo(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		infos = append(infos, &common.ViewInfo{
+			Addr:        addr,
+			LastView:    safetyData.LastView(),
+			CurrentLock: k.accountLockStatus(addr),
+			Qc:          safetyData.Qc,
+		})
+	}
+
+	sort.Slice(infos, func(i, j int) bool {
+		return bytes.Compare(infos[i].Addr.Bytes(), infos[j].Addr.Bytes()) < 0
+	})
+
+	return infos, nil
+}
+
+func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID kramaid.KramaID) error {
+	k.logger.Debug(
+		"validating peer qc",
+		"peer-id", peerID,
+		"addr", remote.Addr,
+	)
+
+	for _, qc := range remote.Qc {
+		if qc.View == common.GenesisView {
+			continue
+		}
+
+		k.logger.Debug(
+			"validating qc",
+			"view", qc.View,
+			"addr", qc.Address,
+			"type", qc.Type,
+			"signers", qc.SignerIndices.String(),
+			"peer-id", peerID,
+			"signature", qc.Signature,
+		)
+
+		ts, err := k.getTS(qc.TSHash, peerID)
+		if err != nil {
+			return err
+		}
+
+		ics, err := k.GetICSCommittee(ts, ts.CommitInfo())
+		if err != nil {
+			return err
+		}
+
+		isVerified, err := k.verifyQc(ts.Addresses(), ts.Participants(), qc.View, ics, qc)
+		if err != nil {
+			return errors.Wrap(err, "failed to verify QC")
+		}
+
+		if !isVerified {
+			return common.ErrSignatureVerificationFailed
+		}
+	}
+
+	return nil
+}
+
+// updateHighestVI updates the highest view info by validating the peer info view and qc.
+func (k *Engine) updateHighestVI(cs *ktypes.ClusterState, peerInfo common.Views, peerID kramaid.KramaID) error {
+	for i, viewInfo := range cs.HighestViewInfo() {
+		if len(peerInfo) <= i {
+			return nil
+		}
+
+		// check if peer viewID is greater than our viewID
+		if peerInfo[i].LastView <= viewInfo.LastView {
+			continue
+		}
+
+		if peerInfo[i].Addr != viewInfo.Addr {
+			return errors.New("View Order doesn't match")
+		}
+
+		// verify the bls signature of the QC
+		if err := k.validatePeerHighestQc(viewInfo, peerID); err != nil {
+			return err
+		}
+
+		cs.HighestViewInfo()[i] = peerInfo[i]
+	}
+
+	return nil
+}
+
+// createPrepareQc creates a prepareQC by aggregating all PreparedMsg sent by the replicas.
+func (k *Engine) createPrepareQc(
+	ctx context.Context,
+	cs *ktypes.ClusterState,
+) (*ktypes.PreparedInfo, error) {
+	initTime := time.Now()
+	defer k.metrics.capturePrepareQCSigAggregationTime(initTime)
+
+	infos, signatures := cs.Committee().ViewInfosAndSignatures()
+
+	aggSign, err := crypto.AggregateSignatures(signatures)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ktypes.PreparedInfo{
+		View:          cs.CurrentView(),
+		PeerViews:     infos,
+		SignerIndices: cs.Committee().GetVoteset(),
+		Signature:     aggSign,
+	}, nil
+}
+
+func (k *Engine) createNewTSFromLockedTS(cs *ktypes.ClusterState, ts *common.Tesseract) (*common.Tesseract, error) {
+	return common.NewTesseract(
+		ts.Participants(),
+		ts.InteractionsHash(),
+		ts.ReceiptsHash(),
+		ts.Epoch(),
+		ts.Timestamp(),
+		ts.FuelUsed(),
+		ts.FuelLimit(),
+		ts.ConsensusInfo(),
+		nil,
+		cs.SelfKramaID(),
+		ts.Interactions(),
+		ts.Receipts(),
+		&common.CommitInfo{
+			Operator:                  cs.SelfKramaID(),
+			ClusterID:                 cs.ClusterID,
+			View:                      cs.CurrentView(),
+			RandomSet:                 cs.GetRandomNodes(),
+			RandomSetSizeWithoutDelta: cs.Committee().RandomSetSizeWithOutDelta(),
+		}), nil
+}
+
+// createProposalTS either creates a proposal tesseract from the locked tesseract
+// or creates a new tesseract by executing the interactions.
+func (k *Engine) createProposalTS(
+	lockedTS map[identifiers.Address]*common.Tesseract,
+	cs *ktypes.ClusterState,
+) (*common.Tesseract, error) {
+	var lockTS *common.Tesseract
+
+	for addr, ts := range lockedTS {
+		if ts.InteractionsHash() != cs.IxnHash() {
+			k.logger.Error(
+				"Ixns hash doesn't match with locked tesseract",
+				"addr", addr,
+				"locked-ts", ts.Hash(),
+				"ixns-hash", cs.IxnHash(),
+			)
+
+			return nil, errors.New("ts lock mismatch")
+		}
+
+		lockTS = ts
+	}
+
+	if len(lockedTS) == 0 {
+		return k.createProposalTesseract(cs)
+	}
+
+	return k.createNewTSFromLockedTS(cs, lockTS)
+}
+
+func (k *Engine) accountLockStatus(addr identifiers.Address) common.LockType {
+	info, ok := k.accountLocks[addr]
+	if !ok {
+		return common.NoLock
+	}
+
+	return info.LockType
+}

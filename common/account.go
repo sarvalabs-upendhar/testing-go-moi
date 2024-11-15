@@ -11,9 +11,9 @@ type AccountType int
 
 const (
 	SargaAccount AccountType = iota + 1
-	RegularAccount
 	LogicAccount
 	AssetAccount
+	RegularAccount
 )
 
 type Account struct {
@@ -57,12 +57,14 @@ func (acc *Accounts) Bytes() ([]byte, error) {
 }
 
 type AccountMetaInfo struct {
-	Type          AccountType         `json:"type"`
-	Address       identifiers.Address `json:"address"`
-	Height        uint64              `json:"height"`
-	TesseractHash Hash                `json:"tesseract_hash"`
-	StateHash     Hash                `json:"state_hash"`
-	ContextHash   Hash                `json:"context_hash"`
+	Type                 AccountType         `json:"type"`
+	Address              identifiers.Address `json:"address"`
+	Height               uint64              `json:"height"`
+	TesseractHash        Hash                `json:"tesseract_hash"`
+	StateHash            Hash                `json:"state_hash"`
+	ContextHash          Hash                `json:"context_hash"`
+	CommitHash           Hash                `json:"commit_hash"`
+	PositionInContextSet int                 `json:"position"`
 }
 
 func (ami *AccountMetaInfo) Bytes() ([]byte, error) {
@@ -102,15 +104,4 @@ func (agi *AccountGenesisInfo) FromBytes(bytes []byte) error {
 	}
 
 	return nil
-}
-
-func AccTypeFromIxType(ixType IxType) AccountType {
-	switch ixType {
-	case IxAssetCreate:
-		return AssetAccount
-	case IxLogicDeploy:
-		return LogicAccount
-	default:
-		return RegularAccount
-	}
 }

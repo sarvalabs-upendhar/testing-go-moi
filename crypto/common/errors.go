@@ -31,4 +31,5 @@ var (
 	ErrMnemonicKeystorePasswordAndPathMandatory = errors.New("both `Mnemonic keystore password` and " +
 		"`Mnemonic keystore path` cannot be empty in `user/register` mode")
 	ErrSignOptionsNotPassed = errors.New("pass IgcPath through signOptions inorder to sign using ECDSA")
+	ErrNotSameLength        = errors.New("messages array length should match with public keys")
 )

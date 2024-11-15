@@ -3,9 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
-	crand "crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"log"
 	"math/big"
@@ -26,15 +24,11 @@ import (
 	"github.com/libp2p/go-libp2p/core/protocol"
 	libp2pTest "github.com/libp2p/go-libp2p/core/test"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-polo"
-
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/crypto"
@@ -171,6 +165,7 @@ func (c *MockChainManager) GetLatestTesseract(addr identifiers.Address, withIxns
 func (c *MockChainManager) GetTesseract(
 	hash common.Hash,
 	withInteractions bool,
+	withCommitInfo bool,
 ) (*common.Tesseract, error) {
 	ts, ok := c.tesseractsByHash[hash]
 	if !ok {
@@ -181,6 +176,10 @@ func (c *MockChainManager) GetTesseract(
 
 	if !withInteractions {
 		tsCopy = *tsCopy.GetTesseractWithoutIxns()
+	}
+
+	if !withCommitInfo {
+		tsCopy = *tsCopy.GetTesseractWithoutCommitInfo()
 	}
 
 	return &tsCopy, nil
@@ -611,7 +610,7 @@ func (mc *MockIxPool) AddLocalInteractions(ixs common.Interactions) []error {
 		return mc.addInteractionHook()
 	}
 
-	for _, ix := range ixs {
+	for _, ix := range ixs.IxList() {
 		mc.interactions[ix.Hash()] = ix
 	}
 
@@ -631,7 +630,7 @@ func (mc *MockIxPool) GetIxs(addr identifiers.Address, inclQueued bool) (promote
 		return mc.pending[addr], mc.queued[addr]
 	}
 
-	return mc.pending[addr], common.Interactions{}
+	return mc.pending[addr], []*common.Interaction{}
 }
 
 func (mc *MockIxPool) GetAllIxs(inclQueued bool) (promoted, enqueued map[identifiers.Address][]*common.Interaction) {
@@ -978,94 +977,6 @@ func createNodeMetaInfo(t *testing.T, count int) ([]peer.ID, map[peer.ID]*senatu
 	return peerIDs, nodeMetaInfo
 }
 
-func GenerateRandomIXPayload(t *testing.T, size uint32) []byte {
-	t.Helper()
-
-	randomBytes := make([]byte, size)
-	_, err := crand.Read(randomBytes)
-	assert.NoError(t, err)
-
-	return randomBytes
-}
-
-func GetTestLogicDeployPayload(
-	t *testing.T,
-	nonce uint64,
-	address identifiers.Address,
-	callback func(args *rpcargs.RPCLogicPayload),
-) ([]byte, []byte) {
-	t.Helper()
-
-	logicArgs := &rpcargs.RPCLogicPayload{
-		Manifest: hexutil.Bytes([]byte{0x00, 0x01}),
-		Calldata: hexutil.Bytes(GenerateRandomIXPayload(t, 20)),
-	}
-
-	if callback != nil {
-		callback(logicArgs)
-	}
-
-	rawJSON, err := json.Marshal(logicArgs)
-	require.NoError(t, err)
-
-	deployPayload := &common.LogicPayload{
-		Calldata: logicArgs.Calldata.Bytes(),
-		Manifest: logicArgs.Manifest.Bytes(),
-	}
-
-	rawPolo, err := polo.Polorize(deployPayload)
-	require.NoError(t, err)
-
-	return rawJSON, rawPolo
-}
-
-func GetTestIxCreationPayload(t *testing.T, callBack func(args *rpcargs.RPCAssetCreation)) ([]byte, []byte) {
-	t.Helper()
-
-	payloadArgs := &rpcargs.RPCAssetCreation{
-		Symbol: "rahul",
-		Supply: (*hexutil.Big)(big.NewInt(78)),
-	}
-
-	if callBack != nil {
-		callBack(payloadArgs)
-	}
-
-	jsonRaw, err := json.Marshal(payloadArgs)
-	assert.NoError(t, err)
-
-	createPayload := &common.AssetCreatePayload{
-		Symbol:     payloadArgs.Symbol,
-		IsLogical:  payloadArgs.IsLogical,
-		IsStateFul: payloadArgs.IsStateful,
-	}
-
-	if payloadArgs.Logic != nil {
-		createPayload.LogicPayload = payloadArgs.Logic.LogicPayload()
-	}
-
-	if payloadArgs.Standard != nil {
-		createPayload.Standard = common.AssetStandard(payloadArgs.Standard.ToInt())
-	}
-
-	if payloadArgs.Supply != nil {
-		createPayload.Supply = payloadArgs.Supply.ToInt()
-	}
-
-	if payloadArgs.Dimension != nil {
-		createPayload.Dimension = payloadArgs.Dimension.ToInt()
-	}
-
-	assetPayload := &common.AssetPayload{
-		Create: createPayload,
-	}
-
-	poloRaw, err := polo.Polorize(assetPayload)
-	assert.NoError(t, err)
-
-	return jsonRaw, poloRaw
-}
-
 func getTesseractsHashes(t *testing.T, tesseracts []*common.Tesseract) []common.Hash {
 	t.Helper()
 
@@ -1120,10 +1031,10 @@ func getContext(t *testing.T, count int) *Context {
 	}
 }
 
-func getSignatureString(t *testing.T, sendIXArgs *common.SendIXArgs, mnemonic string) string {
+func getSignatureString(t *testing.T, ixData *common.IxData, mnemonic string) string {
 	t.Helper()
 
-	bz, err := sendIXArgs.Bytes()
+	bz, err := ixData.Bytes()
 	require.NoError(t, err)
 
 	sign, err := crypto.GetSignature(bz, mnemonic)
@@ -1132,10 +1043,10 @@ func getSignatureString(t *testing.T, sendIXArgs *common.SendIXArgs, mnemonic st
 	return sign
 }
 
-func getSignatureBytes(t *testing.T, sendIXArgs *common.SendIXArgs, mnemonic string) []byte {
+func getSignatureBytes(t *testing.T, ixData *common.IxData, mnemonic string) []byte {
 	t.Helper()
 
-	sign := getSignatureString(t, sendIXArgs, mnemonic)
+	sign := getSignatureString(t, ixData, mnemonic)
 
 	signBytes, err := hex.DecodeString(sign)
 	require.NoError(t, err)
@@ -1157,20 +1068,30 @@ func checkForContext(
 
 func newTestInteraction(
 	t *testing.T,
-	ixType common.IxType,
+	ixType common.IxOpType,
 	callback func(ixData *common.IxData),
 ) *common.Interaction {
 	t.Helper()
 
 	ixData := &common.IxData{
-		Input: common.IxInput{
-			Type:      ixType,
-			FuelLimit: 10000,
+		FuelLimit: 10000,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    ixType,
+				Payload: tests.CreateTxPayload(t, ixType, tests.RandomAddress(t)),
+			},
 		},
 	}
 
 	if callback != nil {
 		callback(ixData)
+	}
+
+	ixData.Participants = []common.IxParticipant{
+		{
+			Address:  ixData.Sender,
+			LockType: common.MutateLock,
+		},
 	}
 
 	ix, err := common.NewInteraction(*ixData, nil)

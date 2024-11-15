@@ -997,18 +997,23 @@ func (tn *TestSingleNode) TestInfo() {
 func (tn *TestSingleNode) TestSendInteraction() {
 	testcases := []struct {
 		name          string
-		ixPoolArgs    *common.SendIXArgs
+		ixPoolArgs    *common.IxData
 		expectedError error
 	}{
 		{
 			name: "invalid account",
-			ixPoolArgs: &common.SendIXArgs{
-				Type:      common.IxValueTransfer,
+			ixPoolArgs: &common.IxData{
 				Sender:    tests.RandomAddress(tn.T()),
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 200,
+				IxOps: []common.IxOpRaw{
+					{
+						Type:    common.IxAssetTransfer,
+						Payload: tests.CreateRawAssetActionPayload(tn.T(), identifiers.NilAddress),
+					},
+				},
 			},
-			expectedError: common.ErrInsufficientFunds,
+			expectedError: common.ErrMissingSender,
 		},
 	}
 
@@ -1238,17 +1243,33 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	require.NoError(tn.T(), err)
 
 	ixArgsWithFuelParams := &rpcargs.IxArgs{
-		Type:      common.IxAssetCreate,
 		Sender:    addr,
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
-		Payload:   (hexutil.Bytes)(rawAssetCreatePayload),
+		IxOps: []rpcargs.IxOp{
+			{
+				Type:    common.IxAssetCreate,
+				Payload: (hexutil.Bytes)(rawAssetCreatePayload),
+			},
+		},
+		Participants: []rpcargs.IxParticipant{{
+			Address:  addr,
+			LockType: common.MutateLock,
+		}},
 	}
 
 	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
-		Type:    common.IxLogicDeploy,
-		Sender:  addr,
-		Payload: (hexutil.Bytes)(rawLogicPayload),
+		Sender: addr,
+		IxOps: []rpcargs.IxOp{
+			{
+				Type:    common.IxLogicDeploy,
+				Payload: (hexutil.Bytes)(rawLogicPayload),
+			},
+		},
+		Participants: []rpcargs.IxParticipant{{
+			Address:  addr,
+			LockType: common.MutateLock,
+		}},
 	}
 
 	testcases := []struct {
@@ -1332,39 +1353,53 @@ func (tn *TestSingleNode) TestCall() {
 	require.NoError(tn.T(), err)
 
 	ixArgsWithFuelParams := &rpcargs.IxArgs{
-		Type:      common.IxLogicDeploy,
 		Sender:    addr,
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
-		Payload:   (hexutil.Bytes)(rawLogicPayload),
+		IxOps: []rpcargs.IxOp{
+			{
+				Type:    common.IxLogicDeploy,
+				Payload: (hexutil.Bytes)(rawLogicPayload),
+			},
+		},
+		Participants: []rpcargs.IxParticipant{{
+			Address:  addr,
+			LockType: common.MutateLock,
+		}},
 	}
 
 	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
-		Type:    common.IxAssetCreate,
-		Sender:  addr,
-		Payload: (hexutil.Bytes)(rawAssetPayload),
+		Sender: addr,
+		IxOps: []rpcargs.IxOp{
+			{
+				Type:    common.IxAssetCreate,
+				Payload: (hexutil.Bytes)(rawAssetPayload),
+			},
+		},
+		Participants: []rpcargs.IxParticipant{{
+			Address:  addr,
+			LockType: common.MutateLock,
+		}},
 	}
 
-	receiptWithFuelParams := &common.Receipt{
-		IxType:   common.IxLogicDeploy,
-		FuelUsed: 3473,
+	receiptWithFuelParams := &common.IxOpResult{
+		IxType: common.IxLogicDeploy,
 	}
 
-	receiptWithoutFuelParams := &common.Receipt{
-		IxType:   common.IxAssetCreate,
-		FuelUsed: 100,
+	receiptWithoutFuelParams := &common.IxOpResult{
+		IxType: common.IxAssetCreate,
 	}
 
 	expectedAccountAddr := common.NewAccountAddress(0, addr)
 	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAccountAddr)
 	expectedLogicID := identifiers.NewLogicIDv0(true, false, false, false, 0, expectedAccountAddr)
 
-	common.SetReceiptExtraData(receiptWithoutFuelParams, common.AssetCreationReceipt{
+	common.SetResultPayload(receiptWithoutFuelParams, common.AssetCreationResult{
 		AssetID:      expectedAssetID,
 		AssetAccount: expectedAccountAddr,
 	})
 
-	common.SetReceiptExtraData(receiptWithFuelParams, common.LogicDeployReceipt{
+	common.SetResultPayload(receiptWithFuelParams, common.LogicDeployResult{
 		LogicID: expectedLogicID,
 	})
 
@@ -1385,11 +1420,14 @@ func (tn *TestSingleNode) TestCall() {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				IxType:    hexutil.Uint64(ixArgsWithFuelParams.Type),
-				FuelUsed:  hexutil.Uint64(receiptWithFuelParams.FuelUsed),
-				ExtraData: receiptWithFuelParams.ExtraData,
-				From:      addr,
-				To:        expectedAccountAddr,
+				FuelUsed: hexutil.Uint64(3473),
+				From:     addr,
+				IxOps: []*rpcargs.RPCIxOpResult{
+					{
+						TxType: hexutil.Uint64(ixArgsWithFuelParams.IxOps[0].Type),
+						Data:   receiptWithFuelParams.Data,
+					},
+				},
 			},
 		},
 		{
@@ -1403,11 +1441,14 @@ func (tn *TestSingleNode) TestCall() {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				IxType:    hexutil.Uint64(ixArgsWithoutFuelParams.Type),
-				FuelUsed:  hexutil.Uint64(receiptWithoutFuelParams.FuelUsed),
-				ExtraData: receiptWithoutFuelParams.ExtraData,
-				From:      addr,
-				To:        expectedAccountAddr,
+				FuelUsed: hexutil.Uint64(100),
+				From:     addr,
+				IxOps: []*rpcargs.RPCIxOpResult{
+					{
+						TxType: hexutil.Uint64(ixArgsWithoutFuelParams.IxOps[0].Type),
+						Data:   receiptWithoutFuelParams.Data,
+					},
+				},
 			},
 		},
 		{

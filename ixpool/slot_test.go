@@ -12,23 +12,32 @@ import (
 func TestSlotRequired(t *testing.T) {
 	testcases := []struct {
 		name          string
-		ixs           common.Interactions
+		ixs           []*common.Interaction
 		expectedSlots uint64
 	}{
 		{
 			name: "slots required for single ixn",
-			ixs: common.Interactions{
-				newTestInteraction(t, common.IxValueTransfer, 9, tests.RandomAddress(t), nil),
+			ixs: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
+					9, tests.RandomAddress(t), nil,
+				),
 			},
 			expectedSlots: 1,
 		},
 		{
 			name: "slots required for multiple ixns",
-			ixs: common.Interactions{
-				newTestInteraction(t, common.IxValueTransfer, 9, tests.RandomAddress(t), func(ixData *common.IxData) {
-					ixData.Input.Payload = make([]byte, ixSlotSize*8)
-				}),
-				newTestInteraction(t, common.IxValueTransfer, 9, tests.RandomAddress(t), nil),
+			ixs: []*common.Interaction{
+				newTestInteraction(
+					t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
+					9, tests.RandomAddress(t), func(ixData *common.IxData) {
+						ixData.IxOps[0].Payload = make([]byte, IxSlotSize*8)
+					},
+				),
+				newTestInteraction(
+					t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
+					9, tests.RandomAddress(t), nil,
+				),
 			},
 			expectedSlots: 10,
 		},

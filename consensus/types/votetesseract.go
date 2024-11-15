@@ -1,12 +1,11 @@
-package kbft
+package types
 
 import (
 	"github.com/sarvalabs/go-moi/common"
-	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
 )
 
-// tesseractVoteSet is a struct that represents a set of votes for a Tesseract
+// tesseractVoteSet is a struct that represents a set of votes for a ts
 type tesseractVoteSet struct {
 	// Represents whether the peer claims to have maj23
 	peermaj23 bool
@@ -14,27 +13,27 @@ type tesseractVoteSet struct {
 	// the value at that index represents whether a vote for the validator exists in the set
 	bitarray *common.ArrayOfBits
 	// Represents the tesseract votes of each validator by index
-	votes []*ktypes.Vote
+	votes []*Vote
 	// Represents the sum of voting powers
 	sum []uint32
 
 	votingPowerSum []int32
 }
 
-// newTesseractVoteSet is a constructor function that generates and returns a new set of Tesseract votes.
+// newTesseractVoteSet is a constructor function that generates and returns a new set of ts votes.
 // Accepts the size of sum set, whether the peer has a maj23 and the number of the validators.
 func newTesseractVoteSet(size int, peermaj23 bool, valcount int) *tesseractVoteSet {
 	return &tesseractVoteSet{
 		peermaj23:      peermaj23,
 		bitarray:       common.NewArrayOfBits(valcount),
-		votes:          make([]*ktypes.Vote, valcount),
+		votes:          make([]*Vote, valcount),
 		sum:            make([]uint32, size),
 		votingPowerSum: make([]int32, size),
 	}
 }
 
 // getByIndex is a method of tesseractVoteSet that retrieves a vote from the set for a given index.
-func (tv *tesseractVoteSet) getByIndex(index int32) *ktypes.Vote {
+func (tv *tesseractVoteSet) getByIndex(index int32) *Vote {
 	// Return nil if voteset is empty
 	if tv == nil {
 		return nil
@@ -46,15 +45,11 @@ func (tv *tesseractVoteSet) getByIndex(index int32) *ktypes.Vote {
 
 // addVerifiedVote is a method of tesseractVoteSet that adds a verified vote to the set.
 // Accepts the sum index, the vote and the voting power of the validator placing the vote.
-func (tv *tesseractVoteSet) addVerifiedVote(sumIndexs []int32, vote *ktypes.Vote, votingpower int32) {
-	// Fetch the index of the validator placing the vote
-	valindex := vote.ValidatorIndex
-
-	// Check if the vote already exists in the set
-	if existingvote := tv.getByIndex(valindex); existingvote == nil {
+func (tv *tesseractVoteSet) addVerifiedVote(valIndex int32, sumIndexs []int32, vote *Vote, votingpower int32) {
+	if existingvote := tv.getByIndex(valIndex); existingvote == nil {
 		// Set the bitarray to reflect that the vote for the validator exists in the set
-		tv.bitarray.SetIndex(int(valindex), true)
-		tv.votes[valindex] = vote
+		tv.bitarray.SetIndex(int(valIndex), true)
+		tv.votes[valIndex] = vote
 
 		for _, index := range sumIndexs {
 			tv.sum[index] += 1

@@ -26,23 +26,43 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 		acc.Nonce = uint64(2)
 	})
 
-	validIXArgs := common.SendIXArgs{
-		Type:      common.IxAssetCreate,
+	validIXArgs := common.IxData{
 		Sender:    address,
 		Nonce:     2,
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 1,
-		Payload:   rawAssetPayload,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetCreate,
+				Payload: rawAssetPayload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  address,
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
-	expectedIxn, err := constructInteraction(
-		&common.SendIXArgs{
-			Type:      common.IxAssetCreate,
+	expectedIxn, err := common.NewInteraction(
+		common.IxData{
 			Sender:    address,
 			Nonce:     acc.Nonce,
 			FuelPrice: big.NewInt(1),
 			FuelLimit: 1,
-			Payload:   rawAssetPayload,
+			IxOps: []common.IxOpRaw{
+				{
+					Type:    common.IxAssetCreate,
+					Payload: rawAssetPayload,
+				},
+			},
+			Participants: []common.IxParticipant{
+				{
+					Address:  address,
+					LockType: common.MutateLock,
+				},
+			},
 		},
 		getSignatureBytes(t, &validIXArgs, mnemonic),
 	)
@@ -50,40 +70,66 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 
 	testcases := []struct {
 		name        string
-		sendIXArgs  common.SendIXArgs
+		ixData      common.IxData
 		expected    *common.Interaction
 		preTestFn   func(ixPool *MockIxPool, sm *MockStateManager)
 		expectedErr error
 	}{
 		{
 			name: "invalid send ix args",
-			sendIXArgs: common.SendIXArgs{
-				Type:      common.IxValueTransfer,
+			ixData: common.IxData{
 				Sender:    common.SargaAddress,
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 1,
+				IxOps: []common.IxOpRaw{
+					{
+						Type:    common.IxAssetTransfer,
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					},
+				},
 			},
-			expectedErr: ErrGenesisAccount,
+			expectedErr: common.ErrGenesisAccount,
 		},
 		{
 			name: "failed to construct interaction",
-			sendIXArgs: common.SendIXArgs{
-				Type:      common.IxInvalid,
+			ixData: common.IxData{
 				Nonce:     3,
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 1,
 				Sender:    address,
+				IxOps: []common.IxOpRaw{
+					{
+						Type: common.IxInvalid,
+					},
+				},
+				Participants: []common.IxParticipant{
+					{
+						Address:  address,
+						LockType: common.MutateLock,
+					},
+				},
 			},
 			expectedErr: common.ErrInvalidInteractionType,
 		},
 		{
 			name: "failed to add interaction in ixpool",
-			sendIXArgs: common.SendIXArgs{
-				Type:      common.IxValueTransfer,
+			ixData: common.IxData{
 				Nonce:     3,
 				Sender:    address,
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 1,
+				IxOps: []common.IxOpRaw{
+					{
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetCreatePayload(t),
+					},
+				},
+				Participants: []common.IxParticipant{
+					{
+						Address:  address,
+						LockType: common.MutateLock,
+					},
+				},
 			},
 			preTestFn: func(ixPool *MockIxPool, sm *MockStateManager) {
 				ixPool.addInteractionHook = func() []error {
@@ -95,9 +141,9 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 			expectedErr: errors.New("failed add ix in ixpool"),
 		},
 		{
-			name:       "Valid ix args with zero nonce",
-			sendIXArgs: validIXArgs,
-			expected:   expectedIxn,
+			name:     "Valid ix args with zero nonce",
+			ixData:   validIXArgs,
+			expected: expectedIxn,
 			preTestFn: func(ixPool *MockIxPool, sm *MockStateManager) {
 				ixPool.setNonce(address, 2)
 				sm.setAccount(address, *acc)
@@ -115,12 +161,12 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 				test.preTestFn(ixpool, sm)
 			}
 
-			bz, err := polo.Polorize(test.sendIXArgs)
+			bz, err := polo.Polorize(test.ixData)
 			require.NoError(t, err)
 
 			sendIx := rpcargs.SendIX{
 				IXArgs:    hex.EncodeToString(bz),
-				Signature: getSignatureString(t, &test.sendIXArgs, mnemonic),
+				Signature: getSignatureString(t, &test.ixData, mnemonic),
 			}
 
 			ixnHash, err := coreAPI.SendInteractions(&sendIx)
@@ -137,114 +183,33 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 	}
 }
 
-func TestPublicCoreAPI_ConstructInteraction(t *testing.T) {
-	address, mnemonic := tests.RandomAddressWithMnemonic(t)
-
-	testcases := []struct {
-		name        string
-		sendIXArgs  *common.SendIXArgs
-		expectedIX  *common.Interaction
-		expectedErr error
-	}{
-		{
-			name: "send ix args",
-			sendIXArgs: &common.SendIXArgs{
-				Type:     common.IxValueTransfer,
-				Nonce:    4,
-				Sender:   address,
-				Receiver: tests.RandomAddress(t),
-				Payer:    tests.RandomAddress(t),
-				TransferValues: map[identifiers.AssetID]*big.Int{
-					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(22),
-					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(22),
-				},
-				PerceivedValues: map[identifiers.AssetID]*big.Int{
-					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(99),
-					tests.GetRandomAssetID(t, tests.RandomAddress(t)): big.NewInt(111),
-				},
-				FuelPrice: big.NewInt(1),
-				FuelLimit: 23,
-				Payload:   []byte{2, 3, 3},
-			},
-		},
-		{
-			name: "fuel price not found",
-			sendIXArgs: &common.SendIXArgs{
-				Type:     common.IxValueTransfer,
-				Nonce:    4,
-				Sender:   common.SargaAddress,
-				Receiver: tests.RandomAddress(t),
-				Payer:    tests.RandomAddress(t),
-			},
-			expectedErr: common.ErrFuelPriceNotFound,
-		},
-		{
-			name: "fuel limit not found",
-			sendIXArgs: &common.SendIXArgs{
-				Type:      common.IxValueTransfer,
-				Nonce:     4,
-				Sender:    common.SargaAddress,
-				Receiver:  tests.RandomAddress(t),
-				FuelPrice: big.NewInt(1),
-				Payer:     tests.RandomAddress(t),
-			},
-			expectedErr: common.ErrFuelLimitNotFound,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			sign := tests.GetIXSignature(t, test.sendIXArgs, mnemonic)
-			ix, err := constructInteraction(test.sendIXArgs, sign)
-			if test.expectedErr != nil {
-				require.ErrorContains(t, err, test.expectedErr.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, test.sendIXArgs.Type, ix.Type())
-			require.Equal(t, test.sendIXArgs.Nonce, ix.Nonce())
-			require.Equal(t, test.sendIXArgs.Sender, ix.Sender())
-			require.Equal(t, test.sendIXArgs.Receiver, ix.Receiver())
-			require.Equal(t, test.sendIXArgs.Payer, ix.Payer())
-			require.Equal(t, test.sendIXArgs.TransferValues, ix.TransferValues())
-			require.Equal(t, test.sendIXArgs.PerceivedValues, ix.PerceivedValues())
-			require.Equal(t, test.sendIXArgs.FuelPrice, ix.FuelPrice())
-			require.Equal(t, test.sendIXArgs.FuelLimit, ix.FuelLimit())
-			require.Equal(t, test.sendIXArgs.Payload, ix.Payload())
-			require.Equal(t, sign, ix.Signature())
-		})
-	}
-}
-
 func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 
-	ixWithNilSender := common.SendIXArgs{
+	ixWithNilSender := common.IxData{
 		Sender: identifiers.NilAddress,
 	}
 
-	ixWithSargaSender := common.SendIXArgs{
+	ixWithSargaSender := common.IxData{
 		Sender: common.SargaAddress,
 	}
 
-	ixWithSargaReceiver := common.SendIXArgs{
-		Sender:   tests.RandomAddress(t),
-		Receiver: common.SargaAddress,
-	}
-
-	ix := &common.SendIXArgs{
-		Sender: address,
+	ix := &common.IxData{
+		Sender:    address,
+		FuelPrice: big.NewInt(1),
+		FuelLimit: 23,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetTransfer,
+				Payload: tests.CreateRawAssetActionPayload(t, common.SargaAddress),
+			},
+		},
 	}
 
 	rawIXWithNilSender, err := ixWithNilSender.Bytes()
 	require.NoError(t, err)
 
 	rawIXWithSargaSender, err := ixWithSargaSender.Bytes()
-	require.NoError(t, err)
-
-	rawIXWithSargaReceiver, err := ixWithSargaReceiver.Bytes()
 	require.NoError(t, err)
 
 	rawIX, err := ix.Bytes()
@@ -259,7 +224,7 @@ func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
 	testcases := []struct {
 		name        string
 		ix          *rpcargs.SendIX
-		ixArgs      *common.SendIXArgs
+		ixArgs      *common.IxData
 		sign        []byte
 		expectedErr error
 	}{
@@ -275,14 +240,7 @@ func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
 			ix: &rpcargs.SendIX{
 				IXArgs: hex.EncodeToString(rawIXWithSargaSender),
 			},
-			expectedErr: ErrGenesisAccount,
-		},
-		{
-			name: "receiver is sarga account",
-			ix: &rpcargs.SendIX{
-				IXArgs: hex.EncodeToString(rawIXWithSargaReceiver),
-			},
-			expectedErr: ErrGenesisAccount,
+			expectedErr: common.ErrGenesisAccount,
 		},
 		{
 			name: "valid args",
@@ -305,6 +263,256 @@ func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.ixArgs, ixArgs)
+		})
+	}
+}
+
+func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
+	testcases := []struct {
+		name         string
+		ixArgs       *common.IxData
+		requiresFuel bool
+		expectedErr  error
+	}{
+		{
+			name: "sender address is nil",
+			ixArgs: &common.IxData{
+				FuelPrice: big.NewInt(1),
+				FuelLimit: 23,
+				IxOps: []common.IxOpRaw{
+					{
+						Type:    common.IxAssetTransfer,
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					},
+				},
+			},
+			requiresFuel: true,
+			expectedErr:  common.ErrInvalidAddress,
+		},
+		{
+			name: "sender is sarga account",
+			ixArgs: &common.IxData{
+				Sender:    common.SargaAddress,
+				FuelPrice: big.NewInt(1),
+				FuelLimit: 23,
+				IxOps: []common.IxOpRaw{
+					{
+						Type:    common.IxAssetTransfer,
+						Payload: tests.CreateRawAssetActionPayload(t, common.SargaAddress),
+					},
+				},
+			},
+			requiresFuel: true,
+			expectedErr:  common.ErrGenesisAccount,
+		},
+		{
+			name: "empty ix ops",
+			ixArgs: &common.IxData{
+				Sender:    tests.RandomAddress(t),
+				FuelPrice: big.NewInt(1),
+				FuelLimit: 23,
+			},
+			requiresFuel: true,
+			expectedErr:  ErrEmptyIxOps,
+		},
+		{
+			name: "fuel price and limit required",
+			ixArgs: &common.IxData{
+				Sender: tests.RandomAddress(t),
+				IxOps: []common.IxOpRaw{
+					{
+						Type:    common.IxAssetTransfer,
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					},
+					{
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetCreatePayload(t),
+					},
+				},
+			},
+			requiresFuel: true,
+			expectedErr:  common.ErrFuelPriceNotFound,
+		},
+		{
+			name: "fuel price and limit not required",
+			ixArgs: &common.IxData{
+				Sender: tests.RandomAddress(t),
+				IxOps: []common.IxOpRaw{
+					{
+						Type:    common.IxAssetTransfer,
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					},
+					{
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetCreatePayload(t),
+					},
+				},
+			},
+			requiresFuel: false,
+		},
+		{
+			name: "valid ix data",
+			ixArgs: &common.IxData{
+				Sender:    tests.RandomAddress(t),
+				FuelPrice: big.NewInt(1),
+				FuelLimit: 23,
+				IxOps: []common.IxOpRaw{
+					{
+						Type:    common.IxAssetTransfer,
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					},
+					{
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetCreatePayload(t),
+					},
+				},
+			},
+			requiresFuel: true,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			err := validateIxData(test.ixArgs, test.requiresFuel)
+			if test.expectedErr != nil {
+				require.ErrorContains(t, err, test.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPublicCoreAPI_ValidateFuel(t *testing.T) {
+	testcases := []struct {
+		name        string
+		ixArgs      *common.IxData
+		expectedErr error
+	}{
+		{
+			name: "fuel price not found",
+			ixArgs: &common.IxData{
+				FuelLimit: 23,
+			},
+			expectedErr: common.ErrFuelPriceNotFound,
+		},
+		{
+			name: "fuel limit not found",
+			ixArgs: &common.IxData{
+				FuelPrice: big.NewInt(1),
+			},
+			expectedErr: common.ErrFuelLimitNotFound,
+		},
+		{
+			name: "valid fuel price and limit",
+			ixArgs: &common.IxData{
+				FuelPrice: big.NewInt(1),
+				FuelLimit: 23,
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			err := validateFuel(test.ixArgs)
+			if test.expectedErr != nil {
+				require.ErrorContains(t, err, test.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestPublicCoreAPI_ValidateIxOps(t *testing.T) {
+	testcases := []struct {
+		name        string
+		txs         []common.IxOpRaw
+		expectedErr error
+	}{
+		{
+			name:        "empty ix transactions",
+			expectedErr: ErrEmptyIxOps,
+		},
+		{
+			name: "too many ix transactions",
+			txs: []common.IxOpRaw{
+				{
+					Type:    common.IxAssetCreate,
+					Payload: tests.CreateRawAssetCreatePayload(t),
+				},
+				{
+					Type:    common.IxAssetTransfer,
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+				},
+				{
+					Type:    common.IxAssetTransfer,
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+				},
+				{
+					Type:    common.IxAssetTransfer,
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+				},
+			},
+			expectedErr: ErrTooManyIxOps,
+		},
+		{
+			name: "exceeds asset creation limit",
+			txs: []common.IxOpRaw{
+				{
+					Type:    common.IxAssetCreate,
+					Payload: tests.CreateRawAssetCreatePayload(t),
+				},
+				{
+					Type:    common.IxAssetCreate,
+					Payload: tests.CreateRawAssetCreatePayload(t),
+				},
+			},
+			expectedErr: ErrAssetCreationLimit,
+		},
+		{
+			name: "exceeds logic deploy limit",
+			txs: []common.IxOpRaw{
+				{
+					Type:    common.IxLogicDeploy,
+					Payload: tests.CreateRawLogicPayload(t, tests.RandomAddress(t)),
+				},
+				{
+					Type:    common.IxLogicDeploy,
+					Payload: tests.CreateRawLogicPayload(t, tests.RandomAddress(t)),
+				},
+			},
+			expectedErr: ErrLogicDeploymentLimit,
+		},
+		{
+			name: "valid ix transactions",
+			txs: []common.IxOpRaw{
+				{
+					Type:    common.IxAssetTransfer,
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+				},
+				{
+					Type:    common.IxAssetCreate,
+					Payload: tests.CreateRawAssetCreatePayload(t),
+				},
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(testing *testing.T) {
+			err := validateIxOps(test.txs)
+			if test.expectedErr != nil {
+				require.ErrorContains(t, err, test.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
 		})
 	}
 }

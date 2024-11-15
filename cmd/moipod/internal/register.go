@@ -211,6 +211,8 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(errors.Wrap(err, "failed to fetch nonce"))
 	}
 
+	sender := identifiers.NewAddressFromBytes(moiIDPublicKey)
+
 	logicPayload := &common.LogicPayload{
 		Logic:    common.GuardianLogicID,
 		Callsite: "RegisterGuardian",
@@ -242,13 +244,27 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(err)
 	}
 
-	ixArgs := common.SendIXArgs{
-		Type:      common.IxLogicInvoke,
-		Sender:    identifiers.NewAddressFromBytes(moiIDPublicKey),
+	ixArgs := common.IxData{
+		Sender:    sender,
 		Nonce:     nonce.ToUint64(),
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 10000,
-		Payload:   rawPayload,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxLogicInvoke,
+				Payload: rawPayload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  sender,
+				LockType: common.MutateLock,
+			},
+			{
+				Address:  common.GuardianLogicAddr,
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
 	rawArgs, err := ixArgs.Bytes()
@@ -280,7 +296,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 	}
 
 	if rpcReceipt.Status != common.ReceiptOk {
-		fmt.Println("Registration failed err", string(rpcReceipt.ExtraData))
+		fmt.Println("Registration failed err", string(rpcReceipt.IxOps[0].Data))
 
 		return
 	}

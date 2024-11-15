@@ -7,7 +7,7 @@ import (
 )
 
 type Interaction struct {
-	Kind  common.IxType
+	Kind  common.IxOpType
 	Nonce uint64
 	Price *big.Int
 	Limit uint64
@@ -15,11 +15,11 @@ type Interaction struct {
 	Call  []byte
 }
 
-func (ixn Interaction) Type() common.IxType { return ixn.Kind }
-func (ixn Interaction) FuelPrice() *big.Int { return ixn.Price }
-func (ixn Interaction) FuelLimit() uint64   { return ixn.Limit }
-func (ixn Interaction) Callsite() string    { return ixn.Site }
-func (ixn Interaction) Calldata() []byte    { return ixn.Call }
+func (ixn Interaction) Type() common.IxOpType { return ixn.Kind }
+func (ixn Interaction) FuelPrice() *big.Int   { return ixn.Price }
+func (ixn Interaction) FuelLimit() uint64     { return ixn.Limit }
+func (ixn Interaction) Callsite() string      { return ixn.Site }
+func (ixn Interaction) Calldata() []byte      { return ixn.Call }
 func (ixn Interaction) Hash() common.Hash {
 	hash, err := common.PoloHash(ixn)
 	if err != nil {

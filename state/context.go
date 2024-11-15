@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	MaxBehaviourContextSize = 8
+	MaxBehaviourContextSize = 6
 	MaxRandomContextSize    = 7
 )
 

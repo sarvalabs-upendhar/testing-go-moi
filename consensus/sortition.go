@@ -11,7 +11,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto/vrf"
@@ -137,24 +136,9 @@ func (os *OperatorSelection) computeICSSeed(accounts common.Participants) ([32]b
 	var icsSeed [32]byte
 
 	knownTSHashes := make(map[common.Hash]struct{})
-	systemAccount := identifiers.NilAddress
-
-	for addr := range accounts {
-		if !common.IsSystemAccount(addr) {
-			continue
-		}
-
-		if systemAccount.String() < addr.String() {
-			systemAccount = addr
-		}
-	}
-
-	if systemAccount != identifiers.NilAddress {
-		return os.state.GetICSSeed(systemAccount)
-	}
 
 	for addr, account := range accounts {
-		if account.IsGenesis {
+		if account.IsGenesis || account.ExcludeFromICS {
 			continue
 		}
 

@@ -389,6 +389,7 @@ func (p *Params) getIXPoolConfig() *config.IxPoolConfig {
 		MaxIxGroupSize:          p.rawCfg.IxPool.MaxIxGroupSize,
 		EnableIxFlooding:        p.rawCfg.IxPool.EnableIxFlooding,
 		EnableRawIxFiltering:    p.rawCfg.IxPool.EnableRawIxFiltering,
+		ViewTimeout:             time.Duration(p.rawCfg.IxPool.ViewTimeout) * time.Second,
 	}
 }
 

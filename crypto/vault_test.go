@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
@@ -102,6 +102,29 @@ func TestBLSSignAgg(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, true, validationStatus)
+
+	// Test VerifyMultiSig
+	fmt.Print("Testing BLS Verify MultiSig")
+
+	msg1 := []byte("I'm message 1")
+	sigBytes1, err = vault1.Sign(msg1, common.BlsBLST)
+	require.NoError(t, err)
+
+	mulSigs[0] = sigBytes1
+	msg2 := []byte("I'm message 2")
+
+	sigBytes2, err = vault2.Sign(msg2, common.BlsBLST)
+	require.NoError(t, err)
+
+	mulSigs[1] = sigBytes2
+	aggSig, err = AggregateSignatures(mulSigs)
+	require.NoError(t, err)
+
+	validationStatus, err = VerifyMultiSig(aggSig, [][]byte{msg1, msg2}, [][]byte{pub1, pub2})
+	require.NoError(t, err)
+
+	require.True(t, validationStatus)
+	fmt.Println(": ✓")
 }
 
 func TestKramaVaultWithoutAnyMode(t *testing.T) {
@@ -136,7 +159,7 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	require.NoError(t, err)
 
 	mnemonicKsPath := strings.Join([]string{datadir, "mnemonic.keystore.json"}, "/")
-	err = os.WriteFile(mnemonicKsPath, []byte(testMnemonicKeystore), os.ModePerm)
+	err = os.WriteFile(mnemonicKsPath, []byte(testMnemonicKeystore), 0o600)
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

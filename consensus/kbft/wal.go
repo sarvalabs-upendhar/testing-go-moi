@@ -117,7 +117,7 @@ func (wal *BaseWAL) Start() error {
 	if err != nil {
 		return err
 	} else if size == 0 {
-		err = wal.WriteSync(ktypes.ConsensusMessage{PeerID: "init", Message: nil}, "init")
+		err = wal.WriteSync(ktypes.ConsensusMessage{PeerID: "init", Payload: nil}, "init")
 		if err != nil {
 			return err
 		}
@@ -256,10 +256,10 @@ func (wal *BaseWAL) SearchForClusterID(
 
 	// NOTE: starting from the last file in the group because we're usually
 	// searching for the last height. See replay.go
-	min, max := wal.group.MinIndex(), wal.group.MaxIndex()
-	wal.logger.Info("Searching for cluster ID", "cluster-id", clusterID, "min", min, "max", max)
+	minimum, maximum := wal.group.MinIndex(), wal.group.MaxIndex()
+	wal.logger.Info("Searching for cluster ID", "cluster-id", clusterID, "minimum", minimum, "maximum", maximum)
 
-	for index := max; index >= min; index-- {
+	for index := maximum; index >= minimum; index-- {
 		gr, err = wal.group.NewReader(index)
 		if err != nil {
 			return nil, false, err
@@ -286,7 +286,7 @@ func (wal *BaseWAL) SearchForClusterID(
 			} else if err != nil {
 				grErr := gr.Close()
 				if grErr != nil {
-					wal.logger.Error("Failed to close group reader", "err", grErr)
+					wal.logger.Error("failed to close group reader", "err", grErr)
 				}
 
 				return nil, false, err
@@ -301,7 +301,7 @@ func (wal *BaseWAL) SearchForClusterID(
 
 		err := gr.Close()
 		if err != nil {
-			wal.logger.Error("Failed to close group reader", "err", err)
+			wal.logger.Error("failed to close group reader", "err", err)
 		}
 	}
 

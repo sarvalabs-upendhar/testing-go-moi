@@ -54,16 +54,26 @@ func (te *TestEnvironment) deployLogic(
 	payload, err := logicPayload.Bytes()
 	te.Suite.NoError(err)
 
-	sendIXArgs := &common.SendIXArgs{
-		Type:      common.IxLogicDeploy,
+	ixData := &common.IxData{
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Payload:   payload,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxLogicDeploy,
+				Payload: payload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  acc.Addr,
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
-	sendIX := moiclient.CreateSendIXFromSendIXArgs(te.T(), sendIXArgs, acc.Mnemonic)
+	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, acc.Mnemonic)
 
 	return te.moiClient.SendInteractions(context.Background(), sendIX)
 }
@@ -77,6 +87,7 @@ func validateLogicDeploy(
 	te *TestEnvironment,
 	sender identifiers.Address,
 	payload *common.LogicPayload,
+	txnID int,
 	ixHash common.Hash,
 ) {
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
@@ -84,7 +95,7 @@ func validateLogicDeploy(
 	expectedManifest, err := moiclient.GetLogicManifestByEncodingType(te.T(), payload.Manifest, "JSON")
 	require.NoError(te.T(), err)
 
-	logicID := moiclient.GetLogicID(te.T(), te.moiClient, sender, rpcargs.LatestTesseractHeight)
+	logicID := moiclient.GetLogicID(te.T(), te.moiClient, txnID, sender, rpcargs.LatestTesseractHeight)
 
 	actualManifest, err := te.moiClient.LogicManifest(context.Background(), &rpcargs.LogicManifestArgs{
 		LogicID:  logicID,
@@ -119,6 +130,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			te *TestEnvironment,
 			sender identifiers.Address,
 			payload *common.LogicPayload,
+			txnID int,
 			ixHash common.Hash,
 		)
 		checkReceiptSuccess func(t *testing.T, client *moiclient.Client, ixHash common.Hash) *rpcargs.RPCReceipt
@@ -198,6 +210,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 
 				return
 			}
+
 			require.NoError(te.T(), err)
 
 			if test.checkReceiptSuccess != nil {
@@ -206,7 +219,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 				return
 			}
 
-			test.postTest(te, test.sender.Addr, test.logicPayload, ixHash)
+			test.postTest(te, test.sender.Addr, test.logicPayload, 0, ixHash)
 		})
 	}
 }

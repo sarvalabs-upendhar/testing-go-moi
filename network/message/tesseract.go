@@ -10,11 +10,12 @@ import (
 type TesseractMsg struct {
 	RawTesseract []byte
 	IxnsHashes   common.Hashes
+	CommitInfo   *common.CommitInfo
 	Extra        map[string][]byte
 }
 
-func (ts *TesseractMsg) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(ts)
+func (m *TesseractMsg) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(m)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to polorize tesseract message")
 	}
@@ -22,22 +23,22 @@ func (ts *TesseractMsg) Bytes() ([]byte, error) {
 	return rawData, nil
 }
 
-func (ts *TesseractMsg) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(ts, bytes); err != nil {
+func (m *TesseractMsg) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(m, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize tesseract message")
 	}
 
 	return nil
 }
 
-func (ts *TesseractMsg) GetTesseract() (*common.Tesseract, error) {
-	canonicalTS := new(common.CanonicalTesseract)
+func (m *TesseractMsg) GetTesseract() (*common.Tesseract, error) {
+	ts := new(common.Tesseract)
 
-	if err := canonicalTS.FromBytes(ts.RawTesseract); err != nil {
+	if err := ts.FromBytes(m.RawTesseract); err != nil {
 		return nil, err
 	}
 
-	tesseract := canonicalTS.ToTesseract(nil, nil)
+	ts.WithIxnAndReceipts(common.Interactions{}, nil, m.CommitInfo)
 
-	return tesseract, nil
+	return ts, nil
 }

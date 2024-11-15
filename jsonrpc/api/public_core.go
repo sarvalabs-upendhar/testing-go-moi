@@ -70,8 +70,9 @@ func getTesseractArgs(address identifiers.Address, options rpcargs.TesseractNumb
 func (p *PublicCoreAPI) getTesseractByHash(
 	hash common.Hash,
 	withInteractions bool,
+	withCommitInfo bool,
 ) (*common.Tesseract, error) {
-	return p.chain.GetTesseract(hash, withInteractions)
+	return p.chain.GetTesseract(hash, withInteractions, withCommitInfo)
 }
 
 func (p *PublicCoreAPI) getTesseractHashByHeight(address identifiers.Address, height int64) (common.Hash, error) {
@@ -94,7 +95,7 @@ func (p *PublicCoreAPI) getTesseractHashByHeight(address identifiers.Address, he
 // getTesseract returns tesseract using arguments.
 func (p *PublicCoreAPI) getTesseract(args *rpcargs.TesseractArgs) (*common.Tesseract, error) {
 	if hash, ok := args.Options.Hash(); ok {
-		return p.getTesseractByHash(hash, args.WithInteractions)
+		return p.getTesseractByHash(hash, args.WithInteractions, args.WithCommitInfo)
 	}
 
 	height, err := args.Options.Number()
@@ -104,7 +105,7 @@ func (p *PublicCoreAPI) getTesseract(args *rpcargs.TesseractArgs) (*common.Tesse
 			return nil, err
 		}
 
-		return p.getTesseractByHash(hash, args.WithInteractions)
+		return p.getTesseractByHash(hash, args.WithInteractions, args.WithCommitInfo)
 	}
 
 	if errors.Is(err, common.ErrEmptyHeight) {
@@ -554,12 +555,13 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 		return nil, err
 	}
 
-	sendIXArgs, err := createSendIXArgs(args.IxArgs)
-	if err != nil {
+	ixData := createIxData(args.IxArgs)
+
+	if err = validateIxData(ixData, false); err != nil {
 		return nil, err
 	}
 
-	ix, err := constructIxn(p.sm, sendIXArgs, nil)
+	ix, err := constructIxn(p.sm, ixData, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +572,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 		Time:     uint64(time.Now().Unix()),
 	}
 
-	transition, err := p.sm.FetchIxStateObjects(common.Interactions{ix}, stateHashes)
+	transition, err := p.sm.FetchIxStateObjects(common.NewInteractionsWithLeaderCheck(false, ix), stateHashes)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch transition objects")
 	}
@@ -610,12 +612,13 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	sendIXArgs, err := createSendIXArgs(args.IxArgs)
-	if err != nil {
+	ixData := createIxData(args.IxArgs)
+
+	if err := validateIxData(ixData, false); err != nil {
 		return nil, err
 	}
 
-	ix, err := constructIxn(p.sm, sendIXArgs, nil)
+	ix, err := constructIxn(p.sm, ixData, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -626,7 +629,7 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		Time:     uint64(time.Now().Unix()),
 	}
 
-	transition, err := p.sm.FetchIxStateObjects(common.Interactions{ix}, stateHashes)
+	transition, err := p.sm.FetchIxStateObjects(common.NewInteractionsWithLeaderCheck(false, ix), stateHashes)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch transition objects")
 	}
@@ -636,7 +639,7 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	return createCallReceipt(receipt, ix), nil
+	return createCallReceipt(ix.Sender(), receipt), nil
 }
 
 func (p *PublicCoreAPI) normalizeOptions(
@@ -728,17 +731,27 @@ func (p *PublicCoreAPI) GetLogs(query *rpcargs.FilterQueryArgs) ([]*rpcargs.RPCL
 }
 
 func createCallReceipt(
+	sender identifiers.Address,
 	receipt *common.Receipt,
-	ix *common.Interaction,
 ) *rpcargs.RPCReceipt {
 	return &rpcargs.RPCReceipt{
-		IxType:    hexutil.Uint64(receipt.IxType),
-		IxHash:    receipt.IxHash,
-		Status:    receipt.Status,
-		FuelUsed:  hexutil.Uint64(receipt.FuelUsed),
-		ExtraData: receipt.ExtraData,
-		From:      ix.Sender(),
-		To:        ix.Receiver(),
+		From:     sender,
+		IxHash:   receipt.IxHash,
+		Status:   receipt.Status,
+		FuelUsed: hexutil.Uint64(receipt.FuelUsed),
+		IxOps: func() []*rpcargs.RPCIxOpResult {
+			results := make([]*rpcargs.RPCIxOpResult, len(receipt.IxOps))
+
+			for idx, op := range receipt.IxOps {
+				results[idx] = &rpcargs.RPCIxOpResult{
+					TxType: hexutil.Uint64(op.IxType),
+					Status: op.Status,
+					Data:   op.Data,
+				}
+			}
+
+			return results
+		}(),
 	}
 }
 

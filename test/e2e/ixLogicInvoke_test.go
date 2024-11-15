@@ -16,6 +16,7 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
+//nolint:dupl
 func (te *TestEnvironment) logicInvoke(
 	acc tests.AccountWithMnemonic,
 	logicPayload *common.LogicPayload,
@@ -30,16 +31,30 @@ func (te *TestEnvironment) logicInvoke(
 	payload, err := logicPayload.Bytes()
 	te.Suite.NoError(err)
 
-	sendIXArgs := &common.SendIXArgs{
-		Type:      common.IxLogicInvoke,
+	ixData := &common.IxData{
 		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
 		Sender:    acc.Addr,
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Payload:   payload,
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxLogicInvoke,
+				Payload: payload,
+			},
+		},
+		Participants: []common.IxParticipant{
+			{
+				Address:  acc.Addr,
+				LockType: common.MutateLock,
+			},
+			{
+				Address:  logicPayload.Logic.Address(),
+				LockType: common.MutateLock,
+			},
+		},
 	}
 
-	sendIX := moiclient.CreateSendIXFromSendIXArgs(te.T(), sendIXArgs, acc.Mnemonic)
+	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, acc.Mnemonic)
 
 	return te.moiClient.SendInteractions(context.Background(), sendIX)
 }
@@ -58,11 +73,7 @@ func validateLogicInvoke(
 	// make sure interaction executed successfully
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	senderHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, sender)
-
-	logicID := moiclient.GetLogicID(te.T(), te.moiClient, sender, int64(senderHeight-1))
-
-	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID, []identifiers.Address{sender, receiver})
+	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, payload.Logic, []identifiers.Address{sender, receiver})
 	senderBalance, ok := state.Balances[sender]
 	require.True(te.T(), ok)
 
@@ -93,7 +104,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	ledgerLogicID := moiclient.GetLogicID(te.T(), te.moiClient, sender.Addr, args.LatestTesseractHeight)
+	ledgerLogicID := moiclient.GetLogicID(te.T(), te.moiClient, 0, sender.Addr, args.LatestTesseractHeight)
 
 	testcases := []struct {
 		name         string
@@ -199,6 +210,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 
 				return
 			}
+
 			require.NoError(te.T(), err)
 
 			test.postTest(te, test.sender.Addr, receiver, test.logicPayload, ixHash)

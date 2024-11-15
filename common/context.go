@@ -13,6 +13,24 @@ const (
 	Genesis
 )
 
+const NodeNotFound = -1
+
+type NodeList []kramaid.KramaID
+
+func (nl NodeList) Contains(id kramaid.KramaID) bool {
+	for _, kramaID := range nl {
+		if id == kramaID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (nl NodeList) Len() int {
+	return len(nl)
+}
+
 type ContextDelta map[identifiers.Address]*DeltaGroup
 
 func (delta ContextDelta) Copy() ContextDelta {
@@ -54,6 +72,20 @@ func (d DeltaGroup) Copy() *DeltaGroup {
 	}
 
 	return deltaGroup
+}
+
+func (d DeltaGroup) NodeIndex(id kramaid.KramaID) int {
+	idx := 0
+
+	for _, node := range d.BehaviouralNodes {
+		if node == id {
+			return idx
+		}
+
+		idx++
+	}
+
+	return NodeNotFound
 }
 
 type ContextLockInfo struct {

@@ -28,7 +28,7 @@ type IxPool interface {
 }
 
 type ChainManager interface {
-	GetTesseract(hash common.Hash, withInteractions bool) (*common.Tesseract, error)
+	GetTesseract(hash common.Hash, withInteractions, withCommitInfo bool) (*common.Tesseract, error)
 	GetReceiptByIxHash(ixHash common.Hash) (*common.Receipt, error)
 	GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error)
 	GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (

@@ -1,81 +1,89 @@
 package types
 
 import (
-	"context"
 	"crypto/rand"
 	"sync"
 	"time"
 
 	"github.com/mr-tron/base58"
-	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
-	"github.com/sarvalabs/go-polo"
-	"golang.org/x/crypto/blake2b"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
 	gtypes "github.com/sarvalabs/go-moi/state"
+	"github.com/sarvalabs/go-polo"
 )
 
 type ClusterState struct {
 	mtx                      sync.Mutex
 	selfID                   kramaid.KramaID
-	NodeSet                  *common.ICSNodeSet
-	TrustedPeers             []kramaid.KramaID
+	committee                *ICSCommittee
+	voteSet                  *HeightVoteSet
 	ixns                     common.Interactions
 	ClusterID                common.ClusterID
-	Operator                 kramaid.KramaID
+	Proposer                 kramaid.KramaID
+	operator                 kramaid.KramaID
 	BinaryHash, IdentityHash common.Hash
 	ICSHash                  common.Hash
 	dirty                    map[common.Hash][]byte
-	Tesseract                *common.Tesseract
+	ts                       *common.Tesseract
 	ICSReqTime               time.Time
 	ICSRespCount             int
 	operatorIncluded         bool
 	Participants             common.Participants
-	RequestMsg               *CanonicalICSRequest
 	SuccessMsg               *ICSMSG
 	Transition               *gtypes.Transition
 	IsObserver               bool
 	quorum                   []uint32
-	VRFOutput                [32]byte
-	VRFProof                 []byte
-	LotteryKey               common.LotteryKey
+	// TODO: Load following view infos appropriately
+	localViewInfo   common.Views
+	highestViewInfo common.Views
+	preparedQc      *PreparedInfo
+	view            uint64
+	TrustedPeers    []kramaid.KramaID
+}
+
+func (cs *ClusterState) SetPrepareQc(prepareQc *PreparedInfo) {
+	cs.preparedQc = prepareQc
+}
+
+func (cs *ClusterState) Committee() *ICSCommittee {
+	return cs.committee
 }
 
 // TODO: Check on locks
 
 func NewICS(
-	icsReqMsg *CanonicalICSRequest,
 	ixs common.Interactions,
 	clusterID common.ClusterID,
 	operator kramaid.KramaID,
 	reqTime time.Time,
 	selfID kramaid.KramaID,
+	committee *ICSCommittee,
 	participants map[identifiers.Address]*common.Participant,
-	nodeSet *common.ICSNodeSet,
-	lotteryKey common.LotteryKey,
+	viewInfos common.Views,
+	currentView uint64,
 ) *ClusterState {
 	return &ClusterState{
-		NodeSet:          nodeSet,
 		ixns:             ixs,
 		selfID:           selfID,
 		ClusterID:        clusterID,
-		Operator:         operator,
+		operator:         operator,
 		operatorIncluded: false,
 		dirty:            make(map[common.Hash][]byte),
 		ICSReqTime:       reqTime,
 		ICSRespCount:     0,
-		RequestMsg:       icsReqMsg,
 		Participants:     participants,
+		committee:        committee,
 		Transition:       gtypes.NewTransition(nil),
-		LotteryKey:       lotteryKey,
+		localViewInfo:    viewInfos.Copy(),
+		highestViewInfo:  viewInfos.Copy(),
+		view:             currentView,
 	}
 }
 
 func (cs *ClusterState) IxnHash() common.Hash {
-	return cs.ixns[0].Hash()
+	return cs.ixns.IxList()[0].Hash()
 }
 
 func (cs *ClusterState) SelfKramaID() kramaid.KramaID {
@@ -100,29 +108,45 @@ func (cs *ClusterState) ParticipantTSHash(addr identifiers.Address) common.Hash 
 	return common.NilHash
 }
 
+func (cs *ClusterState) CurrentView() uint64 {
+	return cs.view
+}
+
 func (cs *ClusterState) Size() int {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.TotalNodes()
+	return cs.committee.TotalNodes()
 }
 
-func (cs *ClusterState) GetNodeSet(nodeSetPosition int) *common.NodeSet {
+func (cs *ClusterState) UpdateVoteSet(vs *HeightVoteSet) {
+	cs.voteSet = vs
+}
+
+func (cs *ClusterState) VoteSet() *HeightVoteSet {
+	return cs.voteSet
+}
+
+func (cs *ClusterState) GetNodeSet(nodeSetPosition int) *NodeSet {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.Sets[nodeSetPosition]
+	return cs.committee.Sets[nodeSetPosition]
 }
 
-func (cs *ClusterState) UpdateNodeSet(nodeSetPosition int, data *common.NodeSet) {
+func (cs *ClusterState) UpdateNodeSet(nodeSetPosition int, data *NodeSet) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	cs.NodeSet.UpdateNodeSet(nodeSetPosition, data)
+	cs.committee.UpdateNodeSet(nodeSetPosition, data)
 }
 
 func (cs *ClusterState) UpdateNodeSetResponses(nodeSetPosition int, responses *common.ArrayOfBits) {
-	cs.NodeSet.UpdateNodeSetResponses(nodeSetPosition, responses)
+	cs.committee.UpdateSetResponses(nodeSetPosition, responses)
+}
+
+func (cs *ClusterState) Operator() kramaid.KramaID {
+	return cs.operator
 }
 
 func (cs *ClusterState) IncludeOperator() {
@@ -139,9 +163,18 @@ func (cs *ClusterState) IsOperatorIncluded() bool {
 	return cs.operatorIncluded
 }
 
+func (cs *ClusterState) ExcludeParticipantsFromICS(addrs common.Addresses) {
+	cs.Participants.ExcludeFromICS(addrs)
+
+	for _, info := range cs.Participants {
+		if info.ExcludedFromICS() {
+			cs.committee.ExcludeParticipantsFromICS(info.NodeSetPosition)
+		}
+	}
+}
+
 func (cs *ClusterState) NewHeights() map[identifiers.Address]uint64 {
 	heights := make(map[identifiers.Address]uint64, len(cs.Participants))
-
 	for addr, ps := range cs.Participants {
 		heights[addr] = ps.NewHeight()
 	}
@@ -153,9 +186,9 @@ func (cs *ClusterState) NewHeights() map[identifiers.Address]uint64 {
 func (cs *ClusterState) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 	m := &ICSMetaInfo{
 		ClusterID:    string(cs.ClusterID),
-		IxHash:       cs.ixns[0].Hash(), // Need to be improved
-		Operator:     string(cs.Operator),
-		ClusterSize:  cs.NodeSet.TotalNodes(),
+		IxHash:       cs.ixns.IxList()[0].Hash(), // Need to be improved
+		Operator:     string(cs.operator),
+		ClusterSize:  cs.committee.TotalNodes(),
 		BinaryHash:   cs.BinaryHash,
 		IdentityHash: cs.IdentityHash,
 		IcsHash:      cs.ICSHash,
@@ -181,33 +214,18 @@ func (cs *ClusterState) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 	return m, nil
 }
 
-func (cs *ClusterState) RespondedEligibleSet() (count int, nodes []kramaid.KramaID) {
-	count = cs.NodeSet.GetRespondedNodeCount(0, 3)
-	nodes = make([]kramaid.KramaID, 0, count)
-
-	for i := 0; i < 4; i++ {
-		if cs.NodeSet.Sets[i] != nil {
-			for _, respIndex := range cs.NodeSet.Sets[i].Responses.GetTrueIndices() {
-				nodes = append(nodes, cs.NodeSet.Sets[i].Ids[respIndex])
-			}
-		}
-	}
-
-	return
-}
-
 func (cs *ClusterState) GetBehaviouralContextDelta(
 	nodeSetPosition int,
 	newPeer kramaid.KramaID,
 ) (added, replaced kramaid.KramaID) {
-	for _, peerID := range cs.NodeSet.Sets[nodeSetPosition].Ids {
-		if newPeer == peerID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
+	for _, info := range cs.committee.Sets[nodeSetPosition].Infos {
+		if newPeer == info.ID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
 			return
 		}
 	}
 
-	if len(cs.NodeSet.Sets[nodeSetPosition].Ids) >= gtypes.MaxBehaviourContextSize {
-		replaced = cs.NodeSet.Sets[nodeSetPosition].Ids[0]
+	if len(cs.committee.Sets[nodeSetPosition].Infos) >= gtypes.MaxBehaviourContextSize {
+		replaced = cs.committee.Sets[nodeSetPosition].Infos[0].ID
 	}
 
 	return newPeer, replaced
@@ -220,9 +238,9 @@ func (cs *ClusterState) GetRandomContextDelta(
 ) (addedPeers, replacedPeers []kramaid.KramaID) {
 	addedPeers = make([]kramaid.KramaID, 0, requiredCount)
 
-	if cs.NodeSet.Sets[nodeSetPosition] != nil {
-		if count := len(cs.NodeSet.Sets[nodeSetPosition].Ids) + requiredCount - gtypes.MaxRandomContextSize; count > 0 {
-			replacedPeers = cs.NodeSet.Sets[nodeSetPosition].Ids[0:count]
+	if cs.committee.Sets[nodeSetPosition] != nil {
+		if count := len(cs.committee.Sets[nodeSetPosition].Infos) + requiredCount - gtypes.MaxRandomContextSize; count > 0 {
+			replacedPeers = cs.committee.Sets[nodeSetPosition].KramaIDs()[0:count]
 		}
 	}
 
@@ -240,10 +258,10 @@ func (cs *ClusterState) GetRandomContextDelta(
 		return addedPeers, replacedPeers
 	}
 
-	set := cs.NodeSet.RandomSet()
-	for index, v := range set.Ids {
-		if set.Responses.GetIndex(index) && !utils.ContainsKramaID(skipPeers, v) {
-			addedPeers = append(addedPeers, v)
+	set := cs.committee.RandomSet()
+	for index, info := range set.Infos {
+		if set.Responses.GetIndex(index) && !utils.ContainsKramaID(skipPeers, info.ID) {
+			addedPeers = append(addedPeers, info.ID)
 		}
 
 		if len(addedPeers) == requiredCount {
@@ -254,29 +272,33 @@ func (cs *ClusterState) GetRandomContextDelta(
 	return addedPeers, replacedPeers
 }
 
+func (cs *ClusterState) LocalViewInfo() []*common.ViewInfo {
+	return cs.localViewInfo
+}
+
+func (cs *ClusterState) HighestViewInfo() common.Views {
+	return cs.highestViewInfo
+}
+
 func (cs *ClusterState) IsContextQuorum() bool {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.IsContextQuorum()
+	return cs.committee.IsContextQuorum()
 }
 
-func (cs *ClusterState) IsRandomQuorum(requiredRandomNodes int) bool {
+func (cs *ClusterState) IsRandomQuorum() bool {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.RandomSet().GetRespCount() >= requiredRandomNodes
+	return cs.committee.RandomSet().GetRespCount() >= int(cs.committee.RandomQuorumSize())
 }
 
-func (cs *ClusterState) IsObserverQuorum(requiredObserverNodes int) bool {
-	return cs.NodeSet.ObserverSet().GetRespCount() >= requiredObserverNodes
-}
-
-func (cs *ClusterState) HasKramaID(kramaID kramaid.KramaID) (int32, bool) {
+func (cs *ClusterState) HasKramaID(kramaID kramaid.KramaID) (int32, []byte, bool) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.HasKramaID(kramaID)
+	return cs.committee.HasKramaID(kramaID)
 }
 
 // GetByIndex returns the krama id and bls public key of the validator based on the index
@@ -284,40 +306,26 @@ func (cs *ClusterState) GetByIndex(index int32) (kramaid.KramaID, []byte) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	slots, slotIndex, kramaID, publicKey := cs.NodeSet.GetKramaID(index)
-	if slots == nil || !cs.NodeSet.Sets[slots[0]].Responses.GetIndex(slotIndex) {
+	slots, slotIndex, kramaID, publicKey := cs.committee.GetKramaID(index)
+	if slots == nil || !cs.committee.Sets[slots[0]].Responses.GetIndex(slotIndex) {
 		return "", nil
 	}
 
 	return kramaID, publicKey
 }
 
-func (cs *ClusterState) GetICSNodeIndex(kramaid kramaid.KramaID) (int, int) {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
-
-	return cs.NodeSet.GetIndex(kramaid)
-}
-
 func (cs *ClusterState) GetICSVoteset() *common.ArrayOfBits {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.GetVoteset()
-}
-
-func (cs *ClusterState) GetObservers() []kramaid.KramaID {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
-
-	return cs.NodeSet.ObserverSet().Ids
+	return cs.committee.GetVoteset()
 }
 
 func (cs *ClusterState) GetRandomNodes() []kramaid.KramaID {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.NodeSet.RandomSet().Ids
+	return cs.committee.RandomSet().KramaIDs()
 }
 
 func (cs *ClusterState) GetQuorum() []uint32 {
@@ -331,10 +339,14 @@ func (cs *ClusterState) GetQuorum() []uint32 {
 	quorum := make([]uint32, len(cs.Participants)+1) // We add one here for random Set
 
 	for _, ps := range cs.Participants {
-		quorum[ps.NodeSetPosition/2] = ps.ConsensusQuorum
+		if ps.ExcludeFromICS {
+			continue
+		}
+
+		quorum[ps.NodeSetPosition] = ps.ConsensusQuorum
 	}
 
-	quorum[len(quorum)-1] = cs.NodeSet.RandomQuorumSize()
+	quorum[len(quorum)-1] = cs.committee.RandomQuorumSize()
 
 	cs.quorum = quorum
 
@@ -362,14 +374,14 @@ func (cs *ClusterState) SetSuccessMsg(msg *ICSMSG) {
 func (cs *ClusterState) SetTesseract(ts *common.Tesseract) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
-	cs.Tesseract = ts
+	cs.ts = ts
 }
 
-func (cs *ClusterState) GetTesseract() *common.Tesseract {
+func (cs *ClusterState) Tesseract() *common.Tesseract {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.Tesseract
+	return cs.ts
 }
 
 func (cs *ClusterState) AddDirty(key common.Hash, data []byte) {
@@ -378,48 +390,14 @@ func (cs *ClusterState) AddDirty(key common.Hash, data []byte) {
 	cs.dirty[key] = data
 }
 
-func (cs *ClusterState) ComputeICSHash() (common.Hash, error) {
-	msg := &common.ICSClusterInfo{
-		RandomSet:                 cs.GetRandomNodes(),
-		RandomSetSizeWithoutDelta: cs.NodeSet.RandomSet().SetSizeWithOutDelta,
-		ObserverSet:               cs.GetObservers(),
-		Responses:                 cs.NodeSet.Responses(),
-	}
-
-	rawData, err := polo.Polorize(msg)
-	if err != nil {
-		return common.NilHash, err
-	}
-
-	hash := blake2b.Sum256(rawData)
-	cs.AddDirty(hash, rawData)
-	cs.ICSHash = hash
-
-	return hash, nil
-}
-
-func (cs *ClusterState) CreateICSSuccessMsg() *ICSSuccess {
-	cs.mtx.Lock()
-	defer cs.mtx.Unlock()
-
-	msg := &ICSSuccess{
-		ClusterID: cs.ClusterID,
-		Responses: cs.NodeSet.Responses(),
-		Signature: make([]byte, 0),
-	}
-
-	return msg
-}
-
 func (cs *ClusterState) ExecutionContext() *common.ExecutionContext {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
 	return &common.ExecutionContext{
-		Participants: cs.Participants.IxnParticipants(),
-		CtxDelta:     cs.ContextDelta(),
-		Cluster:      cs.ClusterID,
-		Time:         uint64(cs.ICSReqTime.Unix()),
+		CtxDelta: cs.ContextDelta(),
+		Cluster:  cs.ClusterID,
+		Time:     uint64(cs.ICSReqTime.Unix()),
 	}
 }
 
@@ -428,19 +406,6 @@ func (cs *ClusterState) GetDirty() map[common.Hash][]byte {
 	defer cs.mtx.Unlock()
 
 	return cs.dirty
-}
-
-func (cs *ClusterState) ContextLock() map[identifiers.Address]common.ContextLockInfo {
-	lockInfo := make(map[identifiers.Address]common.ContextLockInfo)
-	for addr, ps := range cs.Participants {
-		lockInfo[addr] = common.ContextLockInfo{
-			ContextHash:   ps.ContextHash,
-			Height:        ps.Height,
-			TesseractHash: ps.TesseractHash,
-		}
-	}
-
-	return lockInfo
 }
 
 func (cs *ClusterState) GetICSRespCount() int {
@@ -461,7 +426,7 @@ func (cs *ClusterState) ContextDelta() common.ContextDelta {
 	contextDelta := make(common.ContextDelta)
 
 	for addr, ps := range cs.Participants {
-		if ps.ContextDelta != nil {
+		if !ps.ExcludeFromICS && ps.ContextDelta != nil {
 			contextDelta[addr] = ps.ContextDelta
 
 			continue
@@ -473,6 +438,13 @@ func (cs *ClusterState) ContextDelta() common.ContextDelta {
 
 func (cs *ClusterState) Ixns() common.Interactions {
 	return cs.ixns
+}
+
+func (cs *ClusterState) PrepareQc() *PreparedInfo {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	return cs.preparedQc
 }
 
 type AccountInfo struct {
@@ -527,37 +499,7 @@ func (a AccountInfos) Address() []identifiers.Address {
 	return addrs
 }
 
-type Request struct {
-	Ctx          context.Context
-	Ixs          common.Interactions
-	Msg          *CanonicalICSRequest
-	Operator     kramaid.KramaID
-	SlotType     SlotType
-	ReqTime      time.Time
-	ResponseChan chan Response
-}
-
-func (r *Request) IxHash() common.Hash {
-	return r.Ixs[0].Hash()
-}
-
-func (r *Request) GetClusterID() (common.ClusterID, error) {
-	switch r.SlotType {
-	case OperatorSlot:
-		return generateClusterID()
-	case ValidatorSlot:
-		return r.Msg.ClusterID, nil
-	default:
-		return "", errors.New("invalid request type")
-	}
-}
-
-type Response struct {
-	Err  error
-	Data any
-}
-
-func generateClusterID() (common.ClusterID, error) {
+func GenerateClusterID() (common.ClusterID, error) {
 	randHash := make([]byte, 32)
 
 	if _, err := rand.Read(randHash); err != nil {

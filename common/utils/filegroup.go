@@ -329,13 +329,13 @@ func (g *Group) checkTotalSizeLimit(ctx context.Context) error {
 
 		fInfo, err := os.Stat(pathToRemove)
 		if err != nil {
-			g.logger.Error("Failed to fetch information for file", "file", pathToRemove)
+			g.logger.Error("failed to fetch information for file", "file", pathToRemove)
 
 			continue
 		}
 
 		if err = os.Remove(pathToRemove); err != nil {
-			g.logger.Error("Failed to remove path", "path", pathToRemove, "err", err)
+			g.logger.Error("failed to remove path", "path", pathToRemove, "err", err)
 
 			return fmt.Errorf("failed to remove path, path: %s, error: %w", pathToRemove, err)
 		}

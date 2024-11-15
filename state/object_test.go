@@ -426,6 +426,7 @@ func TestCommitStorage(t *testing.T) {
 
 			storageTrees := copyStorageTrees(sObj.storageTrees)
 			actualRootHash, err := sObj.commitStorage()
+
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -753,6 +754,7 @@ func TestStateManager_FlushDirtyObject(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			obj := createTestStateObject(t, test.soParams)
 			err := obj.flush()
+
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -892,6 +894,7 @@ func TestCreateAsset(t *testing.T) {
 			require.NoError(t, err)
 
 			expectedAssetID := getTestAssetID(test.assetAddress, test.assetDescriptor)
+
 			require.NoError(t, err)
 			require.Equal(t, expectedAssetID, actualAssetID)
 
@@ -1522,6 +1525,7 @@ func TestSetStorageEntry(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
 			err := sObj.SetStorageEntry(logicID[0], keys[1], values[1])
+
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1529,6 +1533,7 @@ func TestSetStorageEntry(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+
 			txn, ok := sObj.storageTreeTxns[(logicID)[0]]
 			require.True(t, ok)
 
