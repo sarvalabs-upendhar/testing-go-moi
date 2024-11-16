@@ -374,8 +374,8 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 	}
 
 	if k.trustedPeersPresent {
-		// Choose 5 trusted nodes, as a maximum of 3 nodes are required while updating the context
-		cs.TrustedPeers = k.getTrustedPeers(5)
+		// Choose 10 trusted nodes, as a maximum of 8 nodes are required while updating the context
+		cs.TrustedPeers = k.getTrustedPeers(10)
 	}
 
 	// choose the stochastic nodes using flux

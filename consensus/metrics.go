@@ -142,6 +142,8 @@ func NilMetrics() *Metrics {
 		ProposalValidationTime:       discard.NewHistogram(),
 		RequestTurnaroundTime:        discard.NewHistogram(),
 		RandomNodesQueryTime:         discard.NewHistogram(),
+		CurrentView:                  discard.NewGauge(),
+		ActiveICSClusters:            discard.NewGauge(),
 		ICSCreationTime:              discard.NewHistogram(),
 		ICSCreationFailureCount:      discard.NewCounter(),
 		ICSParticipationFailureCount: discard.NewCounter(),
