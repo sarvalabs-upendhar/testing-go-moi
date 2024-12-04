@@ -1,0 +1,336 @@
+---
+# Define variables for the deployment options
+- name: Run Deployment
+  hosts: all
+  gather_facts: false
+  vars:
+    deployment_option: "{{ lookup('env', 'deployment_option') | default('Full Deployment') }}"  # Default to 'Full Deployment' if not set
+
+  tasks:
+    - name: Print deployment option
+      debug:
+        msg: "Deployment Option: {{ deployment_option }}"
+
+
+################################
+# Docker stop on devnet servers #
+################################
+
+- name: Run devnet_stop.sh on the devnet server
+  hosts: devnet-servers
+  tasks:
+    - name: Copy devnet_stop.sh to the devnet server
+      copy:
+        src: "{{ playbook_dir }}/scripts/devnet_stop.sh"
+        dest: "/home/moichain/devnet_stop.sh"
+        owner: moichain
+        group: moichain
+        mode: '0755'
+      become_user: moichain
+      when: deployment_option in ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+    - name: Run devnet_stop.sh on the devnet server
+      shell: "./devnet_stop.sh"
+      args:
+        chdir: "/home/moichain"
+      become_user: moichain
+      when: deployment_option in ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+###################################
+# Docker stop on bootnode servers #
+###################################
+
+- name: Run bootnode_stop.sh on the bootnode server
+  hosts: bootnode-server
+  tasks:
+    - name: Copy bootnode_stop.sh to the bootnode server
+      copy:
+        src: "{{ playbook_dir }}/scripts/bootnode_stop.sh"
+        dest: "/home/moichain/bootnode_stop.sh"
+        owner: root
+        group: root
+        mode: '0755'
+      become_user: root
+      when: deployment_option in ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+    - name: Run bootnode_stop.sh on the bootnode server
+      shell: "./bootnode_stop.sh"
+      args:
+        chdir: "/home/moichain"
+      become_user: root
+      when: deployment_option in ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+###########################################################
+# Backup folder on devnet backup servers and upload to S3 #
+###########################################################
+
+- name: Backup and upload to S3
+  hosts: devnet-backup-servers
+  gather_facts: true
+  vars:
+    timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d-%H') }}"
+
+  tasks:
+    - name: Ensure AWS CLI is installed
+      become_user: root
+      package:
+        name: awscli
+        state: present
+      when: ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '22.04'
+
+    - name: Ensure snapd is installed
+      apt:
+        name: snapd
+        state: present
+        update_cache: yes
+      when: ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
+
+    - name: Install AWS CLI v2 via Snap
+      snap:
+        name: aws-cli
+        state: present
+        classic: true
+      when: ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
+
+    - name: Ensure backup directory exists
+      become_user: moichain
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: moichain
+        group: moichain
+        mode: '0755'
+      when: deployment_option == 'Full Deployment'
+
+    - name: Backup directories
+      become_user: moichain
+      loop: "{{ directories_to_backup }}"
+      loop_control:
+        label: "{{ item.name }}"
+      command: >
+        tar czf {{ backup_dir }}/test_{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz {{ item.path }}
+      register: backup_result
+      failed_when: backup_result.rc != 0
+      changed_when: backup_result.rc == 0
+      when: deployment_option == 'Full Deployment'
+
+    - name: Upload backups to S3 with timestamp
+      become_user: moichain
+      shell: |
+            aws s3 cp {{ backup_dir }}/test_{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
+            s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
+      args:
+        executable: /bin/bash
+      with_items: "{{ directories_to_backup }}"
+      loop_control:
+          label: "{{ item.name }}"
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ AWS_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY: "{{ AWS_SECRET_ACCESS_KEY }}"
+        AWS_DEFAULT_REGION: "{{ AWS_DEFAULT_REGION }}"
+      when: deployment_option == 'Full Deployment'
+
+
+
+
+#####################################################
+# Backup folder on bootnode server and upload to s3 #
+#####################################################
+
+- name: Backup folder on bootnode server and upload to S3
+  hosts: bootnode-server
+  gather_facts: true
+  vars:
+     timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d-%H') }}"
+  tasks:
+
+  - name: Ensure AWS CLI is installed on Ubuntu 22.04
+    package:
+      name: awscli
+      state: present
+    when: ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '22.04'
+
+  - name: Ensure snapd is installed
+    apt:
+      name: snapd
+      state: present
+      update_cache: yes
+    when: ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
+
+  - name: Install AWS CLI v2 via Snap
+    snap:
+      name: aws-cli
+      state: present
+      classic: true
+    when: ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
+
+  - name: Ensure backup directory exists
+    file:
+      path: "{{ backup_dir }}"
+      state: directory
+      owner: root
+      group: root
+      mode: '0755'
+
+  - name: Backup all directories into a single tar file
+    command: >
+      tar czf {{ backup_dir }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
+      {{ directories_to_backup | map(attribute='path') | join(' ') }}
+    when: deployment_option == 'Full Deployment'
+
+  - name: Check if the tar file exists before uploading to S3
+    become_user: root
+    stat:
+      path: "{{ backup_dir }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz"
+    register: tar_file_stat
+    when: deployment_option == 'Full Deployment'
+
+  - name: Upload the backup tar file to S3
+    when: tar_file_stat.stat.exists
+    command: >
+      aws s3 cp {{ backup_dir }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
+      s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ timestamp }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
+    environment:
+      AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
+      AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
+      AWS_DEFAULT_REGION: "{{ lookup('env', 'AWS_DEFAULT_REGION') }}"
+    when: deployment_option == 'Full Deployment'
+
+
+#########################################
+# update docker compose file on a devnet server #
+#########################################
+
+- name: Generate docker-compose.yaml file for devnet
+  hosts: devnet-servers
+  become: true
+  become_user: moichain
+  tasks:
+    - name: Create docker-compose.yaml from template
+      template:
+        src: "docker-compose-template.yaml.j2"
+        dest: "/home/moichain/stack/moipod/docker-compose-test.yaml"
+      when: deployment_option == ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+
+#########################################
+# update config file on a devnet server #
+#########################################
+
+- name: Update ports in config.json on a single devnet server
+  hosts: devnet-servers
+  become: true
+  become_user: moichain
+  tasks:
+  - name: Generate config.json files using the template
+    template:
+      src: "config_template.json.j2"
+      dest: "/home/moichain/shared/moipod/test_{{ item }}/config.json"
+    loop: "{{ range(0, 10) | list }}"
+    loop_control:
+      loop_var: item
+    vars:
+      node_port: "{{ base_port + item }}"
+      prometheus_port: "{{ base_prometheus_port + item }}"
+      jsonrpc_port: "{{ base_jsonrpc_port + item }}"
+    when: deployment_option == ['Full Deployment', 'Config Update Only'] 
+
+##########################################
+# update "genesis" file on devnet server #
+##########################################
+
+- name: Update genesis.json file on devnet servers
+  hosts: devnet-servers
+  
+  become: true
+  gather_facts: false
+  tasks:
+  - name: Download genesis.json from S3 bucket
+    become_user: moichain
+    shell: |
+      aws s3 cp s3://{{ s3_bucket_genesis }}/{{ s3_file_genesis }} {{ local_temp_path_genesis }}
+    args:
+      executable: /bin/bash
+    environment:
+      AWS_ACCESS_KEY_ID: "{{ AWS_ACCESS_KEY_ID }}"
+      AWS_SECRET_ACCESS_KEY: "{{ AWS_SECRET_ACCESS_KEY }}"
+      AWS_DEFAULT_REGION: "{{ AWS_DEFAULT_REGION }}"
+    when: deployment_option in ['Full Deployment', 'Genesis Update Only']
+ 
+  - name: Backup the existing genesis.json file (if exists)
+    become_user: moichain
+    copy:
+      src: "{{ target_path_genesis }}"
+      dest: "{{ target_path_genesis }}.bak"
+      remote_src: true
+    ignore_errors: true
+    when: deployment_option in ['Full Deployment', 'Genesis Update Only']
+
+  - name: Replace the genesis.json file
+    become_user: moichain
+    copy:
+      src: "{{ local_temp_path_genesis }}"
+      dest: "{{ target_path_genesis }}"
+      remote_src: true
+      owner: moichain
+      group: moichain
+      mode: '0644'
+    when: deployment_option in ['Full Deployment', 'Genesis Update Only']
+
+  - name: Cleanup temporary genesis.json file
+    become_user: moichain
+    file:
+      path: "{{ local_temp_path_genesis }}"
+      state: absent
+    when: deployment_option in ['Full Deployment', 'Genesis Update Only']
+
+
+#####################################
+# Docker start on bootnode servers  #
+#####################################
+
+- name: Run bootnode_start.sh on the bootnode server
+  hosts: bootnode-server
+  tasks:
+  - name: Copy bootnode_start.sh to the bootnode server
+    copy:
+      src: "{{ playbook_dir }}/scripts/bootnode_start.sh"
+      dest: "/home/moichain/bootnode_start.sh"
+      owner: root
+      group: root
+      mode: '0755'
+    become_user: root
+    when: deployment_option in ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+  - name: Run bootnode_start.sh on the bootnode server
+    shell: "./bootnode_start.sh"
+    args:
+      chdir: "/home/moichain"
+    become_user: root
+    when: deployment_option in ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+##################################
+# Docker start on devnet servers #
+##################################
+
+- name: Run devnet_start.sh on the devnet server
+  hosts: devnet-servers
+  tasks:
+  - name: Copy devnet_start.sh to the devnet server
+    copy:
+      src: "{{ playbook_dir }}/scripts/devnet_start.sh"
+      dest: "/home/moichain/devnet_start.sh"
+      owner: moichain
+      group: moichain
+      mode: '0755'
+    become_user: moichain
+    when: deployment_option in ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+  - name: Run devnet_start.sh on the devnet server
+    shell: "./devnet_start.sh"
+    args:
+      chdir: "/home/moichain"
+    become_user: moichain
+    when: deployment_option in ['Full Deployment', 'Quick Deployment', 'Config Update Only', 'Genesis Update Only']
+
+

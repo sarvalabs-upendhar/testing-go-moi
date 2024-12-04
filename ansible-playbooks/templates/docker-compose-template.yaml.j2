@@ -1,0 +1,25 @@
+version: "3.9"
+
+x-common-params: &default-params
+  stdin_open: true
+  restart: "no"
+  working_dir: /data
+  network_mode: host
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "25m"
+      max-file: 10
+
+services:
+{% for i in range(0, 10) %}
+  moipod{{ "%02d" | format(i + 1) }}:
+    image: "ghcr.io/sarvalabs/moipod:{{ image_tag }}"
+    hostname: moipod{{ "%02d" | format(i + 1) }}
+    container_name: moipod{{ "%02d" | format(i + 1) }}
+    <<: *default-params
+    volumes:
+      - "/home/moichain/shared/moipod:/data:rw"
+    command: server --data-dir test_{{ i }} --operator-slots {{ operator_slot }} --validator-slots {{ validator_slot }} --clean-db="{{ clean_db }}" --allow-origins "{{ allow_origin }}" --bootnodes {{ bootnode_endpoint }} --node-password {{ node_password }} --genesis-path ./genesis.json --config-path ./test_{{ i }}/config.json --log-dir ./logs/ --enable-tracing --log-level={{ log_level }} --discovery-interval {{ discovery_interval }}
+
+{% endfor %}
