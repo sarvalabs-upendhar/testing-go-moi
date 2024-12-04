@@ -1,18 +1,22 @@
-name: Network Upgrade Devnet
+name: Internal Testing for Test Servers
 on:
 
   workflow_dispatch:
     inputs:
       environment:
-          default: 'Quick Deployment'
+          default: 'Quick_Deployment'
           description: 'Choose deployment option'
           required: true
           type: choice
           options:
-            - Quick Deployment
-            - Full Deployment
-            - Genesis Update Only
-            - Config Update Only   
+            - Quick_Deployment
+            - Full_Deployment
+            - Genesis_Update_Only
+            - Config_Update_Only   
+            
+
+env: 
+  BRANCH_NAME: ${{ github.ref_name }}
 
 jobs:
   publish:
@@ -56,6 +60,7 @@ jobs:
         run: |
           echo "DEPLOYMENT_OPTION=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
 
+
       # Step 3: Connect to the jump server and execute the playbook
       - name: Run Ansible Playbook on Jump Server
         uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6
@@ -66,16 +71,18 @@ jobs:
           port: ${{ secrets.TELEPORT_PORT }}
           script: |
             echo "Starting playbook execution..."
-            cd /home/github/sarvalabs
-            git pull
+            cd /home/github/go-moi
+            echo ${{ github.ref_name }}
+            echo "Pulling latest changes from branch: ${{ github.ref_name }}"
+            git checkout ${{ github.ref_name }}
+            git pull origin ${{ github.ref_name }}
             # Export AWS credentials as environment variables
             export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
             export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
             # Run the Ansible playbook with extra vars based on deployment option
-            ansible-playbook -i ansible-playbooks/inventory.yml ansible-playbooks/upgrade.yaml \
+            ansible-playbook -i ansible-playbooks/inventory-test.yml ansible-playbooks/upgrade.yaml \
             --extra-vars "ansible_ssh_private_key_file=/home/github/.ssh/id_rsa" \
             -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} deployment_option=${{ env.DEPLOYMENT_OPTION }}" \
             -vv
-
 
