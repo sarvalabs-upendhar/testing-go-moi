@@ -5,83 +5,98 @@ all:
         devnet-node-1:
           ansible_host: 91.107.196.74
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no" 
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
             
         devnet-node-2:
           ansible_host: 167.235.206.10
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"  
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-3:
           ansible_host: 49.12.70.73
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"  
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-4:
           ansible_host: 168.119.187.8
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"    
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10 
 
         devnet-node-5:
           ansible_host: 49.12.242.48
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"    
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10 
 
         devnet-node-6:
           ansible_host: 78.47.151.56
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"  
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-7:
           ansible_host: 91.107.196.216
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"  
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-8:
           ansible_host: 95.217.186.185
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"    
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-9:
           ansible_host: 95.217.130.188
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"    
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10  
 
         devnet-node-10:
           ansible_host: 65.21.7.176
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"  
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-11:
           ansible_host: 95.217.234.61
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no" 
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-12:
           ansible_host: 65.109.228.42
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"     
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-13:
           ansible_host: 65.109.234.64
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"    
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-14:
           ansible_host: 65.109.225.220
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"  
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 10
 
         devnet-node-15:
           ansible_host: 95.216.199.222
           ansible_ssh_user: moichain
-          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"  
+          ansible_ssh_extra_args: "-o StrictHostKeyChecking=no"
+          no_of_pods: 1
 
       vars:
           base_port: 6000  # Starting port for devnet-node-1
           base_prometheus_port: 30000  # Starting port for Prometheus
           base_jsonrpc_port: 1600  # Starting port for JSON-RPC
-          bootnode_endpoint: "/ip4/139.59.73.20/tcp/4003/p2p/16Uiu2HAkvYLk7wpfDcukh7U1Ub6kdNLnEKcLFjkHtsqwy5GzNWAB"
+          bootnode_endpoint: "/ip4/139.59.73.20/tcp/4001/p2p/16Uiu2HAmHCwGWG9ckEaowf2Bpy75kVe7S628GniumaMVXs4GAKGc"
           s3_bucket_genesis: "genesis-devnet"
           s3_file_genesis: "genesis.json"
           local_temp_path_genesis: "/home/moichain/genesis.json"

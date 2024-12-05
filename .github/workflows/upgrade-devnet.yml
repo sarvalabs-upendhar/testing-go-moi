@@ -80,9 +80,8 @@ jobs:
             export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
             export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
+            export SUDO_PASSWORD=${{ secrets.SUDO_PASSWORD }}
             # Run the Ansible playbook with extra vars based on deployment option
-            ansible-playbook -i ansible-playbooks/inventory-devnet.yml ansible-playbooks/upgrade.yaml \
+            ansible-playbook -i ansible-playbooks/inventory-devnet.yml ansible-playbooks/upgrade.yaml -f 10 \
             --extra-vars "ansible_ssh_private_key_file=/home/github/.ssh/id_rsa" \
-            -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} deployment_option=${{ env.DEPLOYMENT_OPTION }}" \
-            -vv
-
+            -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} deployment_option=${{ env.DEPLOYMENT_OPTION }} SUDO_PASSWORD=${{ secrets.SUDO_PASSWORD }}"

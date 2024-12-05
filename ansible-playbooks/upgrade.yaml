@@ -12,9 +12,9 @@
         msg: "Deployment Option: {{ deployment_option }}"
 
 
-################################
-# Docker stop on devnet servers #
-################################
+# ################################
+# # Docker stop on devnet servers #
+# ################################
 
 - name: Run devnet_stop.sh on the devnet server
   hosts: devnet-servers
@@ -72,7 +72,11 @@
 
   tasks:
     - name: Ensure AWS CLI is installed
+      become: yes
       become_user: root
+      become_method: sudo
+      vars:
+        ansible_become_pass: "{{ SUDO_PASSWORD }}"
       package:
         name: awscli
         state: present
@@ -81,6 +85,10 @@
       - deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Ensure snapd is installed
+      become: yes
+      become_user: root
+      vars:
+        ansible_become_pass: "{{ SUDO_PASSWORD }}"
       apt:
         name: snapd
         state: present
@@ -90,6 +98,10 @@
       - deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Install AWS CLI v2 via Snap
+      become: yes
+      become_user: root
+      vars:
+        ansible_become_pass: "{{ SUDO_PASSWORD }}"
       snap:
         name: aws-cli
         state: present
@@ -123,6 +135,7 @@
     - name: Upload backups to S3 with timestamp
       become_user: moichain
       shell: |
+            set -euo pipefail
             aws s3 cp {{ backup_dir }}/test_{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
             s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
       args:
@@ -138,9 +151,9 @@
 
 
 
-#####################################################
-# Backup folder on bootnode server and upload to s3 #
-#####################################################
+# #####################################################
+# # Backup folder on bootnode server and upload to s3 #
+# #####################################################
 
 - name: Backup folder on bootnode server and upload to S3
   hosts: bootnode-server
@@ -240,7 +253,7 @@
     template:
       src: "config_template.json.j2"
       dest: "/home/moichain/shared/moipod/test_{{ item }}/config.json"
-    loop: "{{ range(0, 10) | list }}"
+    loop: "{{ range(0, hostvars[inventory_hostname].no_of_pods) | list }}"
     loop_control:
       loop_var: item
     vars:
@@ -257,9 +270,50 @@
 - name: Update genesis.json file on devnet servers
   hosts: devnet-servers
   
-  become: true
+  # become: true
   gather_facts: false
   tasks:
+  - name: Ensure AWS CLI is installed on Ubuntu 22.04
+    become: yes
+    become_user: root
+    become_method: sudo
+    vars:
+      ansible_become_pass: "{{ SUDO_PASSWORD }}"
+    package:
+      name: awscli
+      state: present
+    when: 
+    - ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '22.04'
+    - deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
+
+  - name: Ensure snapd is installed
+    become: yes
+    become_user: root
+    become_method: sudo
+    vars:
+      ansible_become_pass: "{{ SUDO_PASSWORD }}"
+    apt:
+      name: snapd
+      state: present
+      update_cache: yes
+    when: 
+    - ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
+    - deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
+
+  - name: Install AWS CLI v2 via Snap
+    become: yes
+    become_user: root
+    become_method: sudo
+    vars:
+      ansible_become_pass: "{{ SUDO_PASSWORD }}"
+    snap:
+      name: aws-cli
+      state: present
+      classic: true
+    when: 
+    - ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
+    - deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
+    
   - name: Download genesis.json from S3 bucket
     become_user: moichain
     shell: |
