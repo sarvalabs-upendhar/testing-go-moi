@@ -37,12 +37,10 @@ jobs:
       IP14: ${{ secrets.IP14 }}
       IP15: ${{ secrets.IP15 }}
       NODE_USER: ${{ secrets.NODE_USER }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      SSH_PORT: ${{ secrets.SSH_PORT }}
-      PROXY_HOST: ${{ secrets.PROXY_HOST }}
-      PROXY_USER: ${{ secrets.PROXY_USER }}
-      PROXY_KEY: ${{ secrets.PROXY_KEY }}
-      PROXY_PORT: ${{ secrets.PROXY_PORT }}
+      TELEPORT_HOST: ${{ secrets.TELEPORT_HOST }}
+      TELEPORT_USER: ${{ secrets.TELEPORT_USER }}
+      TELEPORT_PRIVATE_KEY: ${{ secrets.TELEPORT_PRIVATE_KEY }}
+      TELEPORT_PORT: ${{ secrets.TELEPORT_PORT }}
 
   cd:
     # if: github.event.pull_request.merged == true
@@ -74,9 +72,7 @@ jobs:
       IP14: ${{ secrets.IP14 }}
       IP15: ${{ secrets.IP15 }}
       NODE_USER: ${{ secrets.NODE_USER }}
-      SSH_KEY: ${{ secrets.SSH_KEY }}
-      SSH_PORT: ${{ secrets.SSH_PORT }}
-      PROXY_HOST: ${{ secrets.PROXY_HOST }}
-      PROXY_USER: ${{ secrets.PROXY_USER }}
-      PROXY_KEY: ${{ secrets.PROXY_KEY }}
-      PROXY_PORT: ${{ secrets.PROXY_PORT }}
+      TELEPORT_HOST: ${{ secrets.TELEPORT_HOST }}
+      TELEPORT_USER: ${{ secrets.TELEPORT_USER }}
+      TELEPORT_PRIVATE_KEY: ${{ secrets.TELEPORT_PRIVATE_KEY }}
+      TELEPORT_PORT: ${{ secrets.TELEPORT_PORT }}
