@@ -6,6 +6,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/sarvalabs/go-moi/telemetry/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
@@ -17,6 +21,12 @@ import (
 
 // icsHandler is the main handler for ICS Cluster.It handles the timeout events and messages
 func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
+	spanCtx, span := tracing.Span(
+		ctx, "Krama.Handler", "icsHandler",
+		trace.WithAttributes(attribute.String("clusterID", clusterID.String())),
+	)
+	defer span.End()
+
 	slot := k.slots.GetSlot(clusterID)
 	cs := slot.ClusterState()
 
@@ -47,7 +57,7 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 		case msg := <-slot.BftOutboundChan:
 			k.handleOutboundMessage(ctx, slot.ClusterID(), msg)
 		case <-slot.NewICSChan:
-			if err := k.sendPrepare(ctx, cs); err != nil {
+			if err := k.sendPrepare(spanCtx, cs); err != nil {
 				k.logger.Error("failed to send prepare msg", "error", err, "cluster-id", clusterID)
 
 				return
@@ -65,13 +75,13 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 
 			switch m := cMsg.(type) {
 			case *ktypes.Prepared:
-				if err := k.handlePrepared(ctx, clusterID, m, msg.PeerID); err != nil {
+				if err := k.handlePrepared(spanCtx, clusterID, m, msg.PeerID); err != nil {
 					k.logger.Error("failed to handle prepared msg", "error", err)
 				}
 
 			case *ktypes.Proposal:
 				if slot.SlotType == ktypes.ValidatorSlot {
-					if err := k.handleProposal(ctx, slot.ClusterState(), m); err != nil {
+					if err := k.handleProposal(spanCtx, slot.ClusterState(), m); err != nil {
 						k.logger.Error("failed to handle proposal msg", "error", err)
 
 						return
@@ -151,6 +161,9 @@ func (k *Engine) handleOutboundMessage(
 */
 func (k *Engine) handleProposal(ctx context.Context, cs *ktypes.ClusterState, proposal *ktypes.Proposal) error {
 	k.logger.Debug("Handling proposal", "cluster-id", cs.ClusterID, "view", proposal.View())
+
+	_, span := tracing.Span(ctx, "Krama.Handler", "handleProposal")
+	defer span.End()
 
 	initTime := time.Now()
 	defer k.metrics.captureProposalValidationTime(initTime)
@@ -234,6 +247,9 @@ func (k *Engine) handlePrepared(
 	sender kramaid.KramaID,
 ) error {
 	k.logger.Debug("Handling prepared", "cluster-id", clusterID, "sender", sender)
+
+	_, span := tracing.Span(ctx, "Krama.Handler", "handlePrepared")
+	defer span.End()
 
 	if k.view.Load() != msg.View {
 		// leader view and the local view should match
@@ -366,6 +382,9 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 		"cluster-id", cs.ClusterID,
 		"address", cs.Participants.Addrs(),
 	)
+
+	_, span := tracing.Span(ctx, "Krama.Handler", "sendPrepare")
+	defer span.End()
 
 	prepareMsg := &ktypes.Prepare{
 		View: cs.CurrentView(),
