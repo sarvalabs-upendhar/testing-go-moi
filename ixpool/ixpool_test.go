@@ -183,6 +183,13 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 		addrs = tests.GetAddresses(t, 1)
 	)
 
+	sm.SetAccountMetaInfo(addrs[0], &common.AccountMetaInfo{
+		PositionInContextSet: 1,
+	})
+	sm.SetAccountMetaInfo(transferPayload.Beneficiary, &common.AccountMetaInfo{
+		PositionInContextSet: 1,
+	})
+
 	sm.setTestMOIBalance(t, addrs...)
 	sm.registerAccounts(transferPayload.Beneficiary)
 
@@ -333,12 +340,17 @@ func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 				promotedIx := acc.promoted.peek()
 				require.Equal(t, test.ix, promotedIx)
 
+				require.True(t, promotedIx.ShouldPropose())
+
 				return
 			}
 
 			require.Equal(t, 1, int(acc.enqueued.length()))
 			enqueuedIx := acc.enqueued.peek()
 			require.Equal(t, test.ix, enqueuedIx)
+
+			require.False(t, enqueuedIx.ShouldPropose())
+			require.Equal(t, uint64(0), enqueuedIx.AllottedView())
 		})
 	}
 }

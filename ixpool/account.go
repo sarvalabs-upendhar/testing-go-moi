@@ -77,8 +77,8 @@ func (a *account) resetWaitTimeAndCounter() {
 
 // "enqueue" tries to add the Interaction to the enqueued queue unless it is a replacement.
 // In the case of a replacement, it first attempts to replace in the enqueued queue,
-// and if that fails, it replaces it in the promoted queue.
-func (a *account) enqueue(ix *common.Interaction, replace bool) {
+// and if that fails, it replaces it in the promoted queue and returns true
+func (a *account) enqueue(ix *common.Interaction, replace bool) bool {
 	// check the counter and reset if required
 	if a.getDelayCounter() >= MaxWaitCounter && time.Now().After(a.getWaitTime()) {
 		a.resetWaitTimeAndCounter()
@@ -102,13 +102,15 @@ func (a *account) enqueue(ix *common.Interaction, replace bool) {
 		// enqueue ix
 		a.enqueued.push(ix)
 
-		return
+		return false
 	}
 
 	if !replaceInQueue(a.enqueued.queue) { // first, try to replace in enqueued
 		// then try to replace in promoted
-		replaceInQueue(a.promoted.queue)
+		return replaceInQueue(a.promoted.queue)
 	}
+
+	return false
 }
 
 // Promote moves eligible Interactions from enqueued to promoted queue.

@@ -304,7 +304,9 @@ func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
 	ixSize, _ := ix.Size()
 	i.metrics.captureIxPoolSize(float64(ixSize))
 
-	acc.enqueue(ix, oldIxWithSameNonce != nil)
+	if replacedInPromoted := acc.enqueue(ix, oldIxWithSameNonce != nil); replacedInPromoted {
+		i.allocateView(i.currentView()+1, ix)
+	}
 
 	// emit added interactions event
 	if err := i.postAddedInteractionEvent(ix); err != nil {
