@@ -10,59 +10,39 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-type BalanceObject struct {
-	AssetMap common.AssetMap
-	PrvHash  common.Hash
+// AssetObject represents an asset's state, including balance, deposits, mandates, and properties.
+type AssetObject struct {
+	Balance    *big.Int
+	Deposit    map[identifiers.LogicID]*big.Int
+	Mandate    map[identifiers.Address]*big.Int
+	Properties *common.AssetDescriptor
 }
 
-func (balance *BalanceObject) TDU() (common.AssetMap, common.Hash) {
-	return balance.AssetMap, balance.PrvHash
-}
-
-func (balance *BalanceObject) Copy() *BalanceObject {
-	newObject := new(BalanceObject)
-	if !balance.PrvHash.IsNil() {
-		newObject.PrvHash = balance.PrvHash
+// NewAssetObject initializes a new AssetObject with the given balance and properties.
+func NewAssetObject(balance *big.Int, properties *common.AssetDescriptor) *AssetObject {
+	return &AssetObject{
+		Balance:    balance,
+		Deposit:    make(map[identifiers.LogicID]*big.Int),
+		Mandate:    make(map[identifiers.Address]*big.Int),
+		Properties: properties,
 	}
-
-	newObject.AssetMap = make(common.AssetMap)
-	for k, v := range balance.AssetMap {
-		newObject.AssetMap[k] = new(big.Int).SetBytes(v.Bytes())
-	}
-
-	return newObject
 }
 
-func (balance *BalanceObject) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(balance)
+// Bytes serializes the AssetObject into bytes.
+func (ao *AssetObject) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(ao)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize balance object")
+		return nil, errors.Wrap(err, "failed to polorize asset object")
 	}
 
-	return rawData, nil
+	return data, err
 }
 
-func (balance *BalanceObject) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(balance, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize balance object")
+// FromBytes deserializes the AssetObject from bytes.
+func (ao *AssetObject) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(ao, bytes); err != nil {
+		return errors.Wrap(err, "failed to depolorize asset object")
 	}
 
 	return nil
-}
-
-type ApprovalObject struct {
-	Approvals map[identifiers.Address]common.AssetMap
-	PrvHash   common.Hash
-}
-
-func (a *ApprovalObject) Copy() *ApprovalObject {
-	newObject := new(ApprovalObject)
-	newObject.PrvHash = a.PrvHash
-	newObject.Approvals = make(map[identifiers.Address]common.AssetMap)
-
-	for k, v := range a.Approvals {
-		newObject.Approvals[k] = v.Copy()
-	}
-
-	return newObject
 }

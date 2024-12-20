@@ -62,7 +62,7 @@ func (m *MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool 
 	return true
 }
 
-func (m *MockDB) GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error) {
+func (m *MockDB) GetDeeds(addr identifiers.Address, hash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }

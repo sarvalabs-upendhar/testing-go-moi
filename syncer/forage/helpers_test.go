@@ -583,6 +583,10 @@ func (m *MockStateManager) SyncStorageTrees(ctx context.Context, newRoot *common
 	panic("implement me")
 }
 
+func (m *MockStateManager) SyncAssetTree(newRoot *common.RootNode, so *state.Object) error {
+	panic("implement me")
+}
+
 func (m *MockStateManager) SyncLogicTree(newRoot *common.RootNode, so *state.Object) error {
 	// TODO implement me
 	panic("implement me")

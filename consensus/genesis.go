@@ -346,9 +346,7 @@ func (k *Engine) setupAssetAccounts(
 				return errors.New("operator account not found")
 			}
 
-			_, err = transition[assetAccount.AssetInfo.Operator].CreateAsset(
-				accAddress, assetAccount.AssetInfo.AssetDescriptor())
-			if err != nil {
+			if err = transition[assetAccount.AssetInfo.Operator].CreateDeedsEntry(string(assetID)); err != nil {
 				return err
 			}
 		}
@@ -358,7 +356,11 @@ func (k *Engine) setupAssetAccounts(
 				return errors.New("allocation address not found in state objects")
 			}
 
-			transition[allocation.Address].AddBalance(assetID, allocation.Amount.ToInt())
+			assetObject := state.NewAssetObject(allocation.Amount.ToInt(), nil)
+
+			if err = transition[allocation.Address].InsertNewAssetObject(assetID, assetObject); err != nil {
+				return err
+			}
 		}
 	}
 

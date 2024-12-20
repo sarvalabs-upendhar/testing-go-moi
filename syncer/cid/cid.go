@@ -111,10 +111,6 @@ func (s *CIDSet) ForEach(f func(c CID) error) error {
 	return nil
 }
 
-func ApprovalsCID(hash common.Hash) CID {
-	return ContentID(storage.Approvals.Byte(), hash)
-}
-
 func AccountCID(hash common.Hash) CID {
 	return ContentID(storage.Account.Byte(), hash)
 }
@@ -127,20 +123,20 @@ func StorageCID(hash common.Hash) CID {
 	return ContentID(storage.Storage.Byte(), hash)
 }
 
-func LogicCID(hash common.Hash) CID {
-	return ContentID(storage.Logic.Byte(), hash)
+func AssetCID(hash common.Hash) CID {
+	return ContentID(storage.Asset.Byte(), hash)
 }
 
-func BalanceCID(hash common.Hash) CID {
-	return ContentID(storage.Balance.Byte(), hash)
+func LogicCID(hash common.Hash) CID {
+	return ContentID(storage.Logic.Byte(), hash)
 }
 
 func ManifestCID(hash common.Hash) CID {
 	return ContentID(storage.LogicManifest.Byte(), hash)
 }
 
-func RegistryCID(hash common.Hash) CID {
-	return ContentID(storage.Registry.Byte(), hash)
+func DeedsCID(hash common.Hash) CID {
+	return ContentID(storage.Deeds.Byte(), hash)
 }
 
 func InteractionsCID(hash common.Hash) CID {

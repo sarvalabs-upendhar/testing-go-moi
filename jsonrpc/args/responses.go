@@ -17,7 +17,7 @@ import (
 
 // core and ix RPC Responses
 
-type RPCRegistry struct {
+type RPCDeeds struct {
 	AssetID   string             `json:"asset_id"`
 	AssetInfo RPCAssetDescriptor `json:"asset_info"`
 }
@@ -125,13 +125,12 @@ type RPCAccount struct {
 	Nonce   hexutil.Uint64     `json:"nonce"`
 	AccType common.AccountType `json:"acc_type"`
 
-	Balance        common.Hash `json:"balance"`
-	AssetApprovals common.Hash `json:"asset_approvals"`
-	AssetRegistry  common.Hash `json:"asset_registry"`
-	ContextHash    common.Hash `json:"context_hash"`
-	StorageRoot    common.Hash `json:"storage_root"`
-	LogicRoot      common.Hash `json:"logic_root"`
-	FileRoot       common.Hash `json:"file_root"`
+	AssetDeeds  common.Hash `json:"asset_deeds"`
+	ContextHash common.Hash `json:"context_hash"`
+	StorageRoot common.Hash `json:"storage_root"`
+	AssetRoot   common.Hash `json:"asset_root"`
+	LogicRoot   common.Hash `json:"logic_root"`
+	FileRoot    common.Hash `json:"file_root"`
 }
 
 type RPCAccountMetaInfo struct {

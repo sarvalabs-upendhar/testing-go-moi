@@ -44,7 +44,7 @@ var (
 	ErrAssetNotFound               = errors.New("asset not found")
 	ErrOperatorMismatch            = errors.New("asset operator address mismatch")
 	ErrAssetAlreadyRegistered      = errors.New("asset already registered")
-	ErrRegistryEntryNotFound       = errors.New("registry info not found")
+	ErrDeedEntryNotFound           = errors.New("deed info not found")
 	ErrIxParticipantsMissing       = errors.New("ix participants missing")
 	ErrInvalidIxParticipants       = errors.New("invalid ix participants")
 	ErrInvalidInteractions         = errors.New("invalid interactions")

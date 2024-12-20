@@ -58,9 +58,9 @@ type StateManager interface {
 	GetContextByHash(identifiers.Address, common.Hash) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
 
 	GetAssetInfo(identifiers.AssetID, common.Hash) (*common.AssetDescriptor, error)
-	GetBalances(identifiers.Address, common.Hash) (*state.BalanceObject, error)
+	GetBalances(identifiers.Address, common.Hash) (common.AssetMap, error)
 	GetBalance(identifiers.Address, identifiers.AssetID, common.Hash) (*big.Int, error)
-	GetRegistry(identifiers.Address, common.Hash) (map[string][]byte, error)
+	GetDeeds(identifiers.Address, common.Hash) (map[string]*common.AssetDescriptor, error)
 
 	GetLogicIDs(identifiers.Address, common.Hash) ([]identifiers.LogicID, error)
 	GetLogicManifest(identifiers.LogicID, common.Hash) ([]byte, error)

@@ -423,7 +423,7 @@ func (tn *TestSingleNode) TestTDU() {
 	}
 }
 
-func (tn *TestSingleNode) TestRegistry() {
+func (tn *TestSingleNode) TestDeeds() {
 	a := tn.genesis.AssetAccounts[1].AssetInfo
 
 	assetID := identifiers.NewAssetIDv0(
@@ -433,7 +433,6 @@ func (tn *TestSingleNode) TestRegistry() {
 		a.Standard.ToInt(),
 		common.CreateAddressFromString(a.Symbol),
 	)
-
 	testcases := []struct {
 		name          string
 		queryArgs     *rpcargs.QueryArgs
@@ -462,7 +461,7 @@ func (tn *TestSingleNode) TestRegistry() {
 
 	for _, test := range testcases {
 		tn.Run(test.name, func() {
-			registry, err := tn.moiClient.Registry(context.Background(), test.queryArgs)
+			deeds, err := tn.moiClient.Deeds(context.Background(), test.queryArgs)
 			if test.expectedError != nil {
 				require.ErrorContains(tn.T(), err, test.expectedError.Error())
 
@@ -470,9 +469,9 @@ func (tn *TestSingleNode) TestRegistry() {
 			}
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), 1, len(registry))
-			require.Equal(tn.T(), assetID.String(), registry[0].AssetID)
-			require.Equal(tn.T(), a.Operator, registry[0].AssetInfo.Operator)
+			require.Equal(tn.T(), 1, len(deeds))
+			require.Equal(tn.T(), assetID.String(), deeds[0].AssetID)
+			require.Equal(tn.T(), a.Operator, deeds[0].AssetInfo.Operator)
 		})
 	}
 }

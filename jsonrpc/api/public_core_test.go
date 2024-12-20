@@ -1422,30 +1422,23 @@ func TestPublicCoreAPI_GetPendingInteractionCount(t *testing.T) {
 func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 	ts := tests.CreateTesseract(t, nil)
 	height := int64(ts.Height(ts.AnyAddress()))
-
 	chainManager := NewMockChainManager(t)
 	stateManager := NewMockStateManager(t)
 	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
-
 	chainManager.SetTesseractHeightEntry(ts.AnyAddress(), ts.Height(ts.AnyAddress()), ts.Hash())
 	chainManager.setTesseractByHash(t, ts)
-
 	randomHash := tests.RandomHash(t)
-
 	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
 		acc.Nonce = uint64(5)
 		acc.AccType = common.RegularAccount
-		acc.Balance = tests.RandomHash(t)
-		acc.AssetRegistry = tests.RandomHash(t)
-		acc.AssetApprovals = tests.RandomHash(t)
+		acc.AssetDeeds = tests.RandomHash(t)
 		acc.ContextHash = tests.RandomHash(t)
 		acc.StorageRoot = tests.RandomHash(t)
+		acc.AssetRoot = tests.RandomHash(t)
 		acc.LogicRoot = tests.RandomHash(t)
 		acc.FileRoot = tests.RandomHash(t)
 	})
-
 	stateManager.setAccount(ts.AnyAddress(), *acc)
-
 	testcases := []struct {
 		name          string
 		args          *rpcargs.GetAccountArgs
@@ -1482,7 +1475,6 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			fetchedAcc, err := coreAPI.AccountState(test.args)
-
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1492,11 +1484,10 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, hexutil.Uint64(test.expectedAcc.Nonce), fetchedAcc.Nonce)
 			require.Equal(t, test.expectedAcc.AccType, fetchedAcc.AccType)
-			require.Equal(t, test.expectedAcc.Balance, fetchedAcc.Balance)
-			require.Equal(t, test.expectedAcc.AssetApprovals, fetchedAcc.AssetApprovals)
-			require.Equal(t, test.expectedAcc.AssetRegistry, fetchedAcc.AssetRegistry)
+			require.Equal(t, test.expectedAcc.AssetDeeds, fetchedAcc.AssetDeeds)
 			require.Equal(t, test.expectedAcc.ContextHash, fetchedAcc.ContextHash)
 			require.Equal(t, test.expectedAcc.StorageRoot, fetchedAcc.StorageRoot)
+			require.Equal(t, test.expectedAcc.AssetRoot, fetchedAcc.AssetRoot)
 			require.Equal(t, test.expectedAcc.LogicRoot, fetchedAcc.LogicRoot)
 			require.Equal(t, test.expectedAcc.FileRoot, fetchedAcc.FileRoot)
 		})
@@ -1586,33 +1577,31 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	}
 }
 
-func TestPublicCoreAPI_GetRegistry(t *testing.T) {
+func TestPublicCoreAPI_GetDeeds(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 2, nil)
 	height := int64(ts[0].Height(ts[0].AnyAddress()))
 
 	c := NewMockChainManager(t)
 	s := NewMockStateManager(t)
 	coreAPI := NewPublicCoreAPI(nil, c, s, nil, nil, nil)
-
 	c.SetTesseractHeightEntry(ts[0].AnyAddress(), ts[0].Height(ts[0].AnyAddress()), ts[0].Hash())
 	c.setTesseractByHash(t, ts[0])
 	c.setTesseractByHash(t, ts[1])
-
 	randomHash := tests.RandomHash(t)
 	tsHash := getTesseractsHashes(t, ts)
 
 	assetIDs, assetDescriptors := tests.CreateTestAssets(t, 3)
 
-	registryMap, registryEntries := getRegistry(t, assetIDs, assetDescriptors)
-	sortRegistry(registryEntries)
+	deeds, deedEntries := getDeeds(t, assetIDs, assetDescriptors)
+	sortDeeds(deedEntries)
 
-	s.setRegistry(t, ts[0].AnyAddress(), registryMap)
+	s.setDeeds(t, ts[0].AnyAddress(), deeds)
 
 	testcases := []struct {
-		name             string
-		args             rpcargs.QueryArgs
-		expectedRegistry []rpcargs.RPCRegistry
-		expectedError    error
+		name          string
+		args          rpcargs.QueryArgs
+		expectedDeeds []rpcargs.RPCDeeds
+		expectedError error
 	}{
 		{
 			name:          "address can not be empty",
@@ -1630,30 +1619,30 @@ func TestPublicCoreAPI_GetRegistry(t *testing.T) {
 			expectedError: common.ErrFetchingTesseract,
 		},
 		{
-			name: "should return error if registry not found",
+			name: "should return error if deeds not found",
 			args: rpcargs.QueryArgs{
 				Address: tests.RandomAddress(t),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractHash: &tsHash[1],
 				},
 			},
-			expectedError: common.ErrRegistryNotFound,
+			expectedError: errors.New("deeds not found"),
 		},
 		{
-			name: "should fetch registry successfully",
+			name: "should fetch deeds successfully",
 			args: rpcargs.QueryArgs{
 				Address: ts[0].AnyAddress(),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &height,
 				},
 			},
-			expectedRegistry: registryEntries,
+			expectedDeeds: deedEntries,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			registry, err := coreAPI.Registry(&test.args)
+			deeds, err := coreAPI.Deeds(&test.args)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1662,8 +1651,8 @@ func TestPublicCoreAPI_GetRegistry(t *testing.T) {
 
 			require.NoError(t, err)
 
-			sortRegistry(registry)
-			require.Equal(t, test.expectedRegistry, registry)
+			sortDeeds(deeds)
+			require.Equal(t, test.expectedDeeds, deeds)
 		})
 	}
 }

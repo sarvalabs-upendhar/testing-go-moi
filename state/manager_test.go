@@ -167,27 +167,29 @@ func TestStateManager_GetTesseractByHash(t *testing.T) {
 }
 
 func TestStateManager_GetStateObjectByHash(t *testing.T) {
-	assetIDs, bal := getAssetIDsAndBalances(t, 2)
-	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
-	accounts, stateHashes := getTestAccounts(t, balanceHashes, 2)
+	db := mockDB()
+	address := tests.RandomAddress(t)
+	assetIDs, bal := getAssetIDsAndBalances(t, 1)
+	_, assetRoot := createTestAssets(t, address, db, assetIDs, bal)
+	accounts, stateHashes := getTestAccounts(t, []common.Hash{assetRoot}, 1)
 
 	soParams := map[int]*createStateObjectParams{
 		0: {
 			account: accounts[0],
+			db:      db,
 		},
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
 	smParams := &createStateManagerParams{
+		db: db,
 		dbCallback: func(db *MockDB) {
-			insertAccountsInDB(t, db, stateHashes, accounts...)   // insert account into db
-			insertBalancesInDB(t, db, balanceHashes, balances[0]) // (stateHash : account, balanceHash : balance)
+			insertAccountsInDB(t, db, stateHashes, accounts...) // insert account into db
 		},
 	}
 
 	sm := createTestStateManager(t, smParams)
-
 	testcases := []struct {
 		name          string
 		stateHash     common.Hash
@@ -225,20 +227,27 @@ func TestStateManager_GetStateObjectByHash(t *testing.T) {
 }
 
 func TestStateManager_GetLatestStateObject_WithStateCache(t *testing.T) {
-	accounts, stateHashes := getTestAccounts(t, tests.GetHashes(t, 2), 2)
+	db := mockDB()
+	address := tests.RandomAddress(t)
+	assetIDs, bal := getAssetIDsAndBalances(t, 2)
+	_, assetRoot := createTestAssets(t, address, db, assetIDs, bal)
+	accounts, stateHashes := getTestAccounts(t, []common.Hash{assetRoot, common.NilHash}, 2)
 
 	soParams := map[int]*createStateObjectParams{
 		0: {
 			account: accounts[0],
+			db:      db,
 		},
 		1: {
 			account: accounts[1],
+			db:      db,
 		},
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
 	smParams := &createStateManagerParams{
+		db: db,
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHashes[0:1], accounts[0:1]...)
 			for i := 0; i < 2; i++ {
@@ -249,12 +258,9 @@ func TestStateManager_GetLatestStateObject_WithStateCache(t *testing.T) {
 			}
 		},
 	}
-
 	sm := createTestStateManager(t, smParams)
-
 	soInCache := createTestStateObject(t, nil)
 	sm.objectCache.Add(soInCache.address, soInCache)
-
 	testcases := []struct {
 		name          string
 		address       identifiers.Address
@@ -293,16 +299,13 @@ func TestStateManager_GetLatestStateObject_WithStateCache(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-
 			checkForStateObject(t, test.sObj, latestStateObject)
 
 			if sm.objectCache != nil {
 				data, ok := sm.objectCache.Get(test.address)
 				require.True(t, ok)
-
 				so, ok := data.(*Object)
 				require.True(t, ok)
-
 				checkForStateObject(t, so, latestStateObject)
 			}
 		})
@@ -310,17 +313,23 @@ func TestStateManager_GetLatestStateObject_WithStateCache(t *testing.T) {
 }
 
 func TestStateManager_GetLatestStateObject_WithoutStateCache(t *testing.T) {
-	accounts, stateHashes := getTestAccounts(t, tests.GetHashes(t, 1), 1)
+	db := mockDB()
+	address := tests.RandomAddress(t)
+	assetIDs, bal := getAssetIDsAndBalances(t, 1)
+	_, assetRoot := createTestAssets(t, address, db, assetIDs, bal)
+	accounts, stateHashes := getTestAccounts(t, []common.Hash{assetRoot}, 1)
 
 	soParams := map[int]*createStateObjectParams{
 		0: {
 			account: accounts[0],
+			db:      db,
 		},
 	}
 
 	so := createTestStateObjects(t, 1, soParams)
 
 	smParams := &createStateManagerParams{
+		db: db,
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHashes, accounts...)
 			db.setAccountMetaInfo(&common.AccountMetaInfo{
@@ -332,9 +341,7 @@ func TestStateManager_GetLatestStateObject_WithoutStateCache(t *testing.T) {
 			sm.objectCache = nil
 		},
 	}
-
 	sm := createTestStateManager(t, smParams)
-
 	testcases := []struct {
 		name          string
 		address       identifiers.Address
@@ -358,31 +365,26 @@ func TestStateManager_GetLatestStateObject_WithoutStateCache(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-
 			checkForStateObject(t, test.sObj, latestStateObject)
-
 			require.True(t, sm.objectCache == nil)
 		})
 	}
 }
 
 func TestStateManager_GetStateObject(t *testing.T) {
-	account, stateHash := getTestAccounts(t, []common.Hash{tests.RandomHash(t), tests.RandomHash(t)}, 2)
+	account, stateHash := getTestAccounts(t, []common.Hash{common.NilHash, common.NilHash}, 2)
 
 	so := NewStateObject(tests.RandomAddress(t), nil, nil, mockDB(), *account[0], NilMetrics(),
 		false)
 	so1 := NewStateObject(tests.RandomAddress(t), nil, nil, mockDB(), *account[1], NilMetrics(),
 		false)
-
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHash, account...)
 		},
 	}
-
 	sm := createTestStateManager(t, smParams)
 	sm.objectCache.Add(so1.address, so1)
-
 	testcases := []struct {
 		name      string
 		address   identifiers.Address
@@ -407,7 +409,6 @@ func TestStateManager_GetStateObject(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			stateObject, err := sm.getStateObject(test.address, test.stateHash)
 			require.NoError(t, err)
-
 			checkForStateObject(t, test.sObj, stateObject)
 		})
 	}
@@ -872,8 +873,6 @@ func TestStateManager_IsInitialTesseract_With_Sarga(t *testing.T) {
 		[][]byte{common.NilHash.Bytes()},
 	)
 
-	balance, balanceHash := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
-
 	cache, err := lru.New(100)
 	require.NoError(t, err)
 
@@ -910,7 +909,6 @@ func TestStateManager_IsInitialTesseract_With_Sarga(t *testing.T) {
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, initialTS)
 			insertAccountsInDB(t, db, []common.Hash{stateHash}, so.Data())
-			insertBalancesInDB(t, db, []common.Hash{balanceHash}, balance)
 		},
 		smCallBack: func(sm *StateManager) {
 			storeTesseractHashInCache(t, sm.cache, initialTS)
@@ -1396,59 +1394,37 @@ func TestStateManager_GetNonce(t *testing.T) {
 }
 
 func TestStateManager_GetBalances(t *testing.T) {
-	assets, bal := getAssetIDsAndBalances(t, 2)
-	balances, balanceHashes := getTestBalances(t, getAssetMaps(assets, bal, 1), 2)
-
-	accounts0 := &common.Account{
-		Nonce:   12,
-		Balance: balanceHashes[0],
-	}
-
-	stateHash0, err := accounts0.Hash()
-	assert.NoError(t, err)
-
-	soParams := &createStateObjectParams{
-		account: &common.Account{
-			Balance: tests.RandomHash(t),
-		},
-	}
-	so := createTestStateObject(t, soParams)
+	db := mockDB()
+	address := tests.RandomAddress(t)
+	assetIDs, balances := getAssetIDsAndBalances(t, 2)
+	assets, assetRoot := createTestAssets(t, address, db, assetIDs, balances)
+	accounts, stateHashes := getTestAccounts(t, []common.Hash{assetRoot}, 1)
 
 	smParams := &createStateManagerParams{
+		db: db,
 		dbCallback: func(db *MockDB) {
-			insertAccountsInDB(t, db, []common.Hash{stateHash0}, accounts0)
-			insertBalancesInDB(t, db, balanceHashes, balances...)
-		},
-
-		smCallBack: func(sm *StateManager) {
-			sm.objectCache.Add(so.address, so)
+			insertAccountsInDB(t, db, stateHashes, accounts...)
 		},
 	}
 
 	sm := createTestStateManager(t, smParams)
-
 	testcases := []struct {
 		name          string
 		address       identifiers.Address
 		stateHash     common.Hash
-		balance       *BalanceObject
+		assets        common.AssetMap
 		expectedError error
 	}{
 		{
 			name:      "fetch balances at particular state",
 			address:   tests.RandomAddress(t),
-			stateHash: stateHash0,
-			balance:   balances[0],
+			stateHash: stateHashes[0],
+			assets:    assets,
 		},
 		{
 			name:          "failed to fetch state object",
 			address:       tests.RandomAddress(t),
 			expectedError: errors.New("failed to fetch state object"),
-		},
-		{
-			name:          "failed to fetch balances",
-			address:       so.address,
-			expectedError: errors.New("failed to load balance object"),
 		},
 	}
 
@@ -1462,32 +1438,32 @@ func TestStateManager_GetBalances(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.balance, balance)
+			require.Equal(t, test.assets, balance)
 		})
 	}
 }
 
 func TestStateManager_GetBalance(t *testing.T) {
+	db := mockDB()
 	address := tests.RandomAddress(t)
-	assetIDs, bal := getAssetIDsAndBalances(t, 2)
-	balances, balanceHashes := getTestBalances(t, getAssetMaps(assetIDs, bal, 1), 2)
-	accounts, stateHashes := getTestAccounts(t, balanceHashes, 1)
+	assetIDs, bal := getAssetIDsAndBalances(t, 1)
+	assets, assetRoot := createTestAssets(t, address, db, assetIDs, bal)
+	accounts, stateHashes := getTestAccounts(t, []common.Hash{assetRoot}, 1)
 
 	smParams := &createStateManagerParams{
+		db: db,
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHashes, accounts...)
-			insertBalancesInDB(t, db, balanceHashes, balances...)
 		},
 	}
 
 	sm := createTestStateManager(t, smParams)
-
 	testcases := []struct {
 		name          string
 		address       identifiers.Address
 		assetID       identifiers.AssetID
 		stateHash     common.Hash
-		balance       *BalanceObject
+		assets        common.AssetMap
 		expectedError error
 	}{
 		{
@@ -1495,7 +1471,7 @@ func TestStateManager_GetBalance(t *testing.T) {
 			address:   address,
 			assetID:   assetIDs[0],
 			stateHash: stateHashes[0],
-			balance:   balances[0],
+			assets:    assets,
 		},
 		{
 			name:          "should return error if failed to fetch balance",
@@ -1516,7 +1492,7 @@ func TestStateManager_GetBalance(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.balance.AssetMap[test.assetID], balance)
+			require.Equal(t, test.assets[test.assetID], balance)
 		})
 	}
 }
@@ -1701,6 +1677,73 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 	}
 }
 
+//nolint:dupl
+func TestStateManager_SyncAssetTree(t *testing.T) {
+	db := mockDB()
+	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	rawData := assetID.Bytes()
+
+	assetTree, err := tree.NewKramaHashTree(assetID.Address(), common.NilHash, db, blake256.New(),
+		storage.Asset, nil, tree.NilMetrics())
+	require.NoError(t, err)
+
+	err = assetTree.Set(assetID.Bytes(), rawData)
+	require.NoError(t, err)
+
+	soParams := map[int]*createStateObjectParams{
+		0: stateObjectParamsWithAssetTree(t, assetID.Address(), db, assetTree, common.NilHash, nil),
+	}
+
+	so := createTestStateObjects(t, 1, soParams)
+
+	smParams := &createStateManagerParams{
+		db: db,
+	}
+
+	sm := createTestStateManager(t, smParams)
+
+	newRoot := so[0].assetTree.Root()
+
+	testcases := []struct {
+		name          string
+		newRoot       *common.RootNode
+		assetTree     tree.MerkleTree
+		expectedError error
+	}{
+		{
+			name:      "asset tree synced successfully",
+			newRoot:   &newRoot,
+			assetTree: so[0].assetTree,
+		},
+		{
+			name: "tree is not synced properly",
+			newRoot: &common.RootNode{
+				MerkleRoot: tests.RandomHash(t),
+				HashTable:  map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
+			},
+			assetTree:     so[0].assetTree,
+			expectedError: errors.New("updated root doesn't match"),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sm.SyncAssetTree(test.newRoot, so[0])
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			root := test.assetTree.Root()
+			require.Equal(t, test.newRoot, &root)
+		})
+	}
+}
+
+//nolint:dupl
 func TestStateManager_SyncLogicTree(t *testing.T) {
 	db := mockDB()
 	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
@@ -2246,31 +2289,28 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 }
 
 func TestStateManager_GetAssetInfo(t *testing.T) {
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
-	assetInfo := tests.GetRandomAssetInfo(t, assetID.Address())
+	db := mockDB()
 
-	rawAssetInfo, err := assetInfo.Bytes()
-	assert.NoError(t, err)
+	assetAddrs := tests.RandomAddress(t)
+	assetInfo := tests.GetRandomAssetInfo(t, assetAddrs)
 
-	registry, registryHash := getTestRegistryObject(
-		t,
-		map[string][]byte{string(assetID): rawAssetInfo},
-	)
+	sObj := createTestStateObject(t, &createStateObjectParams{
+		db:      db,
+		address: assetAddrs,
+	})
 
-	sObj := createTestStateObject(t, stateObjectParamsWithRegistry(t, registryHash, registry))
+	assetID, assetRoot := createTestAssetInAssetAccount(t, sObj, assetInfo)
 
-	stateHash, err := sObj.commitRegistryObject()
-	assert.NoError(t, err)
+	accounts, stateHashes := getTestAccounts(t, []common.Hash{assetRoot}, 1)
 
 	smParams := &createStateManagerParams{
+		db: db,
 		dbCallback: func(db *MockDB) {
-			insertAccountsInDB(t, db, []common.Hash{stateHash}, sObj.Data())
-			insertAssetRegistryInDB(t, db, []common.Hash{registryHash}, registry)
+			insertAccountsInDB(t, db, stateHashes, accounts...)
 		},
 	}
 
 	sm := createTestStateManager(t, smParams)
-
 	testcases := []struct {
 		name              string
 		assetID           identifiers.AssetID
@@ -2286,13 +2326,13 @@ func TestStateManager_GetAssetInfo(t *testing.T) {
 		{
 			name:              "asset info fetched successfully",
 			assetID:           assetID,
-			stateHash:         stateHash,
+			stateHash:         stateHashes[0],
 			expectedAssetInfo: assetInfo,
 		},
 		{
-			name:          "should return error as asset not found because of invalid assetID",
+			name:          "should return error as asset not found",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			stateHash:     stateHash,
+			stateHash:     stateHashes[0],
 			expectedError: common.ErrAssetNotFound,
 		},
 	}
@@ -2312,39 +2352,70 @@ func TestStateManager_GetAssetInfo(t *testing.T) {
 	}
 }
 
-func TestStateManager_GetRegistry(t *testing.T) {
-	registry, registryHash := getTestRegistryObject(
+func TestStateManager_GetDeeds(t *testing.T) {
+	db := mockDB()
+
+	assetAddr := tests.RandomAddress(t)
+	creatorAddrs := tests.GetRandomAddressList(t, 2)
+	assetInfo := tests.GetRandomAssetInfo(t, assetAddr)
+
+	sObj := createTestStateObjects(t, 2, map[int]*createStateObjectParams{
+		0: {
+			db:      db,
+			address: assetAddr,
+		},
+		1: {
+			db:      db,
+			address: creatorAddrs[0],
+		},
+		2: {
+			db:      db,
+			address: creatorAddrs[1],
+		},
+	})
+
+	assetID, assetRoot := createTestAssetInAssetAccount(t, sObj[0], assetInfo)
+	assetRoot1 := createTestAssetInRegularAccount(t, sObj[1], assetID, assetInfo)
+
+	deeds, deedsHash := getTestDeeds(
 		t,
-		map[string][]byte{tests.RandomHash(t).String(): tests.RandomHash(t).Bytes()},
+		map[string]struct{}{string(assetID): {}},
 	)
 
-	soParams := map[int]*createStateObjectParams{
-		0: stateObjectParamsWithRegistry(t, registryHash, registry),
-		1: {
-			address: tests.RandomAddress(t),
-		},
-	}
+	assetAcc, assetStateHash := tests.GetTestAccount(t, func(acc *common.Account) {
+		acc.AssetRoot = assetRoot
+	})
 
-	so := createTestStateObjects(t, 2, soParams)
+	operatorAcc, operatorStateHash := tests.GetTestAccount(t, func(acc *common.Account) {
+		acc.AssetRoot = assetRoot1
+		acc.AssetDeeds = deedsHash
+	})
 
-	stateHashes := getStateHashes(t, so)
+	operatorAcc1, operatorStateHash1 := tests.GetTestAccount(t, func(acc *common.Account) {})
 
 	smParams := &createStateManagerParams{
+		db: db,
 		dbCallback: func(db *MockDB) {
-			insertAssetRegistryInDB(t, db, []common.Hash{registryHash}, registry)
-			insertAccountsInDB(t, db, []common.Hash{stateHashes[0]}, so[0].Data())
-			insertAccountsInDB(t, db, []common.Hash{stateHashes[1]}, so[1].Data())
+			insertAccountsInDB(
+				t, db, []common.Hash{assetStateHash, operatorStateHash, operatorStateHash1},
+				[]*common.Account{assetAcc, operatorAcc, operatorAcc1}...,
+			)
+			insertAssetDeedsInDB(t, db, []common.Hash{deedsHash}, deeds)
+			db.setAccountMetaInfo(&common.AccountMetaInfo{
+				Address:   assetAddr,
+				StateHash: assetStateHash,
+			})
 		},
 	}
 
 	sm := createTestStateManager(t, smParams)
 
 	testcases := []struct {
-		name                    string
-		address                 identifiers.Address
-		stateHash               common.Hash
-		expectedRegistryEntries *RegistryObject
-		expectedError           error
+		name                string
+		address             identifiers.Address
+		stateHash           common.Hash
+		expectedDeedEntries map[string]*common.AssetDescriptor
+		expectedError       error
 	}{
 		{
 			name:          "failed to fetch state object",
@@ -2353,24 +2424,30 @@ func TestStateManager_GetRegistry(t *testing.T) {
 			expectedError: errors.New("failed to fetch state object"),
 		},
 		{
-			name:                    "fetched registry entries successfully",
-			address:                 so[0].Address(),
-			stateHash:               stateHashes[0],
-			expectedRegistryEntries: registry,
+			name:      "fetch deeds entries successfully",
+			address:   creatorAddrs[0],
+			stateHash: operatorStateHash,
+			expectedDeedEntries: map[string]*common.AssetDescriptor{
+				string(assetID): assetInfo,
+			},
 		},
 		{
-			name:      "fetched empty registry object as it was not present in state object",
-			address:   so[1].Address(),
-			stateHash: stateHashes[1],
-			expectedRegistryEntries: &RegistryObject{
-				Entries: make(map[string][]byte),
-			},
+			name:                "fetch empty deeds object",
+			address:             creatorAddrs[1],
+			stateHash:           operatorStateHash1,
+			expectedDeedEntries: map[string]*common.AssetDescriptor{},
+		},
+		{
+			name:          "state object doesn't exist",
+			address:       creatorAddrs[1],
+			stateHash:     tests.RandomHash(t),
+			expectedError: common.ErrStateNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			registryEntries, err := sm.GetRegistry(test.address, test.stateHash)
+			deeds, err := sm.GetDeeds(test.address, test.stateHash)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2378,9 +2455,7 @@ func TestStateManager_GetRegistry(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedRegistryEntries, &RegistryObject{
-				Entries: registryEntries,
-			})
+			require.Equal(t, test.expectedDeedEntries, deeds)
 		})
 	}
 }
@@ -3181,7 +3256,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 func TestStateManager_GetAccountInfo(t *testing.T) {
 	hash := tests.RandomHash(t)
 	acc := &common.Account{
-		Balance: tests.RandomHash(t),
+		// Balance: tests.RandomHash(t),
 	}
 
 	smParams := &createStateManagerParams{
@@ -3189,9 +3264,7 @@ func TestStateManager_GetAccountInfo(t *testing.T) {
 			db.setAccount(t, hash, acc)
 		},
 	}
-
 	sm := createTestStateManager(t, smParams)
-
 	testcases := []struct {
 		name            string
 		stateHash       common.Hash
@@ -3338,39 +3411,30 @@ func TestStateManager_IsAccountRegisteredAt(t *testing.T) {
 		[][]byte{common.NilHash.Bytes()},
 	)
 
-	balance, balanceHash := getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
-
 	cache, err := lru.New(100)
 	require.NoError(t, err)
 
 	so := NewStateObject(common.SargaAddress, cache, nil, db, common.Account{
 		StorageRoot: storageRoot,
 	}, NilMetrics(), false)
-
 	stateHash, err := so.Commit()
 	assert.NoError(t, err)
-
 	tesseractParams := map[int]*tests.CreateTesseractParams{
 		0: getTesseractParamsWithStateHash(common.SargaAddress, stateHash),
 		1: getTesseractParamsWithStateHash(tests.RandomAddress(t), tests.RandomHash(t)),
 	}
-
 	tesseracts := tests.CreateTesseracts(t, 2, tesseractParams)
-
 	smParams := &createStateManagerParams{
 		db: db,
 		dbCallback: func(db *MockDB) {
 			insertTesseractsInDB(t, db, tesseracts...)
 			insertAccountsInDB(t, db, []common.Hash{stateHash}, so.Data())
-			insertBalancesInDB(t, db, []common.Hash{balanceHash}, balance)
 		},
 		smCallBack: func(sm *StateManager) {
 			storeTesseractHashInCache(t, sm.cache, tesseracts...)
 		},
 	}
-
 	sm := createTestStateManager(t, smParams)
-
 	testcases := []struct {
 		name                string
 		tsHash              common.Hash

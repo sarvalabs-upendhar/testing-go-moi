@@ -65,7 +65,7 @@ type MockDB struct {
 	accounts            map[common.Hash][]byte
 	context             map[common.Hash][]byte
 	balances            map[common.Hash][]byte
-	assetRegistry       map[common.Hash][]byte
+	assetDeeds          map[common.Hash][]byte
 	merkleTreeEntries   map[string][]byte
 	preImages           map[common.Hash][]byte
 	data                map[string][]byte
@@ -97,7 +97,7 @@ func mockDB() *MockDB {
 		tesseracts:          make(map[common.Hash]*common.Tesseract),
 		latestTesseractHash: make(map[identifiers.Address]common.Hash),
 		accounts:            make(map[common.Hash][]byte),
-		assetRegistry:       make(map[common.Hash][]byte),
+		assetDeeds:          make(map[common.Hash][]byte),
 		context:             make(map[common.Hash][]byte),
 		balances:            make(map[common.Hash][]byte),
 		merkleTreeEntries:   make(map[string][]byte),
@@ -116,8 +116,8 @@ func (m *MockDB) ReadEntry(key []byte) ([]byte, error) {
 	return data, nil
 }
 
-func (m *MockDB) GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error) {
-	data, ok := m.assetRegistry[registryHash]
+func (m *MockDB) GetDeeds(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+	data, ok := m.assetDeeds[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
 	}
@@ -125,13 +125,13 @@ func (m *MockDB) GetAssetRegistry(addr identifiers.Address, registryHash common.
 	return data, nil
 }
 
-func (m *MockDB) setAssetRegistry(t *testing.T, registryHash common.Hash, registry *RegistryObject) {
+func (m *MockDB) setAssetDeeds(t *testing.T, deedsHash common.Hash, deeds *Deeds) {
 	t.Helper()
 
-	rawData, err := registry.Bytes()
+	rawData, err := deeds.Bytes()
 	require.NoError(t, err)
 
-	m.assetRegistry[registryHash] = rawData
+	m.assetDeeds[deedsHash] = rawData
 }
 
 func (m *MockDB) CreateEntry(key, value []byte) error {
@@ -294,15 +294,6 @@ func (m *MockDB) GetBalance(addr identifiers.Address, hash common.Hash) ([]byte,
 	return balance, nil
 }
 
-func (m *MockDB) setBalance(t *testing.T, hash common.Hash, bal *BalanceObject) {
-	t.Helper()
-
-	bytes, err := bal.Bytes()
-	require.NoError(t, err)
-
-	m.balances[hash] = bytes
-}
-
 func (m *MockDB) DeleteEntry(key []byte) error {
 	panic("mock DeleteEntry not implemented")
 }
@@ -339,23 +330,13 @@ func insertAccountsInDB(t *testing.T, db Store, hashes []common.Hash, acc ...*co
 	}
 }
 
-func insertBalancesInDB(t *testing.T, db Store, hashes []common.Hash, balances ...*BalanceObject) {
+func insertAssetDeedsInDB(t *testing.T, db Store, hashes []common.Hash, deeds ...*Deeds) {
 	t.Helper()
 
 	mDB := getMockDB(t, db)
 
-	for i, bal := range balances {
-		mDB.setBalance(t, hashes[i], bal)
-	}
-}
-
-func insertAssetRegistryInDB(t *testing.T, db Store, hashes []common.Hash, registry ...*RegistryObject) {
-	t.Helper()
-
-	mDB := getMockDB(t, db)
-
-	for i, bal := range registry {
-		mDB.setAssetRegistry(t, hashes[i], bal)
+	for i, bal := range deeds {
+		mDB.setAssetDeeds(t, hashes[i], bal)
 	}
 }
 
@@ -623,6 +604,24 @@ func getRoot(t *testing.T, m *MockMerkleTree) common.Hash {
 	return common.GetHash(bytes)
 }
 
+func createAssetObject(t *testing.T) *AssetObject {
+	t.Helper()
+
+	return &AssetObject{
+		Balance: big.NewInt(45000),
+		Deposit: map[identifiers.LogicID]*big.Int{
+			tests.GetLogicID(t, tests.RandomAddress(t)): big.NewInt(3000),
+		},
+		Mandate: map[identifiers.Address]*big.Int{
+			tests.RandomAddress(t): big.NewInt(2000),
+		},
+		Properties: &common.AssetDescriptor{
+			Symbol: "MOI",
+			Supply: big.NewInt(50000),
+		},
+	}
+}
+
 type createLogicObjectParams struct {
 	id            identifiers.LogicID
 	logicCallback func(object *LogicObject)
@@ -849,32 +848,40 @@ func createTestStateObjects(t *testing.T, count int, paramsMap map[int]*createSt
 	return objects
 }
 
-func stateObjectParamsWithBalance(
+func stateObjectParamsWithDeeds(
 	t *testing.T,
-	balanceHash common.Hash,
-	balance *BalanceObject,
+	hash common.Hash,
+	deeds *Deeds,
 ) *createStateObjectParams {
 	t.Helper()
 
 	return &createStateObjectParams{
 		soCallback: func(so *Object) {
-			so.data.Balance = balanceHash
-			so.balance = balance
+			so.data.AssetDeeds = hash
+			so.deeds = deeds
 		},
 	}
 }
 
-func stateObjectParamsWithRegistry(
+func stateObjectParamsWithAssetTree(
 	t *testing.T,
-	registryHash common.Hash,
-	registry *RegistryObject,
+	address identifiers.Address,
+	db Store,
+	assetTree tree.MerkleTree,
+	root common.Hash,
+	txn *iradix.Txn,
 ) *createStateObjectParams {
 	t.Helper()
 
+	mDB := getMockDB(t, db)
+
 	return &createStateObjectParams{
+		address: address,
+		db:      mDB,
 		soCallback: func(so *Object) {
-			so.data.AssetRegistry = registryHash
-			so.registry = registry
+			so.assetTree = assetTree
+			so.assetTreeTxn = txn
+			so.data.AssetRoot = root // set asset root as it needs to be returned
 		},
 	}
 }
@@ -1036,7 +1043,7 @@ func stateObjectParamsWithContextObject(
 func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateObjectParams {
 	t.Helper()
 
-	keys, values := getEntries(t, 2)
+	keys, values := getEntries(t, 3)
 
 	return &createStateObjectParams{
 		soCallback: func(s *Object) {
@@ -1047,21 +1054,20 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 
 			s.isGenesis = true
 			s.data = *acc
-			s.balance, _ = getTestBalance(t, getAssetMap(getAssetIDsAndBalances(t, 2)))
-			s.approvals.PrvHash = tests.RandomHash(t) // initialize any one field in asset approvals object
 
 			if !areTreesNil {
-				s.logicTree = getMerkleTreeWithEntries(t, keys[0:1], values[0:1])
-				s.metaStorageTree = getMerkleTreeWithEntries(t, keys[1:], values[1:])
+				s.assetTree = getMerkleTreeWithEntries(t, keys[0:1], values[0:1])
+				s.logicTree = getMerkleTreeWithEntries(t, keys[1:2], values[1:2])
+				s.metaStorageTree = getMerkleTreeWithEntries(t, keys[2:], values[2:])
 			}
 
 			s.files = make(map[common.Hash][]byte)
 			s.files[tests.RandomHash(t)] = tests.RandomHash(t).Bytes()
 			s.files[tests.RandomHash(t)] = tests.RandomHash(t).Bytes()
-			s.registry, _ = getTestRegistryObject(
+			s.deeds, _ = getTestDeeds(
 				t,
-				map[string][]byte{
-					tests.RandomHash(t).String(): tests.RandomHash(t).Bytes(),
+				map[string]struct{}{
+					tests.RandomHash(t).String(): {},
 				})
 
 			logicIDs := tests.GetLogicIDs(t, 1)
@@ -1084,22 +1090,6 @@ func checkForReferences(t *testing.T, sObj, copiedSO *Object) {
 		reflect.ValueOf(sObj.dirtyEntries).Pointer(),
 		reflect.ValueOf(copiedSO.dirtyEntries).Pointer(),
 	)
-	require.NotEqual(t,
-		reflect.ValueOf(sObj.approvals.Approvals).Pointer(),
-		reflect.ValueOf(copiedSO.approvals.Approvals).Pointer(),
-	)
-	require.NotEqual(t,
-		reflect.ValueOf(sObj.balance.AssetMap).Pointer(),
-		reflect.ValueOf(copiedSO.balance.AssetMap).Pointer(),
-	)
-	require.NotEqual(t,
-		reflect.ValueOf(sObj.approvals).Pointer(),
-		reflect.ValueOf(copiedSO.approvals).Pointer(),
-	)
-	require.NotEqual(t,
-		reflect.ValueOf(sObj.balance).Pointer(),
-		reflect.ValueOf(copiedSO.balance).Pointer(),
-	)
 }
 
 func getAssetIDsAndBalances(t *testing.T, count int) ([]identifiers.AssetID, []*big.Int) {
@@ -1113,68 +1103,162 @@ func getAssetIDsAndBalances(t *testing.T, count int) ([]identifiers.AssetID, []*
 	return ids, tests.GetRandomNumbers(t, 10000, count)
 }
 
-func getAssetMap(assetIDs []identifiers.AssetID, balances []*big.Int) common.AssetMap {
-	assetMap := make(common.AssetMap)
-
-	for i := 0; i < len(assetIDs); i++ {
-		assetMap[assetIDs[i]] = balances[i]
-	}
-
-	return assetMap
-}
-
-func getAssetMaps(assetIDs []identifiers.AssetID, balances []*big.Int, assetsPerAssetMap int) []common.AssetMap {
-	assetMapCount := len(assetIDs) / assetsPerAssetMap
-	assetMap := make([]common.AssetMap, assetMapCount)
-
-	for i := 0; i < assetMapCount; i++ {
-		assetMap[i] = getAssetMap(
-			assetIDs[i*assetsPerAssetMap:i*assetsPerAssetMap+assetsPerAssetMap],
-			balances[i*assetsPerAssetMap:i*assetsPerAssetMap+assetsPerAssetMap],
-		)
-	}
-
-	return assetMap
-}
-
-func getTestRegistryObject(t *testing.T, entries map[string][]byte) (*RegistryObject, common.Hash) {
+func getTestDeeds(t *testing.T, entries map[string]struct{}) (*Deeds, common.Hash) {
 	t.Helper()
 
-	registry := &RegistryObject{
+	deeds := &Deeds{
 		Entries: entries,
 	}
 
-	data, err := registry.Bytes()
+	data, err := deeds.Bytes()
 	require.NoError(t, err)
 
-	return registry, common.GetHash(data)
+	return deeds, common.GetHash(data)
 }
 
-func getTestBalance(t *testing.T, assetMap common.AssetMap) (*BalanceObject, common.Hash) {
+func setAssetBalance(t *testing.T, so *Object, assetID identifiers.AssetID, amount *big.Int) {
 	t.Helper()
 
-	balance := &BalanceObject{
-		AssetMap: assetMap,
-		PrvHash:  tests.RandomHash(t),
+	setAssetObject(t, so, assetID, &AssetObject{
+		Balance: amount,
+	})
+}
+
+func setAssetDeposits(
+	t *testing.T, so *Object, assetIDs []identifiers.AssetID,
+	amounts []*big.Int, logicIDs []identifiers.LogicID, depositAmounts []*big.Int,
+) {
+	t.Helper()
+
+	deposits := make(map[identifiers.LogicID]*big.Int)
+
+	if len(logicIDs) > 0 {
+		for idx, logicID := range logicIDs {
+			deposits[logicID] = depositAmounts[idx]
+		}
 	}
 
-	data, err := balance.Bytes()
+	for idx, assetID := range assetIDs {
+		setAssetObject(t, so, assetID, &AssetObject{
+			Balance: amounts[idx],
+			Deposit: deposits,
+		})
+	}
+}
+
+func setAssetMandates(
+	t *testing.T, so *Object, assetIDs []identifiers.AssetID,
+	amounts []*big.Int, addresses []identifiers.Address, depositAmounts []*big.Int,
+) {
+	t.Helper()
+
+	mandates := make(map[identifiers.Address]*big.Int)
+
+	if len(addresses) > 0 {
+		for idx, address := range addresses {
+			mandates[address] = depositAmounts[idx]
+		}
+	}
+
+	for idx, assetID := range assetIDs {
+		setAssetObject(t, so, assetID, &AssetObject{
+			Balance: amounts[idx],
+			Mandate: mandates,
+		})
+	}
+}
+
+func setAssetState(t *testing.T, so *Object, assetID identifiers.AssetID, state *common.AssetDescriptor) {
+	t.Helper()
+
+	setAssetObject(t, so, assetID, &AssetObject{
+		Balance:    state.Supply,
+		Properties: state,
+	})
+}
+
+func setAssetObject(t *testing.T, so *Object, assetID identifiers.AssetID, assetObj *AssetObject) {
+	t.Helper()
+
+	assert.NoError(t, so.InsertNewAssetObject(assetID, assetObj))
+
+	_, err := so.commitAssets()
+	require.NoError(t, err)
+}
+
+func setLogicObject(t *testing.T, so *Object, logicID identifiers.LogicID, logicObj *LogicObject) {
+	t.Helper()
+
+	assert.NoError(t, so.InsertNewLogicObject(logicID, logicObj))
+
+	_, err := so.commitLogics()
+	require.NoError(t, err)
+}
+
+func createTestAssets(
+	t *testing.T,
+	addr identifiers.Address,
+	db *MockDB,
+	assetIDs []identifiers.AssetID,
+	balances []*big.Int,
+) (common.AssetMap, common.Hash) {
+	t.Helper()
+
+	assets := make(common.AssetMap)
+
+	so := NewStateObject(addr, mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
+
+	for i := 0; i < len(assetIDs); i++ {
+		assert.NoError(t, so.InsertNewAssetObject(assetIDs[i], &AssetObject{
+			Balance: balances[i],
+		}))
+
+		assets[assetIDs[i]] = balances[i]
+	}
+
+	rootHash, err := so.commitAssets()
 	require.NoError(t, err)
 
-	return balance, common.GetHash(data)
+	err = so.flushAssetTree()
+	require.NoError(t, err)
+
+	return assets, rootHash
 }
 
-func getTestBalances(t *testing.T, assetMap []common.AssetMap, count int) ([]*BalanceObject, []common.Hash) {
+func createTestAssetInAssetAccount(
+	t *testing.T, so *Object,
+	assetInfo *common.AssetDescriptor,
+) (identifiers.AssetID, common.Hash) {
 	t.Helper()
 
-	balances := make([]*BalanceObject, count)
-	hashes := make([]common.Hash, count)
+	assetID, err := so.CreateAsset(so.Address(), assetInfo)
+	require.NoError(t, err)
 
-	for i := 0; i < count; i++ {
-		balances[i], hashes[i] = getTestBalance(t, assetMap[i])
-	}
+	assetRoot, err := so.commitAssets()
+	require.NoError(t, err)
 
-	return balances, hashes
+	err = so.flushAssetTree()
+	require.NoError(t, err)
+
+	return assetID, assetRoot
+}
+
+func createTestAssetInRegularAccount(
+	t *testing.T, so *Object,
+	assetID identifiers.AssetID, assetInfo *common.AssetDescriptor,
+) common.Hash {
+	t.Helper()
+
+	err := so.InsertNewAssetObject(assetID, NewAssetObject(assetInfo.Supply, nil))
+	require.NoError(t, err)
+
+	assetRoot, err := so.commitAssets()
+	require.NoError(t, err)
+
+	err = so.flushAssetTree()
+	require.NoError(t, err)
+
+	return assetRoot
 }
 
 func getTestAccounts(t *testing.T, balanceHash []common.Hash, count int) ([]*common.Account, []common.Hash) {
@@ -1185,7 +1269,7 @@ func getTestAccounts(t *testing.T, balanceHash []common.Hash, count int) ([]*com
 
 	for i := 0; i < count; i++ {
 		acc, stateHash := tests.GetTestAccount(t, func(acc *common.Account) {
-			acc.Balance = balanceHash[i]
+			acc.AssetRoot = balanceHash[i]
 		})
 
 		accounts[i] = acc
@@ -1580,7 +1664,6 @@ func validateStateObject(t *testing.T, so *Object, accType common.AccountType, a
 func checkForStateObject(t *testing.T, expectedObj *Object, obj *Object) {
 	t.Helper()
 
-	require.Equal(t, expectedObj.balance, obj.balance)
 	require.Equal(t, expectedObj.data, obj.data)
 	require.Equal(t, expectedObj.address, obj.address)
 	require.Equal(t, expectedObj.accType, obj.accType)
@@ -1596,12 +1679,16 @@ func checkIfStateObjectAreEqual(
 	require.NotNil(t, newObj.db)
 	require.NotNil(t, newObj.cache)
 
-	require.Equal(t, oldObj.balance.AssetMap, newObj.balance.AssetMap)
-	require.Equal(t, oldObj.approvals, newObj.approvals)
 	require.Equal(t, oldObj.dirtyEntries, newObj.dirtyEntries)
 	require.Equal(t, oldObj.data, newObj.data)
 	require.Equal(t, oldObj.files, newObj.files)
 	require.Equal(t, oldObj.isGenesis, newObj.isGenesis)
+
+	if oldObj.assetTree != nil {
+		checkIfTreesAreEqual(t, oldObj.assetTree, newObj.assetTree)
+	} else {
+		require.Nil(t, newObj.assetTree)
+	}
 
 	if oldObj.logicTree != nil {
 		checkIfTreesAreEqual(t, oldObj.logicTree, newObj.logicTree)
@@ -1619,6 +1706,10 @@ func checkIfStateObjectAreEqual(
 		checkIfTreesAreEqual(t, sTree, newObj.storageTrees[id])
 	}
 
+	if oldObj.assetTreeTxn != nil {
+		checkIfTxnsAreEqual(t, oldObj.assetTreeTxn, newObj.assetTreeTxn)
+	}
+
 	if oldObj.logicTreeTxn != nil {
 		checkIfTxnsAreEqual(t, oldObj.logicTreeTxn, newObj.logicTreeTxn)
 	}
@@ -1631,58 +1722,33 @@ func checkIfStateObjectAreEqual(
 func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int, assetID identifiers.AssetID) {
 	t.Helper()
 
-	actualBalance, err := sObj.BalanceOf(assetID)
+	assetObject, err := sObj.getAssetObject(assetID, true)
 	require.NoError(t, err)
-	require.Equal(t, expectedBalance, actualBalance)
+	require.Equal(t, expectedBalance, assetObject.Balance)
 }
 
-func checkForRegistry(
+func checkForDeeds(
 	t *testing.T,
 	sObj *Object,
-	expectedRegistry *RegistryObject,
-	actualRegistryHash common.Hash,
+	expectedDeeds *Deeds,
+	actualDeedsHash common.Hash,
 ) {
 	t.Helper()
 
-	expectedRegistryData, err := expectedRegistry.Bytes()
+	expectedDeedsData, err := expectedDeeds.Bytes()
 	require.NoError(t, err)
 
-	expectedRegistryHash := common.GetHash(expectedRegistryData)
-	require.Equal(t, expectedRegistryHash, actualRegistryHash)
+	expectedDeedsHash := common.GetHash(expectedDeedsData)
+	require.Equal(t, expectedDeedsHash, actualDeedsHash)
 
-	// check if registry data in dirty entries and state object is same
-	key := common.BytesToHex(storage.RegistryObjectKey(sObj.address, expectedRegistryHash))
-	actualRegistryData, err := sObj.GetDirtyEntry(key) // get registry data from dirty entries
+	// check if deeds data in dirty entries and state object is same
+	key := common.BytesToHex(storage.DeedsKey(sObj.address, expectedDeedsHash))
+	actualDeedsData, err := sObj.GetDirtyEntry(key) // get deeds data from dirty entries
 	require.NoError(t, err)
 
-	require.Equal(t, expectedRegistryData, actualRegistryData)
+	require.Equal(t, expectedDeedsData, actualDeedsData)
 
-	require.Equal(t, sObj.data.AssetRegistry, actualRegistryHash) // check if registry hash inserted in account
-}
-
-func checkForBalance(
-	t *testing.T,
-	sObj *Object,
-	expectedBalance *BalanceObject,
-	actualBalanceHash common.Hash,
-	journalIndex int,
-) {
-	t.Helper()
-
-	expectedBalanceData, err := expectedBalance.Bytes()
-	require.NoError(t, err)
-
-	expectedBalanceHash := common.GetHash(expectedBalanceData)
-	require.Equal(t, expectedBalanceHash, actualBalanceHash)
-
-	// check if balance data in dirty entries and state object is same
-	key := common.BytesToHex(storage.BalanceObjectKey(sObj.address, expectedBalanceHash))
-	actualBalanceData, err := sObj.GetDirtyEntry(key) // get balance data from dirty entries
-	require.NoError(t, err)
-
-	require.Equal(t, expectedBalanceData, actualBalanceData)
-
-	require.Equal(t, sObj.data.Balance.Bytes(), actualBalanceHash.Bytes()) // check if balance hash inserted in account
+	require.Equal(t, sObj.data.AssetDeeds, actualDeedsHash) // check if deeds hash inserted in account
 }
 
 func checkForAccount(
@@ -1810,6 +1876,39 @@ func checkIfMetaStorageTreeCommitted(
 	require.Equal(t, sObj.data.StorageRoot, generatedStorageRoot)
 }
 
+//nolint:dupl
+func checkIfAssetTreeCommitted(
+	t *testing.T,
+	inputAssetTree tree.MerkleTree,
+	sObj *Object,
+	actualRoot common.Hash,
+) {
+	t.Helper()
+
+	actualMerkleTree, ok := sObj.assetTree.(*MockMerkleTree)
+	require.True(t, ok)
+
+	sObj.assetTreeTxn.Root().Walk(func(k []byte, v interface{}) bool {
+		ok, err := actualMerkleTree.Has(k)
+		assert.NoError(t, err)
+		assert.True(t, ok)
+
+		return true
+	})
+
+	inputMerkleTree, ok := inputAssetTree.(*MockMerkleTree)
+	require.True(t, ok)
+
+	expectedRoot := getRoot(t, actualMerkleTree)
+
+	require.Equal(t, expectedRoot, actualMerkleTree.merkleRoot)
+	require.Equal(t, expectedRoot, actualRoot)
+	require.Equal(t, sObj.data.AssetRoot, actualRoot) // make sure storage root returned and stored are same
+
+	require.NotEqual(t, inputMerkleTree.merkleRoot, expectedRoot)
+}
+
+//nolint:dupl
 func checkIfLogicTreeCommitted(
 	t *testing.T,
 	inputLogicTree tree.MerkleTree,
@@ -2000,13 +2099,16 @@ func CheckAssetCreation(
 ) {
 	t.Helper()
 
-	actualRegistryData, err := s.GetRegistryEntry(string(assetID))
+	state, err := s.GetState(assetID)
 	require.NoError(t, err)
 
-	expectedRegistryData, err := assetDescriptor.Bytes()
+	actualDeedsData, err := state.Bytes()
 	require.NoError(t, err)
 
-	require.Equal(t, actualRegistryData, expectedRegistryData)
+	expectedDeedsData, err := assetDescriptor.Bytes()
+	require.NoError(t, err)
+
+	require.Equal(t, actualDeedsData, expectedDeedsData)
 	require.Equal(t, s.Address(), assetDescriptor.Operator) // check if address is assigned to operator
 }
 
@@ -2067,6 +2169,18 @@ func getTxnsWithEntries(t *testing.T, keys [][]byte, values [][]byte) *iradix.Tx
 
 	for index, key := range keys {
 		txn.Insert(key, values[index])
+	}
+
+	return txn
+}
+
+func getTxnWithAssetObjects(t *testing.T, assetIDs []identifiers.AssetID, objects ...*AssetObject) *iradix.Txn {
+	t.Helper()
+
+	txn := iradix.New().Txn()
+
+	for idx, obj := range objects {
+		txn.Insert(assetIDs[idx].Bytes(), obj)
 	}
 
 	return txn

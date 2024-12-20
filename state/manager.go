@@ -35,8 +35,7 @@ type Store interface {
 	GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error)
 	GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error)
 	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
-	GetBalance(addr identifiers.Address, balanceHash common.Hash) ([]byte, error)
-	GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error)
+	GetDeeds(addr identifiers.Address, registryHash common.Hash) ([]byte, error)
 	GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error)
 	SetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key, value []byte) error
 	SetMerkleTreeEntries(address identifiers.Address, prefix storage.PrefixTag, entries map[string][]byte) error
@@ -550,7 +549,7 @@ func (sm *StateManager) GetNonce(addr identifiers.Address, stateHash common.Hash
 	return so.data.Nonce, nil
 }
 
-func (sm *StateManager) GetBalances(addrs identifiers.Address, stateHash common.Hash) (*BalanceObject, error) {
+func (sm *StateManager) GetBalances(addrs identifiers.Address, stateHash common.Hash) (common.AssetMap, error) {
 	stateObject, err := sm.getStateObject(addrs, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
@@ -561,21 +560,39 @@ func (sm *StateManager) GetBalances(addrs identifiers.Address, stateHash common.
 		return nil, err
 	}
 
-	return balances.Copy(), nil
+	return balances, nil
 }
 
-func (sm *StateManager) GetRegistry(addrs identifiers.Address, stateHash common.Hash) (map[string][]byte, error) {
+func (sm *StateManager) GetDeeds(
+	addrs identifiers.Address, stateHash common.Hash,
+) (map[string]*common.AssetDescriptor, error) {
 	stateObject, err := sm.getStateObject(addrs, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	registry, err := stateObject.Registry()
+	deeds, err := stateObject.Deeds()
 	if err != nil {
 		return nil, err
 	}
 
-	return registry.Entries, nil
+	entries := make(map[string]*common.AssetDescriptor)
+
+	for aid := range deeds.Entries {
+		assetID := identifiers.AssetID(aid)
+
+		stateObject, err = sm.getStateObject(assetID.Address(), common.NilHash)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to fetch state object")
+		}
+
+		entries[aid], err = stateObject.GetState(assetID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return entries, nil
 }
 
 func (sm *StateManager) GetBalance(
@@ -597,17 +614,7 @@ func (sm *StateManager) GetAssetInfo(assetID identifiers.AssetID, state common.H
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	rawDescriptor, err := stateObject.GetRegistryEntry(string(assetID))
-	if err != nil {
-		return nil, common.ErrAssetNotFound
-	}
-
-	ad := new(common.AssetDescriptor)
-	if err = ad.FromBytes(rawDescriptor); err != nil {
-		return nil, err
-	}
-
-	return ad, nil
+	return stateObject.GetState(assetID)
 }
 
 func (sm *StateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
@@ -818,6 +825,18 @@ func (sm *StateManager) syncTree(
 	}
 
 	return nil
+}
+
+func (sm *StateManager) SyncAssetTree(
+	newRoot *common.RootNode,
+	so *Object,
+) error {
+	assetTree, err := so.getAssetTree()
+	if err != nil {
+		return err
+	}
+
+	return sm.syncTree(assetTree, newRoot)
 }
 
 func (sm *StateManager) SyncLogicTree(

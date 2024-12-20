@@ -928,7 +928,7 @@ func (k *Engine) isIxValid(ix *common.Interaction) error {
 				ix.GetIxOp(idx).Target(),
 			)
 
-			if _, err = stateObject.GetRegistryEntry(string(assetID)); err == nil {
+			if _, err = stateObject.GetState(assetID); err == nil {
 				return errors.New("asset already found")
 			}
 

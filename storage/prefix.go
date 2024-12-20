@@ -13,15 +13,14 @@ type PrefixTag byte
 const (
 	Account         PrefixTag = 0x00
 	Context         PrefixTag = 0x01
-	Logic           PrefixTag = 0x02
-	File            PrefixTag = 0x03
-	Storage         PrefixTag = 0x04
-	Balance         PrefixTag = 0x05
-	Registry        PrefixTag = 0x06
-	Approvals       PrefixTag = 0x07
-	PreImage        PrefixTag = 0x08
-	TesseractHeight PrefixTag = 0x09
-	LogicManifest   PrefixTag = 0x0A
+	Asset           PrefixTag = 0x02
+	Logic           PrefixTag = 0x03
+	File            PrefixTag = 0x04
+	Storage         PrefixTag = 0x05
+	Deeds           PrefixTag = 0x06
+	PreImage        PrefixTag = 0x07
+	TesseractHeight PrefixTag = 0x08
+	LogicManifest   PrefixTag = 0x09
 )
 
 // Non-Account Based Key Prefixes

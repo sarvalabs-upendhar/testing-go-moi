@@ -208,15 +208,15 @@ func (c *MockChainManager) setTesseractByHash(
 
 type MockStateManager struct {
 	storage                 map[common.Hash][]byte
-	balances                map[identifiers.Address]*state.BalanceObject
+	balances                map[identifiers.Address]common.AssetMap
 	accounts                map[identifiers.Address]*common.Account
 	context                 map[identifiers.Address]*Context
-	assetRegistry           map[identifiers.AssetID]*common.AssetDescriptor
+	assetDeeds              map[identifiers.AssetID]*common.AssetDescriptor
 	logicManifests          map[string][]byte
 	logicStorage            map[string]map[string]string // first key denotes logic id, second key denotes storage key
 	accMetaInfo             map[identifiers.Address]*common.AccountMetaInfo
 	logicIDs                map[identifiers.Address][]identifiers.LogicID
-	registry                map[identifiers.Address]map[string][]byte
+	deeds                   map[identifiers.Address]map[string]*common.AssetDescriptor
 	fetchIxStateObjectsHook func() error
 }
 
@@ -251,8 +251,8 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
 	mockState := new(MockStateManager)
-	mockState.assetRegistry = make(map[identifiers.AssetID]*common.AssetDescriptor)
-	mockState.balances = make(map[identifiers.Address]*state.BalanceObject)
+	mockState.assetDeeds = make(map[identifiers.AssetID]*common.AssetDescriptor)
+	mockState.balances = make(map[identifiers.Address]common.AssetMap)
 	mockState.storage = make(map[common.Hash][]byte)
 	mockState.accounts = make(map[identifiers.Address]*common.Account)
 	mockState.context = make(map[identifiers.Address]*Context)
@@ -260,31 +260,37 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState.logicStorage = make(map[string]map[string]string)
 	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
 	mockState.logicIDs = make(map[identifiers.Address][]identifiers.LogicID)
-	mockState.registry = make(map[identifiers.Address]map[string][]byte)
+	mockState.deeds = make(map[identifiers.Address]map[string]*common.AssetDescriptor)
 
 	return mockState
 }
 
-func (s *MockStateManager) setRegistry(t *testing.T, addr identifiers.Address, registry map[string][]byte) {
+func (s *MockStateManager) setDeeds(
+	t *testing.T, addr identifiers.Address,
+	deeds map[string]*common.AssetDescriptor,
+) {
 	t.Helper()
 
-	s.registry[addr] = registry
+	s.deeds[addr] = deeds
 }
 
-func (s *MockStateManager) GetRegistry(addr identifiers.Address, stateHash common.Hash) (map[string][]byte, error) {
-	registry, ok := s.registry[addr]
+func (s *MockStateManager) GetDeeds(
+	addr identifiers.Address,
+	stateHash common.Hash,
+) (map[string]*common.AssetDescriptor, error) {
+	deeds, ok := s.deeds[addr]
 	if !ok {
-		return nil, common.ErrRegistryNotFound
+		return nil, errors.New("deeds not found")
 	}
 
-	return registry, nil
+	return deeds, nil
 }
 
 func (s *MockStateManager) GetAssetInfo(
 	assetID identifiers.AssetID,
 	stateHash common.Hash,
 ) (*common.AssetDescriptor, error) {
-	v, ok := s.assetRegistry[assetID]
+	v, ok := s.assetDeeds[assetID]
 	if !ok {
 		return nil, common.ErrAssetNotFound
 	}
@@ -293,7 +299,7 @@ func (s *MockStateManager) GetAssetInfo(
 }
 
 func (s *MockStateManager) addAsset(assetID identifiers.AssetID, descriptor *common.AssetDescriptor) {
-	s.assetRegistry[assetID] = descriptor
+	s.assetDeeds[assetID] = descriptor
 }
 
 func (s *MockStateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash common.Hash) ([]byte, error) {
@@ -413,7 +419,7 @@ func (s *MockStateManager) GetContextByHash(address identifiers.Address,
 	return hash, context.behaviourNodes, context.randomNodes, nil
 }
 
-func (s *MockStateManager) GetBalances(addr identifiers.Address, stateHash common.Hash) (*state.BalanceObject, error) {
+func (s *MockStateManager) GetBalances(addr identifiers.Address, stateHash common.Hash) (common.AssetMap, error) {
 	if _, ok := s.balances[addr]; ok {
 		return s.balances[addr].Copy(), nil
 	}
@@ -427,8 +433,8 @@ func (s *MockStateManager) GetBalance(
 	stateHash common.Hash,
 ) (*big.Int, error) {
 	if _, ok := s.balances[addr]; ok {
-		if _, ok := s.balances[addr].AssetMap[assetID]; ok {
-			return s.balances[addr].AssetMap[assetID], nil
+		if _, ok := s.balances[addr][assetID]; ok {
+			return s.balances[addr][assetID], nil
 		}
 
 		return nil, common.ErrAssetNotFound
@@ -454,10 +460,8 @@ func (s *MockStateManager) IsGenesis(addr identifiers.Address) (bool, error) {
 }
 
 func (s *MockStateManager) setBalance(addr identifiers.Address, assetID identifiers.AssetID, balance *big.Int) {
-	s.balances[addr] = &state.BalanceObject{
-		AssetMap: make(common.AssetMap),
-	}
-	s.balances[addr].AssetMap[assetID] = balance
+	s.balances[addr] = make(common.AssetMap)
+	s.balances[addr][assetID] = balance
 }
 
 func (s *MockStateManager) setContext(t *testing.T, address identifiers.Address, context *Context) {
@@ -471,9 +475,7 @@ func (s *MockStateManager) setAccount(addr identifiers.Address, acc common.Accou
 }
 
 func (s *MockStateManager) getTDU(addr identifiers.Address, stateHash common.Hash) common.AssetMap {
-	data, _ := s.balances[addr].TDU()
-
-	return data
+	return s.balances[addr]
 }
 
 func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte) {
@@ -996,30 +998,27 @@ func getTesseractHash(t *testing.T, tesseract *common.Tesseract) common.Hash {
 	return tesseract.Hash()
 }
 
-func getRegistry(
+func getDeeds(
 	t *testing.T,
 	assetIDs []identifiers.AssetID,
 	assetDescriptors []*common.AssetDescriptor,
-) (map[string][]byte, []rpcargs.RPCRegistry) {
+) (map[string]*common.AssetDescriptor, []rpcargs.RPCDeeds) {
 	t.Helper()
 
 	count := len(assetIDs)
-	registryMap := make(map[string][]byte, count)
-	registryEntries := make([]rpcargs.RPCRegistry, 0, count)
+	deedsMap := make(map[string]*common.AssetDescriptor, count)
+	deedsEntries := make([]rpcargs.RPCDeeds, 0, count)
 
 	for i := 0; i < count; i++ {
-		registryEntries = append(registryEntries, rpcargs.RPCRegistry{
+		deedsEntries = append(deedsEntries, rpcargs.RPCDeeds{
 			AssetID:   assetIDs[i].String(),
 			AssetInfo: rpcargs.GetRPCAssetDescriptor(assetDescriptors[i]),
 		})
 
-		rawAssetDescriptor, err := assetDescriptors[i].Bytes()
-		require.NoError(t, err)
-
-		registryMap[string(assetIDs[i])] = rawAssetDescriptor
+		deedsMap[string(assetIDs[i])] = assetDescriptors[i]
 	}
 
-	return registryMap, registryEntries
+	return deedsMap, deedsEntries
 }
 
 func getContext(t *testing.T, count int) *Context {
@@ -1272,8 +1271,8 @@ func NumPointer(t *testing.T, input int64) *int64 {
 	return &input
 }
 
-func sortRegistry(registry []rpcargs.RPCRegistry) {
-	sort.Slice(registry, func(i, j int) bool {
-		return registry[i].AssetID < registry[j].AssetID
+func sortDeeds(deeds []rpcargs.RPCDeeds) {
+	sort.Slice(deeds, func(i, j int) bool {
+		return deeds[i].AssetID < deeds[j].AssetID
 	})
 }

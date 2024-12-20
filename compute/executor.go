@@ -84,10 +84,10 @@ func (executor *IxExecutor) executeInteraction(
 	// Set the receipt to the transition
 	executor.transition.SetReceipt(ix.Hash(), receipt)
 
-	// Deduct fuel for the ix execution from the senderx
+	// Deduct fuel for the ix execution from the sender
 	executor.transition.DeductFuel(
-		ix.Sender(),
-		new(big.Int).Mul(ix.FuelPrice(), new(big.Int).SetUint64(receipt.FuelUsed)),
+		ix.Sender(), new(big.Int).Mul(ix.FuelPrice(),
+			new(big.Int).SetUint64(receipt.FuelUsed)),
 	)
 
 	return nil

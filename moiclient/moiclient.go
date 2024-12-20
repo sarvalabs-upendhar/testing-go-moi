@@ -184,11 +184,11 @@ func (c *Client) nextID() json.RawMessage {
 	return strconv.AppendUint(nil, uint64(id), 10)
 }
 
-// Registry returns the asset registry info for the given address and tesseract options
-func (c *Client) Registry(ctx context.Context, args *rpcargs.QueryArgs) ([]rpcargs.RPCRegistry, error) {
-	var entries []rpcargs.RPCRegistry
+// Deeds returns the asset deeds info for the given address and tesseract options
+func (c *Client) Deeds(ctx context.Context, args *rpcargs.QueryArgs) ([]rpcargs.RPCDeeds, error) {
+	var entries []rpcargs.RPCDeeds
 
-	err := c.Call(ctx, &entries, "moi.Registry", args)
+	err := c.Call(ctx, &entries, "moi.Deeds", args)
 	if err != nil {
 		return nil, err
 	}

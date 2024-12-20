@@ -37,12 +37,8 @@ func ContextObjectKey(address identifiers.Address, contextHash common.Hash) []by
 	return dbKey(address, Context, contextHash.Bytes())
 }
 
-func RegistryObjectKey(address identifiers.Address, registryHash common.Hash) []byte {
-	return dbKey(address, Registry, registryHash.Bytes())
-}
-
-func BalanceObjectKey(address identifiers.Address, balanceHash common.Hash) []byte {
-	return dbKey(address, Balance, balanceHash.Bytes())
+func DeedsKey(address identifiers.Address, registryHash common.Hash) []byte {
+	return dbKey(address, Deeds, registryHash.Bytes())
 }
 
 func LogicManifestKey(address identifiers.Address, manifestHash common.Hash) []byte {

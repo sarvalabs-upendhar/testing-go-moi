@@ -225,12 +225,10 @@ func (p *PublicCoreAPI) TDU(args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
 		return nil, err
 	}
 
-	object, err := p.sm.GetBalances(args.Address, stateHash)
+	data, err := p.sm.GetBalances(args.Address, stateHash)
 	if err != nil {
 		return nil, err
 	}
-
-	data, _ := object.TDU()
 
 	tdu := make([]rpcargs.TDU, 0, len(data))
 
@@ -244,28 +242,23 @@ func (p *PublicCoreAPI) TDU(args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
 	return tdu, nil
 }
 
-func (p *PublicCoreAPI) Registry(args *rpcargs.QueryArgs) ([]rpcargs.RPCRegistry, error) {
+func (p *PublicCoreAPI) Deeds(args *rpcargs.QueryArgs) ([]rpcargs.RPCDeeds, error) {
 	stateHash, err := p.getStateHash(getTesseractArgs(args.Address, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	registry, err := p.sm.GetRegistry(args.Address, stateHash)
+	deeds, err := p.sm.GetDeeds(args.Address, stateHash)
 	if err != nil {
 		return nil, err
 	}
 
-	entries := make([]rpcargs.RPCRegistry, 0, len(registry))
+	entries := make([]rpcargs.RPCDeeds, 0, len(deeds))
 
-	for assetID, rawInfo := range registry {
-		ad := new(common.AssetDescriptor)
-		if err = ad.FromBytes(rawInfo); err != nil {
-			return nil, err
-		}
-
-		entries = append(entries, rpcargs.RPCRegistry{
+	for assetID, assetInfo := range deeds {
+		entries = append(entries, rpcargs.RPCDeeds{
 			AssetID:   identifiers.AssetID(assetID).String(),
-			AssetInfo: rpcargs.GetRPCAssetDescriptor(ad),
+			AssetInfo: rpcargs.GetRPCAssetDescriptor(assetInfo),
 		})
 	}
 
@@ -399,15 +392,14 @@ func (p *PublicCoreAPI) AccountState(args *rpcargs.GetAccountArgs) (*rpcargs.RPC
 	}
 
 	return &rpcargs.RPCAccount{
-		Nonce:          hexutil.Uint64(account.Nonce),
-		AccType:        account.AccType,
-		Balance:        account.Balance,
-		AssetRegistry:  account.AssetRegistry,
-		AssetApprovals: account.AssetApprovals,
-		ContextHash:    account.ContextHash,
-		StorageRoot:    account.StorageRoot,
-		LogicRoot:      account.LogicRoot,
-		FileRoot:       account.FileRoot,
+		Nonce:       hexutil.Uint64(account.Nonce),
+		AccType:     account.AccType,
+		AssetDeeds:  account.AssetDeeds,
+		ContextHash: account.ContextHash,
+		StorageRoot: account.StorageRoot,
+		AssetRoot:   account.AssetRoot,
+		LogicRoot:   account.LogicRoot,
+		FileRoot:    account.FileRoot,
 	}, nil
 }
 

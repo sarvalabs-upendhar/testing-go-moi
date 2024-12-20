@@ -76,6 +76,10 @@ type stateManager interface {
 		logicStorageTreeRoots map[string]*common.RootNode,
 		so *state.Object,
 	) error
+	SyncAssetTree(
+		newRoot *common.RootNode,
+		so *state.Object,
+	) error
 	SyncLogicTree(
 		newRoot *common.RootNode,
 		so *state.Object,
@@ -1791,10 +1795,7 @@ func (s *Syncer) fetchTesseractState(
 	if err = s.fetchAndStoreData(
 		ctx,
 		newSession,
-		cid.BalanceCID(acc.Balance),
-		cid.ApprovalsCID(acc.AssetApprovals),
-		cid.RegistryCID(acc.AssetRegistry),
-		// receiptsCID(tesseract.GridHash()),
+		cid.DeedsCID(acc.AssetDeeds),
 	); err != nil {
 		s.logger.Error("Error fetching balance data", "err", err)
 
@@ -1805,6 +1806,10 @@ func (s *Syncer) fetchTesseractState(
 		s.logger.Error("Error fetching context data", "err", err)
 
 		return err
+	}
+
+	if err = s.syncAssetTree(ctx, newSession, acc.AssetRoot, object); err != nil {
+		return errors.Wrap(err, "failed to sync asset tree")
 	}
 
 	if err = s.syncLogicTree(ctx, newSession, acc.LogicRoot, object); err != nil {
@@ -2149,6 +2154,29 @@ func (s *Syncer) syncLogicManifests(ctx context.Context, as syncer.Session, root
 	}
 
 	return nil
+}
+
+func (s *Syncer) syncAssetTree(
+	ctx context.Context,
+	as syncer.Session,
+	newRoot common.Hash,
+	object *state.Object,
+) error {
+	if newRoot.IsNil() {
+		return nil
+	}
+
+	_, blk, err := s.getBlock(ctx, as, cid.AssetCID(newRoot))
+	if err != nil {
+		return nil
+	}
+
+	metaAssetRoot := new(common.RootNode)
+	if err = metaAssetRoot.FromBytes(blk.GetData()); err != nil {
+		return err
+	}
+
+	return s.state.SyncAssetTree(metaAssetRoot, object)
 }
 
 func (s *Syncer) syncLogicTree(

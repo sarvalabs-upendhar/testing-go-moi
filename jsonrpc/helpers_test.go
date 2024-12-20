@@ -229,7 +229,7 @@ func (m *MockStateManager) GetContextByHash(
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetBalances(addrs identifiers.Address, stateHash common.Hash) (*state.BalanceObject, error) {
+func (m *MockStateManager) GetBalances(addrs identifiers.Address, stateHash common.Hash) (common.AssetMap, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -299,7 +299,9 @@ func (m *MockStateManager) GetAssetInfo(
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetRegistry(addr identifiers.Address, stateHash common.Hash) (map[string][]byte, error) {
+func (m *MockStateManager) GetDeeds(
+	addr identifiers.Address, stateHash common.Hash,
+) (map[string]*common.AssetDescriptor, error) {
 	// TODO implement me
 	panic("implement me")
 }

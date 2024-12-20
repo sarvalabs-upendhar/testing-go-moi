@@ -352,12 +352,6 @@ func (p *PersistenceManager) GetAccount(addr identifiers.Address, stateHash comm
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetBalance(addr identifiers.Address, balanceHash common.Hash) ([]byte, error) {
-	key := dbKey(addr, Balance, balanceHash.Bytes())
-
-	return p.ReadEntry(key)
-}
-
 func (p *PersistenceManager) GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error) {
 	key := dbKey(addr, Context, contextHash.Bytes())
 
@@ -683,8 +677,8 @@ func (p *PersistenceManager) GetTesseract(
 	return ts, nil
 }
 
-func (p *PersistenceManager) GetAssetRegistry(addr identifiers.Address, registryHash common.Hash) ([]byte, error) {
-	return p.ReadEntry(RegistryObjectKey(addr, registryHash))
+func (p *PersistenceManager) GetDeeds(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+	return p.ReadEntry(DeedsKey(addr, hash))
 }
 
 func (p *PersistenceManager) DropPrefix(prefix []byte) error {

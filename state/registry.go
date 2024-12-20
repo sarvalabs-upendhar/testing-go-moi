@@ -5,35 +5,38 @@ import (
 	"github.com/sarvalabs/go-polo"
 )
 
-type RegistryObject struct {
-	Entries map[string][]byte
+// Deeds represents a collection of assetID's mapped to empty values to indicate their existence.
+type Deeds struct {
+	Entries map[string]struct{}
 }
 
-func (r *RegistryObject) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(r)
+// Bytes serializes Deeds to a byte slice.
+func (d *Deeds) Bytes() ([]byte, error) {
+	rawData, err := polo.Polorize(d)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize registry object")
+		return nil, errors.Wrap(err, "failed to polorize deeds object")
 	}
 
 	return rawData, nil
 }
 
-func (r *RegistryObject) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(r, bytes); err != nil {
-		return errors.Wrap(err, "failed to polorize registry object")
+// FromBytes deserializes a byte slice into Deeds.
+func (d *Deeds) FromBytes(bytes []byte) error {
+	if err := polo.Depolorize(d, bytes); err != nil {
+		return errors.Wrap(err, "failed to polorize deeds object")
 	}
 
 	return nil
 }
 
-func (r *RegistryObject) Copy() *RegistryObject {
-	newObject := &RegistryObject{
-		Entries: make(map[string][]byte, len(r.Entries)),
+// Copy returns a deep copy of the Deeds object.
+func (d *Deeds) Copy() *Deeds {
+	newObject := &Deeds{
+		Entries: make(map[string]struct{}, len(d.Entries)),
 	}
 
-	for k, v := range r.Entries {
-		newObject.Entries[k] = make([]byte, len(v))
-		copy(newObject.Entries[k], v)
+	for k := range d.Entries {
+		newObject.Entries[k] = struct{}{}
 	}
 
 	return newObject
