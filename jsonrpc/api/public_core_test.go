@@ -1494,6 +1494,84 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 	}
 }
 
+func TestPublicCoreAPI_Mandates(t *testing.T) {
+	ts := tests.CreateTesseracts(t, 2, nil)
+	height := int64(ts[0].Height(ts[0].AnyAddress()))
+
+	chainManager := NewMockChainManager(t)
+	stateManager := NewMockStateManager(t)
+	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
+
+	chainManager.SetTesseractHeightEntry(ts[0].AnyAddress(), ts[0].Height(ts[0].AnyAddress()), ts[0].Hash())
+	chainManager.setTesseractByHash(t, ts[0])
+	chainManager.setTesseractByHash(t, ts[1])
+
+	randomHash := tests.RandomHash(t)
+	tsHash := getTesseractsHashes(t, ts)
+
+	mandates, rpcMandates := createMandates(t)
+	stateManager.setMandates(ts[0].AnyAddress(), mandates)
+
+	testcases := []struct {
+		name          string
+		args          rpcargs.GetAssetMandateArgs
+		expected      []rpcargs.RPCMandate
+		expectedError error
+	}{
+		{
+			name:          "address cannot be empty",
+			args:          rpcargs.GetAssetMandateArgs{},
+			expectedError: common.ErrEmptyAddress,
+		},
+		{
+			name: "should return error if tesseract not found",
+			args: rpcargs.GetAssetMandateArgs{
+				Address: tests.RandomAddress(t),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractHash: &randomHash,
+				},
+			},
+			expectedError: common.ErrFetchingTesseract,
+		},
+		{
+			name: "should return empty mandates",
+			args: rpcargs.GetAssetMandateArgs{
+				Address: tests.RandomAddress(t),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractHash: &tsHash[1],
+				},
+			},
+			expected: []rpcargs.RPCMandate{},
+		},
+		{
+			name: "mandates retrieved successfully",
+			args: rpcargs.GetAssetMandateArgs{
+				Address: ts[0].AnyAddress(),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &height,
+				},
+			},
+			expected: rpcMandates,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := coreAPI.Mandates(&test.args)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.ElementsMatch(t, test.expected, result)
+		})
+	}
+}
+
 func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 2, nil)
 	height := int64(ts[0].Height(ts[0].AnyAddress()))

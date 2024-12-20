@@ -102,22 +102,13 @@ func (te *TestEnvironment) TestParticipantCreate() {
 			postTest: validateParticipantCreate,
 		},
 		{
-			name:   "participant already registered",
+			name:   "amount is invalid",
 			sender: sender,
 			participantCreatePayload: &common.ParticipantCreatePayload{
 				Address: receiver.Addr,
-				Amount:  big.NewInt(1),
+				Amount:  big.NewInt(0),
 			},
-			expectedError: common.ErrAlreadyRegistered,
-		},
-		{
-			name:   "insufficient funds",
-			sender: sender,
-			participantCreatePayload: &common.ParticipantCreatePayload{
-				Address: receiver.Addr,
-				Amount:  big.NewInt(1000000000000),
-			},
-			expectedError: common.ErrInsufficientFunds,
+			expectedError: common.ErrInvalidValue,
 		},
 	}
 

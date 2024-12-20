@@ -435,11 +435,11 @@ func TestPublicCoreAPI_ValidateIxOps(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name:        "empty ix transactions",
+			name:        "empty ix operations",
 			expectedErr: ErrEmptyIxOps,
 		},
 		{
-			name: "too many ix transactions",
+			name: "too many ix operations",
 			txs: []common.IxOpRaw{
 				{
 					Type:    common.IxAssetCreate,
@@ -489,7 +489,7 @@ func TestPublicCoreAPI_ValidateIxOps(t *testing.T) {
 			expectedErr: ErrLogicDeploymentLimit,
 		},
 		{
-			name: "valid ix transactions",
+			name: "valid ix operations",
 			txs: []common.IxOpRaw{
 				{
 					Type:    common.IxAssetTransfer,

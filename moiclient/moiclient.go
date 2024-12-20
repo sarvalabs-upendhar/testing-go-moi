@@ -364,6 +364,20 @@ func (c *Client) AccountState(ctx context.Context, args *rpcargs.GetAccountArgs)
 	return &account, nil
 }
 
+func (c *Client) Mandates(
+	ctx context.Context,
+	args *rpcargs.GetAssetMandateArgs,
+) ([]rpcargs.RPCMandate, error) {
+	var mandates []rpcargs.RPCMandate
+
+	err := c.Call(ctx, &mandates, "moi.Mandates", args)
+	if err != nil {
+		return nil, err
+	}
+
+	return mandates, nil
+}
+
 // LogicIDs returns the logic IDs of the given address
 func (c *Client) LogicIDs(ctx context.Context, args *rpcargs.GetLogicIDArgs) ([]identifiers.LogicID, error) {
 	var logicIDs []identifiers.LogicID

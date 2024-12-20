@@ -2152,7 +2152,7 @@ func TestIxPool_ValidateOperations(t *testing.T) {
 				testcase.testFn(testcase.ix)
 			}
 
-			err := ixPool.validateTransactions(testcase.ix)
+			err := ixPool.validateOperations(testcase.ix)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 
@@ -2220,7 +2220,7 @@ func TestIxPool_ValidateAssetCreate(t *testing.T) {
 	}
 }
 
-func TestIxPool_ValidateAssetMint(t *testing.T) {
+func TestIxPool_ValidateAssetSupply(t *testing.T) {
 	sm := NewMockStateManager(t)
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = WaitMode
@@ -2229,10 +2229,14 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 
 	address := tests.RandomAddress(t)
 	assetID := tests.GetRandomAssetID(t, address)
-	assetPayload := common.AssetSupplyPayload{
+	validAssetPayload := common.AssetSupplyPayload{
 		AssetID: assetID,
+		Amount:  big.NewInt(100),
 	}
-
+	invalidAssetPayload := common.AssetSupplyPayload{
+		AssetID: assetID,
+		Amount:  big.NewInt(0),
+	}
 	NFTAssetPayload := common.AssetSupplyPayload{
 		AssetID: identifiers.NewAssetIDv0(false, false, 1, uint16(common.MAS1), address),
 	}
@@ -2240,159 +2244,27 @@ func TestIxPool_ValidateAssetMint(t *testing.T) {
 	testcases := []struct {
 		name        string
 		ix          *common.Interaction
-		testFn      func(interaction *common.Interaction)
 		expectedErr error
 	}{
 		{
-			name:        "should return error if asset not found",
-			ix:          newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
-			expectedErr: common.ErrAssetNotFound,
+			name:        "should return error if amount is less than or equal to zero",
+			ix:          newTestInteraction(t, common.IxAssetMint, invalidAssetPayload, 0, address, nil),
+			expectedErr: common.ErrInvalidValue,
 		},
 		{
-			name: "should return error if operator address mismatch",
-			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
-			testFn: func(interaction *common.Interaction) {
-				sm.setAssetInfo(
-					t,
-					assetID, &common.AssetDescriptor{
-						Operator: tests.RandomAddress(t),
-					})
-			},
-			expectedErr: common.ErrOperatorMismatch,
+			name:        "should return error if non fungible token minted",
+			ix:          newTestInteraction(t, common.IxAssetMint, NFTAssetPayload, 0, address, nil),
+			expectedErr: common.ErrMintOrBurnNonFungibleToken,
 		},
 		{
-			name: "should return success if asset mint data is valid",
-			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
-			testFn: func(interaction *common.Interaction) {
-				sm.setAssetInfo(
-					t,
-					assetID, &common.AssetDescriptor{
-						Operator: interaction.Sender(),
-					})
-			},
-		},
-		{
-			name: "should return error if non fungible token minted",
-			ix:   newTestInteraction(t, common.IxAssetMint, NFTAssetPayload, 0, address, nil),
-			testFn: func(interaction *common.Interaction) {
-				sm.setAssetInfo(
-					t,
-					assetID, &common.AssetDescriptor{
-						Operator: interaction.Sender(),
-					})
-			},
-			expectedErr: common.ErrMintNonFungibleToken,
+			name: "valid asset supply payload",
+			ix:   newTestInteraction(t, common.IxAssetMint, validAssetPayload, 0, address, nil),
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			if testcase.testFn != nil {
-				testcase.testFn(testcase.ix)
-			}
-
-			err := ixPool.validateAssetMint(testcase.ix, 0)
-			if testcase.expectedErr != nil {
-				require.ErrorContains(t, err, testcase.expectedErr.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-		})
-	}
-}
-
-func TestIxPool_ValidateAssetBurn(t *testing.T) {
-	address := tests.RandomAddress(t)
-	assetID := tests.GetRandomAssetID(t, address)
-	assetPayload := common.AssetSupplyPayload{
-		AssetID: assetID,
-		Amount:  big.NewInt(100),
-	}
-
-	testcases := []struct {
-		name        string
-		ix          *common.Interaction
-		testFn      func(interaction *common.Interaction, msm *MockStateManager)
-		expectedErr error
-	}{
-		{
-			name:        "asset not found",
-			ix:          newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
-			expectedErr: common.ErrAssetNotFound,
-		},
-		{
-			name: "balance not found",
-			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
-			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
-				mockStateManager.setAssetInfo(
-					t,
-					assetID, &common.AssetDescriptor{
-						Operator: interaction.Sender(),
-					})
-			},
-			expectedErr: common.ErrFetchingBalance,
-		},
-		{
-			name: "insufficient funds",
-			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
-			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
-				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
-					assetID: big.NewInt(10),
-				}
-				mockStateManager.setAssetInfo(
-					t,
-					assetID, &common.AssetDescriptor{
-						Operator: interaction.Sender(),
-					})
-			},
-			expectedErr: common.ErrInsufficientFunds,
-		},
-		{
-			name: "operator address mismatch",
-			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
-			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
-				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
-					assetID: big.NewInt(1000),
-				}
-				mockStateManager.setAssetInfo(
-					t,
-					assetID, &common.AssetDescriptor{
-						Operator: tests.RandomAddress(t),
-					})
-			},
-			expectedErr: common.ErrOperatorMismatch,
-		},
-		{
-			name: "valid asset burn data",
-			ix:   newTestInteraction(t, common.IxAssetMint, assetPayload, 0, address, nil),
-			testFn: func(interaction *common.Interaction, mockStateManager *MockStateManager) {
-				mockStateManager.balance[interaction.Sender()] = map[identifiers.AssetID]*big.Int{
-					assetID: big.NewInt(1000),
-				}
-				mockStateManager.setAssetInfo(
-					t,
-					assetID, &common.AssetDescriptor{
-						Operator: interaction.Sender(),
-					})
-			},
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			sm := NewMockStateManager(t)
-			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
-				c.Mode = WaitMode
-				c.PriceLimit = defaultIxPriceLimit
-			}, false, sm, nil, nil)
-
-			if testcase.testFn != nil {
-				testcase.testFn(testcase.ix, sm)
-			}
-
-			err := ixPool.validateAssetBurn(testcase.ix, 0)
+			err := ixPool.validateAssetSupply(testcase.ix, 0)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 

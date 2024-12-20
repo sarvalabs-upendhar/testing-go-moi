@@ -483,6 +483,35 @@ func (p *PublicCoreAPI) LogicStorage(args *rpcargs.GetLogicStorageArgs) (hexutil
 	return p.sm.GetEphemeralStorageEntry(args.Address, args.LogicID, args.StorageKey, stateHash)
 }
 
+// Mandates retrieves and returns a list of asset mandates associated with the specified address.
+func (p *PublicCoreAPI) Mandates(args *rpcargs.GetAssetMandateArgs) ([]rpcargs.RPCMandate, error) {
+	if args.Address.IsNil() {
+		return nil, common.ErrEmptyAddress
+	}
+
+	stateHash, err := p.getStateHash(getTesseractArgs(args.Address, args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	mandates, err := p.sm.GetMandates(args.Address, stateHash)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]rpcargs.RPCMandate, 0, len(mandates))
+
+	for _, mandate := range mandates {
+		entries = append(entries, rpcargs.RPCMandate{
+			AssetID: mandate.AssetID.String(),
+			Address: mandate.Address,
+			Amount:  (*hexutil.Big)(mandate.Amount),
+		})
+	}
+
+	return entries, nil
+}
+
 // LogicIDs will fetch the logic IDs from the logic tree
 func (p *PublicCoreAPI) LogicIDs(args *rpcargs.GetAccountArgs) ([]identifiers.LogicID, error) {
 	stateHash, err := p.getStateHash(getTesseractArgs(args.Address, args.Options))

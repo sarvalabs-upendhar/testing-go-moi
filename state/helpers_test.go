@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"reflect"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/blake2b"
 
@@ -612,8 +613,11 @@ func createAssetObject(t *testing.T) *AssetObject {
 		Deposit: map[identifiers.LogicID]*big.Int{
 			tests.GetLogicID(t, tests.RandomAddress(t)): big.NewInt(3000),
 		},
-		Mandate: map[identifiers.Address]*big.Int{
-			tests.RandomAddress(t): big.NewInt(2000),
+		Mandate: map[identifiers.Address]*Mandate{
+			tests.RandomAddress(t): {
+				Amount:    big.NewInt(2000),
+				ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+			},
 		},
 		Properties: &common.AssetDescriptor{
 			Symbol: "MOI",
@@ -1148,15 +1152,18 @@ func setAssetDeposits(
 
 func setAssetMandates(
 	t *testing.T, so *Object, assetIDs []identifiers.AssetID,
-	amounts []*big.Int, addresses []identifiers.Address, depositAmounts []*big.Int,
+	amounts []*big.Int, addresses []identifiers.Address, mandateAmounts []*big.Int,
 ) {
 	t.Helper()
 
-	mandates := make(map[identifiers.Address]*big.Int)
+	mandates := make(map[identifiers.Address]*Mandate)
 
 	if len(addresses) > 0 {
 		for idx, address := range addresses {
-			mandates[address] = depositAmounts[idx]
+			mandates[address] = &Mandate{
+				Amount:    mandateAmounts[idx],
+				ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+			}
 		}
 	}
 
@@ -1725,6 +1732,25 @@ func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int, asse
 	assetObject, err := sObj.getAssetObject(assetID, true)
 	require.NoError(t, err)
 	require.Equal(t, expectedBalance, assetObject.Balance)
+}
+
+func checkForMandates(
+	t *testing.T, sObj *Object, assetID identifiers.AssetID,
+	address identifiers.Address, expectedAmount *big.Int,
+) {
+	t.Helper()
+
+	mandate, err := sObj.GetMandate(assetID, address)
+
+	if expectedAmount.Cmp(big.NewInt(0)) == 0 {
+		require.Error(t, err)
+		require.Equal(t, common.ErrMandateNotFound, err)
+
+		return
+	}
+
+	require.NoError(t, err)
+	require.Equal(t, 0, mandate.Amount.Cmp(expectedAmount))
 }
 
 func checkForDeeds(

@@ -220,11 +220,6 @@ func (object *Object) SubBalance(assetID identifiers.AssetID, amount *big.Int) e
 		return common.ErrAssetNotFound
 	}
 
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(amount) == -1 {
-		return common.ErrInsufficientFunds
-	}
-
 	assetObject.Balance.Sub(assetObject.Balance, amount)
 
 	object.updateAssetTree(assetID, assetObject)
@@ -278,26 +273,75 @@ func (object *Object) GetDeposit(assetID identifiers.AssetID, logicID identifier
 
 // CreateMandate assigns a spending mandate to an address for the specified asset.
 // The mandate grants the recipient the authorization to spend the specified amount on behalf of the participant.
-func (object *Object) CreateMandate(assetID identifiers.AssetID, address identifiers.Address, amount *big.Int) error {
+func (object *Object) CreateMandate(
+	assetID identifiers.AssetID,
+	address identifiers.Address,
+	amount *big.Int,
+	expiresAt int64,
+) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(amount) == -1 {
-		return common.ErrInsufficientFunds
-	}
-
-	if _, ok := assetObject.Mandate[address]; ok {
+	if mandate, ok := assetObject.Mandate[address]; ok {
 		// Increment the mandate amount if the mandate already exist
-		assetObject.Mandate[address].Add(assetObject.Mandate[address], amount)
+		assetObject.Mandate[address] = &Mandate{
+			Amount:    mandate.Amount.Add(mandate.Amount, amount),
+			ExpiresAt: expiresAt,
+		}
 	} else {
 		// Create a new mandate if it doesn't exist
-		assetObject.Mandate[address] = amount
+		assetObject.Mandate[address] = &Mandate{
+			Amount:    amount,
+			ExpiresAt: expiresAt,
+		}
 	}
 
 	object.updateAssetTree(assetID, assetObject)
+
+	return nil
+}
+
+// SubMandateBalance decrements the mandate balance of the specified asset by the given amount
+// for the specified address.
+func (object *Object) SubMandateBalance(
+	assetID identifiers.AssetID, address identifiers.Address, amount *big.Int,
+) error {
+	assetObject, err := object.getAssetObject(assetID, true)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	mandate, ok := assetObject.Mandate[address]
+	if !ok {
+		return common.ErrMandateNotFound
+	}
+
+	// Decrement the mandate balance by the given amount
+	mandate.Amount = mandate.Amount.Sub(mandate.Amount, amount)
+
+	// If the mandate amount is zero, remove the mandate for the specified address.
+	if mandate.Amount.Cmp(big.NewInt(0)) == 0 {
+		delete(assetObject.Mandate, address)
+	}
+
+	object.updateAssetTree(assetID, assetObject)
+
+	return nil
+}
+
+// ConsumeMandate decrements the benefactor's mandate balance and asset balance
+func (object *Object) ConsumeMandate(assetID identifiers.AssetID, address identifiers.Address, amount *big.Int) error {
+	// Deduct the mandate amount from the sender's mandate balance
+	if err := object.SubMandateBalance(assetID, address, amount); err != nil {
+		return err
+	}
+
+	// Deduct the transfer amount from the sender's asset balance
+	if err := object.SubBalance(assetID, amount); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -309,10 +353,6 @@ func (object *Object) DeleteMandate(assetID identifiers.AssetID, address identif
 		return common.ErrAssetNotFound
 	}
 
-	if _, ok := assetObject.Mandate[address]; !ok {
-		return errors.New("mandate doesn't exist")
-	}
-
 	delete(assetObject.Mandate, address)
 
 	object.updateAssetTree(assetID, assetObject)
@@ -320,18 +360,55 @@ func (object *Object) DeleteMandate(assetID identifiers.AssetID, address identif
 	return nil
 }
 
+// Mandates retrieves and returns all the asset mandates with their corresponding asset IDs, addresses, and amounts.
+func (object *Object) Mandates() ([]common.AssetMandate, error) {
+	assetTree, err := object.getAssetTree()
+	if err != nil {
+		return nil, err
+	}
+
+	it := assetTree.NewIterator()
+	mandates := make([]common.AssetMandate, 0)
+
+	for it.Next() {
+		if it.Leaf() {
+			key, err := assetTree.GetPreImageKey(common.BytesToHash(it.LeafKey()))
+			if err != nil {
+				return nil, err
+			}
+
+			assetID := identifiers.AssetID(hex.EncodeToString(key))
+
+			assetObject, err := object.getAssetObject(assetID, false)
+			if err != nil {
+				return nil, err
+			}
+
+			for address, mandate := range assetObject.Mandate {
+				mandates = append(mandates, common.AssetMandate{
+					AssetID: assetID,
+					Address: address,
+					Amount:  mandate.Amount,
+				})
+			}
+		}
+	}
+
+	return mandates, nil
+}
+
 // GetMandate retrieves the mandate amount for the given address and asset id.
-func (object *Object) GetMandate(assetID identifiers.AssetID, address identifiers.Address) (*big.Int, error) {
+func (object *Object) GetMandate(assetID identifiers.AssetID, address identifiers.Address) (*Mandate, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return nil, common.ErrAssetNotFound
 	}
 
-	if amount, ok := assetObject.Mandate[address]; ok {
-		return amount, nil
+	if mandate, ok := assetObject.Mandate[address]; ok {
+		return mandate, nil
 	}
 
-	return nil, errors.New("mandate doesn't exist")
+	return nil, common.ErrMandateNotFound
 }
 
 // GetState retrieves the current properties of the specified asset,
@@ -360,6 +437,7 @@ func (object *Object) SetState(assetID identifiers.AssetID, properties *common.A
 	return nil
 }
 
+// Copy creates and returns a new object that replicates the state and all associated data of the original state object.
 func (object *Object) Copy() *Object {
 	sObj := NewStateObject(object.address, object.cache, object.treeCache, object.db,
 		object.data, object.metrics, object.isGenesis)

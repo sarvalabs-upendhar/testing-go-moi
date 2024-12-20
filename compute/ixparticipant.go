@@ -1,6 +1,7 @@
 package compute
 
 import (
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
 )
@@ -25,32 +26,54 @@ func RunParticipantCreate(
 	// Obtain the sender and target state objects
 	sender := transition.GetObject(op.Sender())
 	target := transition.GetObject(op.Target())
+	sarga := transition.GetObject(common.SargaAddress)
 
-	status := common.ResultOk
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
+
+	// Exhaust fuel from tank
+	if !tank.Exhaust(FuelSimpleParticipantCreate) {
+		return opResult.WithStatus(common.ResultFuelExhausted)
+	}
+
+	// Validate participant create payload
+	if err := validateParticipantCreate(sender, target, sarga, payload); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
 
 	// Register the target account by creating and inserting a new KMOI asset object
 	// into the target account's asset tree.
 	if err := createParticipant(sender, target, payload); err != nil {
-		status = common.ResultStateReverted
-	}
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleParticipantCreate) {
-		status = common.ResultFuelExhausted
+		return opResult.WithStatus(common.ResultStateReverted)
 	}
 
 	if err := addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
-		status = common.ResultStateReverted
+		return opResult.WithStatus(common.ResultStateReverted)
 	}
 
-	opResult.SetStatus(status)
-
-	return opResult
+	return opResult.WithStatus(common.ResultOk)
 }
 
-// helper function
+func validateParticipantCreate(sender, target, sarga *state.Object, payload *common.ParticipantCreatePayload) error {
+	// Check if the account is already registered
+	// Fetch the account info from genesis state
+	_, err := sarga.GetStorageEntry(common.SargaLogicID, target.Address().Bytes())
+	if !errors.Is(err, common.ErrKeyNotFound) {
+		return common.ErrAlreadyRegistered
+	}
+
+	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	// Check if sender has sufficient balance
+	if assetObject.Balance.Cmp(payload.Amount) == -1 {
+		return common.ErrInsufficientFunds
+	}
+
+	return nil
+}
 
 // createParticipant registers a new participant by inserting a KMOI asset object into the target account's asset tree.
 func createParticipant(sender, target *state.Object, payload *common.ParticipantCreatePayload) error {

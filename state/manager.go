@@ -595,6 +595,15 @@ func (sm *StateManager) GetDeeds(
 	return entries, nil
 }
 
+func (sm *StateManager) GetMandates(addrs identifiers.Address, stateHash common.Hash) ([]common.AssetMandate, error) {
+	stateObject, err := sm.getStateObject(addrs, stateHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	return stateObject.Mandates()
+}
+
 func (sm *StateManager) GetBalance(
 	addrs identifiers.Address,
 	assetID identifiers.AssetID,

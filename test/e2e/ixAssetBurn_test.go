@@ -134,34 +134,16 @@ func (te *TestEnvironment) TestAssetBurn() {
 				AssetID: MAS1AssetID,
 				Amount:  big.NewInt(1),
 			},
-			postTest: validateAssetBurn,
+			expectedError: common.ErrMintOrBurnNonFungibleToken,
 		},
 		{
-			name:   "asset not found",
-			sender: sender,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: tests.GetRandomAssetID(te.T(), tests.RandomAddress(te.T())),
-				Amount:  big.NewInt(1),
-			},
-			expectedError: common.ErrAssetNotFound,
-		},
-		{
-			name:   "insufficient balance",
+			name:   "amount is invalid",
 			sender: sender,
 			assetSupplyPayload: &common.AssetSupplyPayload{
 				AssetID: MAS0AssetID,
-				Amount:  initialAmount.Add(initialAmount, big.NewInt(1)),
+				Amount:  big.NewInt(0),
 			},
-			expectedError: common.ErrInsufficientFunds,
-		},
-		{
-			name:   "operator address mismatch (sender is not the asset operator)",
-			sender: nonOperator,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: MAS0AssetID,
-				Amount:  big.NewInt(1),
-			},
-			expectedError: common.ErrOperatorMismatch,
+			expectedError: common.ErrInvalidValue,
 		},
 	}
 

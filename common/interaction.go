@@ -321,7 +321,7 @@ func (op *IxOp) Target() identifiers.Address {
 		op.target = payload.Address
 	case IxAssetCreate:
 		op.target = NewAccountAddress(op.Nonce(), op.Sender())
-	case IxAssetTransfer:
+	case IxAssetTransfer, IxAssetApprove, IxAssetRevoke:
 		payload, err := op.GetAssetActionPayload()
 		if err != nil {
 			panic(err)
@@ -491,6 +491,22 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 					IsGenesis: true,
 					Address:   assetAddr,
 				}
+			}
+
+		case IxAssetApprove, IxAssetRevoke:
+			assetActionPayload := new(AssetActionPayload)
+			if err = assetActionPayload.FromBytes(op.Payload); err != nil {
+				return nil, err
+			}
+
+			ix.ops[idx] = &IxOp{
+				Interaction: ix,
+				OpType:      op.Type,
+				Payload: &IxOpPayload{
+					asset: &AssetPayload{
+						Action: assetActionPayload,
+					},
+				},
 			}
 
 		case IxAssetMint, IxAssetBurn:

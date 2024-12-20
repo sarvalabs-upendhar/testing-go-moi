@@ -22,6 +22,11 @@ type GetAssetInfoArgs struct {
 	Options TesseractNumberOrHash `json:"options"`
 }
 
+type GetAssetMandateArgs struct {
+	Address identifiers.Address   `json:"address"`
+	Options TesseractNumberOrHash `json:"options"`
+}
+
 type QueryArgs struct {
 	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest ts
 	Options TesseractNumberOrHash `json:"options"`

@@ -133,25 +133,16 @@ func (te *TestEnvironment) TestAssetMint() {
 				AssetID: MAS1AssetID,
 				Amount:  big.NewInt(1),
 			},
-			expectedError: common.ErrMintNonFungibleToken,
+			expectedError: common.ErrMintOrBurnNonFungibleToken,
 		},
 		{
-			name:   "asset not found",
-			sender: sender,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: tests.GetRandomAssetID(te.T(), tests.RandomAddress(te.T())),
-				Amount:  big.NewInt(1),
-			},
-			expectedError: common.ErrAssetNotFound,
-		},
-		{
-			name:   "operator address mismatch (sender is not the asset operator)",
+			name:   "amount is invalid",
 			sender: nonOperator,
 			assetSupplyPayload: &common.AssetSupplyPayload{
 				AssetID: MAS0AssetID,
-				Amount:  big.NewInt(1),
+				Amount:  big.NewInt(-1),
 			},
-			expectedError: common.ErrOperatorMismatch,
+			expectedError: common.ErrInvalidValue,
 		},
 	}
 

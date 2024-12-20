@@ -169,7 +169,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 	return ixData
 }
 
-func validateTransactions(
+func validateOperations(
 	te *TestEnvironment, sender identifiers.Address,
 	ixHash common.Hash, txs []common.IxOpRaw,
 ) {
@@ -240,7 +240,7 @@ func validateTransactions(
 	}
 }
 
-func (te *TestEnvironment) TestTransactions() {
+func (te *TestEnvironment) TestOperations() {
 	accounts, err := te.chooseRandomUniqueAccounts(4)
 	require.NoError(te.T(), err)
 
@@ -292,7 +292,7 @@ func (te *TestEnvironment) TestTransactions() {
 			expectedError: api.ErrLogicDeploymentLimit,
 		},
 		{
-			name:    "valid interaction with asset transactions",
+			name:    "valid interaction with asset operations",
 			account: accounts[0],
 			ixData: te.createIxWithMultipleTxs(accounts[0], []common.IxOpType{
 				common.IxAssetCreate,
@@ -301,7 +301,7 @@ func (te *TestEnvironment) TestTransactions() {
 			}),
 		},
 		{
-			name:    "valid interaction with logic transactions",
+			name:    "valid interaction with logic operations",
 			account: accounts[1],
 			ixData: te.createIxWithMultipleTxs(accounts[1], []common.IxOpType{
 				common.IxLogicDeploy,
@@ -309,7 +309,7 @@ func (te *TestEnvironment) TestTransactions() {
 			}),
 		},
 		{
-			name:    "valid interaction with both asset and logic transactions",
+			name:    "valid interaction with both asset and logic operations",
 			account: accounts[2],
 			ixData: te.createIxWithMultipleTxs(accounts[2], []common.IxOpType{
 				common.IxLogicDeploy,
@@ -318,7 +318,7 @@ func (te *TestEnvironment) TestTransactions() {
 			}),
 		},
 		{
-			name:    "valid interaction with participant create transactions",
+			name:    "valid interaction with participant create operations",
 			account: accounts[3],
 			ixData: te.createIxWithMultipleTxs(accounts[3], []common.IxOpType{
 				common.IxParticipantCreate,
@@ -340,7 +340,7 @@ func (te *TestEnvironment) TestTransactions() {
 
 			require.NoError(te.T(), err)
 
-			validateTransactions(te, test.ixData.Sender, ixHash, test.ixData.IxOps)
+			validateOperations(te, test.ixData.Sender, ixHash, test.ixData.IxOps)
 		})
 	}
 }

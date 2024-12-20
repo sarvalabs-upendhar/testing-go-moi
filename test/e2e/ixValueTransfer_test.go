@@ -13,6 +13,7 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
+//nolint:dupl
 func (te *TestEnvironment) transferAsset(
 	sender tests.AccountWithMnemonic,
 	assetActionPayload *common.AssetActionPayload,
@@ -50,6 +51,10 @@ func (te *TestEnvironment) transferAsset(
 			{
 				Address:  assetActionPayload.Beneficiary,
 				LockType: common.MutateLock,
+			},
+			{
+				Address:  common.SargaAddress,
+				LockType: common.ReadLock,
 			},
 		},
 	}
@@ -137,14 +142,14 @@ func (te *TestEnvironment) TestAssetTransfer() {
 			postTest: validateAssetTransfer,
 		},
 		{
-			name:   "insufficient balance",
+			name:   "amount is invalid",
 			sender: sender,
 			assetActionPayload: &common.AssetActionPayload{
 				Beneficiary: receiver.Addr,
 				AssetID:     MAS0AssetID,
-				Amount:      initialAmount.Add(initialAmount, big.NewInt(1)),
+				Amount:      big.NewInt(0),
 			},
-			expectedError: common.ErrInsufficientFunds,
+			expectedError: common.ErrInvalidValue,
 		},
 		{
 			name:   "beneficiary is sarga account",
@@ -155,16 +160,6 @@ func (te *TestEnvironment) TestAssetTransfer() {
 				Amount:      big.NewInt(1),
 			},
 			expectedError: common.ErrGenesisAccount,
-		},
-		{
-			name:   "beneficiary is unregistered account",
-			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(te.T()),
-				AssetID:     MAS0AssetID,
-				Amount:      big.NewInt(1),
-			},
-			expectedError: common.ErrBeneficiaryNotRegistered,
 		},
 		{
 			name:   "asset ID doesn't exist",

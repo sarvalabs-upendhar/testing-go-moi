@@ -13,6 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/hexutil"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 
 	"github.com/sarvalabs/go-moi/jsonrpc"
@@ -209,6 +211,7 @@ func (c *MockChainManager) setTesseractByHash(
 type MockStateManager struct {
 	storage                 map[common.Hash][]byte
 	balances                map[identifiers.Address]common.AssetMap
+	mandates                map[identifiers.Address][]common.AssetMandate
 	accounts                map[identifiers.Address]*common.Account
 	context                 map[identifiers.Address]*Context
 	assetDeeds              map[identifiers.AssetID]*common.AssetDescriptor
@@ -253,6 +256,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState := new(MockStateManager)
 	mockState.assetDeeds = make(map[identifiers.AssetID]*common.AssetDescriptor)
 	mockState.balances = make(map[identifiers.Address]common.AssetMap)
+	mockState.mandates = make(map[identifiers.Address][]common.AssetMandate)
 	mockState.storage = make(map[common.Hash][]byte)
 	mockState.accounts = make(map[identifiers.Address]*common.Account)
 	mockState.context = make(map[identifiers.Address]*Context)
@@ -284,6 +288,14 @@ func (s *MockStateManager) GetDeeds(
 	}
 
 	return deeds, nil
+}
+
+func (s *MockStateManager) GetMandates(address identifiers.Address, hash common.Hash) ([]common.AssetMandate, error) {
+	if mandates, ok := s.mandates[address]; ok {
+		return mandates, nil
+	}
+
+	return []common.AssetMandate{}, nil
 }
 
 func (s *MockStateManager) GetAssetInfo(
@@ -472,6 +484,10 @@ func (s *MockStateManager) setContext(t *testing.T, address identifiers.Address,
 
 func (s *MockStateManager) setAccount(addr identifiers.Address, acc common.Account) {
 	s.accounts[addr] = &acc
+}
+
+func (s *MockStateManager) setMandates(address identifiers.Address, mandates []common.AssetMandate) {
+	s.mandates[address] = mandates
 }
 
 func (s *MockStateManager) getTDU(addr identifiers.Address, stateHash common.Hash) common.AssetMap {
@@ -977,6 +993,33 @@ func createNodeMetaInfo(t *testing.T, count int) ([]peer.ID, map[peer.ID]*senatu
 	}
 
 	return peerIDs, nodeMetaInfo
+}
+
+func createMandates(t *testing.T) ([]common.AssetMandate, []rpcargs.RPCMandate) {
+	t.Helper()
+
+	assetIDs, _ := tests.CreateTestAssets(t, 3)
+	mandates := make([]common.AssetMandate, 0)
+	rpcMandates := make([]rpcargs.RPCMandate, 0)
+
+	for _, assetID := range assetIDs {
+		addr := tests.RandomAddress(t)
+		amount := big.NewInt(int64(rand.Uint64()))
+
+		mandates = append(mandates, common.AssetMandate{
+			AssetID: assetID,
+			Address: addr,
+			Amount:  amount,
+		})
+
+		rpcMandates = append(rpcMandates, rpcargs.RPCMandate{
+			Address: addr,
+			AssetID: assetID.String(),
+			Amount:  (*hexutil.Big)(amount),
+		})
+	}
+
+	return mandates, rpcMandates
 }
 
 func getTesseractsHashes(t *testing.T, tesseracts []*common.Tesseract) []common.Hash {

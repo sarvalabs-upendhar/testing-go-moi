@@ -50,6 +50,18 @@ func transferAsset(
 	require.Equal(te.T(), common.ReceiptOk, receipt.Status)
 }
 
+func approveAsset(te *TestEnvironment, sender tests.AccountWithMnemonic, payload *common.AssetActionPayload) {
+	ixHash, err := te.approveAsset(sender, payload)
+	require.NoError(te.T(), err)
+
+	// make sure interaction executed successfully
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultConfirmIxTimeout)
+	defer cancel()
+
+	receipt := moiclient.RetryFetchReceipt(te.T(), ctx, te.moiClient, ixHash)
+	require.Equal(te.T(), common.ReceiptOk, receipt.Status)
+}
+
 func createAsset(
 	te *TestEnvironment,
 	sender tests.AccountWithMnemonic,

@@ -299,7 +299,7 @@ func TestNewInteraction(t *testing.T) {
 			require.Equal(t, uint64(len(data)+len(ix.Signature())), size)
 
 			// check for payload
-			checkIxTransactions(t, ix, assetCreatePayload, assetActionPayload, assetSupplyPayload, logicPayload)
+			checkIxOperations(t, ix, assetCreatePayload, assetActionPayload, assetSupplyPayload, logicPayload)
 
 			if test.ixData.IxOps[0].Type == common.IxAssetCreate ||
 				test.ixData.IxOps[0].Type == common.IxLogicDeploy {
@@ -463,7 +463,7 @@ func TestCopyIxFund(t *testing.T) {
 	}
 }
 
-func TestCopyIxTransaction(t *testing.T) {
+func TestCopyIxOperation(t *testing.T) {
 	testcases := []struct {
 		name string
 		data common.IxOpRaw
@@ -786,7 +786,7 @@ func TestPolorizeInteractions(t *testing.T) {
 }
 
 // helper functions
-func checkIxTransactions(
+func checkIxOperations(
 	t *testing.T, ix *common.Interaction,
 	assetCreatePayload common.AssetCreatePayload,
 	assetActionPayload common.AssetActionPayload,

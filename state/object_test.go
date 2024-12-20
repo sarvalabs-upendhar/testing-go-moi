@@ -3,6 +3,7 @@ package state
 import (
 	"math/big"
 	"testing"
+	"time"
 
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/pkg/errors"
@@ -117,13 +118,6 @@ func TestSubBalance(t *testing.T) {
 			amount:          big.NewInt(123),
 			expectedBalance: big.NewInt(1),
 			expectError:     nil,
-		},
-		{
-			name:            "should return error if balance is insufficient",
-			assetID:         assetID,
-			amount:          big.NewInt(200),
-			expectedBalance: big.NewInt(124), // unchanged
-			expectError:     common.ErrInsufficientFunds,
 		},
 		{
 			name:            "should return error if asset doesn't exist",
@@ -318,16 +312,17 @@ func TestCreateMandate(t *testing.T) {
 			address: tests.RandomAddress(t),
 			amount:  big.NewInt(3000),
 			preTestFn: func(address identifiers.Address) {
-				assert.NoError(t, sObj.CreateMandate(assetIDs[1], address, big.NewInt(1000)))
+				assert.NoError(
+					t,
+					sObj.CreateMandate(
+						assetIDs[1],
+						address,
+						big.NewInt(1000),
+						time.Now().Add(1*time.Hour).Unix(),
+					),
+				)
 			},
 			expectedAmount: big.NewInt(4000),
-		},
-		{
-			name:          "should return error if the balance is insufficient",
-			assetID:       assetIDs[1],
-			address:       tests.RandomAddress(t),
-			amount:        big.NewInt(60000),
-			expectedError: common.ErrInsufficientFunds,
 		},
 		{
 			name:          "should return error if asset does not exist",
@@ -344,7 +339,7 @@ func TestCreateMandate(t *testing.T) {
 				test.preTestFn(test.address)
 			}
 
-			err := sObj.CreateMandate(test.assetID, test.address, test.amount)
+			err := sObj.CreateMandate(test.assetID, test.address, test.amount, time.Now().Unix())
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -354,11 +349,133 @@ func TestCreateMandate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			checkForMandates(t, sObj, test.assetID, test.address, test.expectedAmount)
+		})
+	}
+}
 
-			amount, err := sObj.GetMandate(test.assetID, test.address)
+func TestSubMandateAmount(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	addresses := tests.GetRandomAddressList(t, 2)
+	assetIDs, _ := getAssetIDsAndBalances(t, 2)
+
+	setAssetMandates(
+		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(1000)},
+		addresses, []*big.Int{big.NewInt(500), big.NewInt(1000)},
+	)
+
+	testcases := []struct {
+		name           string
+		assetID        identifiers.AssetID
+		address        identifiers.Address
+		amount         *big.Int
+		expectedAmount *big.Int
+		expectedError  error
+	}{
+		{
+			name:           "deducts mandate amount successfully",
+			assetID:        assetIDs[0],
+			address:        addresses[0],
+			amount:         big.NewInt(200),
+			expectedAmount: big.NewInt(300),
+		},
+		{
+			name:           "remove mandate when balance reaches zero",
+			assetID:        assetIDs[1],
+			address:        addresses[1],
+			amount:         big.NewInt(1000),
+			expectedAmount: big.NewInt(0),
+		},
+		{
+			name:          "fails to deduct from nonexistent mandate",
+			assetID:       assetIDs[0],
+			address:       tests.RandomAddress(t),
+			amount:        big.NewInt(100),
+			expectedError: common.ErrMandateNotFound,
+		},
+		{
+			name:          "fails to deduct from nonexistent asset",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			address:       addresses[0],
+			amount:        big.NewInt(100),
+			expectedError: common.ErrAssetNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sObj.SubMandateBalance(test.assetID, test.address, test.amount)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, test.expectedError, err.Error())
+
+				return
+			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedAmount, amount)
+			checkForMandates(t, sObj, test.assetID, test.address, test.expectedAmount)
+		})
+	}
+}
+
+func TestConsumeMandate(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	addresses := tests.GetRandomAddressList(t, 2)
+	assetIDs, _ := getAssetIDsAndBalances(t, 2)
+
+	setAssetMandates(
+		t, sObj, assetIDs, []*big.Int{big.NewInt(2000), big.NewInt(1000)},
+		addresses, []*big.Int{big.NewInt(500), big.NewInt(1000)},
+	)
+
+	testcases := []struct {
+		name            string
+		assetID         identifiers.AssetID
+		address         identifiers.Address
+		amount          *big.Int
+		expectedMandate *big.Int
+		expectedBalance *big.Int
+		expectedError   error
+	}{
+		{
+			name:            "consumes mandate and balance successfully",
+			assetID:         assetIDs[0],
+			address:         addresses[0],
+			amount:          big.NewInt(200),
+			expectedMandate: big.NewInt(300),
+			expectedBalance: big.NewInt(1800),
+		},
+		{
+			name:          "fails to deduct mandate balance",
+			assetID:       assetIDs[0],
+			address:       tests.RandomAddress(t),
+			amount:        big.NewInt(100),
+			expectedError: common.ErrMandateNotFound,
+		},
+		{
+			name:          "fails to deduct asset balance",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			address:       addresses[0],
+			amount:        big.NewInt(100),
+			expectedError: common.ErrAssetNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sObj.ConsumeMandate(test.assetID, test.address, test.amount)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			checkForMandates(t, sObj, test.assetID, test.address, test.expectedMandate)
+			checkForBalances(t, sObj, test.expectedBalance, test.assetID)
 		})
 	}
 }
@@ -385,12 +502,6 @@ func TestDeleteMandate(t *testing.T) {
 			address: addresses[0],
 		},
 		{
-			name:          "fails to delete nonexistent mandate",
-			assetID:       assetIDs[0],
-			address:       tests.RandomAddress(t),
-			expectedError: errors.New("mandate doesn't exist"),
-		},
-		{
 			name:          "fails to delete mandate for nonexistent asset",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
 			address:       tests.RandomAddress(t),
@@ -409,8 +520,8 @@ func TestDeleteMandate(t *testing.T) {
 				return
 			}
 
-			_, err = sObj.GetMandate(test.assetID, test.address)
-			require.Error(t, err)
+			require.NoError(t, err)
+			checkForMandates(t, sObj, test.assetID, test.address, big.NewInt(0))
 		})
 	}
 }
@@ -448,13 +559,13 @@ func TestGetMandate(t *testing.T) {
 			name:          "should return error if mandate not found",
 			assetID:       assetIDs[0],
 			address:       tests.RandomAddress(t),
-			expectedError: errors.New("mandate doesn't exist"),
+			expectedError: common.ErrMandateNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			amount, err := sObj.GetMandate(test.assetID, test.address)
+			mandate, err := sObj.GetMandate(test.assetID, test.address)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -464,7 +575,65 @@ func TestGetMandate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, amount, test.expectedAmount)
+			require.Equal(t, test.expectedAmount, mandate.Amount)
+		})
+	}
+}
+
+func TestMandates(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	addresses := tests.GetRandomAddressList(t, 1)
+	assetIDs, _ := getAssetIDsAndBalances(t, 2)
+
+	// Set mandates for the test assets and addresses
+	setAssetMandates(
+		t, sObj, assetIDs, []*big.Int{big.NewInt(10000), big.NewInt(20000)},
+		addresses, []*big.Int{big.NewInt(1000)},
+	)
+
+	testcases := []struct {
+		name           string
+		stateObject    *Object
+		preTestFn      func(stateObject *Object)
+		expectedResult []common.AssetMandate
+		expectedError  error
+	}{
+		{
+			name:        "retrieves existing mandates successfully",
+			stateObject: sObj,
+			expectedResult: []common.AssetMandate{
+				{
+					AssetID: assetIDs[0],
+					Address: addresses[0],
+					Amount:  big.NewInt(1000),
+				},
+				{
+					AssetID: assetIDs[1],
+					Address: addresses[0],
+					Amount:  big.NewInt(1000),
+				},
+			},
+		},
+		{
+			name:           "returns empty list when mandates doesn't exist",
+			stateObject:    createTestStateObject(t, nil),
+			expectedResult: []common.AssetMandate{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			mandates, err := test.stateObject.Mandates()
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.ElementsMatch(t, test.expectedResult, mandates)
 		})
 	}
 }

@@ -98,3 +98,9 @@ const (
 	MAS0 AssetStandard = iota
 	MAS1
 )
+
+type AssetMandate struct {
+	AssetID identifiers.AssetID
+	Address identifiers.Address
+	Amount  *big.Int
+}

@@ -111,7 +111,7 @@ func (manager *Manager) runInteraction(
 
 	for idx, op := range ix.Ops() {
 		// Lookup the runner for the operation type
-		runner := lookupTxRunner(op.Type())
+		runner := lookupOpRunner(op.Type())
 		// Call the interaction runner and get the result
 		opResult := runner(ix.GetIxOp(idx), ctx, tank, transition)
 

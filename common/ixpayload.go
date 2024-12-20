@@ -146,6 +146,8 @@ type AssetActionPayload struct {
 	AssetID identifiers.AssetID
 	// Amount is used to specify the Amount for transfer/approve/revoke
 	Amount *big.Int
+	// Timestamp is used to specify the validity of the mandate
+	Timestamp int64
 }
 
 // Bytes serializes AssetActionPayload to bytes.

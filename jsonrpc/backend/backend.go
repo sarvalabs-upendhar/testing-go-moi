@@ -61,6 +61,7 @@ type StateManager interface {
 	GetBalances(identifiers.Address, common.Hash) (common.AssetMap, error)
 	GetBalance(identifiers.Address, identifiers.AssetID, common.Hash) (*big.Int, error)
 	GetDeeds(identifiers.Address, common.Hash) (map[string]*common.AssetDescriptor, error)
+	GetMandates(identifiers.Address, common.Hash) ([]common.AssetMandate, error)
 
 	GetLogicIDs(identifiers.Address, common.Hash) ([]identifiers.LogicID, error)
 	GetLogicManifest(identifiers.LogicID, common.Hash) ([]byte, error)

@@ -733,7 +733,7 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 		return err
 	}
 
-	if err = i.validateTransactions(ix); err != nil {
+	if err = i.validateOperations(ix); err != nil {
 		return err
 	}
 
@@ -759,19 +759,17 @@ func (i *IxPool) validateFunds(ix *common.Interaction) error {
 	return nil
 }
 
-func (i *IxPool) validateTransactions(ix *common.Interaction) error {
+func (i *IxPool) validateOperations(ix *common.Interaction) error {
 	for idx, op := range ix.Ops() {
 		switch op.Type() {
 		case common.IxParticipantCreate:
-			return i.validateParticipantRegister(ix, idx)
+			return i.validateParticipantCreate(ix, idx)
 		case common.IxAssetCreate:
 			return i.validateAssetCreate(ix, idx)
-		case common.IxAssetTransfer:
-			return i.validateAssetTransfer(ix, idx)
-		case common.IxAssetMint:
-			return i.validateAssetMint(ix, idx)
-		case common.IxAssetBurn:
-			return i.validateAssetBurn(ix, idx)
+		case common.IxAssetApprove, common.IxAssetRevoke, common.IxAssetTransfer:
+			return i.validateAssetAction(ix, idx)
+		case common.IxAssetMint, common.IxAssetBurn:
+			return i.validateAssetSupply(ix, idx)
 		case common.IxLogicDeploy:
 			return i.validateLogicDeployPayload(ix, idx)
 		case common.IxLogicInvoke:
@@ -807,7 +805,7 @@ func (i *IxPool) validateAssetCreate(ix *common.Interaction, txnID int) error {
 	return nil
 }
 
-func (i *IxPool) validateParticipantRegister(ix *common.Interaction, txnID int) error {
+func (i *IxPool) validateParticipantCreate(ix *common.Interaction, txnID int) error {
 	payload, err := ix.GetIxOp(txnID).GetParticipantCreatePayload()
 	if err != nil {
 		return err
@@ -817,27 +815,16 @@ func (i *IxPool) validateParticipantRegister(ix *common.Interaction, txnID int) 
 		return common.ErrInvalidAddress
 	}
 
-	if registered, err := i.sm.IsAccountRegistered(payload.Address); err != nil || registered {
-		return common.ErrAlreadyRegistered
-	}
-
-	if payload.Amount.Sign() < 0 {
+	if payload.Amount.Sign() <= 0 {
 		return common.ErrInvalidValue
-	}
-
-	currentBalance, err := i.sm.GetBalance(ix.Sender(), common.KMOITokenAssetID, common.NilHash)
-	if err != nil {
-		return err
-	}
-
-	if currentBalance.Cmp(payload.Amount) < 0 {
-		return common.ErrInsufficientFunds
 	}
 
 	return nil
 }
 
-func (i *IxPool) validateAssetTransfer(ix *common.Interaction, txnID int) error {
+func (i *IxPool) validateAssetAction(ix *common.Interaction, txnID int) error {
+	opType := ix.GetIxOp(txnID).OpType
+
 	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
 	if err != nil {
 		return err
@@ -856,27 +843,20 @@ func (i *IxPool) validateAssetTransfer(ix *common.Interaction, txnID int) error 
 		return common.ErrGenesisAccount
 	}
 
-	if registered, err := i.sm.IsAccountRegistered(payload.Beneficiary); err != nil || !registered {
-		return common.ErrBeneficiaryNotRegistered
-	}
-
-	if payload.Amount.Sign() < 0 {
+	if opType != common.IxAssetRevoke &&
+		payload.Amount.Sign() <= 0 {
 		return common.ErrInvalidValue
 	}
 
-	currentBalance, err := i.sm.GetBalance(ix.Sender(), payload.AssetID, common.NilHash)
-	if err != nil {
-		return err
-	}
-
-	if currentBalance.Cmp(payload.Amount) < 0 {
-		return common.ErrInsufficientFunds
+	if opType == common.IxAssetApprove &&
+		payload.Timestamp < time.Now().Unix() {
+		return common.ErrInvalidTimestamp
 	}
 
 	return nil
 }
 
-func (i *IxPool) validateAssetMint(ix *common.Interaction, txnID int) error {
+func (i *IxPool) validateAssetSupply(ix *common.Interaction, txnID int) error {
 	payload, err := ix.GetIxOp(txnID).GetAssetSupplyPayload()
 	if err != nil {
 		return err
@@ -889,47 +869,11 @@ func (i *IxPool) validateAssetMint(ix *common.Interaction, txnID int) error {
 
 	// can not mint asset standard mas1
 	if common.AssetStandard(assetID.Standard()) == common.MAS1 {
-		return common.ErrMintNonFungibleToken
+		return common.ErrMintOrBurnNonFungibleToken
 	}
 
-	assetInfo, err := i.sm.GetAssetInfo(payload.AssetID, common.NilHash)
-	if err != nil {
-		return common.ErrAssetNotFound
-	}
-
-	// only operator can mint asset
-	if assetInfo.Operator != ix.Sender() {
-		return common.ErrOperatorMismatch
-	}
-
-	return nil
-}
-
-func (i *IxPool) validateAssetBurn(ix *common.Interaction, txnID int) error {
-	payload, err := ix.GetIxOp(txnID).GetAssetSupplyPayload()
-	if err != nil {
-		return err
-	}
-
-	// make sure asset exists
-	assetInfo, err := i.sm.GetAssetInfo(payload.AssetID, common.NilHash)
-	if err != nil {
-		return common.ErrAssetNotFound
-	}
-
-	currentBal, err := i.sm.GetBalance(ix.Sender(), payload.AssetID, common.NilHash)
-	if err != nil {
-		return err
-	}
-
-	// cannot burn amount greater than current balance
-	if currentBal.Cmp(payload.Amount) < 0 {
-		return common.ErrInsufficientFunds
-	}
-
-	// only operator can burn asset
-	if assetInfo.Operator != ix.Sender() {
-		return common.ErrOperatorMismatch
+	if payload.Amount.Sign() <= 0 {
+		return common.ErrInvalidValue
 	}
 
 	return nil
@@ -1095,7 +1039,7 @@ func (i *IxPool) incomingMsgDupCheck(data []byte) (*common.Hash, bool) {
 }
 
 // IxValidator decides whether to propagate or reject interactions (ixns) based on validation checks.
-// It can forward valid transactions to peers, ignore invalid ones, or punish the sender.
+// It can forward valid interactions to peers, ignore invalid ones, or punish the sender.
 // Validations include checks for:
 // - Self-originated ixns
 // - Duplicate ixns

@@ -10,11 +10,16 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
+type Mandate struct {
+	Amount    *big.Int
+	ExpiresAt int64
+}
+
 // AssetObject represents an asset's state, including balance, deposits, mandates, and properties.
 type AssetObject struct {
 	Balance    *big.Int
 	Deposit    map[identifiers.LogicID]*big.Int
-	Mandate    map[identifiers.Address]*big.Int
+	Mandate    map[identifiers.Address]*Mandate
 	Properties *common.AssetDescriptor
 }
 
@@ -23,7 +28,7 @@ func NewAssetObject(balance *big.Int, properties *common.AssetDescriptor) *Asset
 	return &AssetObject{
 		Balance:    balance,
 		Deposit:    make(map[identifiers.LogicID]*big.Int),
-		Mandate:    make(map[identifiers.Address]*big.Int),
+		Mandate:    make(map[identifiers.Address]*Mandate),
 		Properties: properties,
 	}
 }

@@ -187,8 +187,14 @@ func (r *IxOpResult) SetStatus(status IxOpStatus) {
 	r.Status = status
 }
 
+func (r *IxOpResult) WithStatus(status IxOpStatus) *IxOpResult {
+	r.Status = status
+
+	return r
+}
+
 // SetResultPayload serializes the payload and assigns it to the Data field of the IxOpResult.
-func SetResultPayload[Payload TransactionResultPayload](op *IxOpResult, payload Payload) {
+func SetResultPayload[Payload OperationResultPayload](op *IxOpResult, payload Payload) {
 	raw, _ := json.Marshal(payload)
 	op.Data = raw
 }
@@ -316,7 +322,7 @@ func (rs Receipts) FuelUsed() (fuelUsed uint64) {
 	return fuelUsed
 }
 
-type TransactionResultPayload interface {
+type OperationResultPayload interface {
 	AssetCreationResult | AssetSupplyResult | LogicDeployResult | LogicInvokeResult | LogicEnlistResult
 }
 

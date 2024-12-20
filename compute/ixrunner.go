@@ -5,19 +5,21 @@ import (
 	"github.com/sarvalabs/go-moi/state"
 )
 
-type TxRunner func(
+type OpRunner func(
 	*common.IxOp, *common.ExecutionContext,
 	*FuelTank, *state.Transition,
 ) *common.IxOpResult
 
-func lookupTxRunner(kind common.IxOpType) TxRunner {
-	return txRunnerLookup[kind]
+func lookupOpRunner(kind common.IxOpType) OpRunner {
+	return opRunnerLookup[kind]
 }
 
-var txRunnerLookup = map[common.IxOpType]TxRunner{
+var opRunnerLookup = map[common.IxOpType]OpRunner{
 	common.IxParticipantCreate: RunParticipantCreate,
 	common.IxAssetTransfer:     RunAssetTransfer,
 	common.IxAssetCreate:       RunAssetCreate,
+	common.IxAssetApprove:      RunAssetApprove,
+	common.IxAssetRevoke:       RunAssetRevoke,
 	common.IxAssetMint:         RunAssetMint,
 	common.IxAssetBurn:         RunAssetBurn,
 	common.IxLogicDeploy:       RunLogicDeploy,

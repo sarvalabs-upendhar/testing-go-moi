@@ -22,6 +22,12 @@ type RPCDeeds struct {
 	AssetInfo RPCAssetDescriptor `json:"asset_info"`
 }
 
+type RPCMandate struct {
+	Address identifiers.Address `json:"address"`
+	AssetID string              `json:"asset_id"`
+	Amount  *hexutil.Big        `json:"amount"`
+}
+
 type RPCInteractions []*RPCInteraction
 
 type RPCTesseract struct {

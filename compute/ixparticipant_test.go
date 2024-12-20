@@ -10,15 +10,88 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Test_ValidateParticipantCreate(t *testing.T) {
+	sender := createTestStateObject(t)
+	sarga := createTestSargaStateObject(t)
+
+	insertTestAssetObject(
+		t, common.KMOITokenAssetID, sender, state.NewAssetObject(big.NewInt(5000), nil),
+	)
+
+	testcases := []struct {
+		name          string
+		sender        *state.Object
+		payload       *common.ParticipantCreatePayload
+		preTestFn     func(target *state.Object)
+		expectedError error
+	}{
+		{
+			name:   "asset not found",
+			sender: createTestStateObject(t),
+			payload: &common.ParticipantCreatePayload{
+				Address: tests.RandomAddress(t),
+				Amount:  big.NewInt(1000),
+			},
+			expectedError: common.ErrAssetNotFound,
+		},
+		{
+			name:   "participant already registered",
+			sender: sender,
+			payload: &common.ParticipantCreatePayload{
+				Address: tests.RandomAddress(t),
+				Amount:  big.NewInt(1000),
+			},
+			preTestFn: func(target *state.Object) {
+				registerParticipant(t, sarga, target.Address())
+			},
+			expectedError: common.ErrAlreadyRegistered,
+		},
+		{
+			name:   "insufficient funds",
+			sender: sender,
+			payload: &common.ParticipantCreatePayload{
+				Address: tests.RandomAddress(t),
+				Amount:  big.NewInt(7000),
+			},
+			expectedError: common.ErrInsufficientFunds,
+		},
+		{
+			name:   "valid participant create operation",
+			sender: sender,
+			payload: &common.ParticipantCreatePayload{
+				Address: tests.RandomAddress(t),
+				Amount:  big.NewInt(2000),
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			target := state.NewStateObject(
+				test.payload.Address, nil, tests.NewTestTreeCache(),
+				nil, common.Account{}, state.NilMetrics(), false,
+			)
+
+			if test.preTestFn != nil {
+				test.preTestFn(target)
+			}
+
+			err := validateParticipantCreate(test.sender, target, sarga, test.payload)
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
 func Test_ParticipantCreate(t *testing.T) {
-	sender0 := state.NewStateObject(
-		tests.RandomAddress(t), nil, tests.NewTestTreeCache(),
-		nil, common.Account{}, state.NilMetrics(), false,
-	)
-	sender1 := state.NewStateObject(
-		tests.RandomAddress(t), nil, tests.NewTestTreeCache(),
-		nil, common.Account{}, state.NilMetrics(), false,
-	)
+	sender0 := createTestStateObject(t)
+	sender1 := createTestStateObject(t)
 
 	insertTestAssetObject(
 		t, common.KMOITokenAssetID, sender0, state.NewAssetObject(big.NewInt(2000), nil),
@@ -37,25 +110,13 @@ func Test_ParticipantCreate(t *testing.T) {
 		expectedError         error
 	}{
 		{
-			name: "asset not found",
-			sender: state.NewStateObject(
-				tests.RandomAddress(t), nil, tests.NewTestTreeCache(),
-				nil, common.Account{}, state.NilMetrics(), false,
-			),
+			name:   "asset not found",
+			sender: createTestStateObject(t),
 			payload: &common.ParticipantCreatePayload{
 				Address: tests.RandomAddress(t),
 				Amount:  big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
-		},
-		{
-			name:   "insufficient funds",
-			sender: sender0,
-			payload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(t),
-				Amount:  big.NewInt(6000),
-			},
-			expectedError: common.ErrInsufficientFunds,
 		},
 		{
 			name:   "asset already registered",

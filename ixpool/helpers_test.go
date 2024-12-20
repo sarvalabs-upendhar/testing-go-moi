@@ -113,12 +113,6 @@ func (ms *MockStateManager) GetAssetInfo(
 	return info, nil
 }
 
-func (ms *MockStateManager) setAssetInfo(t *testing.T, assetID identifiers.AssetID, info *common.AssetDescriptor) {
-	t.Helper()
-
-	ms.assetInfo[assetID] = info
-}
-
 func (ms *MockStateManager) GetBalance(
 	addrs identifiers.Address,
 	assetID identifiers.AssetID,
@@ -404,30 +398,30 @@ func getIXParams(
 	}
 }
 
-// getTransactionInfo determines and returns the relevant IxOpRaw, IxFund, and IxParticipant
+// getOperationInfo determines and returns the relevant IxOpRaw, IxFund, and IxParticipant
 // based on the given ix type and payload.
-func getTransactionInfo(
+func getOperationInfo(
 	t *testing.T, ixType common.IxOpType,
-	txPayload interface{},
+	opPayload interface{},
 ) (*common.IxOpRaw, *common.IxFund, *common.IxParticipant) {
 	t.Helper()
 
 	switch ixType {
 	case common.IxInvalid:
-		ixTransaction := &common.IxOpRaw{
+		ixOperation := &common.IxOpRaw{
 			Type: ixType,
 		}
 
-		return ixTransaction, nil, nil
+		return ixOperation, nil, nil
 
 	case common.IxParticipantCreate:
-		payload, ok := txPayload.(common.ParticipantCreatePayload)
+		payload, ok := opPayload.(common.ParticipantCreatePayload)
 		require.True(t, ok)
 
 		rawPayload, err := payload.Bytes()
 		require.NoError(t, err)
 
-		ixTransaction := &common.IxOpRaw{
+		ixOperation := &common.IxOpRaw{
 			Type:    ixType,
 			Payload: rawPayload,
 		}
@@ -437,16 +431,16 @@ func getTransactionInfo(
 			LockType: common.MutateLock,
 		}
 
-		return ixTransaction, nil, ixParticipant
+		return ixOperation, nil, ixParticipant
 
 	case common.IxAssetTransfer:
-		payload, ok := txPayload.(common.AssetActionPayload)
+		payload, ok := opPayload.(common.AssetActionPayload)
 		require.True(t, ok)
 
 		rawPayload, err := payload.Bytes()
 		require.NoError(t, err)
 
-		ixTransaction := &common.IxOpRaw{
+		ixOperation := &common.IxOpRaw{
 			Type:    ixType,
 			Payload: rawPayload,
 		}
@@ -461,28 +455,28 @@ func getTransactionInfo(
 			LockType: common.MutateLock,
 		}
 
-		return ixTransaction, ixFund, ixParticipant
+		return ixOperation, ixFund, ixParticipant
 	case common.IxAssetCreate:
-		payload, ok := txPayload.(common.AssetCreatePayload)
+		payload, ok := opPayload.(common.AssetCreatePayload)
 		require.True(t, ok)
 
 		rawPayload, err := payload.Bytes()
 		require.NoError(t, err)
 
-		ixTransaction := &common.IxOpRaw{
+		ixOperation := &common.IxOpRaw{
 			Type:    ixType,
 			Payload: rawPayload,
 		}
 
-		return ixTransaction, nil, nil
+		return ixOperation, nil, nil
 	case common.IxAssetMint, common.IxAssetBurn:
-		payload, ok := txPayload.(common.AssetSupplyPayload)
+		payload, ok := opPayload.(common.AssetSupplyPayload)
 		require.True(t, ok)
 
 		rawPayload, err := payload.Bytes()
 		require.NoError(t, err)
 
-		ixTransaction := &common.IxOpRaw{
+		ixOperation := &common.IxOpRaw{
 			Type:    ixType,
 			Payload: rawPayload,
 		}
@@ -497,28 +491,28 @@ func getTransactionInfo(
 			LockType: common.MutateLock,
 		}
 
-		return ixTransaction, ixFund, ixParticipant
+		return ixOperation, ixFund, ixParticipant
 	case common.IxLogicDeploy:
-		payload, ok := txPayload.(common.LogicPayload)
+		payload, ok := opPayload.(common.LogicPayload)
 		require.True(t, ok)
 
 		rawPayload, err := payload.Bytes()
 		require.NoError(t, err)
 
-		ixTransaction := &common.IxOpRaw{
+		ixOperation := &common.IxOpRaw{
 			Type:    ixType,
 			Payload: rawPayload,
 		}
 
-		return ixTransaction, nil, nil
+		return ixOperation, nil, nil
 	case common.IxLogicInvoke, common.IxLogicEnlist:
-		payload, ok := txPayload.(common.LogicPayload)
+		payload, ok := opPayload.(common.LogicPayload)
 		require.True(t, ok)
 
 		rawPayload, err := payload.Bytes()
 		require.NoError(t, err)
 
-		ixTransaction := &common.IxOpRaw{
+		ixOperation := &common.IxOpRaw{
 			Type:    ixType,
 			Payload: rawPayload,
 		}
@@ -528,7 +522,7 @@ func getTransactionInfo(
 			LockType: common.MutateLock,
 		}
 
-		return ixTransaction, nil, ixParticipant
+		return ixOperation, nil, ixParticipant
 	default:
 		panic(common.ErrInvalidInteractionType)
 	}
@@ -538,7 +532,7 @@ func getTransactionInfo(
 func newTestInteraction(
 	t *testing.T,
 	ixType common.IxOpType,
-	txPayload interface{},
+	opPayload interface{},
 	nonce int,
 	address identifiers.Address,
 	cb func(ixData *common.IxData),
@@ -564,9 +558,9 @@ func newTestInteraction(
 		},
 	}
 
-	ixTransaction, ixFund, ixParticipant := getTransactionInfo(t, ixType, txPayload)
+	ixOperation, ixFund, ixParticipant := getOperationInfo(t, ixType, opPayload)
 
-	ixData.IxOps = append(ixData.IxOps, *ixTransaction)
+	ixData.IxOps = append(ixData.IxOps, *ixOperation)
 
 	if ixFund != nil {
 		ixData.Funds = append(ixData.Funds, *ixFund)

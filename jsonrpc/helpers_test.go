@@ -182,6 +182,11 @@ type MockStateManager struct {
 	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
 }
 
+func (m *MockStateManager) GetMandates(address identifiers.Address, hash common.Hash) ([]common.AssetMandate, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func (m *MockStateManager) FetchIxStateObjects(ixns common.Interactions,
 	hashes map[identifiers.Address]common.Hash,
 ) (*state.Transition, error) {

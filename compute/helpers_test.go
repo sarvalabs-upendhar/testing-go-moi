@@ -4,12 +4,11 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/state"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -90,6 +89,40 @@ func checkAssetTransfer(
 	require.Equal(t, 0, expectedTargetBalance.Cmp(targetObject.Balance))
 }
 
+func checkMandateConsumption(
+	t *testing.T, assetID identifiers.AssetID, sender, target, benefactor *state.Object,
+	expectedBenefactorBalance, expectedTargetBalance, expectedMandateBalance *big.Int,
+) {
+	t.Helper()
+
+	targetObject, err := target.FetchAssetObject(assetID, true)
+	require.NoError(t, err)
+
+	benefactorObject, err := benefactor.FetchAssetObject(assetID, true)
+	require.NoError(t, err)
+
+	require.Equal(t, 0, expectedBenefactorBalance.Cmp(benefactorObject.Balance))
+	require.Equal(t, 0, expectedTargetBalance.Cmp(targetObject.Balance))
+
+	require.NotNil(t, benefactorObject.Mandate[sender.Address()])
+	require.Equal(t, 0, expectedMandateBalance.Cmp(benefactorObject.Mandate[sender.Address()].Amount))
+}
+
+func checkAssetApprove(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
+	t.Helper()
+
+	mandate, err := sender.GetMandate(payload.AssetID, payload.Beneficiary)
+	require.NoError(t, err)
+	require.Equal(t, payload.Amount, mandate.Amount)
+}
+
+func checkAssetRevoke(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
+	t.Helper()
+
+	_, err := sender.GetMandate(payload.AssetID, payload.Beneficiary)
+	require.Error(t, err)
+}
+
 func createTestAssetID(
 	t *testing.T, assetAddr identifiers.Address,
 	payload *common.AssetCreatePayload,
@@ -103,6 +136,12 @@ func createTestAssetID(
 		uint16(payload.Standard),
 		assetAddr,
 	)
+}
+
+func createMandate(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
+	t.Helper()
+
+	assert.NoError(t, sender.CreateMandate(payload.AssetID, payload.Beneficiary, payload.Amount, payload.Timestamp))
 }
 
 func insertTestAssetObject(
@@ -129,4 +168,49 @@ func createTestDeedsEntry(
 	)
 
 	assert.NoError(t, creatorAcc.CreateDeedsEntry(string(assetID)))
+}
+
+func createTestSargaStateObject(t *testing.T) *state.Object {
+	t.Helper()
+
+	sarga := state.NewStateObject(common.SargaAddress, nil, nil, nil, common.Account{
+		AccType: common.SargaAccount,
+	}, state.NilMetrics(), false)
+
+	err := sarga.CreateStorageTreeForLogic(common.SargaLogicID)
+	require.NoError(t, err)
+
+	return sarga
+}
+
+func registerParticipant(t *testing.T, sarga *state.Object, address identifiers.Address) {
+	t.Helper()
+
+	assert.NoError(t, sarga.SetStorageEntry(common.SargaLogicID, address.Bytes(), address.Bytes()))
+}
+
+func createTestMandate(
+	t *testing.T, sender, beneficiary *state.Object,
+	assetID identifiers.AssetID, amount *big.Int, timestamp int64,
+) {
+	t.Helper()
+
+	assert.NoError(t, approveAsset(sender, &common.AssetActionPayload{
+		Beneficiary: beneficiary.Address(),
+		AssetID:     assetID,
+		Amount:      amount,
+		Timestamp:   timestamp,
+	}))
+}
+
+func setupAssetAccount(t *testing.T, operator, assetAcc *state.Object, assetID identifiers.AssetID) {
+	t.Helper()
+
+	insertTestAssetObject(
+		t, assetID, assetAcc, state.NewAssetObject(big.NewInt(5000), nil),
+	)
+	assert.NoError(
+		t,
+		assetAcc.SetState(assetID, common.NewAssetDescriptor(operator.Address(), common.AssetCreatePayload{})),
+	)
 }
