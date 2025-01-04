@@ -75,7 +75,7 @@ func NewICS(
 		ICSRespCount:     0,
 		Participants:     participants,
 		committee:        committee,
-		Transition:       gtypes.NewTransition(nil),
+		Transition:       gtypes.NewTransition(nil, nil),
 		localViewInfo:    viewInfos.Copy(),
 		highestViewInfo:  viewInfos.Copy(),
 		view:             currentView,

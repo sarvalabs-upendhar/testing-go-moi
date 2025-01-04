@@ -22,6 +22,8 @@ var opRunnerLookup = map[common.IxOpType]OpRunner{
 	common.IxAssetRevoke:       RunAssetRevoke,
 	common.IxAssetMint:         RunAssetMint,
 	common.IxAssetBurn:         RunAssetBurn,
+	common.IxAssetLockup:       RunAssetLockup,
+	common.IxAssetRelease:      RunAssetRelease,
 	common.IxLogicDeploy:       RunLogicDeploy,
 	common.IxLogicInvoke:       RunLogicInvoke,
 	common.IxLogicEnlist:       RunLogicEnlist,

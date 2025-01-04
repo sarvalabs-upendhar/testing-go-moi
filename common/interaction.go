@@ -321,7 +321,7 @@ func (op *IxOp) Target() identifiers.Address {
 		op.target = payload.Address
 	case IxAssetCreate:
 		op.target = NewAccountAddress(op.Nonce(), op.Sender())
-	case IxAssetTransfer, IxAssetApprove, IxAssetRevoke:
+	case IxAssetTransfer, IxAssetApprove, IxAssetRevoke, IxAssetLockup, IxAssetRelease:
 		payload, err := op.GetAssetActionPayload()
 		if err != nil {
 			panic(err)
@@ -350,6 +350,20 @@ func (op *IxOp) Target() identifiers.Address {
 	}
 
 	return op.target
+}
+
+// Benefactor returns the benefactor's address if applicable; otherwise, returns nil address.
+func (op *IxOp) Benefactor() identifiers.Address {
+	if op.Type() == IxAssetTransfer || op.Type() == IxAssetRelease {
+		payload, err := op.GetAssetActionPayload()
+		if err != nil {
+			panic(err)
+		}
+
+		return payload.Benefactor
+	}
+
+	return identifiers.NilAddress
 }
 
 // Interaction represents a batch of ops with associated data and metadata.
@@ -493,7 +507,7 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 				}
 			}
 
-		case IxAssetApprove, IxAssetRevoke:
+		case IxAssetApprove, IxAssetRevoke, IxAssetLockup, IxAssetRelease:
 			assetActionPayload := new(AssetActionPayload)
 			if err = assetActionPayload.FromBytes(op.Payload); err != nil {
 				return nil, err
@@ -507,6 +521,24 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 						Action: assetActionPayload,
 					},
 				},
+			}
+
+			if IxAssetRelease == op.Type {
+				beneficiary, ok := ix.ps[assetActionPayload.Beneficiary]
+				if !ok {
+					return nil, ErrMissingBeneficiary
+				}
+
+				beneficiary.AccType = RegularAccount
+				beneficiary.IsSigner = false
+
+				benefactor, ok := ix.ps[assetActionPayload.Benefactor]
+				if !ok {
+					return nil, ErrMissingBenefactor
+				}
+
+				benefactor.AccType = RegularAccount
+				benefactor.IsSigner = false
 			}
 
 		case IxAssetMint, IxAssetBurn:
@@ -1138,7 +1170,7 @@ func (ixs Interactions) AccountType(address identifiers.Address) (AccountType, e
 		}
 
 		for _, op := range ix.Ops() {
-			if op.Target() != address {
+			if op.Target() != address && op.Benefactor() != address {
 				continue
 			}
 

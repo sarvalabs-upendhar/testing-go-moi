@@ -157,7 +157,7 @@ func (k *Engine) addGenesisTesseract(
 		true,
 		identifiers.NilAddress,
 		tesseract,
-		state.NewTransition(transition),
+		state.NewTransition(transition, nil),
 		true,
 	); err != nil {
 		return errors.Wrap(err, "error adding genesis tesseract")

@@ -9,14 +9,16 @@ import (
 )
 
 type Transition struct {
-	objects  ObjectMap
-	receipts common.Receipts
+	objects          ObjectMap
+	auxiliaryObjects ObjectMap
+	receipts         common.Receipts
 }
 
-func NewTransition(objects ObjectMap) *Transition {
+func NewTransition(objects ObjectMap, auxiliaryObjects ObjectMap) *Transition {
 	return &Transition{
-		objects:  objects,
-		receipts: make(common.Receipts),
+		objects:          objects,
+		auxiliaryObjects: auxiliaryObjects,
+		receipts:         make(common.Receipts),
 	}
 }
 
@@ -58,6 +60,10 @@ func (t *Transition) Receipts() common.Receipts {
 
 func (t *Transition) GetObject(addr identifiers.Address) *Object {
 	return t.objects[addr]
+}
+
+func (t *Transition) GetAuxiliaryObject(addr identifiers.Address) *Object {
+	return t.auxiliaryObjects[addr]
 }
 
 func (t *Transition) Delete(addr identifiers.Address) {

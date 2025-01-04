@@ -22,7 +22,7 @@ type GetAssetInfoArgs struct {
 	Options TesseractNumberOrHash `json:"options"`
 }
 
-type GetAssetMandateArgs struct {
+type GetAssetMandateOrLockupArgs struct {
 	Address identifiers.Address   `json:"address"`
 	Options TesseractNumberOrHash `json:"options"`
 }
@@ -227,6 +227,7 @@ type RPCAssetAction struct {
 	Beneficiary identifiers.Address `json:"beneficiary"`
 	AssetID     identifiers.AssetID `json:"asset_id"`
 	Amount      *hexutil.Big        `json:"amount"`
+	Timestamp   *hexutil.Uint64     `json:"timestamp"`
 }
 
 type RPCLogicPayload struct {

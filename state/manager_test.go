@@ -970,6 +970,7 @@ func TestStateManager_FetchIxStateObjects(t *testing.T) {
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHashes, accounts...) // insert account into db
+			insertSargaAccount(t, db)
 			db.setAccountMetaInfo(&common.AccountMetaInfo{
 				Address:   so[0].Address(),
 				StateHash: stateHashes[0],
@@ -3503,6 +3504,7 @@ func TestStateManager_LoadTransitionObjects(t *testing.T) {
 	smParams := &createStateManagerParams{
 		dbCallback: func(db *MockDB) {
 			insertAccountsInDB(t, db, stateHashes, accounts...)
+			insertSargaAccount(t, db)
 			for i := 0; i < 2; i++ {
 				db.setAccountMetaInfo(&common.AccountMetaInfo{
 					Address:   so[i].address,

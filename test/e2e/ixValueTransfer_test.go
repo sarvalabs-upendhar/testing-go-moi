@@ -13,7 +13,6 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
-//nolint:dupl
 func (te *TestEnvironment) transferAsset(
 	sender tests.AccountWithMnemonic,
 	assetActionPayload *common.AssetActionPayload,
@@ -51,10 +50,6 @@ func (te *TestEnvironment) transferAsset(
 			{
 				Address:  assetActionPayload.Beneficiary,
 				LockType: common.MutateLock,
-			},
-			{
-				Address:  common.SargaAddress,
-				LockType: common.ReadLock,
 			},
 		},
 	}

@@ -12,13 +12,13 @@ import (
 
 type Mandate struct {
 	Amount    *big.Int
-	ExpiresAt int64
+	ExpiresAt uint64
 }
 
-// AssetObject represents an asset's state, including balance, deposits, mandates, and properties.
+// AssetObject represents an asset's state, including balance, lockups, mandates, and properties.
 type AssetObject struct {
 	Balance    *big.Int
-	Deposit    map[identifiers.LogicID]*big.Int
+	Lockup     map[identifiers.Address]*big.Int
 	Mandate    map[identifiers.Address]*Mandate
 	Properties *common.AssetDescriptor
 }
@@ -27,7 +27,7 @@ type AssetObject struct {
 func NewAssetObject(balance *big.Int, properties *common.AssetDescriptor) *AssetObject {
 	return &AssetObject{
 		Balance:    balance,
-		Deposit:    make(map[identifiers.LogicID]*big.Int),
+		Lockup:     make(map[identifiers.Address]*big.Int),
 		Mandate:    make(map[identifiers.Address]*Mandate),
 		Properties: properties,
 	}

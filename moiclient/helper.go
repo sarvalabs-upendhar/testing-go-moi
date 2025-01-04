@@ -145,10 +145,10 @@ func GetTesseract(t *testing.T, client *Client, addr identifiers.Address, height
 	return ts
 }
 
-func GetMandates(t *testing.T, client *Client, addr identifiers.Address, height int64) []rpcargs.RPCMandate {
+func GetMandates(t *testing.T, client *Client, addr identifiers.Address, height int64) []rpcargs.RPCMandateOrLockup {
 	t.Helper()
 
-	args := &rpcargs.GetAssetMandateArgs{
+	args := &rpcargs.GetAssetMandateOrLockupArgs{
 		Address: addr,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &height,
@@ -159,6 +159,22 @@ func GetMandates(t *testing.T, client *Client, addr identifiers.Address, height 
 	require.NoError(t, err)
 
 	return mandates
+}
+
+func GetLockups(t *testing.T, client *Client, addr identifiers.Address, height int64) []rpcargs.RPCMandateOrLockup {
+	t.Helper()
+
+	args := &rpcargs.GetAssetMandateOrLockupArgs{
+		Address: addr,
+		Options: rpcargs.TesseractNumberOrHash{
+			TesseractNumber: &height,
+		},
+	}
+
+	lockups, err := client.Lockups(context.Background(), args)
+	require.NoError(t, err)
+
+	return lockups
 }
 
 // GetLogicID returns logicID for the given senderAddr and height

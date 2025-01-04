@@ -366,9 +366,9 @@ func (c *Client) AccountState(ctx context.Context, args *rpcargs.GetAccountArgs)
 
 func (c *Client) Mandates(
 	ctx context.Context,
-	args *rpcargs.GetAssetMandateArgs,
-) ([]rpcargs.RPCMandate, error) {
-	var mandates []rpcargs.RPCMandate
+	args *rpcargs.GetAssetMandateOrLockupArgs,
+) ([]rpcargs.RPCMandateOrLockup, error) {
+	var mandates []rpcargs.RPCMandateOrLockup
 
 	err := c.Call(ctx, &mandates, "moi.Mandates", args)
 	if err != nil {
@@ -376,6 +376,20 @@ func (c *Client) Mandates(
 	}
 
 	return mandates, nil
+}
+
+func (c *Client) Lockups(
+	ctx context.Context,
+	args *rpcargs.GetAssetMandateOrLockupArgs,
+) ([]rpcargs.RPCMandateOrLockup, error) {
+	var lockups []rpcargs.RPCMandateOrLockup
+
+	err := c.Call(ctx, &lockups, "moi.Lockups", args)
+	if err != nil {
+		return nil, err
+	}
+
+	return lockups, nil
 }
 
 // LogicIDs returns the logic IDs of the given address

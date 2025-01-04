@@ -182,7 +182,16 @@ type MockStateManager struct {
 	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
 }
 
-func (m *MockStateManager) GetMandates(address identifiers.Address, hash common.Hash) ([]common.AssetMandate, error) {
+func (m *MockStateManager) GetMandates(
+	address identifiers.Address, hash common.Hash,
+) ([]common.AssetMandateOrLockup, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) GetLockups(
+	address identifiers.Address, hash common.Hash,
+) ([]common.AssetMandateOrLockup, error) {
 	// TODO implement me
 	panic("implement me")
 }

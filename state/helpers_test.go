@@ -331,6 +331,21 @@ func insertAccountsInDB(t *testing.T, db Store, hashes []common.Hash, acc ...*co
 	}
 }
 
+func insertSargaAccount(t *testing.T, db Store) {
+	t.Helper()
+
+	mDB := getMockDB(t, db)
+
+	stateHash := tests.RandomHash(t)
+
+	mDB.setAccountMetaInfo(&common.AccountMetaInfo{
+		Address:   common.SargaAddress,
+		StateHash: stateHash,
+	})
+
+	mDB.setAccount(t, stateHash, new(common.Account))
+}
+
 func insertAssetDeedsInDB(t *testing.T, db Store, hashes []common.Hash, deeds ...*Deeds) {
 	t.Helper()
 
@@ -610,13 +625,13 @@ func createAssetObject(t *testing.T) *AssetObject {
 
 	return &AssetObject{
 		Balance: big.NewInt(45000),
-		Deposit: map[identifiers.LogicID]*big.Int{
-			tests.GetLogicID(t, tests.RandomAddress(t)): big.NewInt(3000),
+		Lockup: map[identifiers.Address]*big.Int{
+			tests.RandomAddress(t): big.NewInt(3000),
 		},
 		Mandate: map[identifiers.Address]*Mandate{
 			tests.RandomAddress(t): {
 				Amount:    big.NewInt(2000),
-				ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+				ExpiresAt: uint64(time.Now().Add(1 * time.Hour).Unix()),
 			},
 		},
 		Properties: &common.AssetDescriptor{
@@ -1128,24 +1143,24 @@ func setAssetBalance(t *testing.T, so *Object, assetID identifiers.AssetID, amou
 	})
 }
 
-func setAssetDeposits(
+func setAssetLockups(
 	t *testing.T, so *Object, assetIDs []identifiers.AssetID,
-	amounts []*big.Int, logicIDs []identifiers.LogicID, depositAmounts []*big.Int,
+	amounts []*big.Int, addresses []identifiers.Address, lockupAmounts []*big.Int,
 ) {
 	t.Helper()
 
-	deposits := make(map[identifiers.LogicID]*big.Int)
+	lockups := make(map[identifiers.Address]*big.Int)
 
-	if len(logicIDs) > 0 {
-		for idx, logicID := range logicIDs {
-			deposits[logicID] = depositAmounts[idx]
+	if len(addresses) > 0 {
+		for idx, address := range addresses {
+			lockups[address] = lockupAmounts[idx]
 		}
 	}
 
 	for idx, assetID := range assetIDs {
 		setAssetObject(t, so, assetID, &AssetObject{
 			Balance: amounts[idx],
-			Deposit: deposits,
+			Lockup:  lockups,
 		})
 	}
 }
@@ -1162,7 +1177,7 @@ func setAssetMandates(
 		for idx, address := range addresses {
 			mandates[address] = &Mandate{
 				Amount:    mandateAmounts[idx],
-				ExpiresAt: time.Now().Add(1 * time.Hour).Unix(),
+				ExpiresAt: uint64(time.Now().Add(1 * time.Hour).Unix()),
 			}
 		}
 	}
@@ -1751,6 +1766,25 @@ func checkForMandates(
 
 	require.NoError(t, err)
 	require.Equal(t, 0, mandate.Amount.Cmp(expectedAmount))
+}
+
+func checkForLockups(
+	t *testing.T, sObj *Object, assetID identifiers.AssetID,
+	address identifiers.Address, expectedAmount *big.Int,
+) {
+	t.Helper()
+
+	lockupAmount, err := sObj.GetLockup(assetID, address)
+
+	if expectedAmount.Cmp(big.NewInt(0)) == 0 {
+		require.Error(t, err)
+		require.Equal(t, common.ErrLockupNotFound, err)
+
+		return
+	}
+
+	require.NoError(t, err)
+	require.Equal(t, 0, lockupAmount.Cmp(expectedAmount))
 }
 
 func checkForDeeds(

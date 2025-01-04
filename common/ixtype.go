@@ -8,18 +8,20 @@ const (
 	IxInvalid IxOpType = iota
 	IxParticipantCreate
 	IxAssetTransfer
-	TxFuelSupply // TODO: Remove this
+	IxFuelSupply // TODO: Remove this
 	IxAssetCreate
 	IxAssetApprove
 	IxAssetRevoke
 	IxAssetMint
 	IxAssetBurn
+	IxAssetLockup
+	IxAssetRelease
 
 	IxLogicDeploy
 	IxLogicInvoke
 	IxLogicEnlist
-	TxLogicInteract
-	TxLogicUpgrade
+	IxLogicInteract
+	IxLogicUpgrade
 )
 
 var txTypeToString = map[IxOpType]string{
@@ -31,6 +33,8 @@ var txTypeToString = map[IxOpType]string{
 	IxAssetRevoke:       "IxAssetRevoke",
 	IxAssetMint:         "IxAssetMint",
 	IxAssetBurn:         "IxAssetBurn",
+	IxAssetLockup:       "IxAssetLockup",
+	IxAssetRelease:      "IxAssetRelease",
 	IxLogicDeploy:       "IxLogicDeploy",
 	IxLogicInvoke:       "IxLogicInvoke",
 	IxLogicEnlist:       "IxLogicEnlist",

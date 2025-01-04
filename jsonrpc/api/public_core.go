@@ -484,7 +484,7 @@ func (p *PublicCoreAPI) LogicStorage(args *rpcargs.GetLogicStorageArgs) (hexutil
 }
 
 // Mandates retrieves and returns a list of asset mandates associated with the specified address.
-func (p *PublicCoreAPI) Mandates(args *rpcargs.GetAssetMandateArgs) ([]rpcargs.RPCMandate, error) {
+func (p *PublicCoreAPI) Mandates(args *rpcargs.GetAssetMandateOrLockupArgs) ([]rpcargs.RPCMandateOrLockup, error) {
 	if args.Address.IsNil() {
 		return nil, common.ErrEmptyAddress
 	}
@@ -499,13 +499,42 @@ func (p *PublicCoreAPI) Mandates(args *rpcargs.GetAssetMandateArgs) ([]rpcargs.R
 		return nil, err
 	}
 
-	entries := make([]rpcargs.RPCMandate, 0, len(mandates))
+	entries := make([]rpcargs.RPCMandateOrLockup, 0, len(mandates))
 
 	for _, mandate := range mandates {
-		entries = append(entries, rpcargs.RPCMandate{
+		entries = append(entries, rpcargs.RPCMandateOrLockup{
 			AssetID: mandate.AssetID.String(),
 			Address: mandate.Address,
 			Amount:  (*hexutil.Big)(mandate.Amount),
+		})
+	}
+
+	return entries, nil
+}
+
+// Lockups retrieves and returns a list of asset lockups associated with the specified address.
+func (p *PublicCoreAPI) Lockups(args *rpcargs.GetAssetMandateOrLockupArgs) ([]rpcargs.RPCMandateOrLockup, error) {
+	if args.Address.IsNil() {
+		return nil, common.ErrEmptyAddress
+	}
+
+	stateHash, err := p.getStateHash(getTesseractArgs(args.Address, args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	lockups, err := p.sm.GetLockups(args.Address, stateHash)
+	if err != nil {
+		return nil, err
+	}
+
+	entries := make([]rpcargs.RPCMandateOrLockup, 0, len(lockups))
+
+	for _, lockup := range lockups {
+		entries = append(entries, rpcargs.RPCMandateOrLockup{
+			AssetID: lockup.AssetID.String(),
+			Address: lockup.Address,
+			Amount:  (*hexutil.Big)(lockup.Amount),
 		})
 	}
 

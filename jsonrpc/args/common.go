@@ -79,7 +79,8 @@ func CreateRPCInteraction(
 			if err != nil {
 				return nil, err
 			}
-		case common.IxAssetTransfer:
+		case common.IxAssetTransfer, common.IxAssetApprove, common.IxAssetRevoke,
+			common.IxAssetLockup, common.IxAssetRelease:
 			payload, err := op.GetAssetActionPayload()
 			if err != nil {
 				return nil, err
@@ -90,6 +91,7 @@ func CreateRPCInteraction(
 				Beneficiary: payload.Beneficiary,
 				AssetID:     payload.AssetID,
 				Amount:      (*hexutil.Big)(payload.Amount),
+				Timestamp:   (*hexutil.Uint64)(&payload.Timestamp),
 			}
 
 			rawPayload, err = json.Marshal(rpcPayload)

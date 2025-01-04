@@ -595,13 +595,26 @@ func (sm *StateManager) GetDeeds(
 	return entries, nil
 }
 
-func (sm *StateManager) GetMandates(addrs identifiers.Address, stateHash common.Hash) ([]common.AssetMandate, error) {
+func (sm *StateManager) GetMandates(
+	addrs identifiers.Address, stateHash common.Hash,
+) ([]common.AssetMandateOrLockup, error) {
 	stateObject, err := sm.getStateObject(addrs, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
 	return stateObject.Mandates()
+}
+
+func (sm *StateManager) GetLockups(
+	addrs identifiers.Address, stateHash common.Hash,
+) ([]common.AssetMandateOrLockup, error) {
+	stateObject, err := sm.getStateObject(addrs, stateHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	return stateObject.Lockups()
 }
 
 func (sm *StateManager) GetBalance(
@@ -907,6 +920,19 @@ func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash 
 	return logicManifest, nil
 }
 
+func (sm *StateManager) getAuxiliaryStateObjects() (ObjectMap, error) {
+	auxiliaryObjects := make(ObjectMap)
+
+	auxObj, err := sm.GetLatestStateObject(common.SargaAddress)
+	if err != nil {
+		return nil, errors.Wrap(err, "state object fetch failed")
+	}
+
+	auxiliaryObjects[common.SargaAddress] = auxObj.Copy()
+
+	return auxiliaryObjects, nil
+}
+
 func (sm *StateManager) LoadTransitionObjects(
 	ixps map[identifiers.Address]common.ParticipantInfo,
 ) (*Transition, error) {
@@ -930,7 +956,12 @@ func (sm *StateManager) LoadTransitionObjects(
 		objects[addr] = obj.Copy()
 	}
 
-	return NewTransition(objects), nil
+	auxiliaryObjects, err := sm.getAuxiliaryStateObjects()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewTransition(objects, auxiliaryObjects), nil
 }
 
 func (sm *StateManager) FetchIxStateObjects(
@@ -962,7 +993,12 @@ func (sm *StateManager) FetchIxStateObjects(
 		}
 	}
 
-	return NewTransition(objects), nil
+	auxiliaryObjects, err := sm.getAuxiliaryStateObjects()
+	if err != nil {
+		return nil, err
+	}
+
+	return NewTransition(objects, auxiliaryObjects), nil
 }
 
 func (sm *StateManager) IsSealValid(ts *common.Tesseract) (bool, error) {

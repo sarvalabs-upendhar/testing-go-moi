@@ -145,55 +145,37 @@ func TestSubBalance(t *testing.T) {
 	}
 }
 
-func TestCreateDeposit(t *testing.T) {
+func TestCreateLockup(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetIDs, _ := tests.CreateTestAssets(t, 3)
 
-	setAssetDeposits(
+	setAssetLockups(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(50000), big.NewInt(500)},
-		[]identifiers.LogicID{}, []*big.Int{},
+		[]identifiers.Address{}, []*big.Int{},
 	)
 
 	testcases := []struct {
-		name                  string
-		assetID               identifiers.AssetID
-		logicID               identifiers.LogicID
-		amount                *big.Int
-		preTestFn             func(logicID identifiers.LogicID)
-		expectedBalance       *big.Int
-		expectedDepositAmount *big.Int
-		expectedError         error
+		name                 string
+		assetID              identifiers.AssetID
+		address              identifiers.Address
+		amount               *big.Int
+		preTestFn            func(address identifiers.Address)
+		expectedBalance      *big.Int
+		expectedLockupAmount *big.Int
+		expectedError        error
 	}{
 		{
-			name:                  "creates a new deposit and updates balance",
-			assetID:               assetIDs[0],
-			logicID:               tests.GetLogicID(t, tests.RandomAddress(t)),
-			amount:                big.NewInt(5000),
-			expectedBalance:       big.NewInt(45000),
-			expectedDepositAmount: big.NewInt(5000),
-		},
-		{
-			name:    "increments existing deposit amount",
-			assetID: assetIDs[1],
-			logicID: tests.GetLogicID(t, tests.RandomAddress(t)),
-			amount:  big.NewInt(5000),
-			preTestFn: func(logicID identifiers.LogicID) {
-				assert.NoError(t, sObj.CreateDeposit(assetIDs[1], logicID, big.NewInt(500)))
-			},
-			expectedBalance:       big.NewInt(44500),
-			expectedDepositAmount: big.NewInt(5500),
-		},
-		{
-			name:          "should return error if balance is insufficient",
-			assetID:       assetIDs[2],
-			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
-			amount:        big.NewInt(5000),
-			expectedError: common.ErrInsufficientFunds,
+			name:                 "creates a new lockup and updates balance",
+			assetID:              assetIDs[0],
+			address:              tests.RandomAddress(t),
+			amount:               big.NewInt(5000),
+			expectedBalance:      big.NewInt(45000),
+			expectedLockupAmount: big.NewInt(5000),
 		},
 		{
 			name:          "should return error if asset not found",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
+			address:       tests.RandomAddress(t),
 			amount:        big.NewInt(5000),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -202,10 +184,10 @@ func TestCreateDeposit(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.preTestFn != nil {
-				test.preTestFn(test.logicID)
+				test.preTestFn(test.address)
 			}
 
-			err := sObj.CreateDeposit(test.assetID, test.logicID, test.amount)
+			err := sObj.CreateLockup(test.assetID, test.address, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -216,57 +198,121 @@ func TestCreateDeposit(t *testing.T) {
 
 			require.NoError(t, err)
 
-			assetObject, err := sObj.getAssetObject(test.assetID, true)
-			require.NoError(t, err)
-			require.Equal(t, test.expectedBalance, assetObject.Balance)
-
-			amount, err := sObj.GetDeposit(test.assetID, test.logicID)
-			require.NoError(t, err)
-			require.Equal(t, test.expectedDepositAmount, amount)
+			// Verify if the balance is debited
+			checkForBalances(t, sObj, test.expectedBalance, test.assetID)
+			// Verify the updated lockup amount
+			checkForLockups(t, sObj, test.assetID, test.address, test.expectedLockupAmount)
 		})
 	}
 }
 
-func TestGetDeposit(t *testing.T) {
+func TestReleaseLockup(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	logicIDs := tests.GetLogicIDs(t, 1)
-	assetIDs, _ := getAssetIDsAndBalances(t, 1)
+	assetIDs, _ := tests.CreateTestAssets(t, 2)
 
-	setAssetDeposits(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(50000)},
-		logicIDs, []*big.Int{big.NewInt(500)},
+	addresses := tests.GetRandomAddressList(t, 2)
+	setAssetLockups(
+		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(1000)},
+		addresses, []*big.Int{big.NewInt(5000), big.NewInt(1000)},
 	)
 
 	testcases := []struct {
-		name           string
-		assetID        identifiers.AssetID
-		logicID        identifiers.LogicID
-		expectedAmount *big.Int
-		expectedError  error
+		name                 string
+		assetID              identifiers.AssetID
+		address              identifiers.Address
+		amount               *big.Int
+		expectedLockupAmount *big.Int
+		expectedError        error
 	}{
 		{
-			name:           "retrieves existing deposit amount",
-			assetID:        assetIDs[0],
-			logicID:        logicIDs[0],
-			expectedAmount: big.NewInt(500),
+			name:                 "successfully releases lockup",
+			assetID:              assetIDs[0],
+			address:              addresses[0],
+			amount:               big.NewInt(2000),
+			expectedLockupAmount: big.NewInt(3000), // 5000 - 2000
 		},
 		{
-			name:          "should return error if asset doesn't exist",
+			name:                 "remove lockup when balance reaches zero",
+			assetID:              assetIDs[1],
+			address:              addresses[1],
+			amount:               big.NewInt(1000),
+			expectedLockupAmount: big.NewInt(0),
+		},
+		{
+			name:          "should return error if asset not found",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
+			address:       addresses[0],
+			amount:        big.NewInt(2000),
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
-			name:          "should return error if deposit doesn't exist",
-			assetID:       assetIDs[0],
-			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
-			expectedError: errors.New("deposit doesn't exist"),
+			name:          "should return error if lockup not found",
+			assetID:       assetIDs[1],
+			address:       tests.RandomAddress(t),
+			amount:        big.NewInt(500),
+			expectedError: common.ErrLockupNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			amount, err := sObj.GetDeposit(test.assetID, test.logicID)
+			err := sObj.ReleaseLockup(test.assetID, test.address, test.amount)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.Equal(t, test.expectedError, err)
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Verify the updated lockup amount
+			checkForLockups(t, sObj, test.assetID, test.address, test.expectedLockupAmount)
+		})
+	}
+}
+
+func TestGetLockup(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	addresses := tests.GetRandomAddressList(t, 1)
+	assetIDs, _ := getAssetIDsAndBalances(t, 1)
+
+	setAssetLockups(
+		t, sObj, assetIDs, []*big.Int{big.NewInt(50000)},
+		addresses, []*big.Int{big.NewInt(500)},
+	)
+
+	testcases := []struct {
+		name           string
+		assetID        identifiers.AssetID
+		address        identifiers.Address
+		expectedAmount *big.Int
+		expectedError  error
+	}{
+		{
+			name:           "retrieves existing lockup amount",
+			assetID:        assetIDs[0],
+			address:        addresses[0],
+			expectedAmount: big.NewInt(500),
+		},
+		{
+			name:          "should return error if asset doesn't exist",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			address:       tests.RandomAddress(t),
+			expectedError: common.ErrAssetNotFound,
+		},
+		{
+			name:          "should return error if lockup doesn't exist",
+			assetID:       assetIDs[0],
+			address:       tests.RandomAddress(t),
+			expectedError: common.ErrLockupNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			amount, err := sObj.GetLockup(test.assetID, test.address)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -318,7 +364,7 @@ func TestCreateMandate(t *testing.T) {
 						assetIDs[1],
 						address,
 						big.NewInt(1000),
-						time.Now().Add(1*time.Hour).Unix(),
+						uint64(time.Now().Add(1*time.Hour).Unix()),
 					),
 				)
 			},
@@ -339,7 +385,7 @@ func TestCreateMandate(t *testing.T) {
 				test.preTestFn(test.address)
 			}
 
-			err := sObj.CreateMandate(test.assetID, test.address, test.amount, time.Now().Unix())
+			err := sObj.CreateMandate(test.assetID, test.address, test.amount, uint64(time.Now().Unix()))
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -580,6 +626,7 @@ func TestGetMandate(t *testing.T) {
 	}
 }
 
+//nolint:dupl
 func TestMandates(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	addresses := tests.GetRandomAddressList(t, 1)
@@ -595,13 +642,13 @@ func TestMandates(t *testing.T) {
 		name           string
 		stateObject    *Object
 		preTestFn      func(stateObject *Object)
-		expectedResult []common.AssetMandate
+		expectedResult []common.AssetMandateOrLockup
 		expectedError  error
 	}{
 		{
 			name:        "retrieves existing mandates successfully",
 			stateObject: sObj,
-			expectedResult: []common.AssetMandate{
+			expectedResult: []common.AssetMandateOrLockup{
 				{
 					AssetID: assetIDs[0],
 					Address: addresses[0],
@@ -617,7 +664,7 @@ func TestMandates(t *testing.T) {
 		{
 			name:           "returns empty list when mandates doesn't exist",
 			stateObject:    createTestStateObject(t, nil),
-			expectedResult: []common.AssetMandate{},
+			expectedResult: []common.AssetMandateOrLockup{},
 		},
 	}
 
@@ -634,6 +681,65 @@ func TestMandates(t *testing.T) {
 
 			require.NoError(t, err)
 			require.ElementsMatch(t, test.expectedResult, mandates)
+		})
+	}
+}
+
+//nolint:dupl
+func TestLockups(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	addresses := tests.GetRandomAddressList(t, 1)
+	assetIDs, _ := getAssetIDsAndBalances(t, 2)
+
+	// Set lockups for the test assets and addresses
+	setAssetLockups(
+		t, sObj, assetIDs, []*big.Int{big.NewInt(14000), big.NewInt(22000)},
+		addresses, []*big.Int{big.NewInt(1500)},
+	)
+
+	testcases := []struct {
+		name           string
+		stateObject    *Object
+		preTestFn      func(stateObject *Object)
+		expectedResult []common.AssetMandateOrLockup
+		expectedError  error
+	}{
+		{
+			name:        "retrieves existing lockups successfully",
+			stateObject: sObj,
+			expectedResult: []common.AssetMandateOrLockup{
+				{
+					AssetID: assetIDs[0],
+					Address: addresses[0],
+					Amount:  big.NewInt(1500),
+				},
+				{
+					AssetID: assetIDs[1],
+					Address: addresses[0],
+					Amount:  big.NewInt(1500),
+				},
+			},
+		},
+		{
+			name:           "returns empty list when lockups doesn't exist",
+			stateObject:    createTestStateObject(t, nil),
+			expectedResult: []common.AssetMandateOrLockup{},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			lockups, err := test.stateObject.Lockups()
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.ElementsMatch(t, test.expectedResult, lockups)
 		})
 	}
 }

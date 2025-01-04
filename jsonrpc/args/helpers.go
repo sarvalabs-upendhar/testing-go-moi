@@ -131,6 +131,7 @@ func CheckForRPCIxn(
 				Beneficiary: assetCreationPayload.Beneficiary,
 				AssetID:     assetCreationPayload.AssetID,
 				Amount:      (*hexutil.Big)(assetCreationPayload.Amount),
+				Timestamp:   (*hexutil.Uint64)(&assetCreationPayload.Timestamp),
 			}
 
 			expectedPayload, err := json.Marshal(rpcAssetActionPayload)

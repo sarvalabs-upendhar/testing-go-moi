@@ -116,11 +116,36 @@ func checkAssetApprove(t *testing.T, sender *state.Object, payload *common.Asset
 	require.Equal(t, payload.Amount, mandate.Amount)
 }
 
+func checkAssetLockup(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
+	t.Helper()
+
+	lockupAmount, err := sender.GetLockup(payload.AssetID, payload.Beneficiary)
+	require.NoError(t, err)
+	require.Equal(t, payload.Amount, lockupAmount)
+}
+
 func checkAssetRevoke(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
 	t.Helper()
 
 	_, err := sender.GetMandate(payload.AssetID, payload.Beneficiary)
 	require.Error(t, err)
+}
+
+func checkAssetRelease(
+	t *testing.T, sender, beneficiary, benefactor *state.Object,
+	payload *common.AssetActionPayload, expectedAmount *big.Int,
+) {
+	t.Helper()
+
+	// Check the beneficiary account
+	ao, err := beneficiary.FetchAssetObject(payload.AssetID, true)
+	require.NoError(t, err)
+	require.Equal(t, payload.Amount, ao.Balance)
+
+	// Check whether the lockup amount got deducted
+	lockupAmount, err := benefactor.GetLockup(payload.AssetID, sender.Address())
+	require.NoError(t, err)
+	require.Equal(t, expectedAmount, lockupAmount)
 }
 
 func createTestAssetID(
@@ -191,7 +216,7 @@ func registerParticipant(t *testing.T, sarga *state.Object, address identifiers.
 
 func createTestMandate(
 	t *testing.T, sender, beneficiary *state.Object,
-	assetID identifiers.AssetID, amount *big.Int, timestamp int64,
+	assetID identifiers.AssetID, amount *big.Int, timestamp uint64,
 ) {
 	t.Helper()
 
@@ -200,6 +225,19 @@ func createTestMandate(
 		AssetID:     assetID,
 		Amount:      amount,
 		Timestamp:   timestamp,
+	}))
+}
+
+func createLockup(
+	t *testing.T, sender, beneficiary *state.Object,
+	assetID identifiers.AssetID, amount *big.Int,
+) {
+	t.Helper()
+
+	assert.NoError(t, lockupAsset(sender, &common.AssetActionPayload{
+		Beneficiary: beneficiary.Address(),
+		AssetID:     assetID,
+		Amount:      amount,
 	}))
 }
 

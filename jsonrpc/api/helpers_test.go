@@ -211,7 +211,8 @@ func (c *MockChainManager) setTesseractByHash(
 type MockStateManager struct {
 	storage                 map[common.Hash][]byte
 	balances                map[identifiers.Address]common.AssetMap
-	mandates                map[identifiers.Address][]common.AssetMandate
+	mandates                map[identifiers.Address][]common.AssetMandateOrLockup
+	lockups                 map[identifiers.Address][]common.AssetMandateOrLockup
 	accounts                map[identifiers.Address]*common.Account
 	context                 map[identifiers.Address]*Context
 	assetDeeds              map[identifiers.AssetID]*common.AssetDescriptor
@@ -256,7 +257,8 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState := new(MockStateManager)
 	mockState.assetDeeds = make(map[identifiers.AssetID]*common.AssetDescriptor)
 	mockState.balances = make(map[identifiers.Address]common.AssetMap)
-	mockState.mandates = make(map[identifiers.Address][]common.AssetMandate)
+	mockState.mandates = make(map[identifiers.Address][]common.AssetMandateOrLockup)
+	mockState.lockups = make(map[identifiers.Address][]common.AssetMandateOrLockup)
 	mockState.storage = make(map[common.Hash][]byte)
 	mockState.accounts = make(map[identifiers.Address]*common.Account)
 	mockState.context = make(map[identifiers.Address]*Context)
@@ -290,12 +292,24 @@ func (s *MockStateManager) GetDeeds(
 	return deeds, nil
 }
 
-func (s *MockStateManager) GetMandates(address identifiers.Address, hash common.Hash) ([]common.AssetMandate, error) {
+func (s *MockStateManager) GetMandates(
+	address identifiers.Address, hash common.Hash,
+) ([]common.AssetMandateOrLockup, error) {
 	if mandates, ok := s.mandates[address]; ok {
 		return mandates, nil
 	}
 
-	return []common.AssetMandate{}, nil
+	return []common.AssetMandateOrLockup{}, nil
+}
+
+func (s *MockStateManager) GetLockups(
+	address identifiers.Address, hash common.Hash,
+) ([]common.AssetMandateOrLockup, error) {
+	if lockups, ok := s.lockups[address]; ok {
+		return lockups, nil
+	}
+
+	return []common.AssetMandateOrLockup{}, nil
 }
 
 func (s *MockStateManager) GetAssetInfo(
@@ -486,8 +500,12 @@ func (s *MockStateManager) setAccount(addr identifiers.Address, acc common.Accou
 	s.accounts[addr] = &acc
 }
 
-func (s *MockStateManager) setMandates(address identifiers.Address, mandates []common.AssetMandate) {
+func (s *MockStateManager) setMandates(address identifiers.Address, mandates []common.AssetMandateOrLockup) {
 	s.mandates[address] = mandates
+}
+
+func (s *MockStateManager) setLockups(address identifiers.Address, lockups []common.AssetMandateOrLockup) {
+	s.lockups[address] = lockups
 }
 
 func (s *MockStateManager) getTDU(addr identifiers.Address, stateHash common.Hash) common.AssetMap {
@@ -995,31 +1013,31 @@ func createNodeMetaInfo(t *testing.T, count int) ([]peer.ID, map[peer.ID]*senatu
 	return peerIDs, nodeMetaInfo
 }
 
-func createMandates(t *testing.T) ([]common.AssetMandate, []rpcargs.RPCMandate) {
+func createMandatesOrLockups(t *testing.T) ([]common.AssetMandateOrLockup, []rpcargs.RPCMandateOrLockup) {
 	t.Helper()
 
 	assetIDs, _ := tests.CreateTestAssets(t, 3)
-	mandates := make([]common.AssetMandate, 0)
-	rpcMandates := make([]rpcargs.RPCMandate, 0)
+	list := make([]common.AssetMandateOrLockup, 0)
+	rpcList := make([]rpcargs.RPCMandateOrLockup, 0)
 
 	for _, assetID := range assetIDs {
 		addr := tests.RandomAddress(t)
 		amount := big.NewInt(int64(rand.Uint64()))
 
-		mandates = append(mandates, common.AssetMandate{
+		list = append(list, common.AssetMandateOrLockup{
 			AssetID: assetID,
 			Address: addr,
 			Amount:  amount,
 		})
 
-		rpcMandates = append(rpcMandates, rpcargs.RPCMandate{
+		rpcList = append(rpcList, rpcargs.RPCMandateOrLockup{
 			Address: addr,
 			AssetID: assetID.String(),
 			Amount:  (*hexutil.Big)(amount),
 		})
 	}
 
-	return mandates, rpcMandates
+	return list, rpcList
 }
 
 func getTesseractsHashes(t *testing.T, tesseracts []*common.Tesseract) []common.Hash {

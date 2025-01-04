@@ -561,7 +561,7 @@ func (m *MockStateManager) LoadTransitionObjects(
 		objects[addr] = obj.Copy()
 	}
 
-	return state.NewTransition(objects), nil
+	return state.NewTransition(objects, nil), nil
 }
 
 func (m *MockStateManager) CreateStateObject(address identifiers.Address,

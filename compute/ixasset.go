@@ -29,7 +29,7 @@ func RunAssetTransfer(
 	// Obtain the sender and target state objects
 	sender := transition.GetObject(op.Sender())
 	target := transition.GetObject(op.Target())
-	sarga := transition.GetObject(common.SargaAddress)
+	sarga := transition.GetAuxiliaryObject(common.SargaAddress)
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -298,6 +298,85 @@ func RunAssetBurn(
 	return opResult.WithStatus(common.ResultOk)
 }
 
+// RunAssetLockup performs the given IxAssetLockup operation.
+// The stateObjectRetriever must contain the state object for the sender of the operation.
+//
+// The IxOp must have an AssetActionPayload, and the output receipt will reflect the lockup result.
+// The specified asset amount is locked up in the sender's account for the target beneficiary.
+func RunAssetLockup(
+	op *common.IxOp,
+	_ *common.ExecutionContext,
+	tank *FuelTank,
+	transition *state.Transition,
+) *common.IxOpResult {
+	// Obtain the Asset Transfer Payload from the Interaction
+	payload, _ := op.GetAssetActionPayload()
+
+	// Obtain the sender and target state objects
+	sender := transition.GetObject(op.Sender())
+
+	// Create a new result for the op
+	opResult := common.NewIxOpResult(op.Type())
+
+	// Exhaust fuel from tank
+	if !tank.Exhaust(FuelSimpleAssetTransfer) {
+		return opResult.WithStatus(common.ResultFuelExhausted)
+	}
+
+	// Validate asset lockup payload
+	if err := validateAssetLockup(sender, payload); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	// Create a lockup in the sender's account for the specified target
+	if err := lockupAsset(sender, payload); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	return opResult.WithStatus(common.ResultOk)
+}
+
+// RunAssetRelease performs the given IxAssetRelease operation.
+// The stateObjectRetriever must contain state objects for the sender, target, sarga, and benefactor.
+//
+// The IxOp must have an AssetActionPayload, and the output receipt will reflect the release result.
+// The specified asset amount is released from the benefactor's lockup to the target account.
+func RunAssetRelease(
+	op *common.IxOp,
+	_ *common.ExecutionContext,
+	tank *FuelTank,
+	transition *state.Transition,
+) *common.IxOpResult {
+	// Obtain the Asset Transfer Payload from the Interaction
+	payload, _ := op.GetAssetActionPayload()
+
+	// Obtain the sender and target state objects
+	sender := transition.GetObject(op.Sender())
+	target := transition.GetObject(op.Target())
+	benefactor := transition.GetObject(payload.Benefactor)
+	sarga := transition.GetAuxiliaryObject(common.SargaAddress)
+
+	// Create a new result for the op
+	opResult := common.NewIxOpResult(op.Type())
+
+	// Exhaust fuel from tank
+	if !tank.Exhaust(FuelSimpleAssetTransfer) {
+		opResult.WithStatus(common.ResultFuelExhausted)
+	}
+
+	// Validate asset release payload
+	if err := validateAssetRelease(sender, target, sarga, benefactor, payload); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	// Transfer the lockup amount from the benefactor to target account
+	if err := releaseAsset(sender, target, benefactor, payload); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	return opResult.WithStatus(common.ResultOk)
+}
+
 // helper function
 
 // validateAssetCreate checks if the asset already exists and returns an error if it is already registered.
@@ -407,7 +486,7 @@ func validateAssetConsume(sender, target, sarga, benefactor *state.Object, paylo
 		return common.ErrMandateNotFound
 	}
 
-	if mandate.ExpiresAt < time.Now().Unix() {
+	if mandate.ExpiresAt < uint64(time.Now().Unix()) {
 		return common.ErrMandateExpired
 	}
 
@@ -549,4 +628,70 @@ func burnAsset(operator, assetacc *state.Object, payload *common.AssetSupplyPayl
 	}
 
 	return supply, nil
+}
+
+// validateAssetLockup ensures the target account is registered, the asset exists, and the sender has
+// sufficient balance to lock up the specified amount.
+func validateAssetLockup(sender *state.Object, payload *common.AssetActionPayload) error {
+	assetObject, err := sender.FetchAssetObject(payload.AssetID, true)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	// Check if sender has sufficient balance
+	if assetObject.Balance.Cmp(payload.Amount) == -1 {
+		return common.ErrInsufficientFunds
+	}
+
+	if _, ok := assetObject.Lockup[payload.Beneficiary]; ok {
+		return common.ErrLockupAlreadyExists
+	}
+
+	return nil
+}
+
+// lockupAsset creates a lockup for the specified asset and amount.
+func lockupAsset(sender *state.Object, payload *common.AssetActionPayload) error {
+	if err := sender.CreateLockup(payload.AssetID, payload.Beneficiary, payload.Amount); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateAssetRelease verifies that the target account is registered and that the benefactor has enough funds
+// in the lockup to release the specified amount.
+func validateAssetRelease(sender, target, sarga, benefactor *state.Object, payload *common.AssetActionPayload) error {
+	// Check if the target account is registered
+	// Fetch the account info from genesis state
+	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Address().Bytes()); err != nil {
+		return common.ErrBeneficiaryNotRegistered
+	}
+
+	lockupAmount, err := benefactor.GetLockup(payload.AssetID, sender.Address())
+	if err != nil {
+		return common.ErrLockupNotFound
+	}
+
+	if lockupAmount.Cmp(payload.Amount) == -1 {
+		return common.ErrInsufficientFunds
+	}
+
+	return nil
+}
+
+// releaseAsset releases the specified amount from sender's lockup and updates the target's balance.
+func releaseAsset(sender, target, benefactor *state.Object, payload *common.AssetActionPayload) error {
+	if err := benefactor.ReleaseLockup(payload.AssetID, sender.Address(), payload.Amount); err != nil {
+		return err
+	}
+
+	assetObject, _ := target.FetchAssetObject(payload.AssetID, true)
+	if assetObject == nil {
+		// Insert a new asset object if the asset doesn't exist
+		return target.InsertNewAssetObject(payload.AssetID, state.NewAssetObject(payload.Amount, nil))
+	}
+
+	// Increment the asset balance if the asset already exists
+	return target.AddBalance(payload.AssetID, payload.Amount)
 }

@@ -385,7 +385,9 @@ func Test_ValidateMandateConsume(t *testing.T) {
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
-				createTestMandate(t, benefactor, sender, assetID, big.NewInt(2500), time.Now().Add(-1*time.Hour).Unix())
+				createTestMandate(
+					t, benefactor, sender, assetID, big.NewInt(2500), uint64(time.Now().Add(-1*time.Hour).Unix()),
+				)
 			},
 			expectedError: common.ErrMandateExpired,
 		},
@@ -403,7 +405,9 @@ func Test_ValidateMandateConsume(t *testing.T) {
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
-				createTestMandate(t, benefactor, sender, assetID, big.NewInt(1000), time.Now().Add(1*time.Hour).Unix())
+				createTestMandate(
+					t, benefactor, sender, assetID, big.NewInt(1000), uint64(time.Now().Add(1*time.Hour).Unix()),
+				)
 			},
 			expectedError: common.ErrInsufficientFunds,
 		},
@@ -421,7 +425,9 @@ func Test_ValidateMandateConsume(t *testing.T) {
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
-				createTestMandate(t, benefactor, sender, assetID, big.NewInt(4000), time.Now().Add(1*time.Hour).Unix())
+				createTestMandate(
+					t, benefactor, sender, assetID, big.NewInt(4000), uint64(time.Now().Add(1*time.Hour).Unix()),
+				)
 			},
 		},
 	}
@@ -490,7 +496,7 @@ func Test_ConsumeMandate(t *testing.T) {
 				insertTestAssetObject(
 					t, assetID1, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
-				createTestMandate(t, benefactor, sender1, assetID1, big.NewInt(2000), time.Now().Unix())
+				createTestMandate(t, benefactor, sender1, assetID1, big.NewInt(2000), uint64(time.Now().Unix()))
 			},
 			expectedBenefactorBalance: big.NewInt(3500),
 			expectedTargetBalance:     big.NewInt(1500),
@@ -512,7 +518,7 @@ func Test_ConsumeMandate(t *testing.T) {
 				insertTestAssetObject(
 					t, assetID0, target, state.NewAssetObject(big.NewInt(3000), nil),
 				)
-				createTestMandate(t, benefactor, sender0, assetID0, big.NewInt(2000), time.Now().Unix())
+				createTestMandate(t, benefactor, sender0, assetID0, big.NewInt(2000), uint64(time.Now().Unix()))
 			},
 			expectedBenefactorBalance: big.NewInt(3500),
 			expectedTargetBalance:     big.NewInt(4500),
@@ -847,7 +853,7 @@ func Test_AssetApprove(t *testing.T) {
 				Beneficiary: tests.RandomAddress(t),
 				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
 				Amount:      big.NewInt(5000),
-				Timestamp:   time.Now().Add(1 * time.Hour).Unix(),
+				Timestamp:   uint64(time.Now().Add(1 * time.Hour).Unix()),
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -858,7 +864,7 @@ func Test_AssetApprove(t *testing.T) {
 				Beneficiary: tests.RandomAddress(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(5000),
-				Timestamp:   time.Now().Add(1 * time.Hour).Unix(),
+				Timestamp:   uint64(time.Now().Add(1 * time.Hour).Unix()),
 			},
 		},
 	}
@@ -916,7 +922,7 @@ func Test_ValidateAssetRevoke(t *testing.T) {
 			},
 			preTestFn: func(target *state.Object) {
 				registerParticipant(t, sarga, target.Address())
-				createTestMandate(t, sender, target, assetID, big.NewInt(2000), time.Now().Unix())
+				createTestMandate(t, sender, target, assetID, big.NewInt(2000), uint64(time.Now().Unix()))
 			},
 		},
 	}
@@ -962,7 +968,7 @@ func Test_AssetRevoke(t *testing.T) {
 				Beneficiary: tests.RandomAddress(t),
 				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
 				Amount:      big.NewInt(5000),
-				Timestamp:   time.Now().Add(1 * time.Hour).Unix(),
+				Timestamp:   uint64(time.Now().Add(1 * time.Hour).Unix()),
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -974,7 +980,7 @@ func Test_AssetRevoke(t *testing.T) {
 					Beneficiary: payload.Beneficiary,
 					AssetID:     payload.AssetID,
 					Amount:      big.NewInt(5000),
-					Timestamp:   time.Now().Add(1 * time.Hour).Unix(),
+					Timestamp:   uint64(time.Now().Add(1 * time.Hour).Unix()),
 				})
 			},
 			payload: &common.AssetActionPayload{
@@ -1001,6 +1007,285 @@ func Test_AssetRevoke(t *testing.T) {
 
 			require.NoError(t, err)
 			checkAssetRevoke(t, test.sender, test.payload)
+		})
+	}
+}
+
+func Test_ValidateAssetLockup(t *testing.T) {
+	sender := createTestStateObject(t)
+	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+
+	insertTestAssetObject(
+		t, assetID, sender, state.NewAssetObject(big.NewInt(10000), nil),
+	)
+
+	testcases := []struct {
+		name          string
+		sender        *state.Object
+		payload       *common.AssetActionPayload
+		preTestFn     func(target *state.Object)
+		expectedError error
+	}{
+		{
+			name:   "asset not found",
+			sender: sender,
+			payload: &common.AssetActionPayload{
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Amount:      big.NewInt(1000),
+			},
+			expectedError: common.ErrAssetNotFound,
+		},
+		{
+			name:   "insufficient balance",
+			sender: sender,
+			payload: &common.AssetActionPayload{
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     assetID,
+				Amount:      big.NewInt(12000),
+			},
+			expectedError: common.ErrInsufficientFunds,
+		},
+		{
+			name:   "lockup already exists",
+			sender: sender,
+			payload: &common.AssetActionPayload{
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     assetID,
+				Amount:      big.NewInt(4000),
+			},
+			preTestFn: func(target *state.Object) {
+				createLockup(t, sender, target, assetID, big.NewInt(5000))
+			},
+			expectedError: common.ErrLockupAlreadyExists,
+		},
+		{
+			name:   "valid asset lockup operation",
+			sender: sender,
+			payload: &common.AssetActionPayload{
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     assetID,
+				Amount:      big.NewInt(4000),
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			target := state.NewStateObject(
+				test.payload.Beneficiary, nil, tests.NewTestTreeCache(),
+				nil, common.Account{}, state.NilMetrics(), false,
+			)
+
+			if test.preTestFn != nil {
+				test.preTestFn(target)
+			}
+
+			err := validateAssetLockup(test.sender, test.payload)
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func Test_AssetLockup(t *testing.T) {
+	creator, _, assetID := createTestAsset(t, big.NewInt(5000))
+
+	testcases := []struct {
+		name          string
+		sender        *state.Object
+		payload       *common.AssetActionPayload
+		expectedError error
+	}{
+		{
+			name:   "asset not found",
+			sender: creator,
+			payload: &common.AssetActionPayload{
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Amount:      big.NewInt(5000),
+			},
+			expectedError: common.ErrAssetNotFound,
+		},
+		{
+			name:   "asset locked up successfully",
+			sender: creator,
+			payload: &common.AssetActionPayload{
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     assetID,
+				Amount:      big.NewInt(5000),
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := lockupAsset(test.sender, test.payload)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			checkAssetLockup(t, test.sender, test.payload)
+		})
+	}
+}
+
+func Test_ValidateAssetRelease(t *testing.T) {
+	sender := createTestStateObject(t)
+	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	sarga := createTestSargaStateObject(t)
+
+	testcases := []struct {
+		name          string
+		sender        *state.Object
+		payload       *common.AssetActionPayload
+		preTestFn     func(target, benefactor *state.Object)
+		expectedError error
+	}{
+		{
+			name:   "lockup not found",
+			sender: sender,
+			payload: &common.AssetActionPayload{
+				Benefactor:  tests.RandomAddress(t),
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     assetID,
+			},
+			preTestFn: func(target, benefactor *state.Object) {
+				registerParticipant(t, sarga, target.Address())
+			},
+			expectedError: common.ErrLockupNotFound,
+		},
+		{
+			name:   "valid asset release operation",
+			sender: sender,
+			payload: &common.AssetActionPayload{
+				Benefactor:  tests.RandomAddress(t),
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     assetID,
+				Amount:      big.NewInt(1000),
+			},
+			preTestFn: func(target, benefactor *state.Object) {
+				registerParticipant(t, sarga, target.Address())
+				insertTestAssetObject(
+					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+				)
+				createLockup(t, benefactor, sender, assetID, big.NewInt(2000))
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			target := state.NewStateObject(
+				test.payload.Beneficiary, nil, tests.NewTestTreeCache(),
+				nil, common.Account{}, state.NilMetrics(), false,
+			)
+
+			benefactor := state.NewStateObject(
+				test.payload.Benefactor, nil, tests.NewTestTreeCache(),
+				nil, common.Account{}, state.NilMetrics(), false,
+			)
+
+			if test.preTestFn != nil {
+				test.preTestFn(target, benefactor)
+			}
+
+			err := validateAssetRelease(test.sender, target, sarga, benefactor, test.payload)
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func Test_AssetRelease(t *testing.T) {
+	sender := createTestStateObject(t)
+	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	sarga := createTestSargaStateObject(t)
+
+	testcases := []struct {
+		name           string
+		sender         *state.Object
+		payload        *common.AssetActionPayload
+		preTestFn      func(target, benefactor *state.Object)
+		expectedAmount *big.Int
+		expectedError  error
+	}{
+		{
+			name:   "asset not found",
+			sender: sender,
+			payload: &common.AssetActionPayload{
+				Benefactor:  tests.RandomAddress(t),
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			},
+			preTestFn: func(target, benefactor *state.Object) {
+				registerParticipant(t, sarga, target.Address())
+			},
+			expectedError: common.ErrAssetNotFound,
+		},
+		{
+			name:   "asset released successfully",
+			sender: sender,
+			payload: &common.AssetActionPayload{
+				Benefactor:  tests.RandomAddress(t),
+				Beneficiary: tests.RandomAddress(t),
+				AssetID:     assetID,
+				Amount:      big.NewInt(1000),
+			},
+			preTestFn: func(target, benefactor *state.Object) {
+				registerParticipant(t, sarga, target.Address())
+				insertTestAssetObject(
+					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+				)
+				createLockup(t, benefactor, sender, assetID, big.NewInt(2500))
+			},
+			expectedAmount: big.NewInt(1500),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			target := state.NewStateObject(
+				test.payload.Beneficiary, nil, tests.NewTestTreeCache(),
+				nil, common.Account{}, state.NilMetrics(), false,
+			)
+
+			benefactor := state.NewStateObject(
+				test.payload.Benefactor, nil, tests.NewTestTreeCache(),
+				nil, common.Account{}, state.NilMetrics(), false,
+			)
+
+			if test.preTestFn != nil {
+				test.preTestFn(target, benefactor)
+			}
+
+			err := releaseAsset(test.sender, target, benefactor, test.payload)
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			checkAssetRelease(t, sender, target, benefactor, test.payload, test.expectedAmount)
 		})
 	}
 }

@@ -766,8 +766,16 @@ func (i *IxPool) validateOperations(ix *common.Interaction) error {
 			return i.validateParticipantCreate(ix, idx)
 		case common.IxAssetCreate:
 			return i.validateAssetCreate(ix, idx)
-		case common.IxAssetApprove, common.IxAssetRevoke, common.IxAssetTransfer:
-			return i.validateAssetAction(ix, idx)
+		case common.IxAssetApprove:
+			return i.validateAssetApprove(ix, idx)
+		case common.IxAssetRevoke:
+			return i.validateAssetRevoke(ix, idx)
+		case common.IxAssetTransfer:
+			return i.validateAssetTransfer(ix, idx)
+		case common.IxAssetLockup:
+			return i.validateAssetLockup(ix, idx)
+		case common.IxAssetRelease:
+			return i.validateAssetRelease(ix, idx)
 		case common.IxAssetMint, common.IxAssetBurn:
 			return i.validateAssetSupply(ix, idx)
 		case common.IxLogicDeploy:
@@ -822,35 +830,126 @@ func (i *IxPool) validateParticipantCreate(ix *common.Interaction, txnID int) er
 	return nil
 }
 
-func (i *IxPool) validateAssetAction(ix *common.Interaction, txnID int) error {
-	opType := ix.GetIxOp(txnID).OpType
-
+func (i *IxPool) validateAssetApprove(ix *common.Interaction, txnID int) error {
 	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
 	if err != nil {
 		return err
 	}
 
-	if payload.Beneficiary.IsNil() {
-		return common.ErrInvalidAddress
+	if err = validateAssetActionPayload(payload); err != nil {
+		return err
 	}
 
 	if ix.Sender() == payload.Beneficiary {
-		return common.ErrInvalidIxParticipants
+		return common.ErrInvalidBeneficiary
 	}
 
-	// Reject genesis account interaction
-	if payload.Beneficiary == common.SargaAddress {
-		return common.ErrGenesisAccount
-	}
-
-	if opType != common.IxAssetRevoke &&
-		payload.Amount.Sign() <= 0 {
+	if payload.Amount.Sign() <= 0 {
 		return common.ErrInvalidValue
 	}
 
-	if opType == common.IxAssetApprove &&
-		payload.Timestamp < time.Now().Unix() {
+	if payload.Timestamp < uint64(time.Now().Unix()) {
 		return common.ErrInvalidTimestamp
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateAssetRevoke(ix *common.Interaction, txnID int) error {
+	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
+	if err != nil {
+		return err
+	}
+
+	if err = validateAssetActionPayload(payload); err != nil {
+		return err
+	}
+
+	if ix.Sender() == payload.Beneficiary {
+		return common.ErrInvalidBeneficiary
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateAssetTransfer(ix *common.Interaction, txnID int) error {
+	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
+	if err != nil {
+		return err
+	}
+
+	if err = validateAssetActionPayload(payload); err != nil {
+		return err
+	}
+
+	if payload.Benefactor.IsNil() {
+		if ix.Sender() == payload.Beneficiary {
+			return common.ErrInvalidBeneficiary
+		}
+	} else {
+		if ix.Sender() == payload.Benefactor {
+			return common.ErrInvalidBenefactor
+		}
+
+		// Reject genesis account interaction
+		if payload.Benefactor == common.SargaAddress {
+			return common.ErrGenesisAccount
+		}
+	}
+
+	if payload.Amount.Sign() <= 0 {
+		return common.ErrInvalidValue
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateAssetLockup(ix *common.Interaction, txnID int) error {
+	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
+	if err != nil {
+		return err
+	}
+
+	if err = validateAssetActionPayload(payload); err != nil {
+		return err
+	}
+
+	if ix.Sender() == payload.Beneficiary {
+		return common.ErrInvalidBeneficiary
+	}
+
+	if payload.Amount.Sign() <= 0 {
+		return common.ErrInvalidValue
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateAssetRelease(ix *common.Interaction, txnID int) error {
+	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
+	if err != nil {
+		return err
+	}
+
+	if err = validateAssetActionPayload(payload); err != nil {
+		return err
+	}
+
+	if payload.Benefactor.IsNil() {
+		return common.ErrBenefactorMissing
+	}
+
+	if ix.Sender() == payload.Benefactor {
+		return common.ErrInvalidBenefactor
+	}
+
+	// Reject genesis account interaction
+	if payload.Benefactor == common.SargaAddress {
+		return common.ErrGenesisAccount
+	}
+
+	if payload.Amount.Sign() <= 0 {
+		return common.ErrInvalidValue
 	}
 
 	return nil
@@ -1127,6 +1226,24 @@ func (i *IxPool) postPrunedPromotedInteractionEvent(ixns ...*common.Interaction)
 }
 
 // helper functions
+
+// validateAssetActionPayload checks the beneficiary address and asset id in payload.
+func validateAssetActionPayload(payload *common.AssetActionPayload) error {
+	if payload.Beneficiary.IsNil() {
+		return common.ErrBeneficiaryMissing
+	}
+
+	// Reject genesis account interaction
+	if payload.Beneficiary == common.SargaAddress {
+		return common.ErrGenesisAccount
+	}
+
+	if payload.AssetID == "" {
+		return common.ErrInvalidAssetID
+	}
+
+	return nil
+}
 
 // getIxsSize aggregates and returns the size of all the interactions.
 func getIxsSize(ixs []*common.Interaction) (uint64, error) {

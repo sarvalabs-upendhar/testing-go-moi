@@ -514,7 +514,7 @@ func TestAddParticipantData(t *testing.T) {
 			err := c.addParticipantsData(
 				test.address,
 				ts,
-				state.NewTransition(objects),
+				state.NewTransition(objects, nil),
 				test.allParticipants,
 			)
 
@@ -983,7 +983,7 @@ func TestAddTesseract(t *testing.T) {
 				test.shouldCache,
 				identifiers.NilAddress,
 				ts,
-				state.NewTransition(objects),
+				state.NewTransition(objects, nil),
 				true,
 			)
 
@@ -1132,7 +1132,7 @@ func TestAddTesseractWithState(t *testing.T) {
 				test.address,
 				test.dirtyStorage,
 				ts,
-				state.NewTransition(objects),
+				state.NewTransition(objects, nil),
 				test.allParticipants,
 			)
 

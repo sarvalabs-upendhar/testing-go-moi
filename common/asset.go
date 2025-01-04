@@ -99,7 +99,7 @@ const (
 	MAS1
 )
 
-type AssetMandate struct {
+type AssetMandateOrLockup struct {
 	AssetID identifiers.AssetID
 	Address identifiers.Address
 	Amount  *big.Int

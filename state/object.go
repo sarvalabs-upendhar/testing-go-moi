@@ -227,29 +227,43 @@ func (object *Object) SubBalance(assetID identifiers.AssetID, amount *big.Int) e
 	return nil
 }
 
-// CreateDeposit moves the specified amount from the participant's balance to a deposit
-// associated with a logicID. This is typically used during interaction with a logic,
-// locking up tokens as part of the operation.
-func (object *Object) CreateDeposit(assetID identifiers.AssetID, logicID identifiers.LogicID, amount *big.Int) error {
+// CreateLockup transfers a specified amount from the participant's asset balance into a lockup
+// associated with a specified address. The lockup represents funds reserved for a specific purpose,
+// reducing the available balance for the participant.
+func (object *Object) CreateLockup(assetID identifiers.AssetID, address identifiers.Address, amount *big.Int) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(amount) == -1 {
-		return common.ErrInsufficientFunds
-	}
-
 	// Deduct the amount from asset balance
 	assetObject.Balance.Sub(assetObject.Balance, amount)
 
-	if _, ok := assetObject.Deposit[logicID]; ok {
-		// Increment the deposit amount if the deposit already exist
-		assetObject.Deposit[logicID].Add(assetObject.Deposit[logicID], amount)
-	} else {
-		// Create a new deposit if it doesn't exist
-		assetObject.Deposit[logicID] = amount
+	// Create a new lockup for the specified address
+	assetObject.Lockup[address] = amount
+
+	object.updateAssetTree(assetID, assetObject)
+
+	return nil
+}
+
+// ReleaseLockup reduces the lockup amount from a specified address for the given asset.
+// If the lockup amount becomes zero, the lockup entry is deleted from the asset object.
+func (object *Object) ReleaseLockup(assetID identifiers.AssetID, address identifiers.Address, amount *big.Int) error {
+	assetObject, err := object.getAssetObject(assetID, true)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	lockupAmount, ok := assetObject.Lockup[address]
+	if !ok {
+		return common.ErrLockupNotFound
+	}
+
+	lockupAmount.Sub(lockupAmount, amount)
+
+	if lockupAmount.Cmp(big.NewInt(0)) == 0 {
+		delete(assetObject.Lockup, address)
 	}
 
 	object.updateAssetTree(assetID, assetObject)
@@ -257,18 +271,56 @@ func (object *Object) CreateDeposit(assetID identifiers.AssetID, logicID identif
 	return nil
 }
 
-// GetDeposit retrieves the deposit amount for the given logic and asset id.
-func (object *Object) GetDeposit(assetID identifiers.AssetID, logicID identifiers.LogicID) (*big.Int, error) {
+// Lockups retrieves all active lockups across all assets in the AssetTree.
+// It iterates through the AssetTree, collects lockup information, and returns it as a slice.
+func (object *Object) Lockups() ([]common.AssetMandateOrLockup, error) {
+	assetTree, err := object.getAssetTree()
+	if err != nil {
+		return nil, err
+	}
+
+	it := assetTree.NewIterator()
+	lockups := make([]common.AssetMandateOrLockup, 0)
+
+	for it.Next() {
+		if it.Leaf() {
+			key, err := assetTree.GetPreImageKey(common.BytesToHash(it.LeafKey()))
+			if err != nil {
+				return nil, err
+			}
+
+			assetID := identifiers.AssetID(hex.EncodeToString(key))
+
+			assetObject, err := object.getAssetObject(assetID, false)
+			if err != nil {
+				return nil, err
+			}
+
+			for address, amount := range assetObject.Lockup {
+				lockups = append(lockups, common.AssetMandateOrLockup{
+					AssetID: assetID,
+					Address: address,
+					Amount:  amount,
+				})
+			}
+		}
+	}
+
+	return lockups, nil
+}
+
+// GetLockup retrieves the lockup amount for the given logic and asset id.
+func (object *Object) GetLockup(assetID identifiers.AssetID, address identifiers.Address) (*big.Int, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return nil, common.ErrAssetNotFound
 	}
 
-	if amount, ok := assetObject.Deposit[logicID]; ok {
+	if amount, ok := assetObject.Lockup[address]; ok {
 		return amount, nil
 	}
 
-	return nil, errors.New("deposit doesn't exist")
+	return nil, common.ErrLockupNotFound
 }
 
 // CreateMandate assigns a spending mandate to an address for the specified asset.
@@ -277,7 +329,7 @@ func (object *Object) CreateMandate(
 	assetID identifiers.AssetID,
 	address identifiers.Address,
 	amount *big.Int,
-	expiresAt int64,
+	expiresAt uint64,
 ) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
@@ -361,14 +413,14 @@ func (object *Object) DeleteMandate(assetID identifiers.AssetID, address identif
 }
 
 // Mandates retrieves and returns all the asset mandates with their corresponding asset IDs, addresses, and amounts.
-func (object *Object) Mandates() ([]common.AssetMandate, error) {
+func (object *Object) Mandates() ([]common.AssetMandateOrLockup, error) {
 	assetTree, err := object.getAssetTree()
 	if err != nil {
 		return nil, err
 	}
 
 	it := assetTree.NewIterator()
-	mandates := make([]common.AssetMandate, 0)
+	mandates := make([]common.AssetMandateOrLockup, 0)
 
 	for it.Next() {
 		if it.Leaf() {
@@ -385,7 +437,7 @@ func (object *Object) Mandates() ([]common.AssetMandate, error) {
 			}
 
 			for address, mandate := range assetObject.Mandate {
-				mandates = append(mandates, common.AssetMandate{
+				mandates = append(mandates, common.AssetMandateOrLockup{
 					AssetID: assetID,
 					Address: address,
 					Amount:  mandate.Amount,
