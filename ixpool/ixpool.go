@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/petar/GoLLRB/llrb"
+
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -28,10 +30,9 @@ const (
 )
 
 const (
-	IxSlotSize        = 1 * 1024   // IxSlotSize chosen as 1kB as minimum ixn sizes are around 500 bytes
-	IxMaxSize         = 128 * 1024 // 128Kb
-	PruningCooldown   = 5000 * time.Millisecond
-	TotalContextNodes = 6
+	IxSlotSize      = 1 * 1024   // IxSlotSize chosen as 1kB as minimum ixn sizes are around 500 bytes
+	IxMaxSize       = 128 * 1024 // 128Kb
+	PruningCooldown = 5000 * time.Millisecond
 )
 
 const MaxWaitCounter = 10
@@ -128,7 +129,7 @@ func NewIxPool(
 		allIxs:    NewLookupMap(),
 		close:     make(chan struct{}),
 		sealing:   false,
-		accounts:  new(accountsMap),
+		accounts:  newAccountsMap(),
 		gauge: slotGauge{
 			total:   0,
 			max:     cfg.MaxSlots,
@@ -163,14 +164,14 @@ func (i *IxPool) UpdateCurrentView(view uint64) {
 }
 
 func (i *IxPool) getNextView(view uint64, nodePos uint64) uint64 {
-	diffFromStart := view % TotalContextNodes
+	diffFromStart := view % common.BehaviouralContextSize
 
 	start := view - diffFromStart
 	if nodePos >= diffFromStart {
 		return start + nodePos
 	}
 
-	return start + TotalContextNodes + nodePos
+	return start + common.BehaviouralContextSize + nodePos
 }
 
 func (i *IxPool) allocateView(view uint64, ixns ...*common.Interaction) {
@@ -387,6 +388,10 @@ func (i *IxPool) handlePromoteRequest(account *account) {
 	promoted, promotedIxns := account.promote()
 	i.metrics.capturePendingIxs(float64(promoted))
 
+	for _, ix := range promotedIxns {
+		i.accounts.addToSortedAccounts(ix.Sender())
+	}
+
 	if len(promotedIxns) > 0 {
 		i.allocateView(i.currentView()+1, promotedIxns...)
 
@@ -476,6 +481,10 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 				account.waitLock.Unlock()
 				// update the account waitTime and counter
 				account.resetWaitTimeAndCounter()
+
+				if account.promoted.length() == 0 {
+					i.accounts.deleteInSortedAccounts(from)
+				}
 			}
 
 			i.metrics.capturePendingIxs(float64(-1 * len(pruned)))
@@ -530,44 +539,104 @@ func (i *IxPool) Executables() InteractionQueue {
 	return nil
 }
 
+func isEligibleForProposal(
+	ixn *common.Interaction,
+	participantToAcquirer map[identifiers.Address]identifiers.Address,
+	acquirerToParticipants map[identifiers.Address]map[identifiers.Address]struct{},
+) bool {
+	var (
+		newParticipantsCount = 0
+		leaderAcc            = ixn.LeaderCandidateAcc()
+	)
+
+	existingPS, ok := acquirerToParticipants[leaderAcc]
+	if !ok {
+		existingPS = make(map[identifiers.Address]struct{})
+	}
+
+	for _, participant := range ixn.Participants() {
+		if participant.IsGenesis {
+			continue
+		}
+
+		if acquirer, ok := participantToAcquirer[participant.Address]; ok {
+			if leaderAcc != acquirer {
+				return false
+			}
+
+			continue
+		}
+
+		// Count new participants
+		if _, exists := existingPS[participant.Address]; !exists {
+			newParticipantsCount++
+		}
+	}
+
+	// Check if total participants would exceed limit
+	if len(existingPS)+newParticipantsCount > 4 {
+		return false
+	}
+
+	if _, ok := acquirerToParticipants[leaderAcc]; !ok {
+		acquirerToParticipants[leaderAcc] = make(map[identifiers.Address]struct{})
+	}
+
+	for _, participant := range ixn.Participants() {
+		if participant.IsGenesis {
+			continue
+		}
+
+		participantToAcquirer[participant.Address] = leaderAcc
+		acquirerToParticipants[leaderAcc][participant.Address] = struct{}{}
+	}
+
+	return true
+}
+
 func (i *IxPool) ProcessableBatches() []*common.IxBatch {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
+	i.logger.Debug("Processing batches ", "current view-id", i.view)
+
 	batchRegistry := newBatchRegistry()
 
-	i.accounts.Range(func(key, value interface{}) bool {
-		addressKey, ok := key.(identifiers.Address)
-		if !ok {
-			return false
-		}
+	participantToAcquirer := make(map[identifiers.Address]identifiers.Address)
+	acquirerToParticipants := make(map[identifiers.Address]map[identifiers.Address]struct{})
 
-		account := i.accounts.get(addressKey)
+	i.accounts.sortedParticipants.AscendGreaterOrEqual(
+		&Address{addr: identifiers.NilAddress},
+		func(item llrb.Item) bool {
+			account := i.accounts.get(item.(*Address).addr) //nolint: forcetypeassert
+			ixns := common.IxByNonce(common.NewInteractionsWithLeaderCheck(false, account.promoted.list()...))
 
-		ixns := common.IxByNonce(common.NewInteractionsWithLeaderCheck(false, account.promoted.list()...))
+			sort.Sort(ixns)
 
-		sort.Sort(ixns)
+			for _, ixn := range ixns.List() {
+				if !isEligibleForProposal(ixn, participantToAcquirer, acquirerToParticipants) {
+					break
+				}
 
-		for _, ixn := range ixns.List() {
-			if !ixn.ShouldPropose() {
-				break
+				if !ixn.ShouldPropose() {
+					break
+				}
+
+				if ixn.AllottedView() < i.currentView() {
+					i.allocateView(i.currentView(), ixn)
+				}
+
+				if ixn.AllottedView() > i.currentView() {
+					break
+				}
+
+				if added := batchRegistry.addIx(ixn); !added {
+					break
+				}
 			}
 
-			if ixn.AllottedView() < i.currentView() {
-				i.allocateView(i.currentView(), ixn)
-			}
-
-			if ixn.AllottedView() > i.currentView() {
-				break
-			}
-
-			if added := batchRegistry.addIx(ixn); !added {
-				break
-			}
-		}
-
-		return true
-	})
+			return true
+		})
 
 	return batchRegistry.selectOptimalBatches()
 }

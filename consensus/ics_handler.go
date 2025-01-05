@@ -44,9 +44,10 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 
 	for {
 		select {
-		case <-time.After(k.viewTimeOutDuration.Load().(time.Duration)): //nolint
+		case <-time.After(time.Until(k.viewTimeOutDeadline.Load().(time.Time))): //nolint
 			// we should handle this time out if bft is not started
-			if slot.Stage.Load() == 0 {
+
+			if stage := slot.GetStage(); stage == ktypes.PrepareStage || stage == ktypes.PreparedStage {
 				if slot.SlotType == ktypes.OperatorSlot {
 					k.metrics.captureICSCreationFailureCount(1)
 				}
@@ -88,21 +89,23 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 					}
 				}
 
-				slot.Stage.CompareAndSwap(0, 1)
+				slot.Stage.CompareAndSwap(ktypes.PrepareStage, ktypes.PreparedStage)
+
+				ixnHash := cs.IxnsHash()
 
 				// Start the BFT handler
-				icsEvidence := kbft.NewEvidence(cs.IxnHash(), cs.Operator(), cs.Size())
+				icsEvidence := kbft.NewEvidence(ixnHash, cs.Operator(), cs.Size())
 				bft := kbft.NewKBFTService( //nolint
 					ctx,
 					msg.PeerID,
-					k.viewTimeOutDuration.Load().(time.Duration),
+					k.viewTimeOutDeadline.Load().(time.Time),
 					k.cfg,
 					k.vault, cs.VoteSet(), slot, k.safety, k.finalizedTesseractHandler,
 					kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
 					kbft.WithWal(kbft.NullWal{}),
 					kbft.WithEvidence(icsEvidence))
 
-				go k.startBFT(bft)
+				go k.startBFT(bft, slot)
 
 				slot.ForwardMsgToKBFTHandler(msg)
 
@@ -113,10 +116,10 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 	}
 }
 
-func (k *Engine) startBFT(bft *kbft.KBFT) {
+func (k *Engine) startBFT(bft *kbft.KBFT, slot *ktypes.Slot) {
 	agreementInitTime := time.Now()
 
-	bft.Start()
+	bft.Start(slot)
 
 	k.metrics.captureAgreementTime(agreementInitTime)
 }
@@ -215,7 +218,7 @@ func (k *Engine) handleProposal(ctx context.Context, cs *ktypes.ClusterState, pr
 	for peerIndex, info := range proposal.PrepareQc.PeerViews {
 		_, _, peerID, _ := cs.Committee().GetKramaID(int32(peerIndex))
 		if err = k.updateHighestVI(cs, info, peerID); err != nil {
-			k.logger.Error("failed to validate highest QC", "error", err)
+			k.logger.Error("failed to validate highest QC", "error", err, "peer-id", peerID)
 		}
 	}
 
@@ -289,9 +292,7 @@ func (k *Engine) handlePrepared(
 		return nil
 	}
 
-	swapped := slot.Stage.CompareAndSwap(0, 1)
-
-	if !swapped {
+	if swapped := slot.UpdateStage(ktypes.PrepareStage, ktypes.PreparedStage); !swapped {
 		return nil
 	}
 
@@ -341,6 +342,19 @@ func (k *Engine) handlePrepared(
 		}
 	}
 
+	if len(localVI) > 0 && localVI[0].Qc != nil {
+		if localVI[0].Qc[0].Type == common.PREVOTE {
+			currentViewTS, err := k.getTS(localVI[0].Qc[0].TSHash, "")
+			if err != nil {
+				k.logger.Error("failed to load local view tesseract", "ts-hash", localVI[0].Qc[0].TSHash)
+
+				return err
+			}
+
+			lockedTS[localVI[0].Qc[0].Address] = currentViewTS
+		}
+	}
+
 	ts, err := k.createProposalTS(lockedTS, slot.ClusterState())
 	if err != nil {
 		k.logger.Error("Error creating proposal", "error", err)
@@ -359,18 +373,20 @@ func (k *Engine) handlePrepared(
 
 	k.metrics.captureICSCreationTime(slot.InitTime)
 
+	ixnsHash := cs.IxnsHash()
+
 	// Start the BFT system
 	bft := kbft.NewKBFTService( //nolint
 		ctx,
 		k.selfID,
-		k.viewTimeOutDuration.Load().(time.Duration),
+		k.viewTimeOutDeadline.Load().(time.Time),
 		k.cfg,
 		k.vault, cs.VoteSet(), slot, k.safety, k.finalizedTesseractHandler,
 		kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
 		kbft.WithWal(kbft.NullWal{}),
-		kbft.WithEvidence(kbft.NewEvidence(cs.IxnHash(), cs.Operator(), cs.Size())))
+		kbft.WithEvidence(kbft.NewEvidence(ixnsHash, cs.Operator(), cs.Size())))
 
-	go k.startBFT(bft)
+	go k.startBFT(bft, slot)
 
 	return nil
 }
@@ -400,7 +416,7 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 	// choose the stochastic nodes using flux
 	contextNodes, _, _ := ktypes.DistinctNodes(k.selfID, cs.Committee().Sets)
 
-	stochasticNodes, err := k.getStochasticNodes(ctx, StochasticSetSize, contextNodes)
+	stochasticNodes, err := k.getStochasticNodes(ctx, common.StochasticSetSize, contextNodes)
 	if err != nil {
 		return errors.Wrap(err, "unable to retrieve random nodes")
 	}
@@ -413,7 +429,7 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 	// update the committee with the stochastic node set
 	cs.UpdateNodeSet(
 		cs.Committee().StochasticSetPosition(),
-		ktypes.NewNodeSet(stochasticNodes, publicKeys, uint32(StochasticSetSize)),
+		ktypes.NewNodeSet(stochasticNodes, publicKeys, uint32(common.StochasticSetSize)),
 	)
 
 	failedCount, err := k.sendPrepareMsg(ctx, cs.ClusterID, prepareMsg, cs.Committee())
@@ -562,6 +578,10 @@ func (k *Engine) createPrepareQc(
 }
 
 func (k *Engine) createNewTSFromLockedTS(cs *ktypes.ClusterState, ts *common.Tesseract) (*common.Tesseract, error) {
+	if _, err := k.executionInteractions(cs); err != nil {
+		return nil, err
+	}
+
 	return common.NewTesseract(
 		ts.Participants(),
 		ts.InteractionsHash(),
@@ -592,13 +612,15 @@ func (k *Engine) createProposalTS(
 ) (*common.Tesseract, error) {
 	var lockTS *common.Tesseract
 
+	clusterIxnsHash := cs.IxnsHash()
+
 	for addr, ts := range lockedTS {
-		if ts.InteractionsHash() != cs.IxnHash() {
+		if ts.InteractionsHash() != clusterIxnsHash {
 			k.logger.Error(
 				"Ixns hash doesn't match with locked tesseract",
 				"addr", addr,
 				"locked-ts", ts.Hash(),
-				"ixns-hash", cs.IxnHash(),
+				"ixns-hash", clusterIxnsHash,
 			)
 
 			return nil, errors.New("ts lock mismatch")

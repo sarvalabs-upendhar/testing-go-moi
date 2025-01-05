@@ -74,7 +74,7 @@ func initAccount() {
 	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
 		behaviourNodes, randomNodes = getContextNodes(
 			instancesFilePath,
-			cmdcommon.DefaultBehaviouralCount,
+			common.BehaviouralContextSize,
 			cmdcommon.DefaultRandomCount,
 		)
 	}

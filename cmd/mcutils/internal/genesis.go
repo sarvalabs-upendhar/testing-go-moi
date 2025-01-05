@@ -71,7 +71,7 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 	genesisTestCmd.Flags().IntVar(
 		&behaviouralNodesCount,
 		"behavioural-count",
-		cmdcommon.DefaultBehaviouralCount,
+		common.BehaviouralContextSize,
 		"Number of behavioural krama ids per account.",
 	)
 	genesisTestCmd.Flags().IntVar(

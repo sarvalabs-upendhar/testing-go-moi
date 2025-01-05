@@ -3,62 +3,10 @@ package common_test
 import (
 	"testing"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/stretchr/testify/require"
 )
-
-func TestIxBatch_uniqueAccounts(t *testing.T) {
-	addresses := tests.GetAddresses(t, 3)
-	ix := tests.CreateIX(t, nil)
-
-	testcases := []struct {
-		name            string
-		preTestFn       func(batch *common.IxBatch)
-		ps              map[identifiers.Address]*common.ParticipantInfo
-		expectedPsCount int
-	}{
-		{
-			name: "find unique accounts on empty batch",
-			ps: map[identifiers.Address]*common.ParticipantInfo{
-				addresses[0]: {},
-				addresses[1]: {},
-				addresses[2]: {
-					IsGenesis: true,
-				},
-			},
-			expectedPsCount: 2,
-		},
-		{
-			name: "find unique accounts on batch with accounts",
-			preTestFn: func(batch *common.IxBatch) {
-				require.True(t, batch.Add(ix))
-			},
-			ps: map[identifiers.Address]*common.ParticipantInfo{
-				ix.Sender():  {},
-				addresses[1]: {},
-				addresses[2]: {
-					IsGenesis: true,
-				},
-			},
-			expectedPsCount: 3,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			ixBatch := common.NewIxnBatch()
-
-			if testcase.preTestFn != nil {
-				testcase.preTestFn(ixBatch)
-			}
-
-			count := ixBatch.UniqueAccounts(testcase.ps)
-			require.Equal(t, testcase.expectedPsCount, count)
-		})
-	}
-}
 
 func TestIxBatch_Add(t *testing.T) {
 	addresses := tests.GetAddresses(t, 2)
@@ -102,16 +50,6 @@ func TestIxBatch_Add(t *testing.T) {
 			expectedAdd:     true,
 			expectedIxCount: 1,
 			expectedPsCount: 2,
-		},
-		{
-			name: "failed to add ixn due to unique accounts overflow",
-			preTestFn: func(batch *common.IxBatch) {
-				require.True(t, batch.Add(ixns[0]))
-			},
-			ix:              ixns[2],
-			expectedIxCount: 1,
-			expectedPsCount: 2,
-			expectedAdd:     false,
 		},
 		{
 			name: "add ixn with same participants mutiple times successfully",

@@ -22,8 +22,7 @@ import (
 )
 
 const (
-	DefaultBehaviouralCount = 1
-	DefaultRandomCount      = 0
+	DefaultRandomCount = 0
 )
 
 func Err(err error) {

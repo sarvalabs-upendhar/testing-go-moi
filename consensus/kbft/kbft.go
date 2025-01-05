@@ -61,7 +61,7 @@ type KBFT struct {
 func NewKBFTService(
 	ctx context.Context,
 	operator kramaid.KramaID,
-	timeout time.Duration,
+	viewDeadline time.Time,
 	config *config.ConsensusConfig,
 	vault vault,
 	voteset *ktypes.HeightVoteSet,
@@ -89,7 +89,7 @@ func NewKBFTService(
 		opt(k)
 	}
 
-	k.ctx, k.ctxCancel = context.WithTimeout(ctx, timeout)
+	k.ctx, k.ctxCancel = context.WithTimeout(ctx, time.Until(viewDeadline))
 	k.updateToState(voteset)
 
 	return k
@@ -575,7 +575,7 @@ func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID kramaid.Kr
 		preCommits := kbft.Votes.Precommits(v.View)
 
 		tsHash, ok := preCommits.SuperMajority()
-		if ok {
+		if ok && kbft.isProposalReceived() {
 			if !tsHash.IsNil() { // kbft.enterNewView(height, v.View) // kbft.enterPreCommit(height, v.View)
 				kbft.enterCommit(height, v.View)
 			}
@@ -769,13 +769,15 @@ func (kbft *KBFT) stepChange() {
 	}
 }
 
-func (kbft *KBFT) Start() {
+func (kbft *KBFT) Start(slot *ktypes.Slot) {
 	_, span := tracing.Span(kbft.ctx, "Krama.KBFT", "Start")
 	defer span.End()
 	// Start the ticker
 	if err := kbft.toTicker.Start(); err != nil {
 		kbft.logger.Error("Unable to start ticker", "err", err)
 	}
+
+	slot.Stage.CompareAndSwap(ktypes.PreparedStage, ktypes.ProposalStage)
 
 	kbft.scheduleView()
 

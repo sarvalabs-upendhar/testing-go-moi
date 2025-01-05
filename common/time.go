@@ -1,4 +1,4 @@
-package utils
+package common
 
 import (
 	"strings"
@@ -8,7 +8,17 @@ import (
 // TimeFormat that works in filenames on windows.
 var TimeFormat = strings.ReplaceAll(time.RFC3339, ":", "_")
 
-// Now returns the current time in UTC with no monotonic component.
+// Since returns the duration since t.
+func Since(t time.Time) time.Duration {
+	return Now().Sub(t)
+}
+
+// Until returns the duration until t.
+func Until(t time.Time) time.Duration {
+	return t.Sub(Now())
+}
+
+// Now returns the current local time.
 func Now() time.Time {
 	return Canonical(time.Now())
 }

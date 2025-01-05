@@ -31,9 +31,6 @@ import (
 
 const (
 	ICSTimeOutDuration = 6 * time.Second
-
-	BehaviouralContextSize = 5
-	StochasticSetSize      = 3
 )
 
 type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
@@ -142,6 +139,7 @@ type store interface {
 	DeleteConsensusProposalInfo(tsHash common.Hash) error
 	GetAllConsensusProposalInfo(ctx context.Context) ([][]byte, error)
 	DeleteSafetyData(addr identifiers.Address) error
+	HasTesseract(tsHash common.Hash) bool
 }
 
 type vault interface {
@@ -176,7 +174,7 @@ type Engine struct {
 	signatureVerifier   AggregatedSignatureVerifier
 	tsTracker           map[common.Hash]*utils.TSTrackerEvent
 	view                atomic.Uint64
-	viewTimeOutDuration atomic.Value
+	viewTimeOutDeadline atomic.Value
 	accountLocks        map[identifiers.Address]*ktypes.AccConsensusLockInfo
 	safety              *safety.ConsensusSafety
 	trustedPeersPresent bool
@@ -429,9 +427,9 @@ func (k *Engine) isOperatorEligible(peerID kramaid.KramaID, ixns common.Interact
 
 		currentView := k.view.Load()
 
-		fmt.Println("Current View", currentView, currentView%state.MaxBehaviourContextSize)
+		fmt.Println("Current View", currentView, currentView%common.BehaviouralContextSize)
 
-		return currentView%state.MaxBehaviourContextSize == uint64(metaInfo.PositionInContextSet)
+		return currentView%common.BehaviouralContextSize == uint64(metaInfo.PositionInContextSet)
 	}
 
 	behaviourContext, _, err := k.state.GetContext(addr, metaInfo.ContextHash)
@@ -463,8 +461,8 @@ func (k *Engine) updateContextDelta(cs *ktypes.ClusterState) error {
 			// Fetch new nodes for the receiver account
 			behaviouralNodes, randomNodes, err := k.getContextNodes(
 				cs,
-				StochasticSetSize,
-				BehaviouralContextSize,
+				common.StochasticSetSize,
+				common.BehaviouralContextSize,
 			)
 			if err != nil {
 				return err
@@ -489,6 +487,10 @@ func (k *Engine) getContextNodes(
 	requiredRandomNodes,
 	requiredBehaviouralNodes int,
 ) (behaviouralNodes []kramaid.KramaID, randomNodes []kramaid.KramaID, err error) {
+	if requiredRandomNodes < requiredBehaviouralNodes {
+		return nil, nil, errors.New("required random nodes cannot be less than behavioural nodes")
+	}
+
 	if k.trustedPeersPresent {
 		peers := clusterInfo.TrustedPeers
 
@@ -561,9 +563,14 @@ func (k *Engine) createICSForProposal(ctx context.Context, sender kramaid.KramaI
 	// TODO: validate ts timestamp
 	slot, _ := k.slots.CreateSlotAndLockAccounts(msg.ClusterID(), ktypes.ValidatorSlot, msg.Locks())
 	if slot == nil {
+		ps := msg.Tesseract.Participants()
 		for addr, lockInfo := range k.slots.ActiveAccounts() {
+			if _, ok := ps[addr]; !ok {
+				continue
+			}
+
 			for _, info := range lockInfo {
-				k.logger.Debug("Active accounts", "cluster-id", msg.ClusterID(), "address", addr, "lock-info", info.String())
+				k.logger.Debug("krama active accounts", "cluster-id", msg.ClusterID(), "address", addr, "lock-info", info.String())
 			}
 		}
 
@@ -662,13 +669,13 @@ func generateTesseract(
 	return ts, nil
 }
 
-func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesseract, error) {
+func (k *Engine) executionInteractions(cs *ktypes.ClusterState) (common.AccStateHashes, error) {
 	transition, err := k.state.LoadTransitionObjects(cs.Ixns().Participants())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load state transition objects")
 	}
 
-	if err = k.updateContextDelta(cs); err != nil {
+	if err := k.updateContextDelta(cs); err != nil {
 		return nil, err
 	}
 
@@ -693,6 +700,18 @@ func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesse
 	)
 
 	cs.UpdateVoteSet(voteset)
+
+	// store the transition
+	cs.SetStateTransition(transition)
+
+	return stateHashes, nil
+}
+
+func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesseract, error) {
+	stateHashes, err := k.executionInteractions(cs)
+	if err != nil {
+		return nil, err
+	}
 
 	seed, err := k.lottery.computeICSSeed(cs.Participants)
 	if err != nil {
@@ -720,9 +739,6 @@ func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesse
 		ICSSeed:      newSeed,
 		ICSProof:     proof,
 	}
-
-	// store the transition
-	cs.SetStateTransition(transition)
 
 	k.logger.Debug("Generating tesseracts", "cluster-id", cs.ClusterID)
 

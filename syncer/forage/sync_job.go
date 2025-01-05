@@ -8,9 +8,9 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
 
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
 )
@@ -94,31 +94,14 @@ func (jq *JobQueue) AddJob(job *SyncJob) error {
 	return nil
 }
 
-func (jq *JobQueue) NextJob() *SyncJob {
+func (jq *JobQueue) NextJob(updateJob func(jq *JobQueue, jb *SyncJob) *SyncJob) *SyncJob {
 	jq.mtx.Lock()
 	defer func() {
 		jq.mtx.Unlock()
 	}()
 
-	updateJob := func(jb *SyncJob) *SyncJob {
-		if jb.getJobState() == Pending ||
-			(jb.getJobState() == Sleep && time.Since(jb.lastModifiedAt) > time.Millisecond*200) {
-			jb.updateJobState(Active)
-
-			return jb
-		}
-
-		if jb.getJobState() == Done && jb.tesseractQueue.Len() == 0 {
-			if err := jq.RemoveJob(jb); err != nil {
-				log.Panicln(err)
-			}
-		}
-
-		return nil
-	}
-
 	for _, syncJob := range jq.jobs {
-		if j := updateJob(syncJob); j != nil {
+		if j := updateJob(jq, syncJob); j != nil {
 			return j
 		}
 	}
@@ -176,6 +159,7 @@ type SyncJob struct {
 	db                    store
 	address               identifiers.Address
 	mode                  common.SyncMode
+	creationTime          time.Time
 	snapDownloaded        bool
 	expectedHeight        uint64
 	currentHeight         uint64
@@ -207,6 +191,7 @@ func SyncJobFromCanonicalInfo(
 		db:              db,
 		logger:          logger.Named("Sync-Job"),
 		address:         data.Address,
+		creationTime:    time.Now(),
 		snapDownloaded:  data.SnapshotDownloaded,
 		mode:            data.Mode,
 		expectedHeight:  data.ExpectedHeight,

@@ -8,11 +8,6 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-const (
-	MaxBehaviourContextSize = 6
-	MaxRandomContextSize    = 7
-)
-
 type Context interface {
 	Bytes() ([]byte, error)
 	FromBytes(bytes []byte) error

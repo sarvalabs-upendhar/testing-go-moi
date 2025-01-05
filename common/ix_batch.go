@@ -41,37 +41,12 @@ func (ib *IxBatch) PsCount() int {
 	return len(ib.ps)
 }
 
-func (ib *IxBatch) totalSlots() int {
-	return MaxSlotsForIxBatch
-}
-
-func (ib *IxBatch) UniqueAccounts(ps map[identifiers.Address]*ParticipantInfo) int {
-	count := 0
-
-	for addr, info := range ps {
-		if info.IsGenesis {
-			continue
-		}
-
-		if _, ok := ib.ps[addr]; !ok {
-			count++
-		}
-	}
-
-	return count + len(ib.ps)
-}
-
 func (ib *IxBatch) AppendIxns(ixns []*Interaction) {
 	ib.ixs = append(ib.ixs, ixns...)
 }
 
 func (ib *IxBatch) Add(ixn *Interaction) bool {
 	if ib.IxCount() > 100 {
-		return false
-	}
-
-	uniqueAccs := ib.UniqueAccounts(ixn.ps)
-	if uniqueAccs > ib.totalSlots() {
 		return false
 	}
 

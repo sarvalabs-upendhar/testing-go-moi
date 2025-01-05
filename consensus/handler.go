@@ -32,7 +32,7 @@ func (k *Engine) handler() {
 			k.metrics.captureCurrentView(viewID)
 			k.view.Store(viewID) // When a new view tick is received, update the current view and trigger the view handler.
 			k.pool.UpdateCurrentView(viewID)
-			k.viewTimeOutDuration.Store(time.Until(time.Now().Add(k.pool.ViewTimeOut())))
+			k.viewTimeOutDeadline.Store(time.Now().Add(k.pool.ViewTimeOut()))
 
 			k.handleNewView(k.ctx, viewID)
 		case msg := <-k.transport.Messages():
@@ -44,6 +44,30 @@ func (k *Engine) handler() {
 			k.logger.Debug("Cleaning consensus slot", "cluster-id", clusterID)
 		}
 	}
+}
+
+// deleteLockedTesseractInfo returns true locked ts already exist in db
+func (k *Engine) deleteLockedTesseractInfo(ts *common.Tesseract) bool {
+	for addr, state := range ts.Participants() {
+		dbState, err := k.db.GetAccountMetaInfo(addr)
+		if err == nil && dbState.Height >= state.Height {
+			k.logger.Debug("deleting locked tesseract", "cluster-id", ts.ClusterID(), "ts-hash", ts.Hash())
+
+			if err := k.db.DeleteConsensusProposalInfo(ts.Hash()); err != nil {
+				k.logger.Error("failed to delete consensus proposal info", "error", err, "ts-hash", ts.Hash())
+			}
+
+			for addr := range ts.Participants() {
+				if err := k.safety.DeleteSafetyData(addr); err != nil {
+					k.logger.Error("Failed to delete safety data", "err", err, "addr", addr)
+				}
+			}
+
+			return true
+		}
+	}
+
+	return false
 }
 
 // handleNewView checks if there are any failed views to handle first. If failed views exist, it processes them.
@@ -60,7 +84,16 @@ func (k *Engine) handleNewView(ctx context.Context, viewID uint64) {
 	}
 
 	for _, ts := range proposedTS {
+		k.logger.Debug("proposing locked tesseracts", "ts-count", len(proposedTS), "ts-hash",
+			ts.Hash(), "cluster-id", ts.ClusterID())
+
+		if k.deleteLockedTesseractInfo(ts) {
+			continue
+		}
+
 		if !k.isOperatorEligible(k.selfID, ts.Interactions()) {
+			k.logger.Debug("can not propose locked tesseract", "cluster-id", ts.ClusterID())
+
 			continue
 		}
 
@@ -85,9 +118,9 @@ func (k *Engine) handleNewView(ctx context.Context, viewID uint64) {
 			k.logger.Debug("operator not eligible", "view", viewID)
 
 			continue
-		} else {
-			k.logger.Debug("Operator is eligible", "view", viewID)
 		}
+
+		k.logger.Debug("Operator is eligible", "view", viewID)
 
 		slot, activeCluster, err := k.createICS(ctx, clusterID, ixs, ixs.Locks())
 		if err != nil {
@@ -97,7 +130,7 @@ func (k *Engine) handleNewView(ctx context.Context, viewID uint64) {
 			return
 		}
 
-		go k.icsHandler(ctx, clusterID)
+		go k.icsHandler(ctx, clusterID) // operator
 		slot.NewICSChan <- clusterID
 	}
 }
@@ -110,15 +143,18 @@ func (k *Engine) handleFailedView(failedView uint64, ts *common.Tesseract) error
 		return err
 	}
 
+	k.logger.Debug("Handling failed view", "old cluster id", ts.ClusterID(), "cluster-id", clusterID)
+
 	slot, activeCluster, err := k.createICS(k.ctx, clusterID, ts.Interactions(), ts.ConsensusInfo().AccountLocks)
 	if err != nil {
-		k.logger.Debug("failed to create a slot", "view", failedView, "active-cluster", activeCluster)
+		k.logger.Debug("failed to create a slot", "view", failedView,
+			"active-cluster", activeCluster, "cluster-id", ts.ClusterID(), "error", err)
 		k.slots.CleanupSlot(clusterID)
 
 		return err
 	}
 
-	go k.icsHandler(k.ctx, clusterID)
+	go k.icsHandler(k.ctx, clusterID) // operator
 	slot.NewICSChan <- clusterID
 
 	return nil

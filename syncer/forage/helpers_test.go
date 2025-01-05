@@ -1385,6 +1385,7 @@ func createSyncJobs(t *testing.T, count int, addrs []identifiers.Address, opts .
 	for i := 0; i < count; i++ {
 		job := &SyncJob{
 			address:        addrs[i],
+			creationTime:   time.Now(),
 			mode:           common.LatestSync,
 			lastModifiedAt: time.Now(),
 		}

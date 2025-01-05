@@ -724,7 +724,7 @@ func (p *PersistenceManager) GetLastActiveTimeStamp() uint64 {
 }
 
 func (p *PersistenceManager) SetConsensusProposalInfo(tsHash common.Hash, raw []byte) error {
-	return p.CreateEntry(ConsensusProposalKey(tsHash), raw)
+	return p.UpdateEntry(ConsensusProposalKey(tsHash), raw)
 }
 
 func (p *PersistenceManager) DeleteConsensusProposalInfo(tsHash common.Hash) error {

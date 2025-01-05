@@ -1040,7 +1040,7 @@ func (object *Object) UpdateContext(behaviouralNodes, randomNodes []kramaid.Kram
 			return common.NilHash, err
 		}
 
-		behaviouralObj.AddNodes(behaviouralNodes, MaxBehaviourContextSize)
+		behaviouralObj.AddNodes(behaviouralNodes, common.BehaviouralContextSize)
 
 		behaviourObjectHash, err = object.commitContextObject(behaviouralObj)
 		if err != nil {
@@ -1054,7 +1054,7 @@ func (object *Object) UpdateContext(behaviouralNodes, randomNodes []kramaid.Kram
 			return common.NilHash, err
 		}
 
-		randomObj.AddNodes(randomNodes, MaxRandomContextSize)
+		randomObj.AddNodes(randomNodes, common.StochasticSetSize)
 
 		// TODO:Sort based on the stake of the nodes
 

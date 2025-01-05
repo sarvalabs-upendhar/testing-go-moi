@@ -466,7 +466,7 @@ func (c *Cluster) initTestServer(i int) {
 		DiscoveryInterval: "1s",
 		ConfigPath:        "./" + c.Config.TempDir + fmt.Sprintf("/test_%d/config.json", i),
 		GenesisPath:       c.Config.Dir(genesisFile),
-		OperatorSlots:     -1,
+		OperatorSlots:     1,
 		ValidatorSlots:    3,
 	}
 

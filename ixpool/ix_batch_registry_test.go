@@ -57,12 +57,14 @@ func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
 		{
 			name:    "failed to add ixn to batch",
 			batchID: 0,
-			ix:      ixns[1],
+			ix:      ixns[0],
 			preTestFn: func(batch *IxBatchRegistry) {
-				require.True(t, batch.addIxToBatch(0, ixns[0]))
+				for i := 0; i < 101; i++ {
+					require.True(t, batch.addIxToBatch(0, ixns[0]))
+				}
 			},
 			expectedAdd:     false,
-			expectedIxCount: 1,
+			expectedIxCount: 101,
 			expectedPsCount: 2,
 		},
 		{

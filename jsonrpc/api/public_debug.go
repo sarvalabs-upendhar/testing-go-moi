@@ -14,7 +14,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/diagnosis"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/jsonrpc/backend"
@@ -192,7 +191,7 @@ func (p *PublicDebugAPI) RunDiagnosis(args *rpcargs.DiagnosisRequest) (*rpcargs.
 	}
 
 	return nil, diagnosis.WriteProfiles(context.Background(),
-		filepath.Join(args.OutputPath, "go-moi"+time.Now().Format(utils.TimeFormat)+".zip"), diagnosis.Options{
+		filepath.Join(args.OutputPath, "go-moi"+time.Now().Format(common.TimeFormat)+".zip"), diagnosis.Options{
 			Collectors:           args.Collectors,
 			ProfileDuration:      profileDuration,
 			MutexProfileFraction: args.MutexProfileFraction,

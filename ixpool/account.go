@@ -5,6 +5,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/petar/GoLLRB/llrb"
+
 	"github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -158,10 +160,25 @@ func (a *account) promote() (uint64, []*common.Interaction) {
 	return promoted, promotedIxns
 }
 
+type Address struct {
+	addr identifiers.Address
+}
+
+func (a *Address) Less(other llrb.Item) bool {
+	return a.addr.String() < other.(*Address).addr.String() //nolint: forcetypeassert
+}
+
 // Thread safe map of all accounts registered by the pool.
 // Each account (value) is bound to one address (key).
 type accountsMap struct {
 	sync.Map
+	sortedParticipants *llrb.LLRB
+}
+
+func newAccountsMap() *accountsMap {
+	return &accountsMap{
+		sortedParticipants: llrb.New(),
+	}
 }
 
 // Initializes an account for the given address.
@@ -317,6 +334,16 @@ func (m *accountsMap) allIxs(includeEnqueued bool) (
 	})
 
 	return allPromoted, allEnqueued
+}
+
+func (m *accountsMap) addToSortedAccounts(addr identifiers.Address) {
+	m.sortedParticipants.ReplaceOrInsert(&Address{
+		addr: addr,
+	})
+}
+
+func (m *accountsMap) deleteInSortedAccounts(addr identifiers.Address) {
+	m.sortedParticipants.Delete(&Address{addr: addr})
 }
 
 // nonceToIXMap stores nonce to ix key value pairs

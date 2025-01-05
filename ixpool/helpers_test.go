@@ -5,6 +5,7 @@ import (
 	crand "crypto/rand"
 	"errors"
 	"math/big"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -839,13 +840,76 @@ func insertIxnsInPromotedQueue(ixPool *IxPool, input []*common.Interaction) {
 	for _, ix := range input {
 		acc := ixPool.accounts.initOnce(ix.Sender(), 0)
 		acc.promoted.push(ix)
+		ixPool.accounts.addToSortedAccounts(ix.Sender())
 	}
 }
 
 func validateAllocatedView(t *testing.T, allocatedView uint64, currentView uint64, nodePos uint64) {
 	t.Helper()
 
-	require.Equal(t, nodePos, allocatedView%TotalContextNodes)
+	require.Equal(t, nodePos, allocatedView%common.BehaviouralContextSize)
 	require.GreaterOrEqual(t, allocatedView, currentView)
-	require.Less(t, allocatedView, currentView+TotalContextNodes)
+	require.Less(t, allocatedView, currentView+common.BehaviouralContextSize)
+}
+
+// createIxnsFromParticipants processes a list of participant groups to generate interactions.
+// Each group in the input represents a interaction and consists of participants.
+// - The first element in each group represents the sender.
+// - If the second element is a "sarga" address, a "participant creation" interaction is created.
+// - Otherwise, an "asset transfer" interaction is generated.
+// interactions are generated in increasing nonce order starting from zero
+func createIxnsFromParticipants(t *testing.T, input [][]int) []*common.Interaction {
+	t.Helper()
+
+	participantCount := 0
+
+	for _, i := range input {
+		for _, j := range i {
+			if j != 999 {
+				participantCount = common.Max(participantCount, j+1)
+			}
+		}
+	}
+
+	participants := common.Addresses(tests.GetAddresses(t, participantCount))
+	sort.Sort(participants)
+
+	nonces := make(map[identifiers.Address]int)
+	ixns := make([]*common.Interaction, len(input))
+
+	for i, list := range input {
+		nonce := 0
+
+		if n, ok := nonces[participants[list[0]]]; ok {
+			nonce = n
+		}
+
+		if list[1] == 999 {
+			ixns[i] = newTestInteraction(
+				t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
+				nonce, participants[list[0]], func(ixData *common.IxData) {
+					for i := 2; i < len(list); i++ {
+						ixData.Participants = append(ixData.Participants, common.IxParticipant{
+							Address: participants[list[i]],
+						})
+					}
+				},
+			)
+		} else {
+			ixns[i] = newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, participants[list[1]]),
+				nonce, participants[list[0]], func(ixData *common.IxData) {
+					for i := 2; i < len(list); i++ {
+						ixData.Participants = append(ixData.Participants, common.IxParticipant{
+							Address: participants[list[i]],
+						})
+					}
+				},
+			)
+		}
+
+		nonces[participants[list[0]]] = nonce + 1
+	}
+
+	return ixns
 }

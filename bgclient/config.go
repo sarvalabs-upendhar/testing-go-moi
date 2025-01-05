@@ -82,7 +82,7 @@ func DefaultClusterConfig() *ClusterConfig {
 		TempDir:             "./tmp",
 		GenesisAccountCount: 15,
 		GenesisAssetCount:   1,
-		PremineAmount:       300000,
+		PremineAmount:       30000000,
 		BehaviouralCount:    1,
 		RandomCount:         1,
 		WithLogs:            true,

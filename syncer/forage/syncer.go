@@ -43,7 +43,7 @@ const (
 	ChannelBufferSize     = 10
 	MaxPeersToDial        = 8
 	TesseractFetchTimeOut = 15 * time.Second
-	DefaultWorkerWaitTime = 500 * time.Millisecond
+	DefaultWorkerWaitTime = 50 * time.Millisecond
 )
 
 var DefaultMinConnectedPeers = 6
@@ -316,6 +316,7 @@ func (s *Syncer) NewSyncRequest(
 			db:              s.db,
 			logger:          s.logger,
 			address:         addr,
+			creationTime:    time.Now(),
 			mode:            syncMode,
 			tesseractQueue:  NewTesseractQueue(),
 			jobState:        Pending,
@@ -400,6 +401,27 @@ func (s *Syncer) NewSyncRequest(
 	return nil
 }
 
+func updateJobHandler(s *Syncer) func(jq *JobQueue, jb *SyncJob) *SyncJob {
+	return func(jq *JobQueue, jb *SyncJob) *SyncJob {
+		if jb.getJobState() == Pending ||
+			(jb.getJobState() == Sleep && time.Since(jb.lastModifiedAt) > time.Millisecond*20) {
+			jb.updateJobState(Active)
+
+			return jb
+		}
+
+		if jb.getJobState() == Done && jb.tesseractQueue.Len() == 0 {
+			if err := jq.RemoveJob(jb); err != nil {
+				log.Panicln(err)
+			}
+
+			s.metrics.captureJobTimeInQueue(jb.creationTime)
+		}
+
+		return nil
+	}
+}
+
 func (s *Syncer) worker() {
 	defer func() {
 		s.workerLock.Lock()
@@ -416,7 +438,7 @@ func (s *Syncer) worker() {
 			return
 		}
 
-		job := s.jobQueue.NextJob()
+		job := s.jobQueue.NextJob(updateJobHandler(s))
 
 		s.metrics.captureTotalJobs(float64(s.jobQueue.len()))
 
@@ -561,7 +583,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 	// Attempt to lock the account for synchronization also make sure that account is not locked by syncer.
 	if !s.consensus.AddActiveAccount(job.address, common.MutateLock, "syncer") && !job.selfAccLock {
-		s.logger.Debug("Account is active job state set to sleep")
+		s.logger.Debug("Account is active, job state set to sleep", "addr", job.address)
 		job.updateJobState(Sleep)
 
 		return nil
@@ -570,7 +592,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 	// self acc lock indicates if the account is locked by syncer or consensus
 	if !job.selfAccLock {
 		job.selfAccLock = true
-		s.logger.Trace("added to active accounts", "address", job.address)
+		s.logger.Trace("added to active accounts", "address", job.address,
+			"current-height", job.getCurrentHeight(), "expected-height", job.getExpectedHeight())
 	}
 
 	s.metrics.captureActiveJobs(1)
@@ -2242,8 +2265,6 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 
 	// retrieve ixns if they are not available
 	if fetchIxns {
-		s.logger.Trace("fetch ixns for", "ixns-hashes", tsInfo.ixnsHashes)
-
 		ixns, err = s.ixpool.GetIxns(tsInfo.ixnsHashes)
 		if err != nil {
 			s.logger.Trace("Ixns not found in ixpool",
@@ -2350,6 +2371,9 @@ func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 			}
 
 			info := tsInfo.CreateTSInfoWithAddr(addr)
+
+			s.logger.Debug("need to sync ", "address", info.address(), "height", info.height())
+
 			if err := s.NewSyncRequest(
 				info.address(),
 				info.height(),

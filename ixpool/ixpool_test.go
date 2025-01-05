@@ -35,6 +35,117 @@ const (
 	ixMaxSize      = 128 * 1024 // 128Kb
 )
 
+// Each interaction is represented by a group of participants,
+// participants are represented by numbers to draw a comparison on the lexicographic order or addresses
+// 999 is used to represent sarga account.
+func TestIsEligibleForProposal(t *testing.T) {
+	testcases := []struct {
+		name                   string
+		input                  [][]int
+		expectedEligibleInputs [][]int
+		expectedEligibility    []bool
+	}{
+		{
+			name:                   "all ixns are eligible when they are mutually exclusive",
+			input:                  [][]int{{0, 1}, {2, 3}, {4, 5}},
+			expectedEligibleInputs: [][]int{{0, 1}, {2, 3}, {4, 5}},
+			expectedEligibility:    []bool{true, true, true},
+		},
+		{
+			name:                   "chained ixns with different leader accounts",
+			input:                  [][]int{{0, 1}, {1, 2}},
+			expectedEligibleInputs: [][]int{{0, 1}},
+			expectedEligibility:    []bool{true, false},
+		},
+		{
+			name:                   "chained ixns with same leader accounts",
+			input:                  [][]int{{1, 0}, {2, 0}},
+			expectedEligibleInputs: [][]int{{1, 0}, {2, 0}},
+			expectedEligibility:    []bool{true, true},
+		},
+		{
+			name:                   "chained ixns with different leader accounts",
+			input:                  [][]int{{2, 0}, {2, 1}},
+			expectedEligibleInputs: [][]int{{2, 0}},
+			expectedEligibility:    []bool{true, false},
+		},
+		{
+			name:                   "max unique participants per leader - multiple senders",
+			input:                  [][]int{{0, 1}, {0, 2}, {2, 0}, {3, 0}, {4, 0}, {5, 4}},
+			expectedEligibleInputs: [][]int{{0, 1}, {0, 2}, {2, 0}, {3, 0}, {5, 4}},
+			expectedEligibility:    []bool{true, true, true, true, false, true},
+		},
+		{
+			name:                   "max unique participants per leader - single sender",
+			input:                  [][]int{{0, 1}, {0, 2}, {0, 3}, {0, 4}, {0, 5}},
+			expectedEligibleInputs: [][]int{{0, 1}, {0, 2}, {0, 3}},
+			expectedEligibility:    []bool{true, true, true, false, false},
+		},
+		{
+			name:                   "ixns loop",
+			input:                  [][]int{{0, 1}, {0, 2}, {0, 3}, {1, 0}, {2, 0}, {3, 0}},
+			expectedEligibleInputs: [][]int{{0, 1}, {0, 2}, {0, 3}, {1, 0}, {2, 0}, {3, 0}},
+			expectedEligibility:    []bool{true, true, true, true, true, true},
+		},
+		{
+			name:                   "chained ixns and ixns loop",
+			input:                  [][]int{{0, 1}, {1, 2}, {2, 3}, {2, 0}},
+			expectedEligibleInputs: [][]int{{0, 1}, {2, 3}},
+			expectedEligibility:    []bool{true, false, true, false},
+		},
+		{
+			name:                   "chained ixns and ixns loop",
+			input:                  [][]int{{0, 1}, {1, 0}, {1, 2}, {2, 0}},
+			expectedEligibleInputs: [][]int{{0, 1}, {1, 0}, {2, 0}},
+			expectedEligibility:    []bool{true, true, false, true},
+		},
+		{
+			name:                   "more than 2 participants per ixn",
+			input:                  [][]int{{0, 1, 2}, {0, 3, 1}, {0, 4, 1}},
+			expectedEligibleInputs: [][]int{{0, 1, 2}, {0, 3, 1}},
+			expectedEligibility:    []bool{true, true, false},
+		},
+		{
+			name:                   "more than 2 participants per ixn",
+			input:                  [][]int{{0, 1, 2}, {0, 3, 1}, {2, 1, 0}, {3, 1, 2}},
+			expectedEligibleInputs: [][]int{{0, 1, 2}, {0, 3, 1}, {2, 1, 0}},
+			expectedEligibility:    []bool{true, true, true, false},
+		},
+		{
+			name:                   "lot of ixns",
+			input:                  [][]int{{0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}},
+			expectedEligibleInputs: [][]int{{0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}},
+			expectedEligibility:    []bool{true, true, true, true, true, true},
+		},
+		{
+			name:                   "don't count genesis accounts",
+			input:                  [][]int{{0, 999}, {1, 999}, {2, 999}, {3, 999}},
+			expectedEligibleInputs: [][]int{{0, 999}, {1, 999}, {2, 999}}, // 999 refers to sarga
+			expectedEligibility:    []bool{true, true, true, false},
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			var (
+				participantToAcquirer  = make(map[identifiers.Address]identifiers.Address)
+				acquirerToParticipants = make(map[identifiers.Address]map[identifiers.Address]struct{})
+			)
+
+			ixns := createIxnsFromParticipants(t, testcase.input)
+			eligibility := make([]bool, len(ixns))
+
+			for i, ix := range ixns {
+				index := isEligibleForProposal(ix, participantToAcquirer, acquirerToParticipants)
+				eligibility[i] = index
+			}
+
+			require.Equal(t, len(testcase.expectedEligibility), len(eligibility))
+			require.Equal(t, testcase.expectedEligibility, eligibility)
+		})
+	}
+}
+
 func TestGetNextView(t *testing.T) {
 	testcases := []struct {
 		name         string
@@ -2947,7 +3058,7 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 		},
 		{
 			name:        "get processable batches from ixns where current view of an ixn is expired",
-			currentView: TotalContextNodes,
+			currentView: common.BehaviouralContextSize,
 			getIxns: func() (input []*common.Interaction, expected []*common.Interaction) {
 				ixns := createTestAssetTransferIxs(t, 0, 3, addrs[0], sm)
 
@@ -3042,6 +3153,28 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 					batch: CreateBatch{
 						ixnCount: 1,
 						psCount:  2,
+					},
+				},
+			},
+		},
+		{
+			name:        "batches should be picked in sorted participants order",
+			currentView: 4,
+			getIxns: func() (input []*common.Interaction, expected []*common.Interaction) {
+				ixns := createIxnsFromParticipants(t, [][]int{{6, 1}, {6, 5}, {6, 0}, {2, 0}, {0, 1}, {0, 3}, {0, 5}})
+				for _, ixn := range ixns {
+					ixn.SetShouldPropose(true)
+					ixn.UpdateAllottedView(4)
+				}
+
+				return ixns, ixns[4:]
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount: 3,
+						psCount:  4,
 					},
 				},
 			},

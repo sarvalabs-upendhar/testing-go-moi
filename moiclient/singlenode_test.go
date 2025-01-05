@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-polo"
 
@@ -78,7 +78,7 @@ func (tn *TestSingleNode) SetupSuite() {
 	d.BootNodePort = 21000
 	d.Libp2pPort = 22000
 	d.JSONRPCPort = 23000
-	d.ValidatorCount = 1
+	d.ValidatorCount = 5
 	// genesis asset count is 1 as we need to provide data for registry api
 	d.GenesisAssetCount = 1
 
@@ -988,7 +988,17 @@ func (tn *TestSingleNode) TestInfo() {
 			nodeInfo, err := tn.moiClient.Info(context.Background(), test.netArgs)
 			require.NoError(tn.T(), err)
 
-			require.Equal(tn.T(), tn.instances[0].KramaID, string(nodeInfo.KramaID))
+			found := false
+
+			for _, ins := range tn.instances {
+				if ins.KramaID == string(nodeInfo.KramaID) {
+					found = true
+
+					break
+				}
+			}
+
+			require.True(tn.T(), found)
 		})
 	}
 }

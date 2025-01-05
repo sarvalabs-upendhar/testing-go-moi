@@ -82,8 +82,10 @@ func NewICS(
 	}
 }
 
-func (cs *ClusterState) IxnHash() common.Hash {
-	return cs.ixns.IxList()[0].Hash()
+func (cs *ClusterState) IxnsHash() common.Hash {
+	hash, _ := cs.ixns.Hash()
+
+	return hash
 }
 
 func (cs *ClusterState) SelfKramaID() kramaid.KramaID {
@@ -224,7 +226,7 @@ func (cs *ClusterState) GetBehaviouralContextDelta(
 		}
 	}
 
-	if len(cs.committee.Sets[nodeSetPosition].Infos) >= gtypes.MaxBehaviourContextSize {
+	if len(cs.committee.Sets[nodeSetPosition].Infos) >= common.BehaviouralContextSize {
 		replaced = cs.committee.Sets[nodeSetPosition].Infos[0].ID
 	}
 
@@ -239,7 +241,7 @@ func (cs *ClusterState) GetRandomContextDelta(
 	addedPeers = make([]kramaid.KramaID, 0, requiredCount)
 
 	if cs.committee.Sets[nodeSetPosition] != nil {
-		if count := len(cs.committee.Sets[nodeSetPosition].Infos) + requiredCount - gtypes.MaxRandomContextSize; count > 0 {
+		if count := len(cs.committee.Sets[nodeSetPosition].Infos) + requiredCount - common.StochasticSetSize; count > 0 {
 			replacedPeers = cs.committee.Sets[nodeSetPosition].KramaIDs()[0:count]
 		}
 	}

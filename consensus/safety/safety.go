@@ -33,15 +33,17 @@ type store interface {
 
 type ProposalInfo struct {
 	TS         *common.Tesseract
-	Ixns       common.Interactions
+	Ixns       *common.Interactions
 	Receipts   common.Receipts
 	CommitInfo *common.CommitInfo
 }
 
 func NewProposalInfo(ts *common.Tesseract) *ProposalInfo {
+	ixns := ts.Interactions()
+
 	pi := new(ProposalInfo)
 	pi.TS = ts
-	pi.Ixns = ts.Interactions()
+	pi.Ixns = &ixns
 	pi.Receipts = ts.Receipts()
 	pi.CommitInfo = ts.CommitInfo()
 
@@ -49,7 +51,7 @@ func NewProposalInfo(ts *common.Tesseract) *ProposalInfo {
 }
 
 func (pi *ProposalInfo) Tesseract() *common.Tesseract {
-	pi.TS.WithIxnAndReceipts(pi.Ixns, pi.Receipts, pi.CommitInfo)
+	pi.TS.WithIxnAndReceipts(*pi.Ixns, pi.Receipts, pi.CommitInfo)
 
 	return pi.TS
 }

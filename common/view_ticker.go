@@ -1,6 +1,8 @@
 package common
 
-import "time"
+import (
+	"time"
+)
 
 type ViewTicker struct {
 	c    chan uint64
@@ -18,7 +20,7 @@ func NewViewTicker(genesisTime time.Time, secondsPerSlot uint64) *ViewTicker {
 		done: make(chan struct{}),
 	}
 
-	ticker.start(genesisTime, secondsPerSlot, time.Since, time.Until, time.After)
+	ticker.start(Canonical(genesisTime), secondsPerSlot, Since, Until, time.After)
 
 	return ticker
 }

@@ -1,8 +1,8 @@
 package common
 
 import (
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 )
 
 type ParticipantRole int
@@ -14,6 +14,11 @@ const (
 )
 
 const NodeNotFound = -1
+
+const (
+	BehaviouralContextSize = 5
+	StochasticSetSize      = 5
+)
 
 type NodeList []kramaid.KramaID
 

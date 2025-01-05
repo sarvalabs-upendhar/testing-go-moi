@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 )
 
@@ -26,6 +26,12 @@ type AccConsensusLockInfo struct {
 	LockType  common.LockType
 	ClusterID common.ClusterID
 }
+
+const (
+	PrepareStage = iota
+	PreparedStage
+	ProposalStage
+)
 
 type Slot struct {
 	// TODO: explore using sync pool for slots
@@ -53,6 +59,14 @@ func NewSlot(slotType SlotType, ps map[identifiers.Address]common.LockType) *Slo
 		BftInboundChan:  make(chan ConsensusMessage, 1000),
 		BftStopChan:     make(chan error),
 	}
+}
+
+func (info *Slot) UpdateStage(oldSlot, newSlot uint32) bool {
+	return info.Stage.CompareAndSwap(oldSlot, newSlot)
+}
+
+func (info *Slot) GetStage() uint32 {
+	return info.Stage.Load()
 }
 
 func (info *Slot) ForwardMsgToKBFTHandler(msg ConsensusMessage) {
@@ -197,6 +211,10 @@ func (s *Slots) CreateSlotAndLockAccounts(
 		return nil, ""
 	}
 
+	if !s.areSlotsAvailable(slotType) {
+		return nil, ""
+	}
+
 	s.slots[clusterID] = NewSlot(slotType, locks)
 	s.decrementSlots(slotType)
 
@@ -226,7 +244,7 @@ func (s *Slots) areSlotsAvailable(slotType SlotType) bool {
 		return s.availableOperatorSlots > 0
 	}
 
-	return s.availableValidatorSlots > 0
+	return true
 }
 
 func (s *Slots) CleanupSlot(id common.ClusterID) {

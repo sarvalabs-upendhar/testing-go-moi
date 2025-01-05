@@ -1162,7 +1162,9 @@ func TestPendingAccounts_RemoveJob(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	jobQueue.NextJob()
+	jobQueue.NextJob(updateJobHandler(&Syncer{
+		metrics: NilMetrics(),
+	}))
 
 	_, err = tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
 		pendingAccounts := syncStatusTracker.ReadPendingAccounts()
