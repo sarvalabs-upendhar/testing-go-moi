@@ -548,7 +548,7 @@ func (f *FilterManager) getLogsFromTesseract(
 	logs := make([]*rpcargs.RPCLog, 0)
 
 	// participants are declared here to prevent the repetitive creation of the rpc object
-	rpcParticipants := rpcargs.CreateRPCParticipants(ts.Participants())
+	rpcParticipants := rpcargs.CreateRPCParticipantStates(ts.Participants())
 	tsHash := ts.Hash()
 
 	for _, receipt := range ts.Receipts() {

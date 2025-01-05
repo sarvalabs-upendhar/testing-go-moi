@@ -44,6 +44,7 @@ var (
 	ErrInvalidAssetID              = errors.New("invalid asset id")
 	ErrAssetNotFound               = errors.New("asset not found")
 	ErrOperatorMismatch            = errors.New("asset operator address mismatch")
+	ErrAccountAlreadyRegistered    = errors.New("account already registered")
 	ErrAssetAlreadyRegistered      = errors.New("asset already registered")
 	ErrDeedEntryNotFound           = errors.New("deed info not found")
 	ErrIxParticipantsMissing       = errors.New("ix participants missing")

@@ -31,21 +31,19 @@ type RPCMandateOrLockup struct {
 type RPCInteractions []*RPCInteraction
 
 type RPCTesseract struct {
-	Participants     RPCParticipants `json:"participants"`
-	InteractionsHash common.Hash     `json:"interactions_hash"`
-	ReceiptsHash     common.Hash     `json:"receipts_hash"`
-	Epoch            *hexutil.Big    `json:"epoch"`
-	TimeStamp        hexutil.Uint64  `json:"time_stamp"`
-	Operator         string          `json:"operator"`
-	FuelUsed         hexutil.Uint64  `json:"fuel_used"`
-	FuelLimit        hexutil.Uint64  `json:"fuel_limit"`
-	ConsensusInfo    RPCPoXtData     `json:"consensus_info"`
-
-	Seal hexutil.Bytes `json:"seal"`
-
-	Hash       common.Hash     `json:"hash"`
-	Ixns       RPCInteractions `json:"ixns"`
-	CommitInfo RPCCommitInfo   `json:"commit_info"`
+	Participants     RPCParticipantsStates `json:"participants"`
+	Hash             common.Hash           `json:"hash"`
+	Epoch            *hexutil.Big          `json:"epoch"`
+	TimeStamp        hexutil.Uint64        `json:"time_stamp"`
+	Operator         string                `json:"operator"`
+	FuelUsed         hexutil.Uint64        `json:"fuel_used"`
+	FuelLimit        hexutil.Uint64        `json:"fuel_limit"`
+	InteractionsHash common.Hash           `json:"interactions_hash"`
+	ReceiptsHash     common.Hash           `json:"receipts_hash"`
+	ConsensusInfo    RPCPoXtData           `json:"consensus_info"`
+	CommitInfo       RPCCommitInfo         `json:"commit_info"`
+	Ixns             RPCInteractions       `json:"ixns"`
+	Seal             hexutil.Bytes         `json:"seal"`
 }
 
 // ContextResponse is response object for fetching context info
@@ -92,22 +90,36 @@ type RPCIxOp struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
+type RPCIxFund struct {
+	AssetID identifiers.AssetID `json:"asset_id"`
+	Amount  *hexutil.Big        `json:"amount"`
+}
+
+type RPCIxParticipant struct {
+	Address  identifiers.Address `json:"address"`
+	LockType common.LockType     `json:"lock_type"`
+}
+
+type RPCIxParticipants []RPCIxParticipant
+
 type RPCInteraction struct {
-	Nonce hexutil.Uint64 `json:"nonce"`
-
-	Sender identifiers.Address `json:"sender"`
-	Payer  identifiers.Address `json:"payer"`
-
+	IxIndex   hexutil.Uint64 `json:"ix_index"`
+	Hash      common.Hash    `json:"hash"`
+	Nonce     hexutil.Uint64 `json:"nonce"`
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 
+	Sender         identifiers.Address `json:"sender"`
+	Payer          identifiers.Address `json:"payer"`
+	IxParticipants RPCIxParticipants   `json:"ix_participants"`
+	Funds          []RPCIxFund         `json:"funds"`
+
 	IxOps []RPCIxOp `json:"ix_operations"`
 
-	Hash         common.Hash     `json:"hash"`
-	Signature    hexutil.Bytes   `json:"signature"`
-	TSHash       common.Hash     `json:"ts_hash"`
-	Participants RPCParticipants `json:"participants"`
-	IxIndex      hexutil.Uint64  `json:"ix_index"`
+	ParticipantsState RPCParticipantsStates `json:"participants_state"`
+
+	Signature hexutil.Bytes `json:"signature"`
+	TSHash    common.Hash   `json:"ts_hash"`
 }
 
 type RPCIxOpResult struct {
@@ -117,14 +129,14 @@ type RPCIxOpResult struct {
 }
 
 type RPCReceipt struct {
-	IxHash       common.Hash          `json:"ix_hash"`
-	Status       common.ReceiptStatus `json:"status"`
-	FuelUsed     hexutil.Uint64       `json:"fuel_used"`
-	IxOps        []*RPCIxOpResult     `json:"ix_operations"`
-	From         identifiers.Address  `json:"from"`
-	IXIndex      hexutil.Uint64       `json:"ix_index,omitempty"`
-	TSHash       common.Hash          `json:"ts_hash,omitempty"`
-	Participants RPCParticipants      `json:"participants,omitempty"`
+	IxHash       common.Hash           `json:"ix_hash"`
+	Status       common.ReceiptStatus  `json:"status"`
+	FuelUsed     hexutil.Uint64        `json:"fuel_used"`
+	IxOps        []*RPCIxOpResult      `json:"ix_operations"`
+	From         identifiers.Address   `json:"from"`
+	IXIndex      hexutil.Uint64        `json:"ix_index,omitempty"`
+	TSHash       common.Hash           `json:"ts_hash,omitempty"`
+	Participants RPCParticipantsStates `json:"participants,omitempty"`
 }
 
 type RPCAccount struct {
@@ -172,9 +184,9 @@ type RPCLog struct {
 	Data    hexutil.Bytes       `json:"data"`
 
 	// Derived fields, avoid serializing these fields while storing to DB
-	IxHash       common.Hash     `json:"ix_hash"`
-	TSHash       common.Hash     `json:"ts_hash"`
-	Participants RPCParticipants `json:"participants"`
+	IxHash       common.Hash           `json:"ix_hash"`
+	TSHash       common.Hash           `json:"ts_hash"`
+	Participants RPCParticipantsStates `json:"participants"`
 }
 
 // Ixpool RPC Responses
@@ -331,9 +343,9 @@ type RPCState struct {
 	StateHash      common.Hash         `json:"state_hash"`
 }
 
-type RPCParticipants []RPCState
+type RPCParticipantsStates []RPCState
 
-func (participants RPCParticipants) Sort() {
+func (participants RPCParticipantsStates) Sort() {
 	sort.Slice(participants, func(i, j int) bool {
 		return participants[i].Address.Hex() < participants[j].Address.Hex()
 	})

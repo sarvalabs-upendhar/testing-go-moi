@@ -25,8 +25,9 @@ func CheckForRPCTesseract(
 ) {
 	t.Helper()
 
-	CheckForRPCParticipants(t, ts.Participants(), rpcTS.Participants)
+	CheckForRPCParticipantState(t, ts.Participants(), rpcTS.Participants)
 	CheckForRPCPoxtData(t, ts.ConsensusInfo(), rpcTS.ConsensusInfo)
+
 	require.Equal(t, ts.InteractionsHash(), rpcTS.InteractionsHash)
 	require.Equal(t, ts.ReceiptsHash(), rpcTS.ReceiptsHash)
 	require.Equal(t, ts.Epoch(), rpcTS.Epoch.ToInt())
@@ -81,13 +82,15 @@ func CheckForRPCIxn(
 	t *testing.T,
 	ix *common.Interaction,
 	tsHash common.Hash,
-	participants common.ParticipantsState,
+	participantsState common.ParticipantsState,
 	rpcIxn *RPCInteraction,
 ) {
 	t.Helper()
 
 	require.Equal(t, tsHash, rpcIxn.TSHash)
-	CheckForRPCParticipants(t, participants, rpcIxn.Participants)
+	CheckForRPCParticipantState(t, participantsState, rpcIxn.ParticipantsState)
+	CheckForRPCIxParticipants(t, ix.IxParticipants(), rpcIxn.IxParticipants)
+	CheckForRPCFunds(t, ix.Funds(), rpcIxn.Funds)
 
 	input := ix.IXData()
 
@@ -183,7 +186,33 @@ func CheckForRPCIxn(
 	}
 }
 
-func CheckForRPCParticipants(t *testing.T, participants common.ParticipantsState, rpcParticipants RPCParticipants) {
+func CheckForRPCIxParticipants(t *testing.T, participants []common.IxParticipant, rpcParticipants RPCIxParticipants) {
+	t.Helper()
+
+	require.Equal(t, len(participants), len(rpcParticipants))
+
+	for idx, participant := range participants {
+		require.Equal(t, participant.Address, rpcParticipants[idx].Address)
+		require.Equal(t, participant.LockType, rpcParticipants[idx].LockType)
+	}
+}
+
+func CheckForRPCFunds(t *testing.T, funds []common.IxFund, rpcFunds []RPCIxFund) {
+	t.Helper()
+
+	require.Equal(t, len(funds), len(rpcFunds))
+
+	for idx, fund := range funds {
+		require.Equal(t, fund.AssetID, rpcFunds[idx].AssetID)
+		require.Equal(t, fund.Amount, rpcFunds[idx].Amount.ToInt())
+	}
+}
+
+func CheckForRPCParticipantState(
+	t *testing.T,
+	participants common.ParticipantsState,
+	rpcParticipants RPCParticipantsStates,
+) {
 	t.Helper()
 
 	if len(participants) == 0 {
@@ -235,7 +264,7 @@ func CheckForRPCReceipt(
 	t.Helper()
 
 	require.Equal(t, tsHash, rpcReceipt.TSHash)
-	CheckForRPCParticipants(t, participants, rpcReceipt.Participants)
+	CheckForRPCParticipantState(t, participants, rpcReceipt.Participants)
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
 	require.Equal(t, receipt.FuelUsed, uint64(rpcReceipt.FuelUsed))
 	require.Equal(t, ix.Sender(), rpcReceipt.From)

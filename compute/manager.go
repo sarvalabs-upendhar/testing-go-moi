@@ -124,7 +124,7 @@ func (manager *Manager) runInteraction(
 			// in case of any error while executing the ixOp, we should consume total full
 			receipt.SetFuelUsed(ix.FuelLimit())
 
-			break
+			return receipt, err
 		}
 	}
 
@@ -150,8 +150,17 @@ func addNewAccountsToSargaAccount(
 			return errors.New("sarga object not found")
 		}
 
+		registered, err := sargaObject.IsAccountRegistered(addr)
+		if err != nil {
+			return err
+		}
+
+		if registered {
+			return common.ErrAccountAlreadyRegistered
+		}
+
 		// Add the genesis account information of the new account
-		err := sargaObject.AddAccountGenesisInfo(addr, ixHash)
+		err = sargaObject.AddAccountGenesisInfo(addr, ixHash)
 		if err != nil {
 			return err
 		}

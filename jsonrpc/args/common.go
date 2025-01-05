@@ -134,8 +134,10 @@ func CreateRPCInteraction(
 	}
 
 	return &RPCInteraction{
-		TSHash:       tsHash,
-		Participants: CreateRPCParticipants(participants),
+		TSHash: tsHash,
+
+		ParticipantsState: CreateRPCParticipantStates(participants),
+		IxParticipants:    CreateRPCIxParticipants(ix.IxParticipants()),
 
 		IxIndex: hexutil.Uint64(ixIndex),
 		Nonce:   hexutil.Uint64(data.Nonce),
@@ -145,6 +147,7 @@ func CreateRPCInteraction(
 
 		FuelPrice: (*hexutil.Big)(data.FuelPrice),
 		FuelLimit: hexutil.Uint64(data.FuelLimit),
+		Funds:     CreateRPCIxFunds(ix.Funds()),
 
 		IxOps: ops,
 
@@ -186,12 +189,36 @@ func CreateRPCPeersScore(peers map[peer.ID]*pubsub.PeerScoreSnapshot) RPCPeersSc
 	return peersScore
 }
 
-func CreateRPCParticipants(participants common.ParticipantsState) RPCParticipants {
+func CreateRPCIxFunds(funds []common.IxFund) []RPCIxFund {
+	rpcFunds := make([]RPCIxFund, len(funds))
+	for index, v := range funds {
+		rpcFunds[index] = RPCIxFund{
+			AssetID: v.AssetID,
+			Amount:  (*hexutil.Big)(v.Amount),
+		}
+	}
+
+	return rpcFunds
+}
+
+func CreateRPCIxParticipants(ixParticipants []common.IxParticipant) RPCIxParticipants {
+	rpcIxParticipants := make(RPCIxParticipants, len(ixParticipants))
+	for i, participant := range ixParticipants {
+		rpcIxParticipants[i] = RPCIxParticipant{
+			Address:  participant.Address,
+			LockType: participant.LockType,
+		}
+	}
+
+	return rpcIxParticipants
+}
+
+func CreateRPCParticipantStates(participants common.ParticipantsState) RPCParticipantsStates {
 	if len(participants) == 0 {
 		return nil
 	}
 
-	rpcParticipants := make(RPCParticipants, 0, len(participants))
+	rpcParticipants := make(RPCParticipantsStates, 0, len(participants))
 
 	for addr, state := range participants {
 		rpcParticipants = append(rpcParticipants, RPCState{
@@ -245,7 +272,7 @@ func CreateRPCTesseract(ts *common.Tesseract) (*RPCTesseract, error) {
 	}
 
 	return &RPCTesseract{
-		Participants:     CreateRPCParticipants(ts.Participants()),
+		Participants:     CreateRPCParticipantStates(ts.Participants()),
 		InteractionsHash: ts.InteractionsHash(),
 		ReceiptsHash:     ts.ReceiptsHash(),
 		Epoch:            (*hexutil.Big)(ts.Epoch()),
@@ -289,7 +316,7 @@ func CreateRPCReceipt(
 		From:         ix.Sender(),
 		IXIndex:      hexutil.Uint64(ixIndex),
 		TSHash:       tsHash,
-		Participants: CreateRPCParticipants(participants),
+		Participants: CreateRPCParticipantStates(participants),
 	}
 }
 

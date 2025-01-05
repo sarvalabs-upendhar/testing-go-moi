@@ -422,7 +422,7 @@ func TestGetLogsFromTesseract(t *testing.T) {
 				validateLogs(t, log, rpcLog)
 				require.Equal(t, test.expectedTesseract.InteractionsHash(), rpcLog.IxHash)
 				require.Equal(t, test.expectedTesseract.Hash(), rpcLog.TSHash)
-				rpcargs.CheckForRPCParticipants(t,
+				rpcargs.CheckForRPCParticipantState(t,
 					test.expectedTesseract.Participants(),
 					rpcLog.Participants,
 				)
@@ -612,7 +612,7 @@ func TestGetLogsForQuery(t *testing.T) {
 				validateLogs(t, log, rpcLog)
 				require.Equal(t, test.expectedTesseracts[i].InteractionsHash(), rpcLog.IxHash)
 				require.Equal(t, test.expectedTesseracts[i].Hash(), rpcLog.TSHash)
-				rpcargs.CheckForRPCParticipants(t, test.expectedTesseracts[i].Participants(), rpcLog.Participants)
+				rpcargs.CheckForRPCParticipantState(t, test.expectedTesseracts[i].Participants(), rpcLog.Participants)
 			}
 		})
 	}

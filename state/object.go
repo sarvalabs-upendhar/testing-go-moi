@@ -954,6 +954,19 @@ func (object *Object) AddAccountGenesisInfo(address identifiers.Address, ixHash 
 	return object.SetStorageEntry(common.SargaLogicID, address.Bytes(), rawData)
 }
 
+func (object *Object) IsAccountRegistered(address identifiers.Address) (bool, error) {
+	_, err := object.GetStorageEntry(common.SargaLogicID, address.Bytes())
+	if errors.Is(err, common.ErrKeyNotFound) {
+		return false, nil
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
 // CreateContext creates a context object with given nodes and returns its hash.
 func (object *Object) CreateContext(behaviouralNodes, randomNodes []kramaid.KramaID) (common.Hash, error) {
 	if len(behaviouralNodes)+len(randomNodes) < MinimumContextSize {

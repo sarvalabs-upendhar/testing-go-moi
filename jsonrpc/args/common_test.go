@@ -121,9 +121,9 @@ func TestCreateRPCParticipants(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			rpcParticipants := CreateRPCParticipants(test.participants)
+			rpcParticipants := CreateRPCParticipantStates(test.participants)
 
-			CheckForRPCParticipants(t, test.participants, rpcParticipants)
+			CheckForRPCParticipantState(t, test.participants, rpcParticipants)
 		})
 	}
 }

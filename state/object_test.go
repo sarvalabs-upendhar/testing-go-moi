@@ -145,6 +145,39 @@ func TestSubBalance(t *testing.T) {
 	}
 }
 
+func TestIsAccountRegistered(t *testing.T) {
+	address := tests.RandomAddress(t)
+	db := mockDB()
+	logicTree, _ := createTestKramaHashTree(t,
+		db,
+		common.SargaAddress,
+		storage.Storage,
+		nil,
+		nil,
+	)
+
+	sObj := createTestStateObject(t, stateObjectParamsWithStorageTree(
+		t,
+		map[identifiers.LogicID]tree.MerkleTree{
+			common.SargaLogicID: logicTree,
+		},
+	))
+
+	// Test case: Account not registered
+	isRegistered, err := sObj.IsAccountRegistered(address)
+	require.NoError(t, err)
+	require.False(t, isRegistered)
+
+	// Register the account
+	err = sObj.AddAccountGenesisInfo(address, common.NilHash)
+	require.NoError(t, err)
+
+	// Test case: Account registered
+	isRegistered, err = sObj.IsAccountRegistered(address)
+	require.NoError(t, err)
+	require.True(t, isRegistered)
+}
+
 func TestCreateLockup(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetIDs, _ := tests.CreateTestAssets(t, 3)

@@ -530,7 +530,7 @@ func assertRPCLogs(
 	require.Equal(t, expectedHash, rpcLog.IxHash)
 
 	require.Equal(t, expectedTesseract.Hash(), rpcLog.TSHash)
-	rpcargs.CheckForRPCParticipants(t, expectedTesseract.Participants(), rpcLog.Participants)
+	rpcargs.CheckForRPCParticipantState(t, expectedTesseract.Participants(), rpcLog.Participants)
 }
 
 func assertIxHashes(t *testing.T, expectedIx *common.Interaction, res *Message) {
