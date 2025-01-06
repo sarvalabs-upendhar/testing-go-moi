@@ -353,7 +353,11 @@ func (kt *KramaTransport) peerLifeCycle() {
 			// we should open a temporary stream and send the msg if the peer is not registered with directPeerSet
 			// this with happen for prepared messages
 			if err := kt.SendMessageTransientPeer(m.kramaID, m.msg); err != nil {
-				kt.logger.Trace("Failed to send message to transient peer", "peer-id", m.kramaID)
+				kt.logger.Trace(
+					"Failed to send message to transient peer",
+					"error", err,
+					"peer-id", m.kramaID,
+					"msg-type", m.msgType)
 			}
 
 		case m := <-kt.closePeerChan:
@@ -590,6 +594,10 @@ func (kt *KramaTransport) BroadcastMessage(
 	cr := kt.contextRouters.get(icsmsg.ClusterID)
 
 	for _, peerID := range cr.committee.GetNodes(true) {
+		if peerID == kt.selfID {
+			continue
+		}
+
 		kramaID := peerID
 		kt.msgsChan <- msg{kramaID: kramaID, msg: rawMsg, msgType: icsmsg.MsgType}
 	}
@@ -639,13 +647,13 @@ func (kt *KramaTransport) sendICSGraft(clusterID common.ClusterID, peer *icsPeer
 
 // handleICSGraft processes an incoming ICSGRAFT message.
 func (kt *KramaTransport) handleICSGraft(kPeer *icsPeer, msg *types.ICSMSG) {
-	if msg.Sender != "" && kPeer.kramaID == "" {
-		kPeer.kramaID = msg.Sender
+	if msg.SenderAddr != "" && kPeer.kramaID == "" {
+		kPeer.kramaID = msg.SenderAddr
 	}
 
 	cr := kt.contextRouters.get(msg.ClusterID)
 	if cr == nil {
-		kt.transitPeers.add(msg.ClusterID, msg.Sender)
+		kt.transitPeers.add(msg.ClusterID, msg.SenderAddr)
 
 		return
 	}

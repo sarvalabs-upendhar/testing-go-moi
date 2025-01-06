@@ -406,17 +406,17 @@ func createTestClusterInfo(
 	ps := make(map[identifiers.Address]*common.Participant)
 	pStates := make(common.ParticipantsState)
 
-	ps[ixs[0].Sender()] = &common.Participant{
-		Address:         ixs[0].Sender(),
+	ps[ixs[0].SenderAddr()] = &common.Participant{
+		Address:         ixs[0].SenderAddr(),
 		IsSigner:        true,
-		Height:          newHeights[ixs[0].Sender()] - 1,
+		Height:          newHeights[ixs[0].SenderAddr()] - 1,
 		NodeSetPosition: 0,
 		LockType:        common.MutateLock,
 		ConsensusQuorum: 6,
 	}
 
-	pStates[ixs[0].Sender()] = common.State{
-		Height: newHeights[ixs[0].Sender()],
+	pStates[ixs[0].SenderAddr()] = common.State{
+		Height: newHeights[ixs[0].SenderAddr()],
 	}
 
 	if !ixs[0].Transaction(0).Target().IsNil() {

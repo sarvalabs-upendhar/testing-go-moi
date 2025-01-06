@@ -293,6 +293,8 @@ func (k *Engine) handlePrepare(
 		return err
 	}
 
+	k.logger.Debug("sending prepared message", "cluster-id", msg.ClusterID, "sender", msg.Sender)
+
 	return k.transport.SendMessage(
 		ctx,
 		msg.Sender,

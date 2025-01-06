@@ -8,11 +8,11 @@ import (
 
 	"github.com/decred/dcrd/crypto/blake256"
 	iradix "github.com/hashicorp/go-immutable-radix"
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -36,6 +36,7 @@ type Object struct {
 	db Store
 
 	deeds *Deeds
+	keys  common.AccountKeys
 
 	assetTree       tree.MerkleTree
 	logicTree       tree.MerkleTree
@@ -72,6 +73,7 @@ func NewStateObject(
 		data:            account,
 		address:         id,
 		deeds:           nil,
+		keys:            nil,
 		files:           make(map[common.Hash][]byte),
 		dirtyEntries:    make(Storage),
 		receipts:        make(common.Receipts),
@@ -187,6 +189,117 @@ func (object *Object) Balances() (map[identifiers.AssetID]*big.Int, error) {
 	}
 
 	return balances, nil
+}
+
+func (object *Object) UpdateKeys(keys common.AccountKeys) {
+	object.keys = keys
+}
+
+func (object *Object) loadKeys() error {
+	if object.data.KeysHash.IsNil() {
+		object.keys = make(common.AccountKeys, 0)
+
+		return nil
+	}
+
+	object.keys = make(common.AccountKeys, 0)
+
+	data, err := object.db.GetAccountKeys(object.address, object.data.KeysHash)
+	if err != nil {
+		return err
+	}
+
+	return object.keys.FromBytes(data)
+}
+
+func (object *Object) KeysLen() int {
+	if object.keys == nil {
+		if err := object.loadKeys(); err != nil {
+			panic(err)
+		}
+	}
+
+	return len(object.keys)
+}
+
+func (object *Object) AppendAccountKeys(keys common.AccountKeys) error {
+	if object.keys == nil {
+		if err := object.loadKeys(); err != nil {
+			return errors.Wrap(err, "failed to load acc keys")
+		}
+	}
+
+	object.keys = append(object.keys, keys...)
+
+	return nil
+}
+
+func (object *Object) IncrementSequenceID(keyID uint64) error {
+	if object.keys == nil {
+		if err := object.loadKeys(); err != nil {
+			return errors.Wrap(err, "failed to load acc keys")
+		}
+	}
+
+	object.keys[keyID].SequenceID += 1
+
+	return nil
+}
+
+func (object *Object) RevokeAccountKeys(revokePayload []common.KeyRevokePayload) error {
+	if object.keys == nil {
+		if err := object.loadKeys(); err != nil {
+			return errors.Wrap(err, "failed to load acc keys")
+		}
+	}
+
+	for _, revoke := range revokePayload {
+		object.keys[revoke.KeyID].Revoked = true
+	}
+
+	return nil
+}
+
+func (object *Object) getAccountKey(keyID uint64) (*common.AccountKey, error) {
+	if object.keys == nil {
+		if err := object.loadKeys(); err != nil {
+			return nil, errors.Wrap(err, "failed to load acc keys")
+		}
+	}
+
+	if keyID >= uint64(object.KeysLen()) {
+		return nil, common.ErrInvalidKeyID
+	}
+
+	return object.keys[keyID], nil
+}
+
+func (object *Object) SequenceID(keyID uint64) (uint64, error) {
+	key, err := object.getAccountKey(keyID)
+	if err != nil {
+		return 0, err
+	}
+
+	return key.SequenceID, nil
+}
+
+func (object *Object) PublicKey(keyID uint64) ([]byte, error) {
+	key, err := object.getAccountKey(keyID)
+	if err != nil {
+		return nil, err
+	}
+
+	return key.PublicKey, nil
+}
+
+func (object *Object) AccountKeys() (common.AccountKeys, error) {
+	if object.keys == nil {
+		if err := object.loadKeys(); err != nil {
+			return nil, errors.Wrap(err, "failed to load acc keys")
+		}
+	}
+
+	return object.keys, nil
 }
 
 // BalanceOf returns the balance of a specific asset, identified by its asset id.
@@ -391,11 +504,7 @@ func (object *Object) ConsumeMandate(assetID identifiers.AssetID, address identi
 	}
 
 	// Deduct the transfer amount from the sender's asset balance
-	if err := object.SubBalance(assetID, amount); err != nil {
-		return err
-	}
-
-	return nil
+	return object.SubBalance(assetID, amount)
 }
 
 // DeleteMandate revokes a granted spending authorization from a specified address for the given asset id.
@@ -557,14 +666,13 @@ func (object *Object) GetDirtyEntry(key string) ([]byte, error) {
 	return val, nil
 }
 
-// IncrementNonce increases the nonce value by the specified count.
-func (object *Object) IncrementNonce(count uint64) {
-	object.data.Nonce += count
-}
-
 // Commit finalizes all changes to the object by committing the deeds, assets, logics, and
 // storage trees to the database.
 func (object *Object) Commit() (common.Hash, error) {
+	if _, err := object.commitAccountKeys(); err != nil {
+		return common.NilHash, errors.Wrap(err, "failed to commit account keys")
+	}
+
 	if _, err := object.commitDeeds(); err != nil {
 		return common.NilHash, errors.Wrap(err, "failed to commit deeds ")
 	}
@@ -587,6 +695,28 @@ func (object *Object) Commit() (common.Hash, error) {
 	}
 
 	return accCid, nil
+}
+
+func (object *Object) commitAccountKeys() (common.Hash, error) {
+	if len(object.keys) == 0 {
+		return common.NilHash, nil
+	}
+
+	data, err := object.keys.Bytes()
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	hash := common.GetHash(data)
+
+	object.SetDirtyEntry(
+		common.BytesToHex(storage.KeyObjectKey(object.address, hash)),
+		data,
+	)
+
+	object.data.KeysHash = hash
+
+	return hash, nil
 }
 
 // commitDeeds stores the current deeds to the dirty entries.

@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sarvalabs/go-moi/common/tests"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/common/tests"
 )
 
 const (
@@ -57,7 +58,18 @@ func CreateRPCInteraction(
 			if err != nil {
 				return nil, err
 			}
+		case common.IXAccountConfigure:
+			payload, err := op.GetAccountConfigurePayload()
+			if err != nil {
+				return nil, err
+			}
 
+			rpcPayload := GetRPCAccountConfigurePayload(payload)
+
+			rawPayload, err = json.Marshal(rpcPayload)
+			if err != nil {
+				return nil, err
+			}
 		case common.IxAssetCreate:
 			payload, err := op.GetAssetCreatePayload()
 			if err != nil {
@@ -133,6 +145,16 @@ func CreateRPCInteraction(
 		}
 	}
 
+	signatures := make([]RPCSignature, len(ix.Signatures()))
+
+	for i, signature := range ix.Signatures() {
+		signatures[i] = RPCSignature{
+			Address:   signature.Address,
+			KeyID:     hexutil.Uint64(signature.KeyID),
+			Signature: signature.Signature,
+		}
+	}
+
 	return &RPCInteraction{
 		TSHash: tsHash,
 
@@ -140,10 +162,13 @@ func CreateRPCInteraction(
 		IxParticipants:    CreateRPCIxParticipants(ix.IxParticipants()),
 
 		IxIndex: hexutil.Uint64(ixIndex),
-		Nonce:   hexutil.Uint64(data.Nonce),
 
-		Sender: data.Sender,
-		Payer:  data.Payer,
+		Sender: RPCSender{
+			Address:    data.Sender.Address,
+			SequenceID: hexutil.Uint64(data.Sender.SequenceID),
+			KeyID:      hexutil.Uint64(data.Sender.KeyID),
+		},
+		Payer: data.Payer,
 
 		FuelPrice: (*hexutil.Big)(data.FuelPrice),
 		FuelLimit: hexutil.Uint64(data.FuelLimit),
@@ -151,8 +176,8 @@ func CreateRPCInteraction(
 
 		IxOps: ops,
 
-		Hash:      ix.Hash(),
-		Signature: ix.Signature(),
+		Hash:       ix.Hash(),
+		Signatures: signatures,
 	}, nil
 }
 
@@ -313,11 +338,28 @@ func CreateRPCReceipt(
 
 			return opResults
 		}(),
-		From:         ix.Sender(),
+		From:         ix.SenderAddr(),
 		IXIndex:      hexutil.Uint64(ixIndex),
 		TSHash:       tsHash,
 		Participants: CreateRPCParticipantStates(participants),
 	}
+}
+
+func CreateRPCAccountKeys(accountKeys []*common.AccountKey) []*RPCAccountKey {
+	rpcAccountKeys := make([]*RPCAccountKey, len(accountKeys))
+
+	for i, accountKey := range accountKeys {
+		rpcAccountKeys[i] = &RPCAccountKey{
+			ID:                 hexutil.Uint64(accountKey.ID),
+			PublicKey:          accountKey.PublicKey,
+			Weight:             hexutil.Uint64(accountKey.Weight),
+			SignatureAlgorithm: hexutil.Uint64(accountKey.SignatureAlgorithm),
+			Revoked:            accountKey.Revoked,
+			SequenceID:         hexutil.Uint64(accountKey.SequenceID),
+		}
+	}
+
+	return rpcAccountKeys
 }
 
 func UnmarshalTopic(topics []interface{}) ([][]common.Hash, error) {

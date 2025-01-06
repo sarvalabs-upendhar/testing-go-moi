@@ -19,7 +19,8 @@ type IxOpPayload struct {
 
 // ParticipantPayload holds different types of participant operations data.
 type ParticipantPayload struct {
-	Create *ParticipantCreatePayload
+	Create    *ParticipantCreatePayload
+	Configure *AccountConfigurePayload
 }
 
 // AssetPayload holds different types of asset operations data.
@@ -111,10 +112,41 @@ func (supply *AssetSupplyPayload) FromBytes(data []byte) error {
 	return nil
 }
 
+type KeyAddPayload struct {
+	PublicKey          []byte
+	Weight             uint64
+	SignatureAlgorithm uint64
+}
+
+type KeyRevokePayload struct {
+	KeyID uint64
+}
+
 // ParticipantCreatePayload holds the data for creating a new participant account
 type ParticipantCreatePayload struct {
-	Address identifiers.Address
-	Amount  *big.Int
+	Address     identifiers.Address
+	KeysPayload []KeyAddPayload
+	Amount      *big.Int
+}
+
+func (register *ParticipantCreatePayload) Weight() uint64 {
+	weight := uint64(0)
+
+	for _, key := range register.KeysPayload {
+		weight += key.Weight
+	}
+
+	return weight
+}
+
+func (register *ParticipantCreatePayload) VerifySignatureAlgorithms() bool {
+	for _, add := range register.KeysPayload {
+		if add.SignatureAlgorithm != 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
 // Bytes serializes ParticipantCreatePayload to bytes.
@@ -131,6 +163,30 @@ func (register *ParticipantCreatePayload) Bytes() ([]byte, error) {
 func (register *ParticipantCreatePayload) FromBytes(data []byte) error {
 	if err := polo.Depolorize(register, data); err != nil {
 		return errors.Wrap(err, "failed to depolorize participant register payload")
+	}
+
+	return nil
+}
+
+type AccountConfigurePayload struct {
+	Add    []KeyAddPayload
+	Revoke []KeyRevokePayload
+}
+
+// Bytes serializes ParticipantCreatePayload to bytes.
+func (configure *AccountConfigurePayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(configure)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize account configure payload")
+	}
+
+	return data, nil
+}
+
+// FromBytes deserializes account configure payload from bytes.
+func (configure *AccountConfigurePayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(configure, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize account configure payload")
 	}
 
 	return nil

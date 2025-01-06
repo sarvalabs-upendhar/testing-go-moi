@@ -105,8 +105,15 @@ type LogicSetupArgs struct {
 	RandomContext      []kramaid.KramaID `json:"random_context"`
 }
 
+type KeyArgs struct {
+	PublicKey          hexutil.Bytes  `json:"public_key"`
+	Weight             hexutil.Uint64 `json:"weight"`
+	SignatureAlgorithm hexutil.Uint64 `json:"signature_algorithm"`
+}
+
 type AccountSetupArgs struct {
 	Address            identifiers.Address `json:"address"`
+	Keys               []KeyArgs           `json:"keys"`
 	AccType            AccountType         `json:"type"`
 	MoiID              string              `json:"moi-id"`
 	BehaviouralContext []kramaid.KramaID   `json:"behaviour_context"`

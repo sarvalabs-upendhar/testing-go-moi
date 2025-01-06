@@ -37,7 +37,7 @@ func (p *PublicIXPoolAPI) Content() (*rpcargs.ContentResponse, error) {
 
 		for _, ix := range ixs {
 			ixArg := rpcargs.NewInteractionResponse(ix)
-			content.Pending[addr][hexutil.Uint64(ix.Nonce())] = ixArg
+			content.Pending[addr][hexutil.Uint64(ix.SequenceID())] = ixArg
 		}
 	}
 
@@ -47,7 +47,7 @@ func (p *PublicIXPoolAPI) Content() (*rpcargs.ContentResponse, error) {
 
 		for _, ix := range ixs {
 			ixArg := rpcargs.NewInteractionResponse(ix)
-			content.Queued[addr][hexutil.Uint64(ix.Nonce())] = ixArg
+			content.Queued[addr][hexutil.Uint64(ix.SequenceID())] = ixArg
 		}
 	}
 
@@ -69,13 +69,13 @@ func (p *PublicIXPoolAPI) ContentFrom(args *rpcargs.IxPoolArgs) (*rpcargs.Conten
 	// update pending ixs
 	for _, ix := range pendingIxs {
 		ixArg := rpcargs.NewInteractionResponse(ix)
-		content.Pending[hexutil.Uint64(ix.Nonce())] = ixArg
+		content.Pending[hexutil.Uint64(ix.SequenceID())] = ixArg
 	}
 
 	// update queued ixs
 	for _, ix := range queuedIxs {
 		ixArg := rpcargs.NewInteractionResponse(ix)
-		content.Queued[hexutil.Uint64(ix.Nonce())] = ixArg
+		content.Queued[hexutil.Uint64(ix.SequenceID())] = ixArg
 	}
 
 	return content, nil
@@ -130,7 +130,7 @@ func (p *PublicIXPoolAPI) Inspect() (*rpcargs.InspectResponse, error) {
 		content.Pending[addr.Hex()] = make(map[string]string, len(ixs))
 
 		for _, ix := range ixs {
-			content.Pending[addr.Hex()][fmt.Sprintf("%d", ix.Nonce())] = format(ix)
+			content.Pending[addr.Hex()][fmt.Sprintf("%d", ix.SequenceID())] = format(ix)
 		}
 	}
 
@@ -139,7 +139,7 @@ func (p *PublicIXPoolAPI) Inspect() (*rpcargs.InspectResponse, error) {
 		content.Queued[addr.Hex()] = make(map[string]string, len(ixs))
 
 		for _, ix := range ixs {
-			content.Queued[addr.Hex()][fmt.Sprintf("%d", ix.Nonce())] = format(ix)
+			content.Queued[addr.Hex()][fmt.Sprintf("%d", ix.SequenceID())] = format(ix)
 		}
 	}
 

@@ -209,6 +209,7 @@ func (c *MockChainManager) setTesseractByHash(
 }
 
 type MockStateManager struct {
+	sequenceID              map[identifiers.Address]uint64
 	storage                 map[common.Hash][]byte
 	balances                map[identifiers.Address]common.AssetMap
 	mandates                map[identifiers.Address][]common.AssetMandateOrLockup
@@ -222,6 +223,48 @@ type MockStateManager struct {
 	logicIDs                map[identifiers.Address][]identifiers.LogicID
 	deeds                   map[identifiers.Address]map[string]*common.AssetDescriptor
 	fetchIxStateObjectsHook func() error
+}
+
+func NewMockStateManager(t *testing.T) *MockStateManager {
+	t.Helper()
+
+	mockState := new(MockStateManager)
+	mockState.sequenceID = make(map[identifiers.Address]uint64)
+	mockState.assetDeeds = make(map[identifiers.AssetID]*common.AssetDescriptor)
+	mockState.balances = make(map[identifiers.Address]common.AssetMap)
+	mockState.mandates = make(map[identifiers.Address][]common.AssetMandateOrLockup)
+	mockState.lockups = make(map[identifiers.Address][]common.AssetMandateOrLockup)
+	mockState.storage = make(map[common.Hash][]byte)
+	mockState.accounts = make(map[identifiers.Address]*common.Account)
+	mockState.context = make(map[identifiers.Address]*Context)
+	mockState.logicManifests = make(map[string][]byte)
+	mockState.logicStorage = make(map[string]map[string]string)
+	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
+	mockState.logicIDs = make(map[identifiers.Address][]identifiers.LogicID)
+	mockState.deeds = make(map[identifiers.Address]map[string]*common.AssetDescriptor)
+
+	return mockState
+}
+
+func (s *MockStateManager) GetAccountKeys(addrs identifiers.Address,
+	stateHash common.Hash,
+) (common.AccountKeys, error) {
+	panic("implement me")
+}
+
+func (s *MockStateManager) setSequenceID(addr identifiers.Address, sequenceID uint64) {
+	s.sequenceID[addr] = sequenceID
+}
+
+func (s *MockStateManager) GetSequenceID(addr identifiers.Address,
+	keyID uint64, stateHash common.Hash,
+) (uint64, error) {
+	id, ok := s.sequenceID[addr]
+	if !ok {
+		return 0, common.ErrInvalidSequenceID
+	}
+
+	return id, nil
 }
 
 func (s *MockStateManager) FetchIxStateObjects(ixns common.Interactions,
@@ -249,26 +292,6 @@ func (s *MockStateManager) GetStateObjectByHash(addr identifiers.Address, hash c
 func (s *MockStateManager) IsAccountRegistered(address identifiers.Address) (bool, error) {
 	// TODO implement me
 	panic("implement me")
-}
-
-func NewMockStateManager(t *testing.T) *MockStateManager {
-	t.Helper()
-
-	mockState := new(MockStateManager)
-	mockState.assetDeeds = make(map[identifiers.AssetID]*common.AssetDescriptor)
-	mockState.balances = make(map[identifiers.Address]common.AssetMap)
-	mockState.mandates = make(map[identifiers.Address][]common.AssetMandateOrLockup)
-	mockState.lockups = make(map[identifiers.Address][]common.AssetMandateOrLockup)
-	mockState.storage = make(map[common.Hash][]byte)
-	mockState.accounts = make(map[identifiers.Address]*common.Account)
-	mockState.context = make(map[identifiers.Address]*Context)
-	mockState.logicManifests = make(map[string][]byte)
-	mockState.logicStorage = make(map[string]map[string]string)
-	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
-	mockState.logicIDs = make(map[identifiers.Address][]identifiers.LogicID)
-	mockState.deeds = make(map[identifiers.Address]map[string]*common.AssetDescriptor)
-
-	return mockState
 }
 
 func (s *MockStateManager) setDeeds(
@@ -469,14 +492,6 @@ func (s *MockStateManager) GetBalance(
 	return nil, common.ErrAccountNotFound
 }
 
-func (s *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
-	if _, ok := s.accounts[addr]; ok {
-		return s.accounts[addr].Nonce, nil
-	}
-
-	return 0, common.ErrAccountNotFound
-}
-
 func (s *MockStateManager) IsGenesis(addr identifiers.Address) (bool, error) {
 	if _, ok := s.storage[common.GetHash(addr.Bytes())]; ok {
 		return true, nil
@@ -628,6 +643,14 @@ func NewMockIxPool(t *testing.T) *MockIxPool {
 	return ixpool
 }
 
+func (mc *MockIxPool) GetSequenceID(addr identifiers.Address, keyID uint64) (uint64, error) {
+	if nextNonce, ok := mc.nextNonce[addr]; ok {
+		return atomic.LoadUint64(&nextNonce), nil
+	}
+
+	return 0, common.ErrAccountNotFound
+}
+
 func (mc *MockIxPool) SetPendingIx(ix *common.Interaction) {
 	mc.pendingIX[ix.Hash()] = ix
 }
@@ -651,14 +674,6 @@ func (mc *MockIxPool) AddLocalInteractions(ixs common.Interactions) []error {
 	}
 
 	return nil
-}
-
-func (mc *MockIxPool) GetNonce(addr identifiers.Address) (uint64, error) {
-	if nextNonce, ok := mc.nextNonce[addr]; ok {
-		return atomic.LoadUint64(&nextNonce), nil
-	}
-
-	return 0, common.ErrAccountNotFound
 }
 
 func (mc *MockIxPool) GetIxs(addr identifiers.Address, inclQueued bool) (promoted, enqueued []*common.Interaction) {
@@ -1091,7 +1106,7 @@ func getContext(t *testing.T, count int) *Context {
 	}
 }
 
-func getSignatureString(t *testing.T, ixData *common.IxData, mnemonic string) string {
+func getSignatureBytes(t *testing.T, ixData *common.IxData, mnemonic string) []byte {
 	t.Helper()
 
 	bz, err := ixData.Bytes()
@@ -1099,14 +1114,6 @@ func getSignatureString(t *testing.T, ixData *common.IxData, mnemonic string) st
 
 	sign, err := crypto.GetSignature(bz, mnemonic)
 	require.NoError(t, err)
-
-	return sign
-}
-
-func getSignatureBytes(t *testing.T, ixData *common.IxData, mnemonic string) []byte {
-	t.Helper()
-
-	sign := getSignatureString(t, ixData, mnemonic)
 
 	signBytes, err := hex.DecodeString(sign)
 	require.NoError(t, err)
@@ -1149,7 +1156,7 @@ func newTestInteraction(
 
 	ixData.Participants = []common.IxParticipant{
 		{
-			Address:  ixData.Sender,
+			Address:  ixData.Sender.Address,
 			LockType: common.MutateLock,
 		},
 	}

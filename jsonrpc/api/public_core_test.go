@@ -446,16 +446,16 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 	)
 	chainManager.setTesseractByHash(t, ts)
 
-	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
-		acc.Nonce = uint64(2)
-	})
+	acc, _ := tests.GetTestAccount(t, nil)
 	sm.setAccount(ts.AnyAddress(), *acc)
+	sm.setSequenceID(address, 2)
 
 	tsHash := getTesseractHash(t, ts)
 
 	IxWithoutFuelParams, err := constructIxn(sm, &common.IxData{
-		Sender: address,
-		Nonce:  0,
+		Sender: common.Sender{
+			Address: address,
+		},
 		IxOps: []common.IxOpRaw{
 			{
 				Type:    common.IxLogicDeploy,
@@ -468,12 +468,13 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 				LockType: common.MutateLock,
 			},
 		},
-	}, nil)
+	})
 	assert.NoError(t, err)
 
 	IxWithFuelParams, err := constructIxn(sm, &common.IxData{
-		Sender:    address,
-		Nonce:     0,
+		Sender: common.Sender{
+			Address: address,
+		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 100,
 		IxOps: []common.IxOpRaw{
@@ -488,7 +489,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 				LockType: common.MutateLock,
 			},
 		},
-	}, nil)
+	})
 	assert.NoError(t, err)
 
 	receipt := &common.Receipt{
@@ -508,7 +509,9 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 			name: "failed to validate interaction",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender: address,
+					Sender: common.Sender{
+						Address: address,
+					},
 				},
 			},
 			expectedErr: ErrEmptyIxOps,
@@ -517,7 +520,9 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 			name: "failed to construct interaction",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender:    address,
+					Sender: common.Sender{
+						Address: address,
+					},
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					IxOps: []rpcargs.IxOp{
@@ -540,7 +545,9 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 			name: "failed to retrieve stateHashes as options are empty",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender:    address,
+					Sender: common.Sender{
+						Address: address,
+					},
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					IxOps: []rpcargs.IxOp{
@@ -562,7 +569,9 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 			name: "should return error as rpc receipt fetch failed",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender:    tests.RandomAddress(t),
+					Sender: common.Sender{
+						Address: tests.RandomAddress(t),
+					},
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					IxOps: []rpcargs.IxOp{
@@ -578,13 +587,15 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: common.ErrAccountNotFound,
+			expectedErr: common.ErrInvalidSequenceID,
 		},
 		{
 			name: "rpc receipt fetched successfully when fuel price and limit are not given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender: address,
+					Sender: common.Sender{
+						Address: address,
+					},
 					IxOps: []rpcargs.IxOp{
 						{
 							Type:    common.IxLogicDeploy,
@@ -610,7 +621,9 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 			name: "rpc receipt fetched successfully when fuel price and limit are given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender:    address,
+					Sender: common.Sender{
+						Address: address,
+					},
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					IxOps: []rpcargs.IxOp{
@@ -677,16 +690,16 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 	)
 	chainManager.setTesseractByHash(t, ts)
 
-	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
-		acc.Nonce = uint64(2)
-	})
+	acc, _ := tests.GetTestAccount(t, nil)
 	sm.setAccount(ts.AnyAddress(), *acc)
+	sm.setSequenceID(ts.AnyAddress(), 2)
 
 	tsHash := getTesseractHash(t, ts)
 
 	IxWithoutFuelParams, err := constructIxn(sm, &common.IxData{
-		Sender: address,
-		Nonce:  0,
+		Sender: common.Sender{
+			Address: address,
+		},
 		IxOps: []common.IxOpRaw{
 			{
 				Type:    common.IxAssetCreate,
@@ -699,7 +712,7 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 				LockType: common.MutateLock,
 			},
 		},
-	}, nil)
+	})
 	assert.NoError(t, err)
 
 	receiptWithoutFuelParams := &common.Receipt{
@@ -714,8 +727,9 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 	}
 
 	IxWithFuelParams, err := constructIxn(sm, &common.IxData{
-		Sender:    address,
-		Nonce:     0,
+		Sender: common.Sender{
+			Address: address,
+		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 100,
 		IxOps: []common.IxOpRaw{
@@ -730,7 +744,7 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 				LockType: common.MutateLock,
 			},
 		},
-	}, nil)
+	})
 	assert.NoError(t, err)
 
 	receiptWithFuelParams := &common.Receipt{
@@ -757,7 +771,9 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 			name: "failed to validate interaction",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender: tests.RandomAddress(t),
+					Sender: common.Sender{
+						Address: tests.RandomAddress(t),
+					},
 				},
 			},
 			expectedErr: ErrEmptyIxOps,
@@ -766,7 +782,9 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 			name: "failed to construct interaction",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender:    address,
+					Sender: common.Sender{
+						Address: address,
+					},
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					IxOps: []rpcargs.IxOp{
@@ -789,7 +807,9 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 			name: "failed to retrieve stateHashes as options are empty",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender:    tests.RandomAddress(t),
+					Sender: common.Sender{
+						Address: tests.RandomAddress(t),
+					},
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					IxOps: []rpcargs.IxOp{
@@ -811,7 +831,9 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 			name: "should return error as rpc receipt fetch failed",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender:    tests.RandomAddress(t),
+					Sender: common.Sender{
+						Address: tests.RandomAddress(t),
+					},
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					IxOps: []rpcargs.IxOp{
@@ -827,13 +849,15 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: common.ErrAccountNotFound,
+			expectedErr: common.ErrInvalidSequenceID,
 		},
 		{
 			name: "rpc receipt fetched successfully when fuel price and limit are not given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender: address,
+					Sender: common.Sender{
+						Address: address,
+					},
 					IxOps: []rpcargs.IxOp{
 						{
 							Type:    common.IxAssetCreate,
@@ -856,7 +880,7 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 			expectedReceipt: &rpcargs.RPCReceipt{
 				IxHash:   IxWithoutFuelParams.Hash(),
 				FuelUsed: hexutil.Uint64(100),
-				From:     IxWithoutFuelParams.Sender(),
+				From:     IxWithoutFuelParams.SenderAddr(),
 				IxOps: []*rpcargs.RPCIxOpResult{
 					{
 						TxType: hexutil.Uint64(common.IxAssetCreate),
@@ -869,7 +893,9 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 			name: "rpc receipt fetched successfully when fuel price and limit are given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: &rpcargs.IxArgs{
-					Sender:    address,
+					Sender: common.Sender{
+						Address: address,
+					},
 					FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 					FuelLimit: hexutil.Uint64(100),
 					IxOps: []rpcargs.IxOp{
@@ -894,7 +920,7 @@ func TestPublicCoreAPI_Call(t *testing.T) {
 			expectedReceipt: &rpcargs.RPCReceipt{
 				IxHash:   IxWithFuelParams.Hash(),
 				FuelUsed: hexutil.Uint64(100),
-				From:     IxWithFuelParams.Sender(),
+				From:     IxWithFuelParams.SenderAddr(),
 				IxOps: []*rpcargs.RPCIxOpResult{
 					{
 						TxType: hexutil.Uint64(common.IxLogicDeploy),
@@ -1309,11 +1335,10 @@ func TestPublicCoreAPI_GetInteractionCount(t *testing.T) {
 	randomHash := tests.RandomHash(t)
 
 	latestNonce := uint64(5)
-	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
-		acc.Nonce = uint64(5)
-	})
+	acc, _ := tests.GetTestAccount(t, nil)
 
 	stateManager.setAccount(ts.AnyAddress(), *acc)
+	stateManager.setSequenceID(ts.AnyAddress(), latestNonce)
 
 	testcases := []struct {
 		name          string
@@ -1429,7 +1454,6 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 	chainManager.setTesseractByHash(t, ts)
 	randomHash := tests.RandomHash(t)
 	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
-		acc.Nonce = uint64(5)
 		acc.AccType = common.RegularAccount
 		acc.AssetDeeds = tests.RandomHash(t)
 		acc.ContextHash = tests.RandomHash(t)
@@ -1482,7 +1506,6 @@ func TestPublicCoreAPI_GetAccountState(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, hexutil.Uint64(test.expectedAcc.Nonce), fetchedAcc.Nonce)
 			require.Equal(t, test.expectedAcc.AccType, fetchedAcc.AccType)
 			require.Equal(t, test.expectedAcc.AssetDeeds, fetchedAcc.AssetDeeds)
 			require.Equal(t, test.expectedAcc.ContextHash, fetchedAcc.ContextHash)

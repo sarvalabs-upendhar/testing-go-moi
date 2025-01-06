@@ -16,11 +16,12 @@ const (
 	Asset           PrefixTag = 0x02
 	Logic           PrefixTag = 0x03
 	File            PrefixTag = 0x04
-	Storage         PrefixTag = 0x05
-	Deeds           PrefixTag = 0x06
-	PreImage        PrefixTag = 0x07
-	TesseractHeight PrefixTag = 0x08
-	LogicManifest   PrefixTag = 0x09
+	AccountKeys     PrefixTag = 0x05
+	Storage         PrefixTag = 0x06
+	Deeds           PrefixTag = 0x07
+	PreImage        PrefixTag = 0x08
+	TesseractHeight PrefixTag = 0x09
+	LogicManifest   PrefixTag = 0x0A
 )
 
 // Non-Account Based Key Prefixes

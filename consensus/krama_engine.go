@@ -85,6 +85,7 @@ type kramaTransport interface {
 }
 
 type stateManager interface {
+	GetPublicKey(addr identifiers.Address, KeyID uint64, stateHash common.Hash) ([]byte, error)
 	LoadTransitionObjects(ps map[identifiers.Address]common.ParticipantInfo) (*state.Transition, error)
 	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
 	GetLatestContextAndPublicKeys(addr identifiers.Address) (
@@ -98,7 +99,7 @@ type stateManager interface {
 	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(addr identifiers.Address) (bool, error)
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
-	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
+	GetSequenceID(addr identifiers.Address, KeyID uint64, stateHash common.Hash) (uint64, error)
 	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
 	RemoveCachedObject(addr identifiers.Address)
@@ -830,23 +831,23 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 		k.logger.Debug(
 			"Validating interaction",
 			"ix-hash", ixHash,
-			"nonce", ix.Nonce(),
-			"from", ix.Sender().Hex(),
+			"sequence-id", ix.SequenceID(),
+			"from", ix.SenderAddr().Hex(),
 		)
 		/*
 			Checks to perform
-			1) Verify nonce
+			1) Verify sequenceID
 			2) Verify balances
 			3) Verify the account states
 		*/
-		latestNonce, err := k.state.GetNonce(ix.Sender(), common.NilHash)
+		latestSequenceID, err := k.state.GetSequenceID(ix.SenderAddr(), ix.SenderKeyID(), common.NilHash)
 		if err != nil {
 			return err
 		}
 
-		// validate nonce
-		if ix.Nonce() < latestNonce {
-			return common.ErrInvalidNonce
+		// validate sequenceID
+		if ix.SequenceID() < latestSequenceID {
+			return common.ErrInvalidSequenceID
 		}
 
 		if err = k.isIxValid(ix); err != nil {
@@ -859,15 +860,15 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 
 // isIxValid performs validity checks based on the type of interaction
 func (k *Engine) isIxValid(ix *common.Interaction) error {
-	if ix.Sender().IsNil() {
+	if ix.SenderAddr().IsNil() {
 		return common.ErrInvalidAddress
 	}
 
-	if accountRegistered, err := k.state.IsAccountRegistered(ix.Sender()); err != nil || !accountRegistered {
+	if accountRegistered, err := k.state.IsAccountRegistered(ix.SenderAddr()); err != nil || !accountRegistered {
 		return common.ErrAccountNotFound
 	}
 
-	senderObject, err := k.state.GetLatestStateObject(ix.Sender())
+	senderObject, err := k.state.GetLatestStateObject(ix.SenderAddr())
 	if err != nil {
 		return err
 	}

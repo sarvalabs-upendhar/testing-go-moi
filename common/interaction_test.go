@@ -42,10 +42,17 @@ func TestNewInteraction(t *testing.T) {
 	}
 	rawLogicPayload, _ := logicPayload.Bytes()
 
+	signatures := common.Signatures{
+		{
+			Address:   tests.RandomAddress(t),
+			KeyID:     2,
+			Signature: []byte{1, 2, 3},
+		},
+	}
+
 	testcases := []struct {
 		name        string
 		ixData      common.IxData
-		sign        []byte
 		expectedIX  *common.Interaction
 		expectedErr error
 	}{
@@ -62,7 +69,6 @@ func TestNewInteraction(t *testing.T) {
 					Address: assetActionPayload.Beneficiary,
 				})
 			}),
-			sign: []byte{1, 2, 3},
 		},
 		{
 			name: "missing beneficiary in participants",
@@ -75,7 +81,6 @@ func TestNewInteraction(t *testing.T) {
 				}
 			}),
 			expectedErr: common.ErrMissingBeneficiary,
-			sign:        []byte{1, 2, 3},
 		},
 		{
 			name: "asset create ix",
@@ -87,7 +92,6 @@ func TestNewInteraction(t *testing.T) {
 					},
 				}
 			}),
-			sign: []byte{1, 2, 3},
 		},
 		{
 			name: "sender not found in participants",
@@ -101,7 +105,6 @@ func TestNewInteraction(t *testing.T) {
 				ixData.Participants = []common.IxParticipant{}
 			}),
 			expectedErr: common.ErrMissingSender,
-			sign:        []byte{1, 2, 3},
 		},
 		{
 			name: "payer not found in participants",
@@ -115,7 +118,6 @@ func TestNewInteraction(t *testing.T) {
 				ixData.Participants = ixData.Participants[1:2]
 			}),
 			expectedErr: common.ErrMissingPayer,
-			sign:        []byte{1, 2, 3},
 		},
 		{
 			name: "asset mint ix",
@@ -130,7 +132,6 @@ func TestNewInteraction(t *testing.T) {
 					Address: assetSupplyPayload.AssetID.Address(),
 				})
 			}),
-			sign: []byte{1, 2, 3},
 		},
 		{
 			name: "missing asset account in participants in asset mint ixn",
@@ -143,7 +144,6 @@ func TestNewInteraction(t *testing.T) {
 				}
 			}),
 			expectedErr: common.ErrMissingAssetAccount,
-			sign:        []byte{1, 2, 3},
 		},
 		{
 			name: "asset burn ix",
@@ -158,7 +158,6 @@ func TestNewInteraction(t *testing.T) {
 					Address: assetSupplyPayload.AssetID.Address(),
 				})
 			}),
-			sign: []byte{1, 2, 3},
 		},
 		{
 			name: "missing asset account in participants in asset burn ixn",
@@ -171,7 +170,6 @@ func TestNewInteraction(t *testing.T) {
 				}
 			}),
 			expectedErr: common.ErrMissingAssetAccount,
-			sign:        []byte{1, 2, 3},
 		},
 		{
 			name: "deploy logic ix",
@@ -183,7 +181,6 @@ func TestNewInteraction(t *testing.T) {
 					},
 				}
 			}),
-			sign: []byte{1, 2, 3},
 		},
 		{
 			name: "invoke logic ix",
@@ -203,7 +200,6 @@ func TestNewInteraction(t *testing.T) {
 					},
 				}...)
 			}),
-			sign: []byte{1, 2, 3},
 		},
 		{
 			name: "missing foreign logic account in participants",
@@ -221,7 +217,6 @@ func TestNewInteraction(t *testing.T) {
 				}...)
 			}),
 			expectedErr: common.ErrMissingForeignLogicAccount,
-			sign:        []byte{1, 2, 3},
 		},
 		{
 			name: "missing logic account from participants",
@@ -234,7 +229,6 @@ func TestNewInteraction(t *testing.T) {
 				}
 			}),
 			expectedErr: common.ErrMissingLogicAccount,
-			sign:        []byte{1, 2, 3},
 		},
 		{
 			name: "missing foreign logic account from participants",
@@ -247,7 +241,6 @@ func TestNewInteraction(t *testing.T) {
 				}
 			}),
 			expectedErr: common.ErrMissingLogicAccount,
-			sign:        []byte{1, 2, 3},
 		},
 		{
 			name: "invalid ix",
@@ -259,14 +252,13 @@ func TestNewInteraction(t *testing.T) {
 					},
 				}
 			}),
-			sign:        []byte{1, 2, 3},
 			expectedErr: common.ErrInvalidInteractionType,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ix, err := common.NewInteraction(test.ixData, test.sign)
+			ix, err := common.NewInteraction(test.ixData, signatures)
 			if test.expectedErr != nil {
 				require.ErrorContains(t, err, test.expectedErr.Error())
 
@@ -276,7 +268,7 @@ func TestNewInteraction(t *testing.T) {
 			require.NoError(t, err)
 
 			// check if ix data copied properly
-			require.Equal(t, test.ixData.Nonce, ix.Nonce())
+			require.Equal(t, test.ixData.Sender.SequenceID, ix.SequenceID())
 			require.Equal(t, test.ixData.Sender, ix.Sender())
 			require.Equal(t, test.ixData.Payer, ix.Payer())
 			require.Equal(t, test.ixData.FuelPrice, ix.FuelPrice())
@@ -286,7 +278,7 @@ func TestNewInteraction(t *testing.T) {
 			require.Equal(t, test.ixData.Perception, ix.Perception())
 			require.Equal(t, test.ixData.Preferences, ix.Preferences())
 
-			require.Equal(t, test.sign, ix.Signature())
+			require.Equal(t, signatures, ix.Signatures())
 
 			data, err := polo.Polorize(test.ixData)
 			require.NoError(t, err)
@@ -296,14 +288,17 @@ func TestNewInteraction(t *testing.T) {
 			size, err := ix.Size()
 			require.NoError(t, err)
 
-			require.Equal(t, uint64(len(data)+len(ix.Signature())), size)
+			rawSig, err := ix.Signatures().Bytes()
+			require.NoError(t, err)
+
+			require.Equal(t, uint64(len(data)+len(rawSig)), size)
 
 			// check for payload
 			checkIxOperations(t, ix, assetCreatePayload, assetActionPayload, assetSupplyPayload, logicPayload)
 
 			if test.ixData.IxOps[0].Type == common.IxAssetCreate ||
 				test.ixData.IxOps[0].Type == common.IxLogicDeploy {
-				addr := common.NewAccountAddress(ix.Nonce(), ix.Sender())
+				addr := common.NewAccountAddress(ix.SenderAddr(), ix.SenderKeyID(), ix.SequenceID())
 				info := ix.Participants()
 				_, ok := info[addr]
 				require.True(t, ok)
@@ -673,7 +668,9 @@ func TestAccountType(t *testing.T) {
 		}),
 		tests.CreateIX(t, &tests.CreateIxParams{
 			IxDataCallback: func(ix *common.IxData) {
-				ix.Sender = tests.RandomAddress(t)
+				ix.Sender = common.Sender{
+					Address: tests.RandomAddress(t),
+				}
 				ix.IxOps = []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
@@ -696,7 +693,7 @@ func TestAccountType(t *testing.T) {
 	}{
 		{
 			name:         "sender should be a regular account",
-			address:      ixns.IxList()[0].Sender(),
+			address:      ixns.IxList()[0].SenderAddr(),
 			expectedType: common.RegularAccount,
 		},
 		{

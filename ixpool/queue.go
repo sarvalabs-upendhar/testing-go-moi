@@ -17,15 +17,15 @@ type WaitInteractions struct {
 	ix          *common.Interaction
 }
 
-// A thread-safe wrapper of a minNonceQueue.
+// A thread-safe wrapper of a minSequenceIDQueue.
 // All methods assume the (correct) lock is held.
-type accountQueue struct {
-	queue minNonceQueue
+type ixQueue struct {
+	queue minSequenceIDQueue
 }
 
-func newAccountQueue() *accountQueue {
-	q := accountQueue{
-		queue: make(minNonceQueue, 0),
+func newAccountQueue() *ixQueue {
+	q := ixQueue{
+		queue: make(minSequenceIDQueue, 0),
 	}
 
 	heap.Init(&q.queue)
@@ -34,12 +34,12 @@ func newAccountQueue() *accountQueue {
 }
 
 // prune removes all Interactions from the queue
-// with nonce lower than given.
-func (q *accountQueue) prune(nonce uint64) (pruned []*common.Interaction) {
+// with sequenceID lower than given.
+func (q *ixQueue) prune(sequenceID uint64) (pruned []*common.Interaction) {
 	for {
 		ix := q.peek()
 		if ix == nil ||
-			ix.Nonce() >= nonce {
+			ix.SequenceID() >= sequenceID {
 			break
 		}
 
@@ -50,7 +50,7 @@ func (q *accountQueue) prune(nonce uint64) (pruned []*common.Interaction) {
 	return
 }
 
-func (q *accountQueue) clear() (dropped []*common.Interaction) {
+func (q *ixQueue) clear() (dropped []*common.Interaction) {
 	// copy ixs
 	dropped = q.queue
 
@@ -61,21 +61,21 @@ func (q *accountQueue) clear() (dropped []*common.Interaction) {
 }
 
 // push pushes the given Interactions onto the queue.
-func (q *accountQueue) push(ix *common.Interaction) {
+func (q *ixQueue) push(ix *common.Interaction) {
 	heap.Push(&q.queue, ix)
 }
 
 // peek returns the first Interaction from the queue without removing it.
-func (q *accountQueue) peek() *common.Interaction {
+func (q *ixQueue) peek() *common.Interaction {
 	return q.queue.Peek()
 }
 
-func (q *accountQueue) list() []*common.Interaction {
+func (q *ixQueue) list() []*common.Interaction {
 	return q.queue.List()
 }
 
 // pop removes the first Interactions from the queue and returns it.
-func (q *accountQueue) pop() *common.Interaction {
+func (q *ixQueue) pop() *common.Interaction {
 	if q.length() == 0 {
 		return nil
 	}
@@ -84,16 +84,16 @@ func (q *accountQueue) pop() *common.Interaction {
 }
 
 // length returns the number of Interactions in the queue.
-func (q *accountQueue) length() uint64 {
+func (q *ixQueue) length() uint64 {
 	return uint64(q.queue.Len())
 }
 
-// Interactions sorted by nonce (ascending)
-type minNonceQueue []*common.Interaction
+// Interactions sorted by sequenceID (ascending)
+type minSequenceIDQueue []*common.Interaction
 
 /* Queue methods required by the heap interface */
 
-func (q *minNonceQueue) List() []*common.Interaction {
+func (q *minSequenceIDQueue) List() []*common.Interaction {
 	if q.Len() == 0 {
 		return nil
 	}
@@ -101,7 +101,7 @@ func (q *minNonceQueue) List() []*common.Interaction {
 	return (*q)[:]
 }
 
-func (q *minNonceQueue) Peek() *common.Interaction {
+func (q *minSequenceIDQueue) Peek() *common.Interaction {
 	if q.Len() == 0 {
 		return nil
 	}
@@ -109,19 +109,19 @@ func (q *minNonceQueue) Peek() *common.Interaction {
 	return (*q)[0]
 }
 
-func (q *minNonceQueue) Len() int {
+func (q *minSequenceIDQueue) Len() int {
 	return len(*q)
 }
 
-func (q *minNonceQueue) Swap(i, j int) {
+func (q *minSequenceIDQueue) Swap(i, j int) {
 	(*q)[i], (*q)[j] = (*q)[j], (*q)[i]
 }
 
-func (q *minNonceQueue) Less(i, j int) bool {
-	return (*q)[i].Nonce() < (*q)[j].Nonce()
+func (q *minSequenceIDQueue) Less(i, j int) bool {
+	return (*q)[i].SequenceID() < (*q)[j].SequenceID()
 }
 
-func (q *minNonceQueue) Push(x interface{}) {
+func (q *minSequenceIDQueue) Push(x interface{}) {
 	ix, ok := x.(*common.Interaction)
 	if !ok {
 		return
@@ -130,7 +130,7 @@ func (q *minNonceQueue) Push(x interface{}) {
 	*q = append(*q, ix)
 }
 
-func (q *minNonceQueue) Pop() interface{} {
+func (q *minSequenceIDQueue) Pop() interface{} {
 	old := q
 	n := len(*old)
 	x := (*old)[n-1]

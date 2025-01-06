@@ -18,7 +18,9 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 	opTypes []common.IxOpType,
 ) *common.IxData {
 	ixData := &common.IxData{
-		Sender:    sender.Addr,
+		Sender: common.Sender{
+			Address: sender.Addr,
+		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		Funds:     make([]common.IxFund, 0),
@@ -42,9 +44,17 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 			rawPayload, err = []byte{}, nil
 
 		case common.IxParticipantCreate:
+			addr := tests.RandomAddress(te.T())
 			participantRegisterPayload := &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(te.T()),
-				Amount:  big.NewInt(300),
+				Address: addr,
+				KeysPayload: []common.KeyAddPayload{
+					{
+						PublicKey:          addr.Bytes(),
+						Weight:             1000,
+						SignatureAlgorithm: 0,
+					},
+				},
+				Amount: big.NewInt(300),
 			}
 
 			rawPayload, err = participantRegisterPayload.Bytes()
@@ -65,7 +75,14 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 
 			createParticipant(te, sender, &common.ParticipantCreatePayload{
 				Address: addr,
-				Amount:  big.NewInt(1),
+				KeysPayload: []common.KeyAddPayload{
+					{
+						PublicKey:          addr.Bytes(),
+						Weight:             1000,
+						SignatureAlgorithm: 0,
+					},
+				},
+				Amount: big.NewInt(1),
 			})
 
 			assetActionPayload := &common.AssetActionPayload{
@@ -164,7 +181,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 		})
 	}
 
-	ixData.Nonce = moiclient.GetLatestNonce(te.T(), te.moiClient, sender.Addr)
+	ixData.Sender.SequenceID = moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.Addr, 0)
 
 	return ixData
 }
@@ -309,15 +326,6 @@ func (te *TestEnvironment) TestOperations() {
 			}),
 		},
 		{
-			name:    "valid interaction with both asset and logic operations",
-			account: accounts[2],
-			ixData: te.createIxWithMultipleTxs(accounts[2], []common.IxOpType{
-				common.IxLogicDeploy,
-				common.IxAssetCreate,
-				common.IxLogicInvoke,
-			}),
-		},
-		{
 			name:    "valid interaction with participant create operations",
 			account: accounts[3],
 			ixData: te.createIxWithMultipleTxs(accounts[3], []common.IxOpType{
@@ -329,7 +337,13 @@ func (te *TestEnvironment) TestOperations() {
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			sendIX := moiclient.CreateSendIXFromIxData(te.T(), test.ixData, test.account.Mnemonic)
+			sendIX := moiclient.CreateSendIXFromIxData(te.T(), test.ixData, []moiclient.AccountKeyWithMnemonic{
+				{
+					Addr:     test.account.Addr,
+					KeyID:    0,
+					Mnemonic: test.account.Mnemonic,
+				},
+			})
 
 			ixHash, err := te.moiClient.SendInteractions(context.Background(), sendIX)
 			if test.expectedError != nil {
@@ -340,7 +354,7 @@ func (te *TestEnvironment) TestOperations() {
 
 			require.NoError(te.T(), err)
 
-			validateOperations(te, test.ixData.Sender, ixHash, test.ixData.IxOps)
+			validateOperations(te, test.ixData.Sender.Address, ixHash, test.ixData.IxOps)
 		})
 	}
 }

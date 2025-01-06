@@ -15,7 +15,6 @@ import (
 	"github.com/sarvalabs/go-moi-identifiers"
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
@@ -26,6 +25,8 @@ import (
 )
 
 var (
+	senderAddress            string
+	senderKeyID              int32
 	networkRPC               string
 	nodeDataDir              string
 	nodeIndex                int32
@@ -49,6 +50,18 @@ func GetRegisterCommand() *cobra.Command {
 }
 
 func parseRegisterFlags(cmd *cobra.Command) {
+	cmd.PersistentFlags().StringVar(
+		&senderAddress,
+		"address",
+		"",
+		"address",
+	)
+	cmd.PersistentFlags().Int32Var(
+		&senderKeyID,
+		"sender-key-id",
+		-1,
+		"sender key id",
+	)
 	cmd.PersistentFlags().StringVar(
 		&mnemonicKeystorePath,
 		"mnemonic-keystore-path",
@@ -93,6 +106,9 @@ func parseRegisterFlags(cmd *cobra.Command) {
 		"Passcode to encrypt the node keystore.",
 	)
 
+	_ = cmd.MarkPersistentFlagRequired("sender-address")
+	_ = cmd.MarkPersistentFlagRequired("sender-key-id")
+	_ = cmd.MarkPersistentFlagRequired("sender-public-key")
 	_ = cmd.MarkPersistentFlagRequired("data-dir")
 	_ = cmd.MarkPersistentFlagRequired("wallet-address")
 	_ = cmd.MarkPersistentFlagRequired("node-index")
@@ -106,6 +122,14 @@ func validateFlags() error {
 
 	if walletAddress == "" {
 		return errors.New("invalid incentive wallet address")
+	}
+
+	if senderAddress == "" {
+		return errors.New("invalid sender address")
+	}
+
+	if senderKeyID < 0 {
+		return errors.New("invalid sender key id")
 	}
 
 	if nodeIndex == -1 {
@@ -178,6 +202,8 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(errors.Wrap(err, "failed to create moi-client"))
 	}
 
+	sender, _ := identifiers.NewAddressFromHex(senderAddress)
+
 	// Check if the guardian is already registered
 	isRegistered, err := cmdCommon.IsGuardianRegistered(client, vault.KramaID())
 	if err != nil {
@@ -194,24 +220,18 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(errors.Wrap(err, "failed to generate moiID"))
 	}
 
-	moiIDPublicKey, err := vault.GetPublicKeyAt(config.DefaultMOIIDPath)
-	if err != nil {
-		cmdCommon.Err(err)
-	}
-
 	fmt.Printf("Krama-ID %s \n", vault.KramaID())
 
-	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
-		Address: identifiers.NewAddressFromBytes(moiIDPublicKey),
+	sequenceID, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
+		Address: sender,
+		KeyID:   uint64(senderKeyID),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
 	})
 	if err != nil {
-		cmdCommon.Err(errors.Wrap(err, "failed to fetch nonce"))
+		cmdCommon.Err(errors.Wrap(err, "failed to fetch sequenceID"))
 	}
-
-	sender := identifiers.NewAddressFromBytes(moiIDPublicKey)
 
 	logicPayload := &common.LogicPayload{
 		Logic:    common.GuardianLogicID,
@@ -245,8 +265,11 @@ func registerGuardian(vault *crypto.KramaVault) {
 	}
 
 	ixArgs := common.IxData{
-		Sender:    sender,
-		Nonce:     nonce.ToUint64(),
+		Sender: common.Sender{
+			Address:    sender,
+			SequenceID: sequenceID.ToUint64(),
+			KeyID:      uint64(senderKeyID),
+		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 10000,
 		IxOps: []common.IxOpRaw{
@@ -278,8 +301,8 @@ func registerGuardian(vault *crypto.KramaVault) {
 	}
 
 	ixHash, err := client.SendInteractions(context.Background(), &rpcargs.SendIX{
-		IXArgs:    hex.EncodeToString(rawArgs),
-		Signature: hex.EncodeToString(signature),
+		IXArgs:     hex.EncodeToString(rawArgs),
+		Signatures: hex.EncodeToString(signature),
 	})
 	if err != nil {
 		cmdCommon.Err(err)

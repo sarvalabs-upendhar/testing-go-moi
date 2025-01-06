@@ -32,8 +32,10 @@ func (te *TestEnvironment) logicInvoke(
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
-		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, acc.Addr),
-		Sender:    acc.Addr,
+		Sender: common.Sender{
+			Address:    acc.Addr,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.Addr, 0),
+		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		IxOps: []common.IxOpRaw{
@@ -54,7 +56,13 @@ func (te *TestEnvironment) logicInvoke(
 		},
 	}
 
-	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, acc.Mnemonic)
+	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
+		{
+			Addr:     acc.Addr,
+			KeyID:    0,
+			Mnemonic: acc.Mnemonic,
+		},
+	})
 
 	return te.moiClient.SendInteractions(context.Background(), sendIX)
 }

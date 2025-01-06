@@ -36,6 +36,7 @@ type Store interface {
 	GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error)
 	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
 	GetDeeds(addr identifiers.Address, registryHash common.Hash) ([]byte, error)
+	GetAccountKeys(addr identifiers.Address, stateHash common.Hash) ([]byte, error)
 	GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error)
 	SetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key, value []byte) error
 	SetMerkleTreeEntries(address identifiers.Address, prefix storage.PrefixTag, entries map[string][]byte) error
@@ -102,7 +103,8 @@ func NewStateManager(
 	return sm, nil
 }
 
-func (sm *StateManager) CreateStateObject(addr identifiers.Address,
+func (sm *StateManager) CreateStateObject(
+	addr identifiers.Address,
 	accType common.AccountType, isGenesis bool,
 ) *Object {
 	stateObject := NewStateObject(addr, sm.cache, sm.treeCache, sm.db,
@@ -536,7 +538,7 @@ func (sm *StateManager) IsAccountRegisteredAt(addr identifiers.Address, tesserac
 	return true, err
 }
 
-func (sm *StateManager) GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
+func (sm *StateManager) GetSequenceID(addr identifiers.Address, keyID uint64, stateHash common.Hash) (uint64, error) {
 	if addr.IsNil() {
 		return 0, common.ErrInvalidAddress
 	}
@@ -546,7 +548,16 @@ func (sm *StateManager) GetNonce(addr identifiers.Address, stateHash common.Hash
 		return 0, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	return so.data.Nonce, nil
+	return so.SequenceID(keyID)
+}
+
+func (sm *StateManager) GetPublicKey(addr identifiers.Address, keyID uint64, stateHash common.Hash) ([]byte, error) {
+	so, err := sm.getStateObject(addr, stateHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	return so.PublicKey(keyID)
 }
 
 func (sm *StateManager) GetBalances(addrs identifiers.Address, stateHash common.Hash) (common.AssetMap, error) {
@@ -615,6 +626,15 @@ func (sm *StateManager) GetLockups(
 	}
 
 	return stateObject.Lockups()
+}
+
+func (sm *StateManager) GetAccountKeys(addrs identifiers.Address, stateHash common.Hash) (common.AccountKeys, error) {
+	so, err := sm.getStateObject(addrs, stateHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch state object")
+	}
+
+	return so.AccountKeys()
 }
 
 func (sm *StateManager) GetBalance(

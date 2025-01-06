@@ -182,6 +182,28 @@ type MockStateManager struct {
 	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
 }
 
+func NewMockStateManager(t *testing.T) *MockStateManager {
+	t.Helper()
+
+	mockState := new(MockStateManager)
+	mockState.storage = make(map[common.Hash][]byte)
+	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
+
+	return mockState
+}
+
+func (m *MockStateManager) GetAccountKeys(addrs identifiers.Address,
+	stateHash common.Hash,
+) (common.AccountKeys, error) {
+	panic("implement me")
+}
+
+func (m *MockStateManager) GetSequenceID(addr identifiers.Address,
+	keyID uint64, stateHash common.Hash,
+) (uint64, error) {
+	panic("implement me")
+}
+
 func (m *MockStateManager) GetMandates(
 	address identifiers.Address, hash common.Hash,
 ) ([]common.AssetMandateOrLockup, error) {
@@ -218,16 +240,6 @@ func (m *MockStateManager) GetStateObjectByHash(addr identifiers.Address, hash c
 func (m *MockStateManager) IsAccountRegistered(address identifiers.Address) (bool, error) {
 	// TODO implement me
 	panic("implement me")
-}
-
-func NewMockStateManager(t *testing.T) *MockStateManager {
-	t.Helper()
-
-	mockState := new(MockStateManager)
-	mockState.storage = make(map[common.Hash][]byte)
-	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
-
-	return mockState
 }
 
 func (m *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {

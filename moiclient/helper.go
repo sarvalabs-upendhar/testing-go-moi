@@ -23,7 +23,6 @@ import (
 	"github.com/sarvalabs/go-moi/bgclient"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
-	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
@@ -36,18 +35,55 @@ const (
 	InitialSyncQueryTime = 5 * time.Second
 )
 
-func CreateSendIXFromIxData(t *testing.T, ixData *common.IxData, mnemonic string) *rpcargs.SendIX {
+type AccountKeyWithMnemonic struct {
+	Addr     identifiers.Address
+	KeyID    uint64
+	Mnemonic string
+}
+
+func getSignatures(
+	t *testing.T,
+	ixData *common.IxData,
+	keys []AccountKeyWithMnemonic,
+) common.Signatures {
 	t.Helper()
+
+	signatures := make([]common.Signature, len(keys))
 
 	bz, err := polo.Polorize(ixData)
 	require.NoError(t, err)
 
-	sign, err := crypto.GetSignature(bz, mnemonic)
+	for i, key := range keys {
+		sign, err := crypto.GetSignature(bz, key.Mnemonic)
+		require.NoError(t, err)
+
+		rawSign, err := hex.DecodeString(sign)
+		require.NoError(t, err)
+
+		signatures[i] = common.Signature{
+			Address:   key.Addr,
+			KeyID:     key.KeyID,
+			Signature: rawSign,
+		}
+	}
+
+	return signatures
+}
+
+func CreateSendIXFromIxData(t *testing.T, ixData *common.IxData, keys []AccountKeyWithMnemonic) *rpcargs.SendIX {
+	t.Helper()
+
+	signatures := getSignatures(t, ixData, keys)
+
+	bz, err := polo.Polorize(ixData)
+	require.NoError(t, err)
+
+	data, err := signatures.Bytes()
 	require.NoError(t, err)
 
 	return &rpcargs.SendIX{
-		IXArgs:    hex.EncodeToString(bz),
-		Signature: sign,
+		IXArgs:     hex.EncodeToString(bz),
+		Signatures: hex.EncodeToString(data),
 	}
 }
 
@@ -73,18 +109,19 @@ func GetContextNodes(t *testing.T, client *Client, addrs []identifiers.Address) 
 	return contextNodes
 }
 
-func GetLatestNonce(t *testing.T, client *Client, addr identifiers.Address) uint64 {
+func GetLatestSequenceID(t *testing.T, client *Client, addr identifiers.Address, keyID uint64) uint64 {
 	t.Helper()
 
-	nonce, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
+	sequenceID, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
 		Address: addr,
+		KeyID:   keyID,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
 	})
 	require.NoError(t, err)
 
-	return nonce.ToUint64()
+	return sequenceID.ToUint64()
 }
 
 func GetLatestHeight(t *testing.T, client *Client, addr identifiers.Address) uint64 {
@@ -305,6 +342,40 @@ func NumPointer(input int64) *int64 {
 	return &input
 }
 
+func RetryUntilTimeout(ctx context.Context, delay time.Duration, f func() (interface{}, bool)) (interface{}, error) {
+	type result struct {
+		data interface{}
+		err  error
+	}
+
+	resCh := make(chan result, 1)
+
+	go func() {
+		defer close(resCh)
+
+		for {
+			select {
+			case <-ctx.Done():
+				resCh <- result{nil, common.ErrTimeOut}
+
+				return
+			default:
+				res, retry := f()
+				if !retry {
+					resCh <- result{res, nil}
+
+					return
+				}
+			}
+			time.Sleep(delay)
+		}
+	}()
+
+	res := <-resCh
+
+	return res.data, res.err
+}
+
 func GetJSONRPCUrls(t *testing.T, bgClient bgclient.Client, validatorCount int) []string {
 	t.Helper()
 
@@ -315,7 +386,7 @@ func GetJSONRPCUrls(t *testing.T, bgClient bgclient.Client, validatorCount int) 
 
 	var err error
 
-	_, err = tests.RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
+	_, err = RetryUntilTimeout(ctx, 100*time.Millisecond, func() (interface{}, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), JSONRPCURLQueryTime)
 		defer cancel()
 
@@ -367,7 +438,7 @@ func CheckIfNodesInitialSyncDone(t *testing.T, validatorCount int, jsonRPCUrls [
 				moiClient, err := NewClient(jsonRPCUrls[j])
 				require.NoError(t, err)
 
-				_, err = tests.RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
+				_, err = RetryUntilTimeout(ctx, 50*time.Millisecond, func() (interface{}, bool) {
 					ctx, cancel := context.WithTimeout(ctx, InitialSyncQueryTime)
 					defer cancel()
 

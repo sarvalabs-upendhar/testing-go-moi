@@ -67,11 +67,46 @@ type MockDB struct {
 	context             map[common.Hash][]byte
 	balances            map[common.Hash][]byte
 	assetDeeds          map[common.Hash][]byte
+	accountKeys         map[common.Hash][]byte
 	merkleTreeEntries   map[string][]byte
 	preImages           map[common.Hash][]byte
 	data                map[string][]byte
 	accMetaInfo         map[string]*common.AccountMetaInfo
 	createEntryHook     func() error
+}
+
+func mockDB() *MockDB {
+	return &MockDB{
+		tesseracts:          make(map[common.Hash]*common.Tesseract),
+		latestTesseractHash: make(map[identifiers.Address]common.Hash),
+		accounts:            make(map[common.Hash][]byte),
+		assetDeeds:          make(map[common.Hash][]byte),
+		context:             make(map[common.Hash][]byte),
+		balances:            make(map[common.Hash][]byte),
+		accountKeys:         make(map[common.Hash][]byte),
+		merkleTreeEntries:   make(map[string][]byte),
+		preImages:           make(map[common.Hash][]byte),
+		data:                make(map[string][]byte),
+		accMetaInfo:         make(map[string]*common.AccountMetaInfo),
+	}
+}
+
+func (m *MockDB) setAccountKeys(t *testing.T, hash common.Hash, accountKeys common.AccountKeys) {
+	t.Helper()
+
+	bytes, err := accountKeys.Bytes()
+	require.NoError(t, err)
+
+	m.accountKeys[hash] = bytes
+}
+
+func (m *MockDB) GetAccountKeys(addr identifiers.Address, stateHash common.Hash) ([]byte, error) {
+	accountKeys, ok := m.accountKeys[stateHash]
+	if !ok {
+		return nil, common.ErrKeyNotFound
+	}
+
+	return accountKeys, nil
 }
 
 func (m *MockDB) GetTesseract(hash common.Hash, withInteractions, withCommitInfo bool) (*common.Tesseract, error) {
@@ -91,21 +126,6 @@ func (m *MockDB) GetTesseract(hash common.Hash, withInteractions, withCommitInfo
 	}
 
 	return &tsCopy, nil
-}
-
-func mockDB() *MockDB {
-	return &MockDB{
-		tesseracts:          make(map[common.Hash]*common.Tesseract),
-		latestTesseractHash: make(map[identifiers.Address]common.Hash),
-		accounts:            make(map[common.Hash][]byte),
-		assetDeeds:          make(map[common.Hash][]byte),
-		context:             make(map[common.Hash][]byte),
-		balances:            make(map[common.Hash][]byte),
-		merkleTreeEntries:   make(map[string][]byte),
-		preImages:           make(map[common.Hash][]byte),
-		data:                make(map[string][]byte),
-		accMetaInfo:         make(map[string]*common.AccountMetaInfo),
-	}
 }
 
 func (m *MockDB) ReadEntry(key []byte) ([]byte, error) {
@@ -329,6 +349,14 @@ func insertAccountsInDB(t *testing.T, db Store, hashes []common.Hash, acc ...*co
 	for i, hash := range hashes {
 		mDB.setAccount(t, hash, acc[i])
 	}
+}
+
+func insertAccKeysInDB(t *testing.T, db Store, hash common.Hash, accKeys common.AccountKeys) {
+	t.Helper()
+
+	mDB := getMockDB(t, db)
+
+	mDB.setAccountKeys(t, hash, accKeys)
 }
 
 func insertSargaAccount(t *testing.T, db Store) {
@@ -1281,6 +1309,28 @@ func createTestAssetInRegularAccount(
 	require.NoError(t, err)
 
 	return assetRoot
+}
+
+func getTestAccountKeys(t *testing.T, count int) (common.AccountKeys, common.Hash) {
+	t.Helper()
+
+	keys := make(common.AccountKeys, count)
+
+	for i := 0; i < count; i++ {
+		keys[i] = &common.AccountKey{
+			ID:                 uint64(i),
+			PublicKey:          tests.RandomAddress(t).Bytes(),
+			Weight:             2000,
+			SignatureAlgorithm: 0,
+			Revoked:            false,
+			SequenceID:         9,
+		}
+	}
+
+	hash, err := keys.Hash()
+	require.NoError(t, err)
+
+	return keys, hash
 }
 
 func getTestAccounts(t *testing.T, balanceHash []common.Hash, count int) ([]*common.Account, []common.Hash) {

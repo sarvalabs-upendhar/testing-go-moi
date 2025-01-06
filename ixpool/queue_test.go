@@ -222,7 +222,7 @@ func TestWaitQueue_Push(t *testing.T) {
 			for _, expectedNonce := range testcase.expected {
 				ix, ok := waitQueue.Pop().(*common.Interaction)
 				require.True(t, ok)
-				require.Equal(t, expectedNonce, ix.Nonce())
+				require.Equal(t, expectedNonce, ix.SequenceID())
 			}
 		})
 	}
@@ -275,7 +275,7 @@ func TestWaitQueue_Pop(t *testing.T) {
 			for _, expectedNonce := range testcase.expected {
 				ix, ok := waitQueue.Pop().(*common.Interaction)
 				require.True(t, ok)
-				require.Equal(t, expectedNonce, ix.Nonce())
+				require.Equal(t, expectedNonce, ix.SequenceID())
 			}
 
 			require.Len(t, waitQueue.queue, 0)
@@ -328,7 +328,7 @@ func TestWaitQueue_Peek(t *testing.T) {
 			}
 
 			for _, expectedNonce := range testcase.expected {
-				require.Equal(t, expectedNonce, waitQueue.Peek().Nonce())
+				require.Equal(t, expectedNonce, waitQueue.Peek().SequenceID())
 				// Remove the first Interaction from the queue
 				waitQueue.Pop()
 			}

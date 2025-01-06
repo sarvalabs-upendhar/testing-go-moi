@@ -42,7 +42,7 @@ const (
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
 	DefaultAccountCount     = 4
-	InitialKMOITokens       = 50000
+	InitialKMOITokens       = 2000000
 	DefaultJSONRPCPort      = 29000
 )
 
@@ -365,7 +365,14 @@ func (te *TestEnvironment) SetupSuite() {
 		te.logger.Debug("sending Fuel token ", "KMOI ", InitialKMOITokens)
 		createParticipant(te, registeredAcc[0], &common.ParticipantCreatePayload{
 			Address: account.Addr,
-			Amount:  big.NewInt(InitialKMOITokens),
+			KeysPayload: []common.KeyAddPayload{
+				{
+					PublicKey:          account.Addr.Bytes(),
+					Weight:             1000,
+					SignatureAlgorithm: 0,
+				},
+			},
+			Amount: big.NewInt(InitialKMOITokens),
 		})
 	}
 

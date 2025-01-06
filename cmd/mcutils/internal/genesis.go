@@ -176,7 +176,14 @@ func createTestGenesisFile() {
 
 		g.AddAccount(
 			common.AccountSetupArgs{
-				Address:            addr,
+				Address: addr,
+				Keys: []common.KeyArgs{
+					{
+						PublicKey:          addr.Bytes(),
+						Weight:             1000,
+						SignatureAlgorithm: 0,
+					},
+				},
 				AccType:            common.RegularAccount,
 				MoiID:              common.BytesToHex(getRandomMOIID()),
 				BehaviouralContext: getKramaIDs(behaviouralNodesCount),

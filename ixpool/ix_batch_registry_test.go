@@ -146,9 +146,9 @@ func TestIxBatchRegistry_findBatchID(t *testing.T) {
 		{
 			name: "conflicting batch id's among participants",
 			ps: map[identifiers.Address]*common.ParticipantInfo{
-				ixns[0].Sender(): {Address: ixns[0].Sender()},
+				ixns[0].SenderAddr(): {Address: ixns[0].SenderAddr()},
 
-				ixns[1].Sender(): {Address: ixns[1].Sender()},
+				ixns[1].SenderAddr(): {Address: ixns[1].SenderAddr()},
 			},
 			preTestFn: func(batch *IxBatchRegistry) {
 				batch.appendEmptyBatch()

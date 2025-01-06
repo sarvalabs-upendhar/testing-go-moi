@@ -1,8 +1,8 @@
 package ixpool
 
 import (
+	"sort"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/petar/GoLLRB/llrb"
@@ -13,26 +13,135 @@ import (
 	"github.com/sarvalabs/go-moi/common/utils"
 )
 
+type accountQueue struct {
+	keyID              uint64
+	enqueued, promoted *ixQueue
+	sequenceIDToIX     *sequenceIDToIXMap
+	nextSequenceID     uint64
+}
+
+// getSequenceID returns the next expected sequenceID for this account.
+func (a *accountQueue) getSequenceID() uint64 {
+	return a.nextSequenceID
+}
+
+// setSequenceID sets the next expected sequenceID for this account.
+func (a *accountQueue) setSequenceID(sequenceID uint64) {
+	a.nextSequenceID = sequenceID
+}
+
+// "enqueue" tries to add the Interaction to the enqueued queue unless it is a replacement.
+// In the case of a replacement, it first attempts to replace in the enqueued queue,
+// and if that fails, it replaces it in the promoted queue and returns true.
+func (a *accountQueue) enqueue(ix *common.Interaction, replace bool) bool {
+	replaceInQueue := func(queue minSequenceIDQueue) bool {
+		for i, x := range queue {
+			if x.SequenceID() == ix.SequenceID() {
+				queue[i] = ix // replace
+
+				return true
+			}
+		}
+
+		return false
+	}
+
+	a.sequenceIDToIX.set(ix)
+
+	if !replace {
+		// enqueue ix
+		a.enqueued.push(ix)
+
+		return false
+	}
+
+	if !replaceInQueue(a.enqueued.queue) { // first, try to replace in enqueued
+		// then try to replace in promoted
+		return replaceInQueue(a.promoted.queue)
+	}
+
+	return false
+}
+
+// Promote moves eligible Interactions from enqueued to promoted queue.
+//
+// Eligible Interactions are all sequential in order of sequenceID
+// and the first one has to have sequenceID less (or equal) to the account's
+// nextSequenceID.
+func (a *accountQueue) promote() (uint64, []*common.Interaction) {
+	currentSequenceID := a.getSequenceID()
+	if a.enqueued.length() == 0 ||
+		a.enqueued.peek().SequenceID() > currentSequenceID {
+		// nothing to promote
+		return 0, nil
+	}
+
+	promoted := uint64(0)
+	promotedIxns := make([]*common.Interaction, 0)
+	nextSequenceID := a.enqueued.peek().SequenceID()
+
+	for {
+		ix := a.enqueued.peek()
+		if ix == nil ||
+			ix.SequenceID() != nextSequenceID {
+			break
+		}
+
+		// pop from enqueued
+		ix = a.enqueued.pop()
+
+		// push to promoted
+		a.promoted.push(ix)
+		promotedIxns = append(promotedIxns, ix)
+
+		// update counters
+		nextSequenceID += 1
+		promoted += 1
+	}
+
+	// only update the sequenceID map if the new sequenceID
+	// is higher than the one previously stored.
+	if nextSequenceID > currentSequenceID {
+		a.setSequenceID(nextSequenceID)
+	}
+
+	return promoted, promotedIxns
+}
+
 // An account is the core structure for processing
-// Interactions from a specific address. The nextNonce
-// field is what separetes the enqueued from promoted:
+// Interactions from a specific address and key id. The nextSequenceID
+// field is what separates the enqueued from promoted:
 //
-//  1. enqueued - Interactions higher than the nextNonce
-//  2. promoted - Interactions lower than the nextNonce
+//  1. enqueued - Interactions higher than the nextSequenceID
+//  2. promoted - Interactions lower than the nextSequenceID
 //
-// If an enqueued Interaction matches the nextNonce,
+// If an enqueued Interaction matches the nextSequenceID,
 // a promoteRequest is signaled for this account
 // indicating the account's enqueued Interaction(s)
 // are ready to be moved to the promoted queue.
-// nonce to ix map is helpful in replacement of interaction
+// sequenceID to ix map is helpful in replacement of interaction
 type account struct {
-	enqueued, promoted *accountQueue
-	nonceToIX          *nonceToIXMap
-	requestTime        time.Time
-	waitTime           time.Time
-	delayCounter       int32
-	nextNonce          uint64
-	waitLock           sync.RWMutex // waitLock facilitates safe access to requestTime, waitTime and delayCounter
+	accountQueues []*accountQueue
+	requestTime   time.Time
+	waitTime      time.Time
+	delayCounter  int32
+	waitLock      sync.RWMutex // waitLock facilitates safe access to requestTime, waitTime and delayCounter
+}
+
+func (a *account) get(keyID uint64) *accountQueue {
+	for _, accQueue := range a.accountQueues {
+		if accQueue.keyID == keyID {
+			return accQueue
+		}
+	}
+
+	return nil
+}
+
+func (a *account) sortAccountQueues() {
+	sort.Slice(a.accountQueues, func(i, j int) bool {
+		return a.accountQueues[i].keyID < a.accountQueues[j].keyID
+	})
 }
 
 func (a *account) incrementCounter(baseTime time.Duration) {
@@ -58,16 +167,6 @@ func (a *account) getDelayCounter() int32 {
 	return a.delayCounter
 }
 
-// getNonce returns the next expected nonce for this account.
-func (a *account) getNonce() uint64 {
-	return atomic.LoadUint64(&a.nextNonce)
-}
-
-// setNonce sets the next expected nonce for this account.
-func (a *account) setNonce(nonce uint64) {
-	atomic.StoreUint64(&a.nextNonce, nonce)
-}
-
 // resetWaitTimeAndCounter checks the waitTime,counter and resets if conditions are met
 func (a *account) resetWaitTimeAndCounter() {
 	a.waitLock.Lock()
@@ -75,89 +174,6 @@ func (a *account) resetWaitTimeAndCounter() {
 
 	a.delayCounter = 0
 	a.waitTime = time.Now()
-}
-
-// "enqueue" tries to add the Interaction to the enqueued queue unless it is a replacement.
-// In the case of a replacement, it first attempts to replace in the enqueued queue,
-// and if that fails, it replaces it in the promoted queue and returns true
-func (a *account) enqueue(ix *common.Interaction, replace bool) bool {
-	// check the counter and reset if required
-	if a.getDelayCounter() >= MaxWaitCounter && time.Now().After(a.getWaitTime()) {
-		a.resetWaitTimeAndCounter()
-	}
-
-	replaceInQueue := func(queue minNonceQueue) bool {
-		for i, x := range queue {
-			if x.Nonce() == ix.Nonce() {
-				queue[i] = ix // replace
-
-				return true
-			}
-		}
-
-		return false
-	}
-
-	a.nonceToIX.set(ix)
-
-	if !replace {
-		// enqueue ix
-		a.enqueued.push(ix)
-
-		return false
-	}
-
-	if !replaceInQueue(a.enqueued.queue) { // first, try to replace in enqueued
-		// then try to replace in promoted
-		return replaceInQueue(a.promoted.queue)
-	}
-
-	return false
-}
-
-// Promote moves eligible Interactions from enqueued to promoted queue.
-//
-// Eligible Interactions are all sequential in order of nonce
-// and the first one has to have nonce less (or equal) to the account's
-// nextNonce.
-func (a *account) promote() (uint64, []*common.Interaction) {
-	currentNonce := a.getNonce()
-	if a.enqueued.length() == 0 ||
-		a.enqueued.peek().Nonce() > currentNonce {
-		// nothing to promote
-		return 0, nil
-	}
-
-	promoted := uint64(0)
-	promotedIxns := make([]*common.Interaction, 0)
-	nextNonce := a.enqueued.peek().Nonce()
-
-	for {
-		ix := a.enqueued.peek()
-		if ix == nil ||
-			ix.Nonce() != nextNonce {
-			break
-		}
-
-		// pop from enqueued
-		ix = a.enqueued.pop()
-
-		// push to promoted
-		a.promoted.push(ix)
-		promotedIxns = append(promotedIxns, ix)
-
-		// update counters
-		nextNonce += 1
-		promoted += 1
-	}
-
-	// only update the nonce map if the new nonce
-	// is higher than the one previously stored.
-	if nextNonce > currentNonce {
-		a.setNonce(nextNonce)
-	}
-
-	return promoted, promotedIxns
 }
 
 type Address struct {
@@ -168,140 +184,120 @@ func (a *Address) Less(other llrb.Item) bool {
 	return a.addr.String() < other.(*Address).addr.String() //nolint: forcetypeassert
 }
 
-// Thread safe map of all accounts registered by the pool.
 // Each account (value) is bound to one address (key).
-type accountsMap struct {
-	sync.Map
+type accountsManager struct {
+	accounts           map[identifiers.Address]*account
 	sortedParticipants *llrb.LLRB
 }
 
-func newAccountsMap() *accountsMap {
-	return &accountsMap{
+func newAccountsMap() *accountsManager {
+	return &accountsManager{
+		accounts:           make(map[identifiers.Address]*account),
 		sortedParticipants: llrb.New(),
 	}
 }
 
-// Initializes an account for the given address.
-func (m *accountsMap) initOnce(addr identifiers.Address, nonce uint64) *account {
-	a, _ := m.LoadOrStore(addr, &account{
-		enqueued:    newAccountQueue(),
-		promoted:    newAccountQueue(),
-		nonceToIX:   newNonceToIXMap(),
-		nextNonce:   nonce,
-		waitTime:    time.Now(),
-		requestTime: time.Now(),
-	})
-
-	return a.(*account) //nolint:forcetypeassert
-}
-
 // exists checks if an account exists within the map.
-func (m *accountsMap) exists(addr identifiers.Address) bool {
-	_, ok := m.Load(addr)
+func (m *accountsManager) exists(addr identifiers.Address) bool {
+	_, ok := m.accounts[addr]
 
 	return ok
 }
 
 // getPrimaries returns the interactions sorted based on the waitTime of the account
-func (m *accountsMap) getWaitPrimaries() *waitQueue {
+func (m *accountsManager) getWaitPrimaries() *waitQueue {
 	waitQueue := newWaitQueue()
 
-	m.Range(func(key, value interface{}) bool {
-		addressKey, ok := key.(identifiers.Address)
-		if !ok {
-			return false
+	for _, acc := range m.accounts {
+		for _, accQueue := range acc.accountQueues {
+			if !time.Now().After(acc.getWaitTime()) {
+				break
+			}
+			// add head of the queue
+			if ix := accQueue.promoted.peek(); ix != nil {
+				waitIX := &WaitInteractions{acc.getDelayCounter(), ix}
+				waitQueue.Push(waitIX)
+			}
 		}
-
-		account := m.get(addressKey)
-
-		if !time.Now().After(account.getWaitTime()) {
-			return true
-		}
-		// add head of the queue
-		if ix := account.promoted.peek(); ix != nil {
-			waitIX := &WaitInteractions{account.getDelayCounter(), ix}
-			waitQueue.Push(waitIX)
-		}
-
-		return true
-	})
+	}
 
 	return waitQueue
 }
 
 // getCostPrimaries returns the interactions sorted based on the waitTime of the account
-func (m *accountsMap) getCostPrimaries() *pricedQueue {
+func (m *accountsManager) getCostPrimaries() *pricedQueue {
 	priceQueue := newPricedQueue()
 
-	m.Range(func(key, value interface{}) bool {
-		addressKey, ok := key.(identifiers.Address)
-		if !ok {
-			return false
-		}
+	for _, acc := range m.accounts {
+		for _, accQueue := range acc.accountQueues {
+			if !time.Now().After(acc.getWaitTime()) {
+				break
+			}
 
-		account := m.get(addressKey)
-
-		if !time.Now().After(account.getWaitTime()) {
-			return true
+			// add head of the queue
+			if ix := accQueue.promoted.peek(); ix != nil {
+				priceQueue.Push(ix)
+			}
 		}
-		// add head of the queue
-		if ix := account.promoted.peek(); ix != nil {
-			priceQueue.Push(ix)
-		}
-
-		return true
-	})
+	}
 
 	return priceQueue
 }
 
 // get returns the account associated with the given address.
-func (m *accountsMap) get(addr identifiers.Address) *account {
-	a, ok := m.Load(addr)
+func (m *accountsManager) getAccount(addr identifiers.Address) *account {
+	acc, ok := m.accounts[addr]
 	if !ok {
 		return nil
 	}
 
-	account, ok := a.(*account)
-	if !ok {
+	return acc
+}
+
+// get returns the account associated with the given address.
+func (m *accountsManager) getAccountQueue(addr identifiers.Address, keyID uint64) *accountQueue {
+	acc := m.getAccount(addr)
+	if acc == nil {
 		return nil
 	}
 
-	return account
+	return acc.get(keyID)
+}
+
+func (m *accountsManager) getAccountAndAccountQueue(addr identifiers.Address, keyID uint64) (*account, *accountQueue) {
+	acc := m.getAccount(addr)
+	if acc == nil {
+		return nil, nil
+	}
+
+	return acc, acc.get(keyID)
 }
 
 // promoted returns the number of all promoted interactions.
-func (m *accountsMap) promoted() (total uint64) { //nolint:unused
-	m.Range(func(key, value interface{}) bool {
-		addressKey, ok := key.(identifiers.Address)
-		if !ok {
-			return false
-		}
-
-		account := m.get(addressKey)
-
-		total += account.promoted.length()
-
-		return true
-	})
+func (a *account) promoted() (total uint64) { //nolint:unused
+	for _, accQueue := range a.accountQueues {
+		total += accQueue.promoted.length()
+	}
 
 	return total
 }
 
 // getIxs returns the promoted and enqueued Interactions of the given address, depending on the flag.
-func (m *accountsMap) getIxs(addr identifiers.Address, includeEnqueued bool) (
+func (m *accountsManager) getIxs(addr identifiers.Address, includeEnqueued bool) (
 	promoted, enqueued []*common.Interaction,
 ) {
-	account := m.get(addr)
+	account := m.getAccount(addr)
 
 	if account != nil {
-		if account.promoted.length() != 0 {
-			promoted = account.promoted.queue
-		}
+		for _, accQueue := range account.accountQueues {
+			if accQueue.promoted.length() != 0 {
+				promoted = accQueue.promoted.queue
+			}
 
-		if includeEnqueued {
-			if account.enqueued.length() != 0 {
-				enqueued = account.enqueued.queue
+			if includeEnqueued {
+				if accQueue.enqueued.length() != 0 {
+					enqueued = accQueue.enqueued.queue
+				}
 			}
 		}
 	}
@@ -310,67 +306,64 @@ func (m *accountsMap) getIxs(addr identifiers.Address, includeEnqueued bool) (
 }
 
 // allIxs returns all promoted and all enqueued Interactions, depending on the flag.
-func (m *accountsMap) allIxs(includeEnqueued bool) (
+func (m *accountsManager) allIxs(includeEnqueued bool) (
 	allPromoted, allEnqueued map[identifiers.Address][]*common.Interaction,
 ) {
 	allPromoted = make(map[identifiers.Address][]*common.Interaction)
 	allEnqueued = make(map[identifiers.Address][]*common.Interaction)
 
-	m.Range(func(key, value interface{}) bool {
-		addr, _ := key.(identifiers.Address)
-		account := m.get(addr)
+	for addr, acc := range m.accounts {
+		for _, accQueue := range acc.accountQueues {
+			if accQueue.promoted.length() != 0 {
+				allPromoted[addr] = accQueue.promoted.queue
+			}
 
-		if account.promoted.length() != 0 {
-			allPromoted[addr] = account.promoted.queue
-		}
-
-		if includeEnqueued {
-			if account.enqueued.length() != 0 {
-				allEnqueued[addr] = account.enqueued.queue
+			if includeEnqueued {
+				if accQueue.enqueued.length() != 0 {
+					allEnqueued[addr] = accQueue.enqueued.queue
+				}
 			}
 		}
-
-		return true
-	})
+	}
 
 	return allPromoted, allEnqueued
 }
 
-func (m *accountsMap) addToSortedAccounts(addr identifiers.Address) {
+func (m *accountsManager) addToSortedAccounts(addr identifiers.Address) {
 	m.sortedParticipants.ReplaceOrInsert(&Address{
 		addr: addr,
 	})
 }
 
-func (m *accountsMap) deleteInSortedAccounts(addr identifiers.Address) {
+func (m *accountsManager) deleteInSortedAccounts(addr identifiers.Address) {
 	m.sortedParticipants.Delete(&Address{addr: addr})
 }
 
-// nonceToIXMap stores nonce to ix key value pairs
-type nonceToIXMap struct {
+// sequenceIDToIXMap stores sequenceID to ix key value pairs
+type sequenceIDToIXMap struct {
 	mapping map[uint64]*common.Interaction
 }
 
-func newNonceToIXMap() *nonceToIXMap {
-	return &nonceToIXMap{
+func newSequenceIDToIXMap() *sequenceIDToIXMap {
+	return &sequenceIDToIXMap{
 		mapping: make(map[uint64]*common.Interaction),
 	}
 }
 
-func (m *nonceToIXMap) get(nonce uint64) *common.Interaction {
-	return m.mapping[nonce]
+func (m *sequenceIDToIXMap) get(sequenceID uint64) *common.Interaction {
+	return m.mapping[sequenceID]
 }
 
-func (m *nonceToIXMap) set(ix *common.Interaction) {
-	m.mapping[ix.Nonce()] = ix
+func (m *sequenceIDToIXMap) set(ix *common.Interaction) {
+	m.mapping[ix.SequenceID()] = ix
 }
 
-func (m *nonceToIXMap) reset() {
+func (m *sequenceIDToIXMap) reset() {
 	m.mapping = make(map[uint64]*common.Interaction)
 }
 
-func (m *nonceToIXMap) remove(ixns ...*common.Interaction) {
+func (m *sequenceIDToIXMap) remove(ixns ...*common.Interaction) {
 	for _, ix := range ixns {
-		delete(m.mapping, ix.Nonce())
+		delete(m.mapping, ix.SequenceID())
 	}
 }

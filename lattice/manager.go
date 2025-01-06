@@ -446,9 +446,21 @@ func (c *ChainManager) AddTesseract(
 				return errors.Wrap(err, common.ErrUpdatingInclusivity.Error())
 			}
 		}
-
-		c.ixpool.ResetWithHeaders(t)
 	}
+
+	if allParticipants {
+		c.ixpool.ResetWithHeaders(t)
+
+		return nil
+	}
+
+	for addr, p := range t.Participants() {
+		if !c.db.HasAccMetaInfoAt(addr, p.Height) {
+			return nil
+		}
+	}
+
+	c.ixpool.ResetWithHeaders(t)
 
 	return nil
 }

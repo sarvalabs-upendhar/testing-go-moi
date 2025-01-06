@@ -39,6 +39,21 @@ func (k *Engine) SetupGenesis() error {
 		if transition[v.Address], err = k.setupNewAccount(v); err != nil {
 			return errors.Wrap(err, "failed to setup genesis account")
 		}
+
+		accountKeys := make(common.AccountKeys, len(v.Keys))
+
+		for i, key := range v.Keys {
+			accountKeys[i] = &common.AccountKey{
+				ID:                 uint64(i),
+				PublicKey:          key.PublicKey,
+				Weight:             key.Weight.ToUint64(),
+				SignatureAlgorithm: key.SignatureAlgorithm.ToUint64(),
+				Revoked:            false,
+				SequenceID:         0,
+			}
+		}
+
+		transition[v.Address].UpdateKeys(accountKeys)
 	}
 
 	if _, err = k.setupGenesisLogics(transition, logics); err != nil {
@@ -222,6 +237,21 @@ func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, e
 		return nil, errors.Wrap(err, "context initiation failed in genesis")
 	}
 
+	accountKeys := make(common.AccountKeys, len(info.Keys))
+
+	for i, key := range info.Keys {
+		accountKeys[i] = &common.AccountKey{
+			ID:                 uint64(i),
+			PublicKey:          key.PublicKey,
+			Weight:             key.Weight.ToUint64(),
+			SignatureAlgorithm: key.SignatureAlgorithm.ToUint64(),
+			Revoked:            false,
+			SequenceID:         0,
+		}
+	}
+
+	stateObject.UpdateKeys(accountKeys)
+
 	return stateObject, nil
 }
 
@@ -270,7 +300,9 @@ func (k *Engine) setupGenesisLogics(
 					Address: common.SargaAddress,
 				},
 			},
-			Sender: common.SargaAddress,
+			Sender: common.Sender{
+				Address: common.SargaAddress,
+			},
 			IxOps: []common.IxOpRaw{
 				{
 					Type: common.IxLogicDeploy,
@@ -367,14 +399,37 @@ func (k *Engine) setupAssetAccounts(
 	return nil
 }
 
+func (k *Engine) validateAccountKeys(keys []common.KeyArgs) error {
+	total := uint64(0)
+
+	for _, key := range keys {
+		if key.SignatureAlgorithm.ToUint64() != 0 {
+			return common.ErrInvalidSignatureAlgorithm
+		}
+
+		total += key.Weight.ToUint64()
+	}
+
+	if total < common.MinWeight {
+		return common.ErrInvalidWeight
+	}
+
+	return nil
+}
+
 func (k *Engine) validateAccountCreationInfo(accs ...common.AccountSetupArgs) error {
 	for _, acc := range accs {
 		if acc.Address == common.SargaAddress {
 			return common.ErrInvalidAddress
 		}
+
 		// check for address validity
 		err := utils.ValidateAccountType(acc.AccType)
 		if err != nil {
+			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
+		}
+
+		if err := k.validateAccountKeys(acc.Keys); err != nil {
 			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
 		}
 	}

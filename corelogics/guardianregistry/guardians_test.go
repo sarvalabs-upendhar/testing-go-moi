@@ -382,7 +382,7 @@ func (suite *GuardianTestSuite) TestRegistration() {
 	)
 
 	// Attempt to register an already existing guardian
-	// Sender must be the address of the operator
+	// SenderAddr must be the address of the operator
 	// This should cause an exception
 	suite.Invoke(
 		"RegisterGuardian",
@@ -406,7 +406,7 @@ func (suite *GuardianTestSuite) TestRegistration() {
 	)
 
 	// Attempt to register a guardian that is not approved
-	// Sender must be the address of the operator
+	// SenderAddr must be the address of the operator
 	// This should cause an exception
 	suite.Invoke(
 		"RegisterGuardian",
@@ -431,7 +431,7 @@ func (suite *GuardianTestSuite) TestRegistration() {
 	)
 
 	// Register an approved guardian
-	// Sender must be the address of the operator
+	// SenderAddr must be the address of the operator
 	// This should work as expected
 	suite.Invoke(
 		"RegisterGuardian",
@@ -526,7 +526,7 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 		referralWallet := identifiers.NewRandomAddress()
 
 		// Register an approved guardian
-		// Sender must be the address of the operator
+		// SenderAddr must be the address of the operator
 		// This should work as expected
 		suite.Invoke(
 			"RegisterGuardian",

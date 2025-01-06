@@ -45,7 +45,12 @@ func TestCreateRPCInteraction(t *testing.T) {
 		}
 	})
 
-	ixWithNilFields, err := common.NewInteraction(ixData, tests.RandomHash(t).Bytes())
+	ixWithNilFields, err := common.NewInteraction(ixData, common.Signatures{
+		{
+			Address:   ixData.Sender.Address,
+			Signature: tests.RandomHash(t).Bytes(),
+		},
+	})
 	require.NoError(t, err)
 
 	tsHash := tests.RandomHash(t)

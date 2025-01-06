@@ -53,6 +53,7 @@ func (ixRaw *IxOpRaw) Copy() IxOpRaw {
 type IxParticipant struct {
 	Address  identifiers.Address `json:"address"`
 	LockType LockType            `json:"lock_type"`
+	Notary   bool                `json:"notary"`
 }
 
 // IxConsensusPreference contains preferences related to consensus.
@@ -98,11 +99,16 @@ func (ixPreferences *IxPreferences) Copy() *IxPreferences {
 	return &preferences
 }
 
+type Sender struct {
+	Address    identifiers.Address `json:"address"`
+	SequenceID uint64              `json:"sequence_id"`
+	KeyID      uint64              `json:"key_id"`
+}
+
 // IxData represents interaction related information.
 type IxData struct {
-	Sender identifiers.Address `json:"sender"`
+	Sender Sender              `json:"sender"`
 	Payer  identifiers.Address `json:"payer"`
-	Nonce  uint64              `json:"nonce"`
 
 	FuelPrice *big.Int `json:"fuel_price"`
 	FuelLimit uint64   `json:"fuel_limit"`
@@ -183,8 +189,8 @@ func (ixData *IxData) ParticipantsInfo() map[identifiers.Address]*ParticipantInf
 			AccType:  RegularAccount,
 		}
 
-		if ps.Address == ixData.Sender || ps.Address == ixData.Payer {
-			psInfo[ps.Address].IsSigner = ps.Address == ixData.Sender
+		if ps.Address == ixData.Sender.Address {
+			psInfo[ps.Address].IsSigner = true
 		}
 	}
 
@@ -207,11 +213,20 @@ func (op *IxOp) Type() IxOpType {
 // GetParticipantCreatePayload returns the participant payload if its present.
 func (op *IxOp) GetParticipantCreatePayload() (*ParticipantCreatePayload, error) {
 	// If payload has been decoded, return the asset form
-	if op.Payload == nil && op.Payload.participant == nil {
+	if op.Payload == nil || op.Payload.participant == nil {
 		return nil, errors.New("payload not found")
 	}
 
 	return op.Payload.participant.Create, nil
+}
+
+// GetAccountConfigurePayload returns the account configure payload if its present.
+func (op *IxOp) GetAccountConfigurePayload() (*AccountConfigurePayload, error) {
+	if op.Payload == nil || op.Payload.participant == nil || op.Payload.participant.Configure == nil {
+		return nil, errors.New("payload not found")
+	}
+
+	return op.Payload.participant.Configure, nil
 }
 
 // getAssetPayload returns the asset payload if its present.
@@ -320,7 +335,7 @@ func (op *IxOp) Target() identifiers.Address {
 
 		op.target = payload.Address
 	case IxAssetCreate:
-		op.target = NewAccountAddress(op.Nonce(), op.Sender())
+		op.target = NewAccountAddress(op.SenderAddr(), op.SenderKeyID(), op.SequenceID())
 	case IxAssetTransfer, IxAssetApprove, IxAssetRevoke, IxAssetLockup, IxAssetRelease:
 		payload, err := op.GetAssetActionPayload()
 		if err != nil {
@@ -336,7 +351,7 @@ func (op *IxOp) Target() identifiers.Address {
 
 		op.target = payload.AssetID.Address()
 	case IxLogicDeploy:
-		op.target = NewAccountAddress(op.Nonce(), op.Sender())
+		op.target = NewAccountAddress(op.SenderAddr(), op.SenderKeyID(), op.SequenceID())
 	case IxLogicInvoke, IxLogicEnlist:
 		payload, err := op.GetLogicPayload()
 		if err != nil {
@@ -350,6 +365,33 @@ func (op *IxOp) Target() identifiers.Address {
 	}
 
 	return op.target
+}
+
+type Signature struct {
+	Address   identifiers.Address
+	KeyID     uint64
+	Signature []byte
+}
+
+type Signatures []Signature
+
+// Bytes serializes signatures to bytes.
+func (s Signatures) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(s)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize signatures payload")
+	}
+
+	return data, nil
+}
+
+// FromBytes deserializes signatures from bytes.
+func (s *Signatures) FromBytes(data []byte) error {
+	if err := polo.Depolorize(s, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize signatures payload")
+	}
+
+	return nil
 }
 
 // Benefactor returns the benefactor's address if applicable; otherwise, returns nil address.
@@ -374,13 +416,13 @@ type Interaction struct {
 	leaderCandidateAcc *ParticipantInfo
 	hash               atomic.Value
 	size               atomic.Value
-	signature          atomic.Value
+	signatures         Signatures
 	allottedView       atomic.Uint64
 	shouldPropose      bool
 }
 
 // NewInteraction initializes and returns the Interaction.
-func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
+func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) {
 	cpyIxData := ixData.Copy()
 	ix := &Interaction{
 		inner: cpyIxData,
@@ -388,14 +430,15 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 			len(cpyIxData.IxOps)),
 		ps: ixData.ParticipantsInfo(),
 	}
-	ix.signature.Store(signature)
+
+	ix.signatures = signatures
 
 	data, err := polo.Polorize(ixData)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, ok := ix.ps[ix.Sender()]; !ok {
+	if _, ok := ix.ps[ix.SenderAddr()]; !ok {
 		return nil, ErrMissingSender
 	}
 
@@ -442,6 +485,22 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 			info.IsSigner = false
 			info.AccType = RegularAccount
 			info.IsGenesis = true
+
+		case IXAccountConfigure:
+			accConfigurePayload := new(AccountConfigurePayload)
+			if err := accConfigurePayload.FromBytes(op.Payload); err != nil {
+				return nil, err
+			}
+
+			ix.ops[idx] = &IxOp{
+				Interaction: ix,
+				OpType:      op.Type,
+				Payload: &IxOpPayload{
+					participant: &ParticipantPayload{
+						Configure: accConfigurePayload,
+					},
+				},
+			}
 
 		case IxAssetTransfer:
 			assetActionPayload := new(AssetActionPayload)
@@ -494,7 +553,7 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 				}
 			}
 
-			assetAddr := NewAccountAddress(ix.inner.Nonce, ix.Sender())
+			assetAddr := NewAccountAddress(ix.SenderAddr(), ix.SenderKeyID(), ix.SequenceID())
 
 			_, ok = ix.ps[assetAddr]
 			if !ok {
@@ -610,7 +669,7 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 				}
 			}
 
-			logicAddrs := NewAccountAddress(ix.inner.Nonce, ix.Sender())
+			logicAddrs := NewAccountAddress(ix.SenderAddr(), ix.SenderKeyID(), ix.SequenceID())
 
 			_, ok = ix.ps[logicAddrs]
 			if !ok {
@@ -628,8 +687,13 @@ func NewInteraction(ixData IxData, signature []byte) (*Interaction, error) {
 		}
 	}
 
+	signaturesBytes, err := signatures.Bytes()
+	if err != nil {
+		return nil, err
+	}
+
 	ix.hash.Store(GetHash(data))
-	ix.size.Store(uint64(len(data) + len(signature)))
+	ix.size.Store(uint64(len(data) + len(signaturesBytes)))
 
 	return ix, ix.UpdateLeaderCandidateAddr()
 }
@@ -647,23 +711,26 @@ func (ix *Interaction) IXData() IxData {
 	return ix.inner.Copy()
 }
 
-// Signature returns the interaction's signature.
-func (ix *Interaction) Signature() []byte {
-	signature, ok := ix.signature.Load().([]byte)
-	if !ok {
-		panic("invalid data stored into interaction signature")
-	}
-
-	return signature
+// Signatures returns the interaction's signatures.
+func (ix *Interaction) Signatures() Signatures {
+	return ix.signatures
 }
 
-// Sender returns the address of the Interaction sender
-func (ix *Interaction) Sender() identifiers.Address {
+// SenderAddr returns the address of the Interaction sender
+func (ix *Interaction) SenderAddr() identifiers.Address {
+	return ix.inner.Sender.Address
+}
+
+func (ix *Interaction) SenderKeyID() uint64 {
+	return ix.inner.Sender.KeyID
+}
+
+func (ix *Interaction) Sender() Sender {
 	return ix.inner.Sender
 }
 
-func (ix *Interaction) SetSender(addr identifiers.Address) {
-	ix.inner.Sender = addr
+func (ix *Interaction) SetSender(sender Sender) {
+	ix.inner.Sender = sender
 }
 
 // Payer returns the address of the Interaction payer
@@ -671,9 +738,9 @@ func (ix *Interaction) Payer() identifiers.Address {
 	return ix.inner.Payer
 }
 
-// Nonce returns the account nonce of the Interaction sender
-func (ix *Interaction) Nonce() uint64 {
-	return ix.inner.Nonce
+// SequenceID returns the account sequenceID of the Interaction sender
+func (ix *Interaction) SequenceID() uint64 {
+	return ix.inner.Sender.SequenceID
 }
 
 // KMOITokenValue aggregates and returns the KMOI token values in asset transfers.
@@ -776,19 +843,19 @@ func (ix *Interaction) Size() (uint64, error) {
 }
 
 // Polorize serializes the interaction.
-func (ix Interaction) Polorize() (*polo.Polorizer, error) { //nolint:govet
+func (ix *Interaction) Polorize() (*polo.Polorizer, error) {
 	polorizer := polo.NewPolorizer()
 
 	if err := polorizer.Polorize(ix.inner); err != nil {
 		return nil, errors.Wrap(err, "failed to polorize interaction data")
 	}
 
-	sig, ok := ix.signature.Load().([]byte)
-	if !ok {
-		panic("invalid data stored into interaction signature")
+	rawSig, err := ix.signatures.Bytes()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal signatures")
 	}
 
-	polorizer.PolorizeBytes(sig)
+	polorizer.PolorizeBytes(rawSig)
 
 	return polorizer, nil
 }
@@ -812,7 +879,13 @@ func (ix *Interaction) Depolorize(depolorizer *polo.Depolorizer) (err error) {
 		return errors.Wrap(err, "failed to depolorize interaction signature")
 	}
 
-	ixn, err := NewInteraction(data, sig)
+	signatures := make(Signatures, 0)
+
+	if err := signatures.FromBytes(sig); err != nil {
+		return err
+	}
+
+	ixn, err := NewInteraction(data, signatures)
 	if err != nil {
 		return err
 	}
@@ -1165,7 +1238,7 @@ func (ixs Interactions) AccountType(address identifiers.Address) (AccountType, e
 	}
 
 	for _, ix := range ixs.ixns {
-		if ix.Sender() == address || ix.Payer() == address {
+		if ix.SenderAddr() == address || ix.Payer() == address {
 			return RegularAccount, nil
 		}
 
@@ -1188,9 +1261,9 @@ func (ixs Interactions) AccountType(address identifiers.Address) (AccountType, e
 	return -1, ErrAccountNotFound
 }
 
-type IxByNonce Interactions
+type IxBySequenceID Interactions
 
-func (s IxByNonce) Len() int             { return len(s.ixns) }
-func (s IxByNonce) Less(i, j int) bool   { return s.ixns[i].Nonce() < s.ixns[j].Nonce() }
-func (s IxByNonce) Swap(i, j int)        { s.ixns[i], s.ixns[j] = s.ixns[j], s.ixns[i] }
-func (s IxByNonce) List() []*Interaction { return s.ixns }
+func (s IxBySequenceID) Len() int             { return len(s.ixns) }
+func (s IxBySequenceID) Less(i, j int) bool   { return s.ixns[i].SequenceID() < s.ixns[j].SequenceID() }
+func (s IxBySequenceID) Swap(i, j int)        { s.ixns[i], s.ixns[j] = s.ixns[j], s.ixns[i] }
+func (s IxBySequenceID) List() []*Interaction { return s.ixns }

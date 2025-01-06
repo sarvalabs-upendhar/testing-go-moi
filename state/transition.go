@@ -70,8 +70,8 @@ func (t *Transition) Delete(addr identifiers.Address) {
 	delete(t.objects, addr)
 }
 
-func (t *Transition) IncrementNonce(addr identifiers.Address, count uint64) {
-	t.objects[addr].IncrementNonce(count)
+func (t *Transition) IncrementSequenceID(addr identifiers.Address, keyID uint64) {
+	_ = t.objects[addr].IncrementSequenceID(keyID)
 }
 
 func (t *Transition) Flush(addr identifiers.Address) error {

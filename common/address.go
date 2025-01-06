@@ -46,10 +46,11 @@ func CreateAddressFromString(name string) identifiers.Address {
 	return identifiers.NewAddressFromBytes(hash)
 }
 
-func NewAccountAddress(nonce uint64, address identifiers.Address) identifiers.Address {
-	rawBytes := make([]byte, 40)
-	binary.BigEndian.PutUint64(rawBytes, nonce)
-	copy(rawBytes[8:], address.Bytes())
+func NewAccountAddress(addr identifiers.Address, keyID uint64, sequenceID uint64) identifiers.Address {
+	rawBytes := make([]byte, 48)
+	binary.BigEndian.PutUint64(rawBytes[:8], sequenceID)
+	binary.BigEndian.PutUint64(rawBytes[8:16], keyID)
+	copy(rawBytes[16:], addr.Bytes())
 
 	hash := GetHash(rawBytes).Bytes()
 

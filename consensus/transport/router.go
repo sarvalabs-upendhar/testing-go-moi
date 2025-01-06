@@ -389,7 +389,7 @@ func (cr *ContextRouter) broadcast(broadcastInterval time.Duration) {
 			}
 
 			cr.transport.BroadcastMessage(cr.ctx, &types.ICSMSG{
-				Sender:    cr.selfID,
+				SenderAddr:    cr.selfID,
 				ClusterID: cr.clusterID,
 				MsgType:   message.ICSHAVE,
 				Payload:   payload,
@@ -452,7 +452,7 @@ func (cr *ContextRouter) handleICSHave(msg *types.ICSMSG) error {
 	}
 
 	// If the gossip peer is not active, do not proceed further
-	if gossipPeer := cr.gossipPeers.get(msg.Sender); gossipPeer == nil || !gossipPeer.isConnected() {
+	if gossipPeer := cr.gossipPeers.get(msg.SenderAddr); gossipPeer == nil || !gossipPeer.isConnected() {
 		return nil
 	}
 
@@ -524,7 +524,7 @@ func (cr *ContextRouter) handleICSHave(msg *types.ICSMSG) error {
 		cr.logger.Trace(
 			"Sending IWANT message to peer",
 			"round", k,
-			"peer-id", msg.Sender,
+			"peer-id", msg.SenderAddr,
 			"prevote-set", v.Prevotes,
 			"precommit-set", v.Precommits)
 	}
@@ -536,7 +536,7 @@ func (cr *ContextRouter) handleICSHave(msg *types.ICSMSG) error {
 
 	return cr.transport.SendMessage(
 		context.Background(),
-		msg.Sender,
+		msg.SenderAddr,
 		types.NewICSMsg(cr.selfID, cr.clusterID, message.ICSWANT, raw),
 	)
 }
@@ -550,10 +550,10 @@ func (cr *ContextRouter) handleICSWant(msg *types.ICSMSG) error {
 		return err
 	}
 
-	cr.logger.Trace("Handling ICSWant", "peer", msg.Sender)
+	cr.logger.Trace("Handling ICSWant", "peer", msg.SenderAddr)
 
 	votes := cr.voteset.GetVotes(icsWant.ViewVoteBitSets)
-	cr.logger.Trace("Sending Votes", "peer", msg.Sender)
+	cr.logger.Trace("Sending Votes", "peer", msg.SenderAddr)
 
 	rawICSHave, err := types.NewICSHave(nil, nil, votes...).Bytes()
 	if err != nil {
@@ -561,7 +561,7 @@ func (cr *ContextRouter) handleICSWant(msg *types.ICSMSG) error {
 	}
 
 	err = cr.transport.SendMessage(
-		context.Background(), msg.Sender,
+		context.Background(), msg.SenderAddr,
 		types.NewICSMsg(
 			cr.selfID,
 			cr.clusterID,

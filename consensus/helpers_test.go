@@ -355,7 +355,7 @@ func (ms *MockStateManager) setLatestStateObject(addr identifiers.Address, so *s
 	ms.stateObjects[addr] = so
 }
 
-func (ms *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
+func (ms *MockStateManager) GetSequenceID(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -673,8 +673,8 @@ func createAssetMintIx(t *testing.T, sender, receiver identifiers.Address) *comm
 		IxDataCallback: func(ix *common.IxData) {
 			ix.Input = common.IxInput{
 				Type:      common.IxAssetMint,
-				Nonce:     0,
-				Sender:    sender,
+				SequenceID:     0,
+				SenderAddr:    sender,
 				FuelPrice: big.NewInt(1),
 				Payload:   rawAssetMintPayload,
 			}
@@ -1182,7 +1182,7 @@ func getIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifie
 
 	return &tests.CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.Sender = from
+			ix.SenderAddr = from
 			ix.IxOps = []common.IxOpRaw{
 				{
 					Type:    common.IxAssetTransfer,

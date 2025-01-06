@@ -364,6 +364,18 @@ func (c *Client) AccountState(ctx context.Context, args *rpcargs.GetAccountArgs)
 	return &account, nil
 }
 
+// AccountKeys returns the account state of the given address
+func (c *Client) AccountKeys(ctx context.Context, args *rpcargs.GetAccountKeysArgs) ([]rpcargs.RPCAccountKey, error) {
+	var accountKeys []rpcargs.RPCAccountKey
+
+	err := c.Call(ctx, &accountKeys, "moi.AccountKeys", args)
+	if err != nil {
+		return nil, err
+	}
+
+	return accountKeys, nil
+}
+
 func (c *Client) Mandates(
 	ctx context.Context,
 	args *rpcargs.GetAssetMandateOrLockupArgs,

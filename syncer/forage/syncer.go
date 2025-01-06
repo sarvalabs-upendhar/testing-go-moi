@@ -1819,6 +1819,7 @@ func (s *Syncer) fetchTesseractState(
 		ctx,
 		newSession,
 		cid.DeedsCID(acc.AssetDeeds),
+		cid.AccountKeysCID(acc.KeysHash),
 	); err != nil {
 		s.logger.Error("Error fetching balance data", "err", err)
 

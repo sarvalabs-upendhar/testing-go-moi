@@ -72,7 +72,7 @@ func (tn *TestSingleNode) SetupSuite() {
 	tn.initLogger()
 
 	d := bgclient.DefaultClusterConfig()
-	d.WithLogs = true
+	d.WithLogs = false
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 21000
@@ -119,13 +119,13 @@ func (tn *TestSingleNode) SetupSuite() {
 
 	for i := 0; i < 3; i++ {
 		// promoted queue
-		createAssetWithNonce(tn.T(), tn.moiClient, addr0, tn.accounts[0].Mnemonic, uint64(i))
+		createAssetWithNonce(tn.T(), tn.moiClient, addr0, uint64(i), tn.accounts[0])
 	}
 
 	// enqueued queue
-	createAssetWithNonce(tn.T(), tn.moiClient, addr0, tn.accounts[0].Mnemonic, uint64(4))
+	createAssetWithNonce(tn.T(), tn.moiClient, addr0, uint64(4), tn.accounts[0])
 	// different account
-	createAssetWithNonce(tn.T(), tn.moiClient, addr1, tn.accounts[1].Mnemonic, uint64(4))
+	createAssetWithNonce(tn.T(), tn.moiClient, addr1, uint64(4), tn.accounts[1])
 
 	tn.suiteSetupDone = true
 }
@@ -536,7 +536,7 @@ func (tn *TestSingleNode) TestInteractionCount() {
 		{
 			name: "fetch interaction count for existing address",
 			interactionCountArgs: &rpcargs.InteractionCountArgs{
-				Address: common.SargaAddress,
+				Address: tn.accounts[0].Addr,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -574,6 +574,7 @@ func (tn *TestSingleNode) TestPendingInteractionCount() {
 	testcases := []struct {
 		name                 string
 		interactionCountArgs *rpcargs.InteractionCountArgs
+		expectedSequenceID   uint64
 		expectedError        error
 	}{
 		{
@@ -586,8 +587,9 @@ func (tn *TestSingleNode) TestPendingInteractionCount() {
 		{
 			name: "fetch pending interaction count for existing address",
 			interactionCountArgs: &rpcargs.InteractionCountArgs{
-				Address: common.SargaAddress,
+				Address: tn.accounts[0].Addr,
 			},
+			expectedSequenceID: 3,
 		},
 	}
 
@@ -602,7 +604,7 @@ func (tn *TestSingleNode) TestPendingInteractionCount() {
 			}
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), uint64(0), pendingInteractionCount.ToUint64())
+			require.Equal(tn.T(), test.expectedSequenceID, pendingInteractionCount.ToUint64())
 		})
 	}
 }
@@ -645,8 +647,53 @@ func (tn *TestSingleNode) TestAccountState() {
 			}
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), uint64(0), accountState.Nonce.ToUint64())
 			require.NotNil(tn.T(), accountState.ContextHash)
+			require.Equal(tn.T(), common.SargaAccount, accountState.AccType)
+		})
+	}
+}
+
+func (tn *TestSingleNode) TestAccountKeys() {
+	testcases := []struct {
+		name          string
+		accKeysArgs   *rpcargs.GetAccountKeysArgs
+		expectedError error
+	}{
+		{
+			name: "fetch account state for existing address",
+			accKeysArgs: &rpcargs.GetAccountKeysArgs{
+				Address: tn.accounts[0].Addr,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+		},
+		{
+			name: "fetch account state for non-existing address",
+			accKeysArgs: &rpcargs.GetAccountKeysArgs{
+				Address: tests.RandomAddress(tn.T()),
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &LatestTesseractNumber,
+				},
+			},
+			expectedError: common.ErrAccountNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		tn.Run(test.name, func() {
+			accKeys, err := tn.moiClient.AccountKeys(context.Background(), test.accKeysArgs)
+
+			if test.expectedError != nil {
+				require.ErrorContains(tn.T(), err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(tn.T(), err)
+			require.Equal(tn.T(), 1, len(accKeys))
+			require.Equal(tn.T(), uint64(1000), accKeys[0].Weight.ToUint64())
+			require.Equal(tn.T(), uint64(0), accKeys[0].ID.ToUint64())
 		})
 	}
 }
@@ -1012,7 +1059,9 @@ func (tn *TestSingleNode) TestSendInteraction() {
 		{
 			name: "invalid account",
 			ixPoolArgs: &common.IxData{
-				Sender:    tests.RandomAddress(tn.T()),
+				Sender: common.Sender{
+					Address: tests.RandomAddress(tn.T()),
+				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 200,
 				IxOps: []common.IxOpRaw{
@@ -1031,9 +1080,13 @@ func (tn *TestSingleNode) TestSendInteraction() {
 			bz, err := polo.Polorize(test.ixPoolArgs)
 			require.NoError(tn.T(), err)
 
+			signatures := make(common.Signatures, 0)
+			data, err := signatures.Bytes()
+			require.NoError(tn.T(), err)
+
 			sendIx := &rpcargs.SendIX{
-				IXArgs:    hex.EncodeToString(bz),
-				Signature: "",
+				IXArgs:     hex.EncodeToString(bz),
+				Signatures: hex.EncodeToString(data),
 			}
 
 			_, err = tn.moiClient.SendInteractions(context.Background(), sendIx)
@@ -1252,7 +1305,9 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	require.NoError(tn.T(), err)
 
 	ixArgsWithFuelParams := &rpcargs.IxArgs{
-		Sender:    addr,
+		Sender: common.Sender{
+			Address: addr,
+		},
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
 		IxOps: []rpcargs.IxOp{
@@ -1268,7 +1323,9 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	}
 
 	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
-		Sender: addr,
+		Sender: common.Sender{
+			Address: addr,
+		},
 		IxOps: []rpcargs.IxOp{
 			{
 				Type:    common.IxLogicDeploy,
@@ -1362,7 +1419,9 @@ func (tn *TestSingleNode) TestCall() {
 	require.NoError(tn.T(), err)
 
 	ixArgsWithFuelParams := &rpcargs.IxArgs{
-		Sender:    addr,
+		Sender: common.Sender{
+			Address: addr,
+		},
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
 		IxOps: []rpcargs.IxOp{
@@ -1378,7 +1437,9 @@ func (tn *TestSingleNode) TestCall() {
 	}
 
 	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
-		Sender: addr,
+		Sender: common.Sender{
+			Address: addr,
+		},
 		IxOps: []rpcargs.IxOp{
 			{
 				Type:    common.IxAssetCreate,
@@ -1399,7 +1460,7 @@ func (tn *TestSingleNode) TestCall() {
 		IxType: common.IxAssetCreate,
 	}
 
-	expectedAccountAddr := common.NewAccountAddress(0, addr)
+	expectedAccountAddr := common.NewAccountAddress(addr, 0, 0)
 	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAccountAddr)
 	expectedLogicID := identifiers.NewLogicIDv0(true, false, false, false, 0, expectedAccountAddr)
 

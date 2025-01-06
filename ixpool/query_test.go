@@ -36,7 +36,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 			name:    "IxPool accounts without interaction sender state",
 			address: tests.RandomAddress(t),
 			testFn: func(addr identifiers.Address) {
-				sm.setLatestNonce(t, addr, 4)
+				sm.setLatestSequenceID(t, addr, 0, 4)
 			},
 			expectedNonce: 4,
 		},
@@ -44,7 +44,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 			name:    "IxPool accounts with interaction sender state",
 			address: tests.RandomAddress(t),
 			testFn: func(addr identifiers.Address) {
-				ixPool.accounts.initOnce(addr, 5)
+				ixPool.getOrCreateAccountQueue(addr, 0, 5)
 			},
 			expectedNonce: 5,
 		},
@@ -56,8 +56,8 @@ func TestIxPool_GetNonce(t *testing.T) {
 				testcase.testFn(testcase.address)
 			}
 
-			// Should return the nonce either from ixpool account if it exists or from the latest state object
-			nonce, err := ixPool.GetNonce(testcase.address)
+			// Should return the sequenceID either from ixpool account if it exists or from the latest state object
+			nonce, err := ixPool.GetSequenceID(testcase.address, 0)
 			require.NoError(t, err)
 			require.Equal(t, testcase.expectedNonce, nonce)
 		})
@@ -119,6 +119,8 @@ func TestIxPool_GetIxs(t *testing.T) {
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
 			}, true, sm, nil, newMockNetwork(""))
+
+			sm.setAccountKeysAndPublicKeys(t, address)
 
 			addAndProcessIxs(t, sm, ixPool, testcase.ixs...)
 
@@ -206,6 +208,8 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
 			}, true, sm, nil, newMockNetwork(""))
 
+			sm.setAccountKeysAndPublicKeys(t, addresses...)
+
 			for _, ixs := range testcase.accounts {
 				addAndProcessIxs(t, sm, ixPool, ixs...)
 			}
@@ -242,7 +246,7 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 			name:    "Account with state",
 			address: tests.RandomAddress(t),
 			testFn: func(addr identifiers.Address, baseTime time.Duration) {
-				ixPool.createAccountOnce(addr, 0)
+				ixPool.getOrCreateAccountQueue(addr, 0, 0)
 				err := ixPool.IncrementWaitTime(addr, baseTime)
 				require.NoError(t, err)
 			},
@@ -305,7 +309,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 			baseTime := 1500 * time.Millisecond
 
 			for addr, delta := range testcase.accounts {
-				ixPool.createAccountOnce(addr, 0)
+				ixPool.getOrCreateAccountQueue(addr, 0, 0)
 
 				for i := 0; i < delta; i++ {
 					require.NoError(t, ixPool.IncrementWaitTime(addr, baseTime))
@@ -315,7 +319,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 			accountWaitTime := ixPool.GetAllAccountsWaitTime()
 
 			for addr, delta := range testcase.accounts {
-				acc := ixPool.accounts.get(addr)
+				acc := ixPool.accounts.getAccount(addr)
 				waitTime := accountWaitTime[addr]
 
 				require.NotNil(t, waitTime)

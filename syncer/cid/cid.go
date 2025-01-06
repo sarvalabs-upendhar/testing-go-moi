@@ -115,6 +115,10 @@ func AccountCID(hash common.Hash) CID {
 	return ContentID(storage.Account.Byte(), hash)
 }
 
+func AccountKeysCID(hash common.Hash) CID {
+	return ContentID(storage.AccountKeys.Byte(), hash)
+}
+
 func ContextCID(hash common.Hash) CID {
 	return ContentID(storage.Context.Byte(), hash)
 }

@@ -983,7 +983,9 @@ func TestStateManager_FetchIxStateObjects(t *testing.T) {
 	ixn := tests.CreateIX(t, &tests.CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
 			ix.IxOps = []common.IxOpRaw{}
-			ix.Sender = so[0].Address()
+			ix.Sender = common.Sender{
+				Address: so[0].Address(),
+			}
 			ix.Participants = []common.IxParticipant{
 				{
 					Address: so[0].Address(),
@@ -1144,12 +1146,12 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 	tesseractParams := map[int]*tests.CreateTesseractParams{
 		0: getTesseractParams(
 			ixns[0:1],
-			[]identifiers.Address{ixns[0].Sender(), ixns[0].Receiver()},
+			[]identifiers.Address{ixns[0].SenderAddr(), ixns[0].Receiver()},
 			mHash[0], mHash[1],
 		),
 		1: getTesseractParams(
 			ixns[1:2],
-			[]identifiers.Address{ixns[1].Sender()},
+			[]identifiers.Address{ixns[1].SenderAddr()},
 			tests.RandomHash(t),
 		),
 		2: getTesseractParams(
@@ -1159,7 +1161,7 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 		),
 		3: getTesseractParams(
 			ixns[3:4],
-			[]identifiers.Address{ixns[3].Sender(), ixns[3].Receiver()},
+			[]identifiers.Address{ixns[3].SenderAddr(), ixns[3].Receiver()},
 			mHash[0], common.NilHash,
 		),
 		4: getTesseractParams(
@@ -1334,62 +1336,6 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.isRegistered, isRegistered)
-		})
-	}
-}
-
-func TestStateManager_GetNonce(t *testing.T) {
-	accounts0 := &common.Account{
-		Nonce: 12,
-	}
-
-	stateHash0, err := accounts0.Hash()
-	assert.NoError(t, err)
-
-	smParams := &createStateManagerParams{
-		dbCallback: func(db *MockDB) {
-			insertAccountsInDB(t, db, []common.Hash{stateHash0}, accounts0)
-		},
-	}
-
-	sm := createTestStateManager(t, smParams)
-
-	testcases := []struct {
-		name          string
-		address       identifiers.Address
-		stateHash     common.Hash
-		nonce         uint64
-		expectedError error
-	}{
-		{
-			name:      "fetch nonce at particular state",
-			address:   tests.RandomAddress(t),
-			stateHash: stateHash0,
-			nonce:     accounts0.Nonce,
-		},
-		{
-			name:          "should return error if failed to fetch nonce",
-			address:       tests.RandomAddress(t),
-			expectedError: errors.New("failed to fetch state object"),
-		},
-		{
-			name:          "nil address",
-			address:       identifiers.NilAddress,
-			expectedError: common.ErrInvalidAddress,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			nonce, err := sm.GetNonce(test.address, test.stateHash)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, test.nonce, nonce)
 		})
 	}
 }
@@ -3154,7 +3100,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 	assert.NoError(t, so.flush())
 
 	tesseractParams := map[int]*tests.CreateTesseractParams{
-		0: getTesseractParamsWithContextHash(ixs[0].Sender(), mHash[0]),
+		0: getTesseractParamsWithContextHash(ixs[0].SenderAddr(), mHash[0]),
 		1: getTesseractParamsWithContextHash(ixs[0].Receiver(), mHash[1]),
 		2: getTesseractParamsWithStateHash(common.SargaAddress, stateHash),
 	}
@@ -3194,7 +3140,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 				common.NewNodeSet(obj[3].Ids, pk[6:8], 0),
 			),
 			contextHashes: map[identifiers.Address]common.Hash{
-				ixs[0].Sender():   ts[0].LatestContextHash(ts[0].AnyAddress()),
+				ixs[0].SenderAddr():   ts[0].LatestContextHash(ts[0].AnyAddress()),
 				ixs[0].Receiver(): ts[1].LatestContextHash(ts[1].AnyAddress()),
 			},
 			preTestFn: func() {

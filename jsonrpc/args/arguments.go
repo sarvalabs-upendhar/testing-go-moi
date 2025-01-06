@@ -64,6 +64,11 @@ type GetAccountArgs struct {
 	Options TesseractNumberOrHash `json:"options"`
 }
 
+type GetAccountKeysArgs struct {
+	Address identifiers.Address   `json:"address"`
+	Options TesseractNumberOrHash `json:"options"`
+}
+
 type LogicEnlistedArgs struct {
 	Address identifiers.Address `json:"address"`
 	LogicID identifiers.LogicID `json:"logic_id"`
@@ -71,6 +76,7 @@ type LogicEnlistedArgs struct {
 
 type InteractionCountArgs struct {
 	Address identifiers.Address   `json:"address"`
+	KeyID   uint64                `json:"key_id"`
 	Options TesseractNumberOrHash `json:"options"`
 }
 
@@ -129,8 +135,8 @@ type PeerScoreRequest struct{}
 // Public ix args
 
 type SendIX struct {
-	IXArgs    string `json:"ix_args"`
-	Signature string `json:"signature"`
+	IXArgs     string `json:"ix_args"`
+	Signatures string `json:"signatures"`
 }
 
 type IxFund struct {
@@ -159,10 +165,10 @@ type IxPreferences struct {
 }
 
 type IxArgs struct {
-	Sender identifiers.Address `json:"sender"`
+	Sender common.Sender       `json:"sender"`
 	Payer  identifiers.Address `json:"payer"`
 
-	Nonce hexutil.Uint64 `json:"nonce"`
+	SequenceID hexutil.Uint64 `json:"sequence_id"`
 
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
@@ -220,6 +226,47 @@ type RPCAssetSupply struct {
 type RPCParticipantCreate struct {
 	Address identifiers.Address `json:"address"`
 	Amount  *hexutil.Big        `json:"amount"`
+}
+
+type KeyAddPayload struct {
+	PublicKey          hexutil.Bytes  `json:"public_key"`
+	Weight             hexutil.Uint64 `json:"weight"`
+	SignatureAlgorithm hexutil.Uint64 `json:"signature_algorithm"`
+}
+
+type KeyRevokePayload struct {
+	KeyID hexutil.Uint64 `json:"key_id"`
+}
+
+type RPCAccountConfigurePayload struct {
+	Add    []KeyAddPayload
+	Revoke []KeyRevokePayload
+}
+
+func GetRPCAccountConfigurePayload(payload *common.AccountConfigurePayload) *RPCAccountConfigurePayload {
+	rpcPayload := &RPCAccountConfigurePayload{}
+
+	if payload.Add != nil {
+		rpcPayload.Add = make([]KeyAddPayload, len(payload.Add))
+		for i, add := range payload.Add {
+			rpcPayload.Add[i] = KeyAddPayload{
+				PublicKey:          add.PublicKey,
+				Weight:             hexutil.Uint64(add.Weight),
+				SignatureAlgorithm: hexutil.Uint64(add.SignatureAlgorithm),
+			}
+		}
+	}
+
+	if payload.Revoke != nil {
+		rpcPayload.Revoke = make([]KeyRevokePayload, len(payload.Revoke))
+		for i, revoke := range payload.Revoke {
+			rpcPayload.Revoke[i] = KeyRevokePayload{
+				KeyID: hexutil.Uint64(revoke.KeyID),
+			}
+		}
+	}
+
+	return rpcPayload
 }
 
 type RPCAssetAction struct {

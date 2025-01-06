@@ -27,7 +27,7 @@ func RunAssetTransfer(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.Sender())
+	sender := transition.GetObject(op.SenderAddr())
 	target := transition.GetObject(op.Target())
 	sarga := transition.GetAuxiliaryObject(common.SargaAddress)
 
@@ -87,7 +87,7 @@ func RunAssetCreate(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the operator and asset account state objects
-	operator := transition.GetObject(op.Sender())
+	operator := transition.GetObject(op.SenderAddr())
 	assetacc := transition.GetObject(op.Target())
 
 	// todo: [asset logics] handle logic deployment for logical assets
@@ -142,7 +142,7 @@ func RunAssetApprove(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.Sender())
+	sender := transition.GetObject(op.SenderAddr())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -181,7 +181,7 @@ func RunAssetRevoke(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.Sender())
+	sender := transition.GetObject(op.SenderAddr())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -224,7 +224,7 @@ func RunAssetMint(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the operator and asset account state objects
-	operator := objects.GetObject(op.Sender())
+	operator := objects.GetObject(op.SenderAddr())
 	assetacc := objects.GetObject(op.Target())
 
 	// Exhaust fuel from tank
@@ -271,7 +271,7 @@ func RunAssetBurn(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the operator and asset account state objects
-	operator := objects.GetObject(op.Sender())
+	operator := objects.GetObject(op.SenderAddr())
 	assetacc := objects.GetObject(op.Target())
 
 	// Exhaust fuel from tank
@@ -313,7 +313,7 @@ func RunAssetLockup(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.Sender())
+	sender := transition.GetObject(op.SenderAddr())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -351,7 +351,7 @@ func RunAssetRelease(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.Sender())
+	sender := transition.GetObject(op.SenderAddr())
 	target := transition.GetObject(op.Target())
 	benefactor := transition.GetObject(payload.Benefactor)
 	sarga := transition.GetAuxiliaryObject(common.SargaAddress)

@@ -356,10 +356,6 @@ func (d *dispatcher) getMethodHandler(req Request) (*serviceData, *methodData, E
 	return service, fd, nil
 }
 
-func (d *dispatcher) logInternalError(method string, err error) {
-	d.logger.Warn("failed to dispatch", "method", method, "err", err)
-}
-
 func (d *dispatcher) handleReq(req Request) ([]byte, Error) {
 	service, funcData, funcErr := d.getMethodHandler(req)
 	if funcErr != nil {
@@ -397,8 +393,6 @@ func (d *dispatcher) handleReq(req Request) ([]byte, Error) {
 	output := funcData.methodValue.Call(inArgs) // call rpc endpoint function
 
 	if err := getError(output[1]); err != nil {
-		d.logInternalError(req.Method, err)
-
 		if res := output[0].Interface(); res != nil {
 			data, ok = res.([]byte)
 
@@ -413,8 +407,6 @@ func (d *dispatcher) handleReq(req Request) ([]byte, Error) {
 	if res := output[0].Interface(); res != nil {
 		data, err = json.Marshal(res)
 		if err != nil {
-			d.logInternalError(req.Method, err)
-
 			return nil, NewInternalError("Internal error")
 		}
 	}

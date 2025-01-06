@@ -95,11 +95,19 @@ func CheckForRPCIxn(
 	input := ix.IXData()
 
 	require.Equal(t, ix.Hash(), rpcIxn.Hash)
-	require.Equal(t, ix.Signature(), rpcIxn.Signature.Bytes())
+	require.Equal(t, len(ix.Signatures()), len(rpcIxn.Signatures))
 
-	require.Equal(t, input.Nonce, rpcIxn.Nonce.ToUint64())
+	for i := 0; i < len(ix.Signatures()); i++ {
+		require.Equal(t, ix.Signatures()[i].Address, rpcIxn.Signatures[i].Address)
+		require.Equal(t, ix.Signatures()[i].KeyID, rpcIxn.Signatures[i].KeyID.ToUint64())
+		require.Equal(t, ix.Signatures()[i].Signature, rpcIxn.Signatures[i].Signature.Bytes())
+	}
 
-	require.Equal(t, input.Sender, rpcIxn.Sender)
+	require.Equal(t, input.Sender.SequenceID, rpcIxn.Sender.SequenceID.ToUint64())
+
+	require.Equal(t, input.Sender.Address, rpcIxn.Sender.Address)
+	require.Equal(t, input.Sender.SequenceID, rpcIxn.Sender.SequenceID.ToUint64())
+	require.Equal(t, input.Sender.KeyID, rpcIxn.Sender.KeyID.ToUint64())
 	require.Equal(t, input.Payer, rpcIxn.Payer)
 
 	require.Equal(t, len(input.IxOps), len(rpcIxn.IxOps))
@@ -267,7 +275,7 @@ func CheckForRPCReceipt(
 	CheckForRPCParticipantState(t, participants, rpcReceipt.Participants)
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
 	require.Equal(t, receipt.FuelUsed, uint64(rpcReceipt.FuelUsed))
-	require.Equal(t, ix.Sender(), rpcReceipt.From)
+	require.Equal(t, ix.SenderAddr(), rpcReceipt.From)
 	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToUint64())
 	require.Len(t, rpcReceipt.IxOps, len(receipt.IxOps))
 
@@ -282,9 +290,11 @@ func CreateInteractionWithTestData(t *testing.T, ixType common.IxOpType, payload
 	t.Helper()
 
 	ixData := common.IxData{
-		Sender:    tests.RandomAddress(t),
+		Sender: common.Sender{
+			Address:    tests.RandomAddress(t),
+			SequenceID: 2,
+		},
 		Payer:     tests.RandomAddress(t),
-		Nonce:     2,
 		FuelLimit: 1043,
 		FuelPrice: new(big.Int).SetUint64(1),
 		IxOps: []common.IxOpRaw{
@@ -297,7 +307,18 @@ func CreateInteractionWithTestData(t *testing.T, ixType common.IxOpType, payload
 
 	tests.AppendParticipantsInIxData(t, &ixData)
 
-	ix, err := common.NewInteraction(ixData, tests.RandomHash(t).Bytes())
+	ix, err := common.NewInteraction(ixData, common.Signatures{
+		{
+			Address:   tests.RandomAddress(t),
+			KeyID:     2,
+			Signature: tests.RandomHash(t).Bytes(),
+		},
+		{
+			Address:   tests.RandomAddress(t),
+			KeyID:     3,
+			Signature: tests.RandomHash(t).Bytes(),
+		},
+	})
 	require.NoError(t, err)
 
 	return ix

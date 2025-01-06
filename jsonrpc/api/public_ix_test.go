@@ -22,13 +22,13 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 	rawAssetPayload, err := assetPayload.Bytes()
 	require.NoError(t, err)
 
-	acc, _ := tests.GetTestAccount(t, func(acc *common.Account) {
-		acc.Nonce = uint64(2)
-	})
+	acc, _ := tests.GetTestAccount(t, nil)
 
 	validIXArgs := common.IxData{
-		Sender:    address,
-		Nonce:     2,
+		Sender: common.Sender{
+			Address:    address,
+			SequenceID: 2,
+		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 1,
 		IxOps: []common.IxOpRaw{
@@ -47,8 +47,10 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 
 	expectedIxn, err := common.NewInteraction(
 		common.IxData{
-			Sender:    address,
-			Nonce:     acc.Nonce,
+			Sender: common.Sender{
+				Address:    address,
+				SequenceID: 2,
+			},
 			FuelPrice: big.NewInt(1),
 			FuelLimit: 1,
 			IxOps: []common.IxOpRaw{
@@ -64,7 +66,12 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 				},
 			},
 		},
-		getSignatureBytes(t, &validIXArgs, mnemonic),
+		common.Signatures{
+			{
+				Address:   address,
+				Signature: getSignatureBytes(t, &validIXArgs, mnemonic),
+			},
+		},
 	)
 	require.NoError(t, err)
 
@@ -78,7 +85,9 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 		{
 			name: "invalid send ix args",
 			ixData: common.IxData{
-				Sender:    common.SargaAddress,
+				Sender: common.Sender{
+					Address: common.SargaAddress,
+				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 1,
 				IxOps: []common.IxOpRaw{
@@ -93,10 +102,12 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 		{
 			name: "failed to construct interaction",
 			ixData: common.IxData{
-				Nonce:     3,
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 1,
-				Sender:    address,
+				Sender: common.Sender{
+					Address:    address,
+					SequenceID: 3,
+				},
 				IxOps: []common.IxOpRaw{
 					{
 						Type: common.IxInvalid,
@@ -114,8 +125,10 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 		{
 			name: "failed to add interaction in ixpool",
 			ixData: common.IxData{
-				Nonce:     3,
-				Sender:    address,
+				Sender: common.Sender{
+					Address:    address,
+					SequenceID: 3,
+				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 1,
 				IxOps: []common.IxOpRaw{
@@ -164,9 +177,18 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 			bz, err := polo.Polorize(test.ixData)
 			require.NoError(t, err)
 
+			rawSig, err := common.Signatures{
+				{
+					Address:   test.ixData.Sender.Address,
+					KeyID:     test.ixData.Sender.KeyID,
+					Signature: getSignatureBytes(t, &test.ixData, mnemonic),
+				},
+			}.Bytes()
+			require.NoError(t, err)
+
 			sendIx := rpcargs.SendIX{
-				IXArgs:    hex.EncodeToString(bz),
-				Signature: getSignatureString(t, &test.ixData, mnemonic),
+				IXArgs:     hex.EncodeToString(bz),
+				Signatures: hex.EncodeToString(rawSig),
 			}
 
 			ixnHash, err := coreAPI.SendInteractions(&sendIx)
@@ -187,15 +209,21 @@ func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
 	address, mnemonic := tests.RandomAddressWithMnemonic(t)
 
 	ixWithNilSender := common.IxData{
-		Sender: identifiers.NilAddress,
+		Sender: common.Sender{
+			Address: identifiers.NilAddress,
+		},
 	}
 
 	ixWithSargaSender := common.IxData{
-		Sender: common.SargaAddress,
+		Sender: common.Sender{
+			Address: common.SargaAddress,
+		},
 	}
 
 	ix := &common.IxData{
-		Sender:    address,
+		Sender: common.Sender{
+			Address: address,
+		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 23,
 		IxOps: []common.IxOpRaw{
@@ -292,7 +320,9 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 		{
 			name: "sender is sarga account",
 			ixArgs: &common.IxData{
-				Sender:    common.SargaAddress,
+				Sender: common.Sender{
+					Address: common.SargaAddress,
+				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 23,
 				IxOps: []common.IxOpRaw{
@@ -308,7 +338,9 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 		{
 			name: "empty ix ops",
 			ixArgs: &common.IxData{
-				Sender:    tests.RandomAddress(t),
+				Sender: common.Sender{
+					Address: tests.RandomAddress(t),
+				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 23,
 			},
@@ -318,7 +350,9 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 		{
 			name: "fuel price and limit required",
 			ixArgs: &common.IxData{
-				Sender: tests.RandomAddress(t),
+				Sender: common.Sender{
+					Address: tests.RandomAddress(t),
+				},
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
@@ -336,7 +370,9 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 		{
 			name: "fuel price and limit not required",
 			ixArgs: &common.IxData{
-				Sender: tests.RandomAddress(t),
+				Sender: common.Sender{
+					Address: tests.RandomAddress(t),
+				},
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
@@ -353,7 +389,9 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 		{
 			name: "valid ix data",
 			ixArgs: &common.IxData{
-				Sender:    tests.RandomAddress(t),
+				Sender: common.Sender{
+					Address: tests.RandomAddress(t),
+				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 23,
 				IxOps: []common.IxOpRaw{

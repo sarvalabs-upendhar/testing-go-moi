@@ -1,8 +1,10 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"math/big"
+	"testing"
 
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
@@ -25,8 +27,10 @@ func (te *TestEnvironment) createParticipant(
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
-		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, sender.Addr),
-		Sender:    sender.Addr,
+		Sender: common.Sender{
+			Address:    sender.Addr,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.Addr, 0),
+		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		IxOps: []common.IxOpRaw{
@@ -47,9 +51,37 @@ func (te *TestEnvironment) createParticipant(
 		},
 	}
 
-	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, sender.Mnemonic)
+	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
+		{
+			Addr:     sender.Addr,
+			KeyID:    0,
+			Mnemonic: sender.Mnemonic,
+		},
+	})
 
 	return te.moiClient.SendInteractions(context.Background(), sendIX)
+}
+
+func checkForKeys(t *testing.T, keysPayload []common.KeyAddPayload, rpcAccountKeys []args.RPCAccountKey) {
+	t.Helper()
+
+	require.Equal(t, len(keysPayload), len(rpcAccountKeys))
+
+	for _, key := range keysPayload {
+		found := false
+
+		for _, rpcAccountKey := range rpcAccountKeys {
+			if bytes.Equal(rpcAccountKey.PublicKey, key.PublicKey) {
+				require.Equal(t, key.Weight, rpcAccountKey.Weight.ToUint64())
+
+				found = true
+
+				break
+			}
+		}
+
+		require.True(t, found)
+	}
 }
 
 func validateParticipantCreate(
@@ -69,6 +101,16 @@ func validateParticipantCreate(
 
 	require.Equal(te.T(), payload.Amount.Uint64()+receipt.FuelUsed.ToUint64(), senderPrevBal-senderCurBal)
 	require.Equal(te.T(), payload.Amount.Uint64(), receiverCurBal)
+
+	accountKeys, err := te.moiClient.AccountKeys(context.Background(), &args.GetAccountKeysArgs{
+		Address: payload.Address,
+		Options: args.TesseractNumberOrHash{
+			TesseractNumber: &args.LatestTesseractHeight,
+		},
+	})
+	require.NoError(te.T(), err)
+
+	checkForKeys(te.T(), payload.KeysPayload, accountKeys)
 }
 
 func (te *TestEnvironment) TestParticipantCreate() {
@@ -97,18 +139,74 @@ func (te *TestEnvironment) TestParticipantCreate() {
 			sender: sender,
 			participantCreatePayload: &common.ParticipantCreatePayload{
 				Address: addr,
-				Amount:  big.NewInt(10),
+				KeysPayload: []common.KeyAddPayload{
+					{
+						PublicKey:          addr.Bytes(),
+						Weight:             1000,
+						SignatureAlgorithm: 0,
+					},
+				},
+				Amount: big.NewInt(10),
 			},
 			postTest: validateParticipantCreate,
 		},
 		{
-			name:   "amount is invalid",
+			name:   "register participants with multiple keys",
+			sender: sender,
+			participantCreatePayload: &common.ParticipantCreatePayload{
+				Address: tests.RandomAddress(te.T()),
+				KeysPayload: []common.KeyAddPayload{
+					{
+						PublicKey:          addr.Bytes(),
+						Weight:             200,
+						SignatureAlgorithm: 0,
+					},
+					{
+						PublicKey:          tests.RandomAddress(te.T()).Bytes(),
+						Weight:             800,
+						SignatureAlgorithm: 0,
+					},
+				},
+				Amount: big.NewInt(10),
+			},
+			postTest: validateParticipantCreate,
+		},
+		{
+			name:   "invalid weight of keys",
+			sender: sender,
+			participantCreatePayload: &common.ParticipantCreatePayload{
+				Address: addr,
+				KeysPayload: []common.KeyAddPayload{
+					{
+						PublicKey:          addr.Bytes(),
+						Weight:             600,
+						SignatureAlgorithm: 0,
+					},
+					{
+						PublicKey:          tests.RandomAddress(te.T()).Bytes(),
+						Weight:             299,
+						SignatureAlgorithm: 0,
+					},
+				},
+				Amount: big.NewInt(10),
+			},
+			expectedError: common.ErrInvalidWeight,
+		},
+		{
+			name:   "insufficient funds",
 			sender: sender,
 			participantCreatePayload: &common.ParticipantCreatePayload{
 				Address: receiver.Addr,
-				Amount:  big.NewInt(0),
+				KeysPayload: []common.KeyAddPayload{
+					{
+						PublicKey:          receiver.Addr.Bytes(),
+						Weight:             1000,
+						SignatureAlgorithm: 0,
+					},
+				},
+				Amount: big.NewInt(1000000000000),
 			},
-			expectedError: common.ErrInvalidValue,
+			expectedError: common.ErrInsufficientFunds,
 		},
 	}
 

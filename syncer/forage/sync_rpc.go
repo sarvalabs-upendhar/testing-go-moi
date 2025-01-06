@@ -244,7 +244,7 @@ func (service *SYNCRPCService) SyncLattice(
 			true,
 		)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("failed to fetch tesseract %d", height))
+			return errors.Wrap(err, fmt.Sprintf("failed to fetch tesseract for %v %d", req.Address, height))
 		}
 
 		var commitInfo []byte

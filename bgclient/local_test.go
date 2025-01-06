@@ -16,7 +16,7 @@ package bgclient
 //	y, err := l.NetworkStatus(context.Background())
 //	require.NoError(t, err)
 //
-//	fmt.Println("network status ", y)
+//	fmt.Println("network  status ", y)
 //
 //	fmt.Println("before stop ", x[0])
 //	err = l.StopNode(context.Background(), x[0])

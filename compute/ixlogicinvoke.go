@@ -30,7 +30,7 @@ func RunLogicInvoke(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the invoker and logic account state objects
-	invoker := objects.GetObject(op.Sender())
+	invoker := objects.GetObject(op.SenderAddr())
 	logicacc := objects.GetObject(op.Target())
 
 	// Create an options chain

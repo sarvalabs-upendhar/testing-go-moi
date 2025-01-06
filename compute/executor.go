@@ -76,9 +76,9 @@ func (executor *IxExecutor) executeInteraction(
 		executor.transition.UpdateSnapshot(snapshot)
 	}
 
-	// Increment the nonce of the sender address
-	if ix.Sender() != identifiers.NilAddress {
-		executor.transition.IncrementNonce(ix.Sender(), 1)
+	// Increment the sequenceID of the sender address
+	if ix.SenderAddr() != identifiers.NilAddress {
+		executor.transition.IncrementSequenceID(ix.SenderAddr(), ix.SenderKeyID())
 	}
 
 	// Set the receipt to the transition
@@ -86,8 +86,8 @@ func (executor *IxExecutor) executeInteraction(
 
 	// Deduct fuel for the ix execution from the sender
 	executor.transition.DeductFuel(
-		ix.Sender(), new(big.Int).Mul(ix.FuelPrice(),
-			new(big.Int).SetUint64(receipt.FuelUsed)),
+		ix.SenderAddr(),
+		new(big.Int).Mul(ix.FuelPrice(), new(big.Int).SetUint64(receipt.FuelUsed)),
 	)
 
 	return nil

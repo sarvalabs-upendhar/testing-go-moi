@@ -221,7 +221,7 @@ func (s *Session) GetBlocks(ctx context.Context, cids []cid.CID) chan *block.Blo
 			attemptedPeers[peerID] = true
 
 			if err = s.getBlocks(ctx, peerID, out, idSet); err != nil {
-				s.logger.Error("Error fetching blocks", "err", err)
+				s.logger.Error("Error fetching blocks", "peer-id", peerID, "err", err)
 
 				s.pm.UpdateFailedAttempts(peerID, 1)
 

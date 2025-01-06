@@ -6,54 +6,6 @@ import (
 	"github.com/sarvalabs/go-moi/state"
 )
 
-// RunParticipantCreate performs the given IxParticipantCreate operation.
-// The stateObjectRetriever must contain state objects for the sender and Target of the op.
-//
-// The IxOp must have an ParticipantCreatePayload and the output receipt will have a ParticipantCreateResult.
-// The KMOI asset balance is debited from the sender and credited to the Target state objects.
-// Returns an error if any of given amounts are invalid (negative)
-// or if the sender does not have enough balance for that asset ID
-// or if the KMOI asset object already exists in the target account
-func RunParticipantCreate(
-	op *common.IxOp,
-	_ *common.ExecutionContext,
-	tank *FuelTank,
-	transition *state.Transition,
-) *common.IxOpResult {
-	// Obtain the participant create Payload from the Interaction
-	payload, _ := op.GetParticipantCreatePayload()
-
-	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.Sender())
-	target := transition.GetObject(op.Target())
-	sarga := transition.GetObject(common.SargaAddress)
-
-	// Create a new result for the op
-	opResult := common.NewIxOpResult(op.Type())
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleParticipantCreate) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
-	}
-
-	// Validate participant create payload
-	if err := validateParticipantCreate(sender, target, sarga, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
-	}
-
-	// Register the target account by creating and inserting a new KMOI asset object
-	// into the target account's asset tree.
-	if err := createParticipant(sender, target, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
-	}
-
-	if err := addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
-	}
-
-	return opResult.WithStatus(common.ResultOk)
-}
-
 func validateParticipantCreate(sender, target, sarga *state.Object, payload *common.ParticipantCreatePayload) error {
 	// Check if the account is already registered
 	// Fetch the account info from genesis state
@@ -84,4 +36,126 @@ func createParticipant(sender, target *state.Object, payload *common.Participant
 
 	// Insert a new asset object with the specified amount into the target's asset tree.
 	return target.InsertNewAssetObject(common.KMOITokenAssetID, state.NewAssetObject(payload.Amount, nil))
+}
+
+func createAccountKeys(startID int, keysPayload []common.KeyAddPayload) common.AccountKeys {
+	accountKeys := make(common.AccountKeys, len(keysPayload))
+
+	for i, key := range keysPayload {
+		accountKeys[i] = &common.AccountKey{
+			ID:                 uint64(startID + i),
+			PublicKey:          key.PublicKey,
+			Weight:             key.Weight,
+			SignatureAlgorithm: key.SignatureAlgorithm,
+			Revoked:            false,
+			SequenceID:         0,
+		}
+	}
+
+	return accountKeys
+}
+
+func validateAccRevoke(keysCount uint64, revoke []common.KeyRevokePayload) bool {
+	for _, revokeKey := range revoke {
+		if revokeKey.KeyID >= keysCount {
+			return false
+		}
+	}
+
+	return true
+}
+
+// RunParticipantCreate performs the given IxParticipantCreate operation.
+// The stateObjectRetriever must contain state objects for the sender and Target of the op.
+//
+// The IxOp must have an ParticipantCreatePayload and the output receipt will have a ParticipantCreateResult.
+// The KMOI asset balance is debited from the sender and credited to the Target state objects.
+// Returns an error if any of given amounts are invalid (negative)
+// or if the sender does not have enough balance for that asset ID
+// or if the KMOI asset object already exists in the target account
+func RunParticipantCreate(
+	op *common.IxOp,
+	_ *common.ExecutionContext,
+	tank *FuelTank,
+	transition *state.Transition,
+) *common.IxOpResult {
+	// Obtain the participant create Payload from the Interaction
+	payload, _ := op.GetParticipantCreatePayload()
+
+	// Obtain the sender and target state objects
+	sender := transition.GetObject(op.SenderAddr())
+	target := transition.GetObject(op.Target())
+	sarga := transition.GetObject(common.SargaAddress)
+
+	// Create a new result for the op
+	opResult := common.NewIxOpResult(op.Type())
+
+	// Exhaust fuel from tank
+	if !tank.Exhaust(FuelSimpleParticipantCreate) {
+		return opResult.WithStatus(common.ResultFuelExhausted)
+	}
+
+	// Validate participant create payload
+	if err := validateParticipantCreate(sender, target, sarga, payload); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	// Register the target account by creating and inserting a new KMOI asset object
+	// into the target account's asset tree.
+	if err := createParticipant(sender, target, payload); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	if err := addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	accountKeys := createAccountKeys(0, payload.KeysPayload)
+
+	target.UpdateKeys(accountKeys)
+
+	return opResult.WithStatus(common.ResultOk)
+}
+
+func RunAccountConfigure(
+	op *common.IxOp,
+	_ *common.ExecutionContext,
+	tank *FuelTank,
+	transition *state.Transition,
+) *common.IxOpResult {
+	// Obtain the participant create Payload from the Interaction
+	payload, _ := op.GetAccountConfigurePayload()
+
+	// Obtain the sender and target state objects
+	sender := transition.GetObject(op.SenderAddr())
+
+	// Create a new result for the op
+	opResult := common.NewIxOpResult(op.Type())
+
+	// Exhaust fuel from tank
+	if !tank.Exhaust(FuelSimpleParticipantCreate) {
+		return opResult.WithStatus(common.ResultFuelExhausted)
+	}
+
+	keysCount := sender.KeysLen()
+
+	if len(payload.Add) > 0 {
+		accountKeys := createAccountKeys(keysCount, payload.Add)
+
+		if err := sender.AppendAccountKeys(accountKeys); err != nil {
+			return opResult.WithStatus(common.ResultStateReverted)
+		}
+
+		return opResult.WithStatus(common.ResultOk)
+	}
+
+	if !validateAccRevoke(uint64(keysCount), payload.Revoke) {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	if err := sender.RevokeAccountKeys(payload.Revoke); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	return opResult.WithStatus(common.ResultOk)
 }

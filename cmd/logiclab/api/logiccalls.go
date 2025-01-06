@@ -160,9 +160,9 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 
 	// Generate an interaction from the kind, callsite, calldata and manifest
 	ixn := core.Interaction{
-		Nonce: env.Nonce,
-		Limit: env.CallFuel,
-		Price: new(big.Int).SetUint64(core.LabFuelPrice),
+		SequenceID: env.SequenceID,
+		Limit:      env.CallFuel,
+		Price:      new(big.Int).SetUint64(core.LabFuelPrice),
 
 		Kind: common.IxLogicDeploy,
 		Site: request.Callsite,
@@ -192,7 +192,7 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 	// Mark the logic as deployed
 	logic.Ready = true
 
-	env.IncrementNonce()
+	env.IncrementSequenceID()
 
 	// Get the logic interaction hash
 	hash := ixn.Hash()
@@ -311,9 +311,9 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 
 	// Generate an interaction from the kind, callsite, calldata and manifest
 	ixn := core.Interaction{
-		Nonce: env.Nonce,
-		Limit: env.CallFuel,
-		Price: new(big.Int).SetUint64(core.LabFuelPrice),
+		SequenceID: env.SequenceID,
+		Limit:      env.CallFuel,
+		Price:      new(big.Int).SetUint64(core.LabFuelPrice),
 
 		Kind: common.IxLogicInvoke,
 		Site: request.Callsite,
@@ -340,7 +340,7 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 		return
 	}
 
-	env.IncrementNonce()
+	env.IncrementSequenceID()
 
 	// Get the logic interaction hash
 	hash := ixn.Hash()
@@ -462,9 +462,9 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 
 	// Generate an interaction from the kind, callsite and calldata
 	ixn := core.Interaction{
-		Nonce: env.Nonce,
-		Limit: env.CallFuel,
-		Price: new(big.Int).SetUint64(core.LabFuelPrice),
+		SequenceID: env.SequenceID,
+		Limit:      env.CallFuel,
+		Price:      new(big.Int).SetUint64(core.LabFuelPrice),
 
 		Kind: common.IxLogicEnlist,
 		Site: request.Callsite,
@@ -491,7 +491,7 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 		return
 	}
 
-	env.IncrementNonce()
+	env.IncrementSequenceID()
 	_ = env.Enlist(senderAddress, logicID)
 
 	// Get the logic interaction hash

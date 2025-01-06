@@ -356,12 +356,12 @@ func (p *PublicCoreAPI) InteractionCount(args *rpcargs.InteractionCountArgs) (*h
 		return nil, err
 	}
 
-	nonce, err := p.sm.GetNonce(args.Address, stateHash)
+	sequenceID, err := p.sm.GetSequenceID(args.Address, args.KeyID, stateHash)
 	if err != nil {
 		return nil, err
 	}
 
-	return (*hexutil.Uint64)(&nonce), nil
+	return (*hexutil.Uint64)(&sequenceID), nil
 }
 
 // PendingInteractionCount returns the number of interactions sent for the given address.
@@ -371,7 +371,7 @@ func (p *PublicCoreAPI) PendingInteractionCount(args *rpcargs.InteractionCountAr
 		return nil, common.ErrEmptyAddress
 	}
 
-	interactionCount, err := p.ixpool.GetNonce(args.Address)
+	interactionCount, err := p.ixpool.GetSequenceID(args.Address, args.KeyID)
 	if err != nil {
 		return nil, err
 	}
@@ -392,7 +392,6 @@ func (p *PublicCoreAPI) AccountState(args *rpcargs.GetAccountArgs) (*rpcargs.RPC
 	}
 
 	return &rpcargs.RPCAccount{
-		Nonce:       hexutil.Uint64(account.Nonce),
 		AccType:     account.AccType,
 		AssetDeeds:  account.AssetDeeds,
 		ContextHash: account.ContextHash,
@@ -400,7 +399,22 @@ func (p *PublicCoreAPI) AccountState(args *rpcargs.GetAccountArgs) (*rpcargs.RPC
 		AssetRoot:   account.AssetRoot,
 		LogicRoot:   account.LogicRoot,
 		FileRoot:    account.FileRoot,
+		KeysHash:    account.KeysHash,
 	}, nil
+}
+
+func (p *PublicCoreAPI) AccountKeys(args *rpcargs.GetAccountKeysArgs) ([]*rpcargs.RPCAccountKey, error) {
+	stateHash, err := p.getStateHash(getTesseractArgs(args.Address, args.Options))
+	if err != nil {
+		return nil, err
+	}
+
+	accountKeys, err := p.sm.GetAccountKeys(args.Address, stateHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return rpcargs.CreateRPCAccountKeys(accountKeys), nil
 }
 
 func (p *PublicCoreAPI) LogicEnlisted(args *rpcargs.LogicEnlistedArgs) (bool, error) {
@@ -611,7 +625,7 @@ func (p *PublicCoreAPI) FuelEstimate(args *rpcargs.CallArgs) (*hexutil.Big, erro
 		return nil, err
 	}
 
-	ix, err := constructIxn(p.sm, ixData, nil)
+	ix, err := constructIxn(p.sm, ixData)
 	if err != nil {
 		return nil, err
 	}
@@ -668,7 +682,7 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	ix, err := constructIxn(p.sm, ixData, nil)
+	ix, err := constructIxn(p.sm, ixData)
 	if err != nil {
 		return nil, err
 	}
@@ -689,7 +703,7 @@ func (p *PublicCoreAPI) Call(args *rpcargs.CallArgs) (*rpcargs.RPCReceipt, error
 		return nil, err
 	}
 
-	return createCallReceipt(ix.Sender(), receipt), nil
+	return createCallReceipt(ix.SenderAddr(), receipt), nil
 }
 
 func (p *PublicCoreAPI) normalizeOptions(

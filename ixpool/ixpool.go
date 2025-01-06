@@ -44,13 +44,14 @@ const (
 )
 
 var (
-	ErrNonceTooLow   = errors.New("nonce too low")
-	ErrAlreadyKnown  = errors.New("already known")
-	ErrOversizedData = errors.New("over sized data")
+	ErrSequenceIDTooLow = errors.New("sequenceID too low")
+	ErrAlreadyKnown     = errors.New("already known")
+	ErrOversizedData    = errors.New("over sized data")
 )
 
 type stateManager interface {
-	GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error)
+	GetPublicKey(addr identifiers.Address, KeyID uint64, stateHash common.Hash) ([]byte, error)
+	GetSequenceID(addr identifiers.Address, KeyID uint64, stateHash common.Hash) (uint64, error)
 	IsAccountRegistered(addr identifiers.Address) (bool, error)
 	IsLogicRegistered(logicID identifiers.LogicID) error
 	GetBalance(addrs identifiers.Address, assetID identifiers.AssetID, stateHash common.Hash) (*big.Int, error)
@@ -58,6 +59,7 @@ type stateManager interface {
 	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
 	RemoveCachedObject(addr identifiers.Address)
 	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
+	GetAccountKeys(addrs identifiers.Address, stateHash common.Hash) (common.AccountKeys, error)
 }
 
 type executionManager interface {
@@ -97,7 +99,7 @@ type IxPool struct {
 	close       chan struct{}
 	sealing     bool
 	mux         *utils.TypeMux
-	accounts    *accountsMap
+	accounts    *accountsManager
 	gauge       slotGauge // gauge for measuring pool capacity
 	pruneCh     chan struct{}
 	metrics     *Metrics
@@ -219,14 +221,47 @@ func (i *IxPool) signalPruning() {
 	}
 }
 
-// getOrCreateAccount fetches the account of the sender if it exists;
+// getOrCreateAccountQueue fetches the account of the sender if it exists;
 // otherwise, it creates a new account and returns it.
-func (i *IxPool) getOrCreateAccount(ix *common.Interaction) *account {
-	if acc := i.accounts.get(ix.Sender()); acc != nil {
-		return acc
+func (i *IxPool) getOrCreateAccountQueue(
+	sender identifiers.Address,
+	keyID uint64, sequenceID uint64,
+) (*account, *accountQueue) {
+	acc := i.accounts.getAccount(sender)
+
+	if acc != nil {
+		if accQueue := acc.get(keyID); accQueue != nil {
+			return acc, accQueue
+		}
 	}
 
-	return i.createAccountOnce(ix.Sender(), ix.Nonce())
+	stateSequenceID, err := i.sm.GetSequenceID(sender, keyID, common.NilHash)
+	if err != nil {
+		stateSequenceID = sequenceID
+	}
+
+	accQueue := &accountQueue{
+		keyID:          keyID,
+		enqueued:       newAccountQueue(),
+		promoted:       newAccountQueue(),
+		sequenceIDToIX: newSequenceIDToIXMap(),
+		nextSequenceID: stateSequenceID,
+	}
+
+	if acc == nil {
+		i.accounts.accounts[sender] = &account{
+			accountQueues: []*accountQueue{accQueue},
+			requestTime:   time.Now(),
+			waitTime:      time.Now(),
+		}
+
+		return i.accounts.accounts[sender], accQueue
+	}
+
+	acc.accountQueues = append(acc.accountQueues, accQueue)
+	acc.sortAccountQueues()
+
+	return acc, accQueue
 }
 
 // validateAndEnqueueIx validates the Interaction, performs checks such as assessing pressure in the gauge,
@@ -241,38 +276,38 @@ func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
 		return err
 	}
 
-	acc := i.getOrCreateAccount(ix)
+	acc, accQueue := i.getOrCreateAccountQueue(ix.SenderAddr(), ix.SenderKeyID(), ix.SequenceID())
 
 	// checks if the current gauge size has reached the pressure mark and signals for account pruning if it has
 	if i.gauge.highPressure() {
 		i.signalPruning()
 
-		if ix.Nonce() > acc.getNonce() {
-			return common.ErrRejectFutureIx // reject this ix as it will create nonce hole in enqueue and gets pruned
+		if ix.SequenceID() > accQueue.getSequenceID() {
+			return common.ErrRejectFutureIx // reject this ix as it will create sequenceID hole in enqueue and gets pruned
 		}
 	}
 
-	oldIxWithSameNonce := acc.nonceToIX.get(ix.Nonce())
-	if oldIxWithSameNonce != nil {
-		if oldIxWithSameNonce.Hash() == ix.Hash() {
+	oldIxWithSameSequenceID := accQueue.sequenceIDToIX.get(ix.SequenceID())
+	if oldIxWithSameSequenceID != nil {
+		if oldIxWithSameSequenceID.Hash() == ix.Hash() {
 			return common.ErrAlreadyKnown
 		}
 
 		// TODO thrown an error if new interaction gas price is lower than equal to older interaction gas price
 		// https://github.com/sarvalabs/go-moi/issues/695
-		if oldIxWithSameNonce.FuelPrice().Cmp(ix.FuelPrice()) > 0 {
+		if oldIxWithSameSequenceID.FuelPrice().Cmp(ix.FuelPrice()) > 0 {
 			return common.ErrReplacementUnderpriced
 		}
-	} else if ix.Nonce() < acc.getNonce() {
-		return ErrNonceTooLow
+	} else if ix.SequenceID() < accQueue.getSequenceID() {
+		return ErrSequenceIDTooLow
 	}
 
 	slotsAllocated := slotsRequired(ix)
 
 	var slotsFreed uint64
 
-	if oldIxWithSameNonce != nil {
-		slotsFreed = slotsRequired(oldIxWithSameNonce)
+	if oldIxWithSameSequenceID != nil {
+		slotsFreed = slotsRequired(oldIxWithSameSequenceID)
 	}
 
 	var slotsIncreased uint64
@@ -295,20 +330,24 @@ func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
 		i.gauge.decrease(slotsFreed - slotsAllocated)
 	}
 
-	if oldIxWithSameNonce != nil {
-		i.allIxs.remove(oldIxWithSameNonce)
+	if oldIxWithSameSequenceID != nil {
+		i.allIxs.remove(oldIxWithSameSequenceID)
 
-		oldIxSize, _ := oldIxWithSameNonce.Size()
+		oldIxSize, _ := oldIxWithSameSequenceID.Size()
 		i.metrics.captureIxPoolSize(-1 * float64(oldIxSize))
 	}
 
 	ixSize, _ := ix.Size()
 	i.metrics.captureIxPoolSize(float64(ixSize))
 
-	if replacedInPromoted := acc.enqueue(ix, oldIxWithSameNonce != nil); replacedInPromoted {
-		i.allocateView(i.currentView()+1, ix)
+	// check the counter and reset if required
+	if acc.getDelayCounter() >= MaxWaitCounter && time.Now().After(acc.getWaitTime()) {
+		acc.resetWaitTimeAndCounter()
 	}
 
+	if replacedInPromoted := accQueue.enqueue(ix, oldIxWithSameSequenceID != nil); replacedInPromoted {
+		i.allocateView(i.currentView()+1, ix)
+	}
 	// emit added interactions event
 	if err := i.postAddedInteractionEvent(ix); err != nil {
 		i.logger.Error("Error sending interaction added event", "err", err)
@@ -316,8 +355,8 @@ func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
 
 	i.logger.Info("added ix to enqueue ", ix.Hash())
 
-	if ix.Nonce() == acc.getNonce() {
-		i.handlePromoteRequest(acc)
+	if ix.SequenceID() == accQueue.getSequenceID() {
+		i.handlePromoteRequest(accQueue)
 	}
 
 	return nil
@@ -383,13 +422,13 @@ func (i *IxPool) AddLocalInteractions(ixs common.Interactions) []error {
 	return errs
 }
 
-func (i *IxPool) handlePromoteRequest(account *account) {
+func (i *IxPool) handlePromoteRequest(account *accountQueue) {
 	// promote enqueued ixs
 	promoted, promotedIxns := account.promote()
 	i.metrics.capturePendingIxs(float64(promoted))
 
 	for _, ix := range promotedIxns {
-		i.accounts.addToSortedAccounts(ix.Sender())
+		i.accounts.addToSortedAccounts(ix.SenderAddr())
 	}
 
 	if len(promotedIxns) > 0 {
@@ -400,19 +439,6 @@ func (i *IxPool) handlePromoteRequest(account *account) {
 			i.logger.Error("Error sending interaction promoted event", "err", err)
 		}
 	}
-}
-
-// createAccountOnce creates an account and
-// ensures it is only initialized once.
-func (i *IxPool) createAccountOnce(newAddr identifiers.Address, nonce uint64) *account {
-	// fetch nonce from the latest state
-	stateNonce, err := i.sm.GetNonce(newAddr, common.NilHash)
-	if err != nil {
-		stateNonce = nonce
-	}
-
-	// initialize the account
-	return i.accounts.initOnce(newAddr, stateNonce)
 }
 
 func (i *IxPool) RemoveCachedObject(addr identifiers.Address) {
@@ -437,21 +463,21 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 		for _, ix := range ixs {
 			from := ix.Sender()
 			// skip already processed accounts
-			if _, processed := processedAccounts[from]; processed {
+			if _, processed := processedAccounts[from.Address]; processed {
 				continue
 			}
 
-			// fetch the latest nonce from the state
-			latestNonce, err := i.sm.GetNonce(from, common.NilHash)
+			// fetch the latest sequenceID from the state
+			latestSequenceID, err := i.sm.GetSequenceID(from.Address, from.KeyID, common.NilHash)
 			if err != nil {
-				latestNonce = ix.Nonce() + 1
+				latestSequenceID = ix.SequenceID() + 1
 			}
 
-			i.logger.Debug("Latest nonce in the ixpool", "nonce", latestNonce)
+			i.logger.Debug("Latest sequenceID in the ixpool", "sequenceID", latestSequenceID)
 			// update the result map
-			processedAccounts[from] = latestNonce
+			processedAccounts[from.Address] = latestSequenceID
 
-			if !i.accounts.exists(from) {
+			if !i.accounts.exists(from.Address) {
 				continue
 			}
 
@@ -461,11 +487,11 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 				i.gauge.decrease(slotsRequired(ixns...))
 			}
 
-			account := i.accounts.get(from)
+			acc, accQueue := i.accounts.getAccountAndAccountQueue(from.Address, from.KeyID)
 
 			// prune promoted
-			pruned := account.promoted.prune(latestNonce)
-			account.nonceToIX.remove(pruned...)
+			pruned := accQueue.promoted.prune(latestSequenceID)
+			accQueue.sequenceIDToIX.remove(pruned...)
 
 			if len(pruned) > 0 {
 				cleanup(pruned)
@@ -475,15 +501,15 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 					i.logger.Error("Error sending interaction pruned promoted event", "err", err)
 				}
 
-				account.waitLock.Lock()
-				i.metrics.captureAccountWaitTime(account.requestTime, account.waitTime)
-				account.requestTime = time.Now()
-				account.waitLock.Unlock()
+				acc.waitLock.Lock()
+				i.metrics.captureAccountWaitTime(acc.requestTime, acc.waitTime)
+				acc.requestTime = time.Now()
+				acc.waitLock.Unlock()
 				// update the account waitTime and counter
-				account.resetWaitTimeAndCounter()
+				acc.resetWaitTimeAndCounter()
 
-				if account.promoted.length() == 0 {
-					i.accounts.deleteInSortedAccounts(from)
+				if accQueue.promoted.length() == 0 {
+					i.accounts.deleteInSortedAccounts(from.Address)
 				}
 			}
 
@@ -493,14 +519,14 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 				i.metrics.captureIxPoolSize(-1 * float64(ixSize))
 			}
 
-			if latestNonce <= account.getNonce() {
+			if latestSequenceID <= accQueue.getSequenceID() {
 				// only the promoted queue needed pruning
 				continue
 			}
 
 			// prune enqueued
-			pruned = account.enqueued.prune(latestNonce)
-			account.nonceToIX.remove(pruned...)
+			pruned = accQueue.enqueued.prune(latestSequenceID)
+			accQueue.sequenceIDToIX.remove(pruned...)
 
 			if len(pruned) > 0 {
 				cleanup(pruned)
@@ -515,12 +541,12 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 				i.metrics.captureIxPoolSize(-1 * float64(ixSize))
 			}
 
-			// update next nonce
-			account.setNonce(latestNonce)
+			// update next sequenceID
+			accQueue.setSequenceID(latestSequenceID)
 
-			if first := account.enqueued.peek(); first != nil && first.Nonce() == latestNonce {
+			if first := accQueue.enqueued.peek(); first != nil && first.SequenceID() == latestSequenceID {
 				// first enqueued ix is expected -> signal promotion
-				i.handlePromoteRequest(account)
+				i.handlePromoteRequest(accQueue)
 			}
 		}
 	}
@@ -608,30 +634,34 @@ func (i *IxPool) ProcessableBatches() []*common.IxBatch {
 	i.accounts.sortedParticipants.AscendGreaterOrEqual(
 		&Address{addr: identifiers.NilAddress},
 		func(item llrb.Item) bool {
-			account := i.accounts.get(item.(*Address).addr) //nolint: forcetypeassert
-			ixns := common.IxByNonce(common.NewInteractionsWithLeaderCheck(false, account.promoted.list()...))
+			acc := i.accounts.getAccount(item.(*Address).addr) //nolint: forcetypeassert
+			for _, accQueue := range acc.accountQueues {
+				ixns := common.IxBySequenceID(
+					common.NewInteractionsWithLeaderCheck(false, accQueue.promoted.list()...),
+				)
 
-			sort.Sort(ixns)
+				sort.Sort(ixns)
 
-			for _, ixn := range ixns.List() {
-				if !isEligibleForProposal(ixn, participantToAcquirer, acquirerToParticipants) {
-					break
-				}
+				for _, ixn := range ixns.List() {
+					if !isEligibleForProposal(ixn, participantToAcquirer, acquirerToParticipants) {
+						break
+					}
 
-				if !ixn.ShouldPropose() {
-					break
-				}
+					if !ixn.ShouldPropose() {
+						break
+					}
 
-				if ixn.AllottedView() < i.currentView() {
-					i.allocateView(i.currentView(), ixn)
-				}
+					if ixn.AllottedView() < i.currentView() {
+						i.allocateView(i.currentView(), ixn)
+					}
 
-				if ixn.AllottedView() > i.currentView() {
-					break
-				}
+					if ixn.AllottedView() > i.currentView() {
+						break
+					}
 
-				if added := batchRegistry.addIx(ixn); !added {
-					break
+					if added := batchRegistry.addIx(ixn); !added {
+						break
+					}
 				}
 			}
 
@@ -647,7 +677,7 @@ func (i *IxPool) ProcessableBatches() []*common.IxBatch {
 // from that account (if any).
 func (i *IxPool) Pop(ix *common.Interaction) {
 	// fetch the associated account
-	account := i.accounts.get(ix.Sender())
+	acc := i.accounts.getAccountQueue(ix.SenderAddr(), ix.SenderKeyID())
 
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -662,25 +692,26 @@ func (i *IxPool) Pop(ix *common.Interaction) {
 			}
 	*/
 
-	ix = account.promoted.pop()
+	ix = acc.promoted.pop()
 	if ix != nil {
 		i.gauge.decrease(slotsRequired(ix))
 	}
 
-	account.nonceToIX.remove(ix)
+	acc.sequenceIDToIX.remove(ix)
 }
 
 func (i *IxPool) Drop(ix *common.Interaction) {
-	// fetch the associated account
-	account := i.accounts.get(ix.Sender())
+	// fetch the associated acc
+	acc := i.accounts.getAccountQueue(ix.SenderAddr(), ix.SenderKeyID())
 
-	if account != nil {
-		nonce := ix.Nonce()
-		// fetch the latest nonce from the state
-		if latestNonce, _ := i.sm.GetNonce(ix.Sender(), common.NilHash); latestNonce > nonce {
+	if acc != nil {
+		sequenceID := ix.SequenceID()
+		// fetch the latest sequenceID from the state
+		if latestSequenceID, _ := i.sm.GetSequenceID(ix.SenderAddr(),
+			ix.SenderKeyID(), common.NilHash); latestSequenceID > sequenceID {
 			i.logger.Debug(
 				"Skipping ix drop", "ix-hash", ix.Hash(),
-				"ix-nonce", ix.Nonce(), "latest-nonce", latestNonce,
+				"ix-sequenceID", ix.SequenceID(), "latest-sequenceID", latestSequenceID,
 			)
 
 			return
@@ -699,13 +730,13 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 			noOfDroppedIxs += len(ixs)
 		}
 
-		account.setNonce(nonce)
+		acc.setSequenceID(sequenceID)
 
-		// reset nonce to ix
-		account.nonceToIX.reset()
+		// reset sequenceID to ix
+		acc.sequenceIDToIX.reset()
 
 		// drop promoted
-		dropped := account.promoted.clear()
+		dropped := acc.promoted.clear()
 		cleanup(dropped)
 
 		if len(dropped) > 0 {
@@ -718,19 +749,20 @@ func (i *IxPool) Drop(ix *common.Interaction) {
 		i.metrics.capturePendingIxs(float64(-1 * len(dropped)))
 
 		// drop enqueued
-		dropped = account.enqueued.clear()
+		dropped = acc.enqueued.clear()
 		cleanup(dropped)
 
-		// drop the account
-		// i.accounts.remove(ix.Sender()) FIXME: Issue(https://github.com/sarvalabs/go-moi/issues/256)
+		// drop the acc
+		// i.accounts.remove(ix.SenderAddr()) FIXME: Issue(https://github.com/sarvalabs/go-moi/issues/256)
 
-		i.logger.Debug("Dropped interactions", "count", noOfDroppedIxs, "next-nonce", nonce, "addr", ix.Sender())
+		i.logger.Debug("Dropped interactions", "count", noOfDroppedIxs,
+			"next-sequenceID", sequenceID, "addr", ix.SenderAddr())
 	}
 }
 
 // IncrementWaitTime updates the waitTime for the given account
 func (i *IxPool) IncrementWaitTime(addr identifiers.Address, baseTime time.Duration) error {
-	acc := i.accounts.get(addr)
+	acc := i.accounts.getAccount(addr)
 	if acc == nil {
 		return common.ErrAccountNotFound
 	}
@@ -739,6 +771,86 @@ func (i *IxPool) IncrementWaitTime(addr identifiers.Address, baseTime time.Durat
 		acc.incrementCounter(baseTime)
 	} else {
 		acc.resetWaitTimeAndCounter()
+	}
+
+	return nil
+}
+
+func (i *IxPool) verifyParticipantSignatures(
+	addr identifiers.Address,
+	rawPayload []byte,
+	signatures common.Signatures,
+) error {
+	accountKeys, err := i.sm.GetAccountKeys(addr, common.NilHash)
+	if err != nil {
+		return err
+	}
+
+	count := uint64(len(accountKeys))
+	weight := uint64(0)
+
+	for _, sig := range signatures {
+		if sig.Address != addr {
+			continue
+		}
+
+		if sig.KeyID >= count {
+			return errors.New("invalid key id in signature")
+		}
+
+		pk, err := i.sm.GetPublicKey(addr, sig.KeyID, common.NilHash)
+		if err != nil {
+			return err
+		}
+
+		if isVerified, err := i.verifier(rawPayload, sig.Signature, pk); !isVerified || err != nil {
+			return common.ErrInvalidIXSignature
+		}
+
+		if !accountKeys[sig.KeyID].Revoked {
+			weight += accountKeys[sig.KeyID].Weight
+		}
+	}
+
+	if weight < common.MinWeight {
+		return common.ErrInvalidWeight
+	}
+
+	return nil
+}
+
+func (i *IxPool) hasSenderKeyIDSignature(ix *common.Interaction) bool {
+	for _, sig := range ix.Signatures() {
+		if sig.Address == ix.SenderAddr() && sig.KeyID == ix.SenderKeyID() {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (i *IxPool) verifySignatures(ix *common.Interaction) error {
+	rawPayload, err := ix.PayloadForSignature()
+	if err != nil {
+		return err
+	}
+
+	signatures := ix.Signatures()
+
+	if !i.hasSenderKeyIDSignature(ix) {
+		return common.ErrInvalidSenderSignature
+	}
+
+	if err := i.verifyParticipantSignatures(ix.SenderAddr(), rawPayload, signatures); err != nil {
+		return errors.Wrap(err, "invalid sender's signature")
+	}
+
+	for _, ps := range ix.IxParticipants() {
+		if ps.Notary {
+			if err := i.verifyParticipantSignatures(ps.Address, rawPayload, signatures); err != nil {
+				return errors.Wrap(err, "invalid notary participant signature")
+			}
+		}
 	}
 
 	return nil
@@ -755,7 +867,7 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 		return ErrOversizedData
 	}
 
-	if ix.Sender().IsNil() {
+	if ix.SenderAddr().IsNil() {
 		return common.ErrInvalidAddress
 	}
 
@@ -766,9 +878,9 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 		return common.ErrUnderpriced
 	}
 
-	// Check nonce ordering
-	if n, _ := i.sm.GetNonce(ix.Sender(), common.NilHash); n > ix.Nonce() {
-		return ErrNonceTooLow
+	// Check sequenceID ordering
+	if n, _ := i.sm.GetSequenceID(ix.SenderAddr(), ix.SenderKeyID(), common.NilHash); n > ix.SequenceID() {
+		return ErrSequenceIDTooLow
 	}
 	/*
 		accountBalance, balanceErr := i.lattice.GetBalance(stateRoot, op.From)
@@ -782,20 +894,14 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 		}
 	*/
 
-	moiBal, _ := i.sm.GetBalance(ix.Sender(), common.KMOITokenAssetID, common.NilHash)
+	moiBal, _ := i.sm.GetBalance(ix.SenderAddr(), common.KMOITokenAssetID, common.NilHash)
 
 	if moiBal.Cmp(ix.Cost()) < 0 {
 		return common.ErrInsufficientFunds
 	}
 
-	rawPayload, err := ix.PayloadForSignature()
-	if err != nil {
+	if err := i.verifySignatures(ix); err != nil {
 		return err
-	}
-
-	isVerified, err := i.verifier(rawPayload, ix.Signature(), ix.Sender().Bytes())
-	if !isVerified || err != nil {
-		return common.ErrInvalidIXSignature
 	}
 
 	if err = i.validateFunds(ix); err != nil {
@@ -815,7 +921,7 @@ func (i *IxPool) validateFunds(ix *common.Interaction) error {
 			return common.ErrInvalidValue
 		}
 
-		currentBalance, err := i.sm.GetBalance(ix.Sender(), fund.AssetID, common.NilHash)
+		currentBalance, err := i.sm.GetBalance(ix.SenderAddr(), fund.AssetID, common.NilHash)
 		if err != nil {
 			return err
 		}
@@ -833,6 +939,8 @@ func (i *IxPool) validateOperations(ix *common.Interaction) error {
 		switch op.Type() {
 		case common.IxParticipantCreate:
 			return i.validateParticipantCreate(ix, idx)
+		case common.IXAccountConfigure:
+			return i.validateAccountConfigure(ix, idx)
 		case common.IxAssetCreate:
 			return i.validateAssetCreate(ix, idx)
 		case common.IxAssetApprove:
@@ -896,6 +1004,36 @@ func (i *IxPool) validateParticipantCreate(ix *common.Interaction, txnID int) er
 		return common.ErrInvalidValue
 	}
 
+	if payload.Weight() < common.MinWeight {
+		return common.ErrInvalidWeight
+	}
+
+	if !payload.VerifySignatureAlgorithms() {
+		return common.ErrInvalidSignatureAlgorithm
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateAccountConfigure(ix *common.Interaction, txnID int) error {
+	payload, err := ix.GetIxOp(txnID).GetAccountConfigurePayload()
+	if err != nil {
+		return err
+	}
+
+	payloadAddLen := len(payload.Add)
+	payloadRevokeLen := len(payload.Revoke)
+
+	if (payloadAddLen > 0 && payloadRevokeLen > 0) || (payloadAddLen == 0 && payloadRevokeLen == 0) {
+		return common.ErrInvalidAccountConfigure
+	}
+
+	for _, key := range payload.Add {
+		if key.SignatureAlgorithm > 0 {
+			return common.ErrInvalidSignatureAlgorithm
+		}
+	}
+
 	return nil
 }
 
@@ -909,7 +1047,7 @@ func (i *IxPool) validateAssetApprove(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	if ix.Sender() == payload.Beneficiary {
+	if ix.SenderAddr() == payload.Beneficiary {
 		return common.ErrInvalidBeneficiary
 	}
 
@@ -934,7 +1072,7 @@ func (i *IxPool) validateAssetRevoke(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	if ix.Sender() == payload.Beneficiary {
+	if ix.SenderAddr() == payload.Beneficiary {
 		return common.ErrInvalidBeneficiary
 	}
 
@@ -952,11 +1090,11 @@ func (i *IxPool) validateAssetTransfer(ix *common.Interaction, txnID int) error 
 	}
 
 	if payload.Benefactor.IsNil() {
-		if ix.Sender() == payload.Beneficiary {
+		if ix.SenderAddr() == payload.Beneficiary {
 			return common.ErrInvalidBeneficiary
 		}
 	} else {
-		if ix.Sender() == payload.Benefactor {
+		if ix.SenderAddr() == payload.Benefactor {
 			return common.ErrInvalidBenefactor
 		}
 
@@ -983,7 +1121,7 @@ func (i *IxPool) validateAssetLockup(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	if ix.Sender() == payload.Beneficiary {
+	if ix.SenderAddr() == payload.Beneficiary {
 		return common.ErrInvalidBeneficiary
 	}
 
@@ -1008,7 +1146,7 @@ func (i *IxPool) validateAssetRelease(ix *common.Interaction, txnID int) error {
 		return common.ErrBenefactorMissing
 	}
 
-	if ix.Sender() == payload.Benefactor {
+	if ix.SenderAddr() == payload.Benefactor {
 		return common.ErrInvalidBenefactor
 	}
 
@@ -1097,7 +1235,7 @@ func (i *IxPool) validateLogicInvokePayload(ix *common.Interaction, txnID int) e
 	}
 
 	// Obtain state object of sender
-	callerAcc, err := i.sm.GetLatestStateObject(ix.Sender())
+	callerAcc, err := i.sm.GetLatestStateObject(ix.SenderAddr())
 	if err != nil {
 		return err
 	}
@@ -1121,7 +1259,7 @@ func (i *IxPool) validateLogicEnlistPayload(ix *common.Interaction, txnID int) e
 	}
 
 	// Obtain state object of sender
-	callerAcc, err := i.sm.GetLatestStateObject(ix.Sender())
+	callerAcc, err := i.sm.GetLatestStateObject(ix.SenderAddr())
 	if err != nil {
 		return err
 	}
@@ -1139,34 +1277,31 @@ func (i *IxPool) validateLogicEnlistPayload(ix *common.Interaction, txnID int) e
 	return nil
 }
 
-func (i *IxPool) removeNonceHoleAccounts() {
+func (i *IxPool) removeSequenceIDHoleAccounts() {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	i.accounts.Range(
-		func(key, value any) bool {
-			acc, _ := value.(*account)
-
-			ixn := acc.enqueued.peek()
+	for _, acc := range i.accounts.accounts {
+		for _, accQueue := range acc.accountQueues {
+			ixn := accQueue.enqueued.peek()
 			if ixn == nil {
-				return true
+				continue
 			}
 
-			// check if the account "enqueue" possesses a nonce hole,
+			// check if the account "enqueue" possesses a sequenceID hole,
 			// and if so, remove all interactions from "enqueue" and all associated interactions in allixns map.
 
-			if ixn.Nonce() == acc.getNonce() {
-				return true
+			if ixn.SequenceID() == accQueue.getSequenceID() {
+				continue
 			}
 
-			dropped := acc.enqueued.clear()
+			dropped := accQueue.enqueued.clear()
 
-			acc.nonceToIX.remove(dropped...)
+			accQueue.sequenceIDToIX.remove(dropped...)
 			i.allIxs.remove(dropped...)
 			i.gauge.decrease(slotsRequired(dropped...))
-
-			return true
-		})
+		}
+	}
 }
 
 func (i *IxPool) handlePruning() {
@@ -1175,7 +1310,7 @@ func (i *IxPool) handlePruning() {
 		case <-i.ctx.Done():
 			return
 		case <-i.pruneCh:
-			i.removeNonceHoleAccounts()
+			i.removeSequenceIDHoleAccounts()
 		}
 
 		time.Sleep(PruningCooldown)
@@ -1334,7 +1469,7 @@ func getIxsSize(ixs []*common.Interaction) (uint64, error) {
 func getIxParticipants(ix *common.Interaction) map[identifiers.Address]struct{} {
 	participants := make(map[identifiers.Address]struct{})
 
-	participants[ix.Sender()] = struct{}{}
+	participants[ix.SenderAddr()] = struct{}{}
 
 	if !ix.Payer().IsNil() {
 		participants[ix.Payer()] = struct{}{}

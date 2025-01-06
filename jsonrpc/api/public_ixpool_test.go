@@ -60,8 +60,8 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 				addressList[0]: {
 					pending: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -87,8 +87,8 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 					pending: []*common.Interaction{},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -113,13 +113,13 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 					pending: []*common.Interaction{},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 2
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 2
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -127,20 +127,20 @@ func TestPublicIXPoolAPI_Content(t *testing.T) {
 				addressList[1]: {
 					pending: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 2
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 2
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 3
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 3
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -228,8 +228,8 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 				addressList[0]: {
 					pending: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -257,8 +257,8 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 					pending: []*common.Interaction{},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -285,13 +285,13 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 					pending: []*common.Interaction{},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 2
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 2
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -299,20 +299,20 @@ func TestPublicIXPoolAPI_ContentFrom(t *testing.T) {
 				addressList[1]: {
 					pending: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 2
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 2
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 3
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 3
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -385,13 +385,13 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 					pending: []*common.Interaction{},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 2
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 2
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -399,20 +399,20 @@ func TestPublicIXPoolAPI_Status(t *testing.T) {
 				addressList[1]: {
 					pending: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 2
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 2
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 3
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 3
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -485,8 +485,8 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 				addressList[0]: {
 					pending: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 							ixData.IxOps = []common.IxOpRaw{
 								{
@@ -528,8 +528,8 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					pending: []*common.Interaction{},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 							ixData.IxOps = []common.IxOpRaw{
 								{
@@ -564,13 +564,13 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					pending: []*common.Interaction{},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[0]
-							ixData.Nonce = 2
+							ixData.Sender.Address = addressList[0]
+							ixData.Sender.SequenceID = 2
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -579,20 +579,20 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 				addressList[1]: {
 					pending: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 1
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 1
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 2
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 2
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
 					queued: []*common.Interaction{
 						newTestInteraction(t, common.IxAssetCreate, func(ixData *common.IxData) {
-							ixData.Sender = addressList[1]
-							ixData.Nonce = 3
+							ixData.Sender.Address = addressList[1]
+							ixData.Sender.SequenceID = 3
 							ixData.FuelPrice = big.NewInt(100)
 						}),
 					},
@@ -642,7 +642,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					require.NotNil(t, interactionInfo)
 
 					for _, ix := range testcase.accounts[address].pending {
-						require.NotNil(t, interactionInfo[strconv.Itoa(int(ix.Nonce()))])
+						require.NotNil(t, interactionInfo[strconv.Itoa(int(ix.SequenceID()))])
 					}
 				}
 
@@ -651,7 +651,7 @@ func TestPublicIXPoolAPI_Inspect(t *testing.T) {
 					require.NotNil(t, interactionInfo)
 
 					for _, ix := range testcase.accounts[address].queued {
-						require.NotNil(t, interactionInfo[strconv.Itoa(int(ix.Nonce()))])
+						require.NotNil(t, interactionInfo[strconv.Itoa(int(ix.SequenceID()))])
 					}
 				}
 			}

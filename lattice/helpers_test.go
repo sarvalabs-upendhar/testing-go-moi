@@ -49,6 +49,10 @@ func mockDB() *MockDB {
 	}
 }
 
+func (m *MockDB) GetAccountKeys(addr identifiers.Address, stateHash common.Hash) ([]byte, error) {
+	panic("implement me")
+}
+
 func (m *MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool {
 	accMetaInfo, err := m.GetAccountMetaInfo(addr)
 	if err != nil {
@@ -489,8 +493,8 @@ func createIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		params.ixDataCallback(data)
 	}
 
-	if data.Sender == identifiers.NilAddress {
-		data.Sender = tests.RandomAddress(t)
+	if data.Sender.Address == identifiers.NilAddress {
+		data.Sender.Address = tests.RandomAddress(t)
 	}
 
 	tests.AppendParticipantsInIxData(t, data)
@@ -499,7 +503,9 @@ func createIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		params.Sign = []byte{}
 	}
 
-	ix, err := common.NewInteraction(*data, []byte{})
+	ix, err := common.NewInteraction(*data, []common.Signature{{
+		Signature: make([]byte, 0),
+	}})
 	require.NoError(t, err)
 
 	return ix
@@ -525,7 +531,7 @@ func getIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifie
 
 	return &CreateIxParams{
 		ixDataCallback: func(ix *common.IxData) {
-			ix.Sender = from
+			ix.Sender.Address = from
 			ix.IxOps = []common.IxOpRaw{
 				{
 					Type:    common.IxAssetCreate,

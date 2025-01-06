@@ -7,12 +7,12 @@ import (
 )
 
 type Interaction struct {
-	Kind  common.IxOpType
-	Nonce uint64
-	Price *big.Int
-	Limit uint64
-	Site  string
-	Call  []byte
+	Kind       common.IxOpType
+	SequenceID uint64
+	Price      *big.Int
+	Limit      uint64
+	Site       string
+	Call       []byte
 }
 
 func (ixn Interaction) Type() common.IxOpType { return ixn.Kind }

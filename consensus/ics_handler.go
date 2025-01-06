@@ -147,6 +147,8 @@ func (k *Engine) handleOutboundMessage(
 	// we should broadcast the message if the recipient is empty
 	if msg.Recipient == "" {
 		k.transport.BroadcastMessage(ctx, icsMsg)
+
+		return
 	}
 
 	if err = k.transport.SendMessage(ctx, msg.Recipient, icsMsg); err != nil {

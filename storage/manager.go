@@ -352,6 +352,12 @@ func (p *PersistenceManager) GetAccount(addr identifiers.Address, stateHash comm
 	return p.ReadEntry(key)
 }
 
+func (p *PersistenceManager) GetAccountKeys(addr identifiers.Address, accountKeysHash common.Hash) ([]byte, error) {
+	key := dbKey(addr, AccountKeys, accountKeysHash.Bytes())
+
+	return p.ReadEntry(key)
+}
+
 func (p *PersistenceManager) GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error) {
 	key := dbKey(addr, Context, contextHash.Bytes())
 

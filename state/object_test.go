@@ -2076,6 +2076,105 @@ func TestUpdateContext(t *testing.T) {
 	}
 }
 
+func TestLoadKeys(t *testing.T) {
+	accountKeys, accountKeysHash := getTestAccountKeys(t, 2)
+
+	testcases := []struct {
+		name            string
+		soParams        *createStateObjectParams
+		expectedAccKeys common.AccountKeys
+		expectedError   error
+	}{
+		{
+			name: "loaded acc keys successfully",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *Object) {
+					insertAccKeysInDB(t, so.db, accountKeysHash, accountKeys)
+					so.data.KeysHash = accountKeysHash
+				},
+			},
+			expectedAccKeys: accountKeys,
+		},
+		{
+			name: "should return error if failed to load acc keys",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *Object) {
+					so.data.KeysHash = tests.RandomHash(t)
+				},
+			},
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name:            "should load empty acc keys object for nil acc keys hash",
+			expectedAccKeys: make(common.AccountKeys, 0),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			sObj := createTestStateObject(t, test.soParams)
+			err := sObj.loadKeys()
+
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedAccKeys, sObj.keys)
+		})
+	}
+}
+
+func TestRevokeAccountKeys(t *testing.T) {
+	accountKeys, accountKeysHash := getTestAccountKeys(t, 3)
+
+	testcases := []struct {
+		name           string
+		soParams       *createStateObjectParams
+		revokePayload  []common.KeyRevokePayload
+		revokedKeys    []int
+		nonRevokedKeys []int
+	}{
+		{
+			name: "revoke account keys",
+			soParams: &createStateObjectParams{
+				soCallback: func(so *Object) {
+					insertAccKeysInDB(t, so.db, accountKeysHash, accountKeys)
+					so.data.KeysHash = accountKeysHash
+				},
+			},
+			revokePayload: []common.KeyRevokePayload{
+				{
+					KeyID: accountKeys[0].ID,
+				},
+				{
+					KeyID: accountKeys[2].ID,
+				},
+			},
+			revokedKeys:    []int{0, 2},
+			nonRevokedKeys: []int{1},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			sObj := createTestStateObject(t, test.soParams)
+			err := sObj.RevokeAccountKeys(test.revokePayload)
+			require.NoError(t, err)
+
+			for _, id := range test.revokedKeys {
+				require.True(t, sObj.keys[id].Revoked)
+			}
+
+			for _, id := range test.nonRevokedKeys {
+				require.False(t, sObj.keys[id].Revoked)
+			}
+		})
+	}
+}
+
 func TestLoadDeedsObject(t *testing.T) {
 	deeds, deedsHash := getTestDeeds(t, map[string]struct{}{
 		"MOI": {},

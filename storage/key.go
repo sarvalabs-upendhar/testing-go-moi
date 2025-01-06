@@ -49,6 +49,10 @@ func AccountKey(address identifiers.Address, stateHash common.Hash) []byte {
 	return dbKey(address, Account, stateHash.Bytes())
 }
 
+func KeyObjectKey(address identifiers.Address, accountKeysHash common.Hash) []byte {
+	return dbKey(address, AccountKeys, accountKeysHash.Bytes())
+}
+
 func PreImageKey(address identifiers.Address, hash common.Hash) []byte {
 	return dbKey(address, PreImage, hash.Bytes())
 }

@@ -20,7 +20,7 @@ func TestSlotRequired(t *testing.T) {
 			ixs: []*common.Interaction{
 				newTestInteraction(
 					t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
-					9, tests.RandomAddress(t), nil,
+					9, tests.RandomAddress(t), 0, nil,
 				),
 			},
 			expectedSlots: 1,
@@ -30,13 +30,13 @@ func TestSlotRequired(t *testing.T) {
 			ixs: []*common.Interaction{
 				newTestInteraction(
 					t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
-					9, tests.RandomAddress(t), func(ixData *common.IxData) {
+					9, tests.RandomAddress(t), 0, func(ixData *common.IxData) {
 						ixData.IxOps[0].Payload = make([]byte, IxSlotSize*8)
 					},
 				),
 				newTestInteraction(
 					t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
-					9, tests.RandomAddress(t), nil,
+					9, tests.RandomAddress(t), 0, nil,
 				),
 			},
 			expectedSlots: 10,

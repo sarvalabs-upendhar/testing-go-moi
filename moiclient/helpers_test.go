@@ -99,7 +99,9 @@ func httpTesseract(t *testing.T, url string, args ...interface{}) *rpcargs.RPCTe
 	return &tess
 }
 
-func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address, mnemonic string, nonce uint64) {
+func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address,
+	nonce uint64, key tests.AccountWithMnemonic,
+) {
 	t.Helper()
 
 	supply, _ := new(big.Int).SetString("130D41", 16)
@@ -113,8 +115,10 @@ func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address
 	require.NoError(t, err)
 
 	ixData := &common.IxData{
-		Nonce:     nonce,
-		Sender:    addr,
+		Sender: common.Sender{
+			Address:    addr,
+			SequenceID: nonce,
+		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 200,
 		IxOps: []common.IxOpRaw{
@@ -131,14 +135,19 @@ func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address
 		},
 	}
 
-	sendIX := CreateSendIXFromIxData(t, ixData, mnemonic)
+	sendIX := CreateSendIXFromIxData(t, ixData, []AccountKeyWithMnemonic{
+		{
+			Addr:     addr,
+			Mnemonic: key.Mnemonic,
+		},
+	})
 
 	_, err = client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 }
 
 // createAsset creates asset named "MOI"
-func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemonic string) (
+func createAsset(t *testing.T, client *Client, addr identifiers.Address, key tests.AccountWithMnemonic) (
 	common.Hash, identifiers.Address,
 ) {
 	t.Helper()
@@ -154,8 +163,10 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemoni
 	require.NoError(t, err)
 
 	ixData := &common.IxData{
-		Nonce:     GetLatestNonce(t, client, addr),
-		Sender:    addr,
+		Sender: common.Sender{
+			Address:    addr,
+			SequenceID: GetLatestSequenceID(t, client, addr, 0),
+		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 200,
 		IxOps: []common.IxOpRaw{
@@ -172,7 +183,12 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, mnemoni
 		},
 	}
 
-	sendIX := CreateSendIXFromIxData(t, ixData, mnemonic)
+	sendIX := CreateSendIXFromIxData(t, ixData, []AccountKeyWithMnemonic{
+		{
+			Addr:     key.Addr,
+			Mnemonic: key.Mnemonic,
+		},
+	})
 
 	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)

@@ -33,7 +33,6 @@ func (rc *Command) RegisterSubCommands() {
 		internal.GetInitCommand(),
 		internal.GetAccountCommand(),
 		internal.GetGenesisCommand(),
-		internal.GetFaucetCommand(),
 	)
 }
 

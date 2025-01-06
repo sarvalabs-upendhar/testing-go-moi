@@ -87,7 +87,7 @@ func (manager *Manager) runInteraction(
 		tank = NewFuelTank(ix.FuelLimit())
 
 		// Check that the sender has sufficient balance
-		if ok, _ := transition.HasSufficientFuel(ix.Sender(), ix.Cost()); !ok {
+		if ok, _ := transition.HasSufficientFuel(ix.SenderAddr(), ix.Cost()); !ok {
 			receipt.Status = common.ReceiptInsufficientFuel
 
 			return receipt, nil

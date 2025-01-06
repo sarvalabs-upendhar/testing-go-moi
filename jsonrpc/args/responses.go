@@ -90,6 +90,18 @@ type RPCIxOp struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
+type RPCSender struct {
+	Address    identifiers.Address `json:"address"`
+	SequenceID hexutil.Uint64      `json:"sequence_id"`
+	KeyID      hexutil.Uint64      `json:"key_id"`
+}
+
+type RPCSignature struct {
+	Address   identifiers.Address `json:"address"`
+	KeyID     hexutil.Uint64      `json:"key_id"`
+	Signature hexutil.Bytes       `json:"signature"`
+}
+
 type RPCIxFund struct {
 	AssetID identifiers.AssetID `json:"asset_id"`
 	Amount  *hexutil.Big        `json:"amount"`
@@ -105,11 +117,10 @@ type RPCIxParticipants []RPCIxParticipant
 type RPCInteraction struct {
 	IxIndex   hexutil.Uint64 `json:"ix_index"`
 	Hash      common.Hash    `json:"hash"`
-	Nonce     hexutil.Uint64 `json:"nonce"`
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 
-	Sender         identifiers.Address `json:"sender"`
+	Sender         RPCSender           `json:"sender"`
 	Payer          identifiers.Address `json:"payer"`
 	IxParticipants RPCIxParticipants   `json:"ix_participants"`
 	Funds          []RPCIxFund         `json:"funds"`
@@ -118,8 +129,8 @@ type RPCInteraction struct {
 
 	ParticipantsState RPCParticipantsStates `json:"participants_state"`
 
-	Signature hexutil.Bytes `json:"signature"`
-	TSHash    common.Hash   `json:"ts_hash"`
+	Signatures []RPCSignature `json:"signatures"`
+	TSHash     common.Hash    `json:"ts_hash"`
 }
 
 type RPCIxOpResult struct {
@@ -140,7 +151,6 @@ type RPCReceipt struct {
 }
 
 type RPCAccount struct {
-	Nonce   hexutil.Uint64     `json:"nonce"`
 	AccType common.AccountType `json:"acc_type"`
 
 	AssetDeeds  common.Hash `json:"asset_deeds"`
@@ -149,6 +159,16 @@ type RPCAccount struct {
 	AssetRoot   common.Hash `json:"asset_root"`
 	LogicRoot   common.Hash `json:"logic_root"`
 	FileRoot    common.Hash `json:"file_root"`
+	KeysHash    common.Hash `json:"keys_hash"`
+}
+
+type RPCAccountKey struct {
+	ID                 hexutil.Uint64 `json:"id"`
+	PublicKey          hexutil.Bytes  `json:"publicKey"`
+	Weight             hexutil.Uint64 `json:"weight"`
+	SignatureAlgorithm hexutil.Uint64 `json:"signature_algorithm"`
+	Revoked            bool           `json:"revoked"`
+	SequenceID         hexutil.Uint64 `json:"sequence_id"`
 }
 
 type RPCAccountMetaInfo struct {
@@ -193,14 +213,14 @@ type RPCLog struct {
 
 // InteractionResponse is a struct that represents a single interaction
 type InteractionResponse struct {
-	Nonce     hexutil.Uint64      `json:"nonce"`
-	Sender    identifiers.Address `json:"sender"`
-	Cost      *hexutil.Big        `json:"cost"`
-	FuelPrice *hexutil.Big        `json:"fuel_price"`
-	FuelLimit hexutil.Uint64      `json:"fuel_limit"`
-	IxOps     []IxOp              `json:"ix_operations"`
-	Input     string              `json:"input"`
-	Hash      common.Hash         `json:"hash"`
+	SequenceID hexutil.Uint64      `json:"sequence-id"`
+	Sender     identifiers.Address `json:"sender"`
+	Cost       *hexutil.Big        `json:"cost"`
+	FuelPrice  *hexutil.Big        `json:"fuel_price"`
+	FuelLimit  hexutil.Uint64      `json:"fuel_limit"`
+	IxOps      []IxOp              `json:"ix_operations"`
+	Input      string              `json:"input"`
+	Hash       common.Hash         `json:"hash"`
 }
 
 // NewInteractionResponse is a contructor function that generates
@@ -216,13 +236,13 @@ func NewInteractionResponse(ix *common.Interaction) *InteractionResponse {
 	}
 
 	return &InteractionResponse{
-		Nonce:     hexutil.Uint64(ix.Nonce()),
-		Sender:    ix.Sender(),
-		Cost:      (*hexutil.Big)(ix.Cost()),
-		FuelPrice: (*hexutil.Big)(ix.FuelPrice()),
-		FuelLimit: hexutil.Uint64(ix.FuelLimit()),
-		IxOps:     ops,
-		Hash:      ix.Hash(),
+		SequenceID: hexutil.Uint64(ix.SequenceID()),
+		Sender:     ix.SenderAddr(),
+		Cost:       (*hexutil.Big)(ix.Cost()),
+		FuelPrice:  (*hexutil.Big)(ix.FuelPrice()),
+		FuelLimit:  hexutil.Uint64(ix.FuelLimit()),
+		IxOps:      ops,
+		Hash:       ix.Hash(),
 	}
 }
 

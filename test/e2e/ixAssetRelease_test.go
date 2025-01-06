@@ -23,8 +23,10 @@ func (te *TestEnvironment) releaseAsset(
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
-		Nonce:     moiclient.GetLatestNonce(te.T(), te.moiClient, sender.Addr),
-		Sender:    sender.Addr,
+		Sender: common.Sender{
+			Address:    sender.Addr,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.Addr, 0),
+		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
 		Funds:     []common.IxFund{},
@@ -50,7 +52,13 @@ func (te *TestEnvironment) releaseAsset(
 		},
 	}
 
-	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, sender.Mnemonic)
+	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
+		{
+			Addr:     sender.Addr,
+			KeyID:    0,
+			Mnemonic: sender.Mnemonic,
+		},
+	})
 
 	return te.moiClient.SendInteractions(context.Background(), sendIX)
 }

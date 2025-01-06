@@ -21,7 +21,7 @@ var (
 
 // SendInteractions is a method of PublicIXAPI that stores the interaction
 func (p *PublicCoreAPI) SendInteractions(sendIx *rpcargs.SendIX) (common.Hash, error) {
-	sign, err := hex.DecodeString(sendIx.Signature)
+	signs, err := hex.DecodeString(sendIx.Signatures)
 	if err != nil {
 		return common.NilHash, err
 	}
@@ -31,7 +31,12 @@ func (p *PublicCoreAPI) SendInteractions(sendIx *rpcargs.SendIX) (common.Hash, e
 		return common.NilHash, err
 	}
 
-	ixn, err := common.NewInteraction(*ixData, sign)
+	signatures := make(common.Signatures, 0)
+	if err := signatures.FromBytes(signs); err != nil {
+		return common.NilHash, err
+	}
+
+	ixn, err := common.NewInteraction(*ixData, signatures)
 	if err != nil {
 		return common.NilHash, err
 	}
@@ -70,12 +75,12 @@ func validateArgumentsWithSign(args *rpcargs.SendIX) (*common.IxData, error) {
 }
 
 func validateIxData(ixData *common.IxData, requiresFuel bool) error {
-	if ixData.Sender.IsNil() {
+	if ixData.Sender.Address.IsNil() {
 		return common.ErrInvalidAddress
 	}
 
 	// Reject genesis account interaction
-	if ixData.Sender == common.SargaAddress {
+	if ixData.Sender.Address == common.SargaAddress {
 		return common.ErrGenesisAccount
 	}
 
@@ -139,28 +144,27 @@ func validateIxOps(ixOps []common.IxOpRaw) error {
 }
 
 // helper function for moi.Call and moi.FuelEstimate
-func constructIxn(sm backend.StateManager, ixData *common.IxData, sign []byte) (ix *common.Interaction, err error) {
+func constructIxn(sm backend.StateManager, ixData *common.IxData) (ix *common.Interaction, err error) {
 	for _, op := range ixData.IxOps {
 		if op.Type == common.IxLogicDeploy || op.Type == common.IxAssetCreate {
-			nonce, err := sm.GetNonce(ixData.Sender, common.NilHash)
+			sequenceID, err := sm.GetSequenceID(ixData.Sender.Address, ixData.Sender.KeyID, common.NilHash)
 			if err != nil {
 				return nil, err
 			}
 
-			ixData.Nonce = nonce
+			ixData.Sender.SequenceID = sequenceID
 
 			break
 		}
 	}
 
-	return common.NewInteraction(*ixData, sign)
+	return common.NewInteraction(*ixData, nil)
 }
 
 func createIxData(ixArgs *rpcargs.IxArgs) *common.IxData {
 	ixData := &common.IxData{
 		Sender: ixArgs.Sender,
 		Payer:  ixArgs.Payer,
-		Nonce:  ixArgs.Nonce.ToUint64(),
 
 		FuelPrice:  ixArgs.FuelPrice.ToInt(),
 		FuelLimit:  uint64(ixArgs.FuelLimit),

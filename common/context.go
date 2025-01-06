@@ -5,14 +5,6 @@ import (
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 )
 
-type ParticipantRole int
-
-const (
-	Sender ParticipantRole = iota
-	Receiver
-	Genesis
-)
-
 const NodeNotFound = -1
 
 const (

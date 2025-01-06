@@ -101,7 +101,7 @@ func (tm *TestMultiNode) SetupSuite() {
 
 	// a tesseract is generated to provide data for tesseract related api
 	// fire and finalize ixn and store ix hash
-	tm.ixHash, setupSuiteAssetAddr = createAsset(tm.T(), tm.moiClient, tm.accounts[0].Addr, tm.accounts[0].Mnemonic)
+	tm.ixHash, setupSuiteAssetAddr = createAsset(tm.T(), tm.moiClient, tm.accounts[0].Addr, tm.accounts[0])
 	setupSuiteSenderAddr = tm.accounts[0].Addr
 
 	tm.suiteSetupDone = true
@@ -245,7 +245,7 @@ func (tm *TestMultiNode) TestInteractionByHash() {
 			}
 
 			require.NoError(tm.T(), err)
-			require.Equal(tm.T(), tm.accounts[0].Addr, rpcIxn.Sender)
+			require.Equal(tm.T(), tm.accounts[0].Addr, rpcIxn.Sender.Address)
 		})
 	}
 }
@@ -292,7 +292,7 @@ func (tm *TestMultiNode) TestInteractionByTesseract() {
 			}
 
 			require.NoError(tm.T(), err)
-			require.Equal(tm.T(), tm.accounts[0].Addr, rpcIxn.Sender)
+			require.Equal(tm.T(), tm.accounts[0].Addr, rpcIxn.Sender.Address)
 		})
 	}
 }
@@ -389,8 +389,8 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 	logFilter := createLogFilter(tm.T(), ctx, tm.moiClient, acc1.Addr)
 
 	// send create asset interactions
-	expectedIXHashes[0], assetAddresses[0] = createAsset(tm.T(), tm.moiClient, acc1.Addr, acc1.Mnemonic)
-	expectedIXHashes[1], assetAddresses[1] = createAsset(tm.T(), tm.moiClient, acc2.Addr, acc2.Mnemonic)
+	expectedIXHashes[0], assetAddresses[0] = createAsset(tm.T(), tm.moiClient, acc1.Addr, acc1)
+	expectedIXHashes[1], assetAddresses[1] = createAsset(tm.T(), tm.moiClient, acc2.Addr, acc2)
 
 	testcases := []struct {
 		name             string

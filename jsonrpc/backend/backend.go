@@ -19,7 +19,7 @@ import (
 
 type IxPool interface {
 	AddLocalInteractions(ixs common.Interactions) []error
-	GetNonce(addr identifiers.Address) (uint64, error)
+	GetSequenceID(addr identifiers.Address, keyID uint64) (uint64, error)
 	GetIxs(addr identifiers.Address, inclQueued bool) (promoted, enqueued []*common.Interaction)
 	GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[identifiers.Address][]*common.Interaction)
 	GetPendingIx(ixHash common.Hash) (*common.Interaction, bool)
@@ -46,12 +46,13 @@ type ChainManager interface {
 }
 
 type StateManager interface {
+	GetAccountKeys(addrs identifiers.Address, stateHash common.Hash) (common.AccountKeys, error)
 	GetLatestStateObject(identifiers.Address) (*state.Object, error)
 	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
 	GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error)
 	FetchIxStateObjects(common.Interactions, map[identifiers.Address]common.Hash) (*state.Transition, error)
 
-	GetNonce(identifiers.Address, common.Hash) (uint64, error)
+	GetSequenceID(addr identifiers.Address, KeyID uint64, stateHash common.Hash) (uint64, error)
 	GetAccountState(identifiers.Address, common.Hash) (*common.Account, error)
 	GetAccountMetaInfo(identifiers.Address) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(identifiers.Address) (bool, error)

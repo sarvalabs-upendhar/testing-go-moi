@@ -22,8 +22,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -685,8 +685,9 @@ func XORBytes(t *testing.T, arrays ...[32]byte) [32]byte {
 }
 
 type CreateIxParams struct {
-	IxDataCallback func(ix *common.IxData)
-	Sign           []byte
+	IxDataCallback     func(ix *common.IxData)
+	SenderSign         []byte
+	SignaturesCallback func(ixData *common.IxData, sig *common.Signatures)
 }
 
 func IsPresent(participants []common.IxParticipant, addr identifiers.Address) bool {
@@ -713,9 +714,9 @@ func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
 		}
 	}
 
-	if !IsPresent(data.Participants, data.Sender) {
+	if !IsPresent(data.Participants, data.Sender.Address) {
 		data.Participants = append(data.Participants, common.IxParticipant{
-			Address:  data.Sender,
+			Address:  data.Sender.Address,
 			LockType: common.MutateLock,
 		})
 	}
@@ -816,17 +817,29 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		params.IxDataCallback(data)
 	}
 
-	if data.Sender == identifiers.NilAddress {
-		data.Sender = RandomAddress(t)
+	if data.Sender.Address == identifiers.NilAddress {
+		data.Sender.Address = RandomAddress(t)
 	}
 
 	AppendParticipantsInIxData(t, data)
 
-	if len(params.Sign) == 0 {
-		params.Sign = []byte{}
+	if len(params.SenderSign) == 0 {
+		params.SenderSign = []byte{}
 	}
 
-	ix, err := common.NewInteraction(*data, params.Sign)
+	signatures := common.Signatures{
+		{
+			Address:   data.Sender.Address,
+			KeyID:     data.Sender.KeyID,
+			Signature: params.SenderSign,
+		},
+	}
+
+	if params.SignaturesCallback != nil {
+		params.SignaturesCallback(data, &signatures)
+	}
+
+	ix, err := common.NewInteraction(*data, signatures)
 	require.NoError(t, err)
 
 	return ix
@@ -853,7 +866,7 @@ func GetIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifie
 
 	return &CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.Sender = from
+			ix.Sender.Address = from
 			ix.IxOps = []common.IxOpRaw{
 				{
 					Type:    common.IxAssetTransfer,
@@ -871,7 +884,7 @@ func GetIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifie
 				},
 			}
 		},
-		Sign: nil,
+		SenderSign: nil,
 	}
 }
 
@@ -1006,10 +1019,11 @@ func CreateIXDataWithTestData(t *testing.T, callback func(ixData *common.IxData)
 	t.Helper()
 
 	ixData := &common.IxData{
-		Nonce: 2,
-
-		Sender: RandomAddress(t),
-		Payer:  RandomAddress(t),
+		Sender: common.Sender{
+			Address:    RandomAddress(t),
+			SequenceID: 2,
+		},
+		Payer: RandomAddress(t),
 
 		FuelLimit: 1043,
 		FuelPrice: new(big.Int).SetUint64(1),
@@ -1048,7 +1062,7 @@ func CreateIXDataWithTestData(t *testing.T, callback func(ixData *common.IxData)
 
 	ixData.Participants = append(ixData.Participants, []common.IxParticipant{
 		{
-			Address: ixData.Sender,
+			Address: ixData.Sender.Address,
 		},
 		{
 			Address: ixData.Payer,
@@ -1373,7 +1387,12 @@ func CreateParticipantCreatePayload(t *testing.T, address identifiers.Address) c
 
 	return common.ParticipantCreatePayload{
 		Address: address,
-		Amount:  big.NewInt(1),
+		KeysPayload: []common.KeyAddPayload{
+			{
+				Weight: 1000,
+			},
+		},
+		Amount: big.NewInt(1),
 	}
 }
 

@@ -9,14 +9,14 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-// GetNonce returns the next nonce from the IxPool if the account is initialized in-memory.
-// Otherwise, returns the nonce of the latest state object.
-func (i *IxPool) GetNonce(addr identifiers.Address) (uint64, error) {
-	if acc := i.accounts.get(addr); acc != nil {
-		return acc.getNonce(), nil
+// GetSequenceID returns the next sequenceID from the IxPool if the account is initialized in-memory.
+// Otherwise, returns the sequenceID of the latest state object.
+func (i *IxPool) GetSequenceID(addr identifiers.Address, keyID uint64) (uint64, error) {
+	if acc := i.accounts.getAccountQueue(addr, keyID); acc != nil {
+		return acc.getSequenceID(), nil
 	}
 
-	return i.sm.GetNonce(addr, common.NilHash)
+	return i.sm.GetSequenceID(addr, keyID, common.NilHash)
 }
 
 // GetIxs returns the pending and queued interactions of the given address.
@@ -41,7 +41,7 @@ func (i *IxPool) GetAllIxs(inclQueued bool) (
 
 // GetAccountWaitTime returns the wait time for an account based on the queried address.
 func (i *IxPool) GetAccountWaitTime(addr identifiers.Address) (*big.Int, error) {
-	if acc := i.accounts.get(addr); acc != nil {
+	if acc := i.accounts.getAccount(addr); acc != nil {
 		return big.NewInt(time.Until(acc.getWaitTime()).Milliseconds()), nil
 	}
 
@@ -52,14 +52,9 @@ func (i *IxPool) GetAccountWaitTime(addr identifiers.Address) (*big.Int, error) 
 func (i *IxPool) GetAllAccountsWaitTime() map[identifiers.Address]*big.Int {
 	waitTime := make(map[identifiers.Address]*big.Int)
 
-	i.accounts.Range(func(key, value interface{}) bool {
-		addr, _ := key.(identifiers.Address)
-		account := i.accounts.get(addr)
-
-		waitTime[addr] = big.NewInt(time.Until(account.getWaitTime()).Milliseconds())
-
-		return true
-	})
+	for addr, acc := range i.accounts.accounts {
+		waitTime[addr] = big.NewInt(time.Until(acc.getWaitTime()).Milliseconds())
+	}
 
 	return waitTime
 }

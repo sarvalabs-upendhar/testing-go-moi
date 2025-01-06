@@ -10,22 +10,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
+	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/crypto"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/state"
 
-	"github.com/hashicorp/go-hclog"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/crypto"
 )
 
 type expectedResult struct {
@@ -36,9 +36,10 @@ type expectedResult struct {
 }
 
 type MockStateManager struct {
-	nonce                    map[identifiers.Address]uint64
+	publicKey                map[identifiers.Address]map[uint64][]byte
+	accountKeys              map[identifiers.Address]common.AccountKeys
+	sequenceID               map[identifiers.Address]map[uint64]uint64
 	balance                  map[identifiers.Address]map[identifiers.AssetID]*big.Int
-	assetInfo                map[identifiers.AssetID]*common.AssetDescriptor
 	accountRegistration      map[identifiers.Address]bool
 	logicRegistration        map[identifiers.LogicID]bool
 	removedCacheStateObjects map[identifiers.Address]struct{}
@@ -46,20 +47,86 @@ type MockStateManager struct {
 	accMetaInfos             map[identifiers.Address]*common.AccountMetaInfo
 }
 
+func (ms *MockStateManager) GetAssetInfo(assetID identifiers.AssetID,
+	hash common.Hash,
+) (*common.AssetDescriptor, error) {
+	panic("implement me")
+}
+
 // NewMockStateManager returns a new instance of MockStateManager
 func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
 	return &MockStateManager{
-		nonce:                    make(map[identifiers.Address]uint64),
+		publicKey:                make(map[identifiers.Address]map[uint64][]byte),
+		accountKeys:              make(map[identifiers.Address]common.AccountKeys),
+		sequenceID:               make(map[identifiers.Address]map[uint64]uint64),
 		balance:                  map[identifiers.Address]map[identifiers.AssetID]*big.Int{},
-		assetInfo:                map[identifiers.AssetID]*common.AssetDescriptor{},
 		accountRegistration:      make(map[identifiers.Address]bool),
 		logicRegistration:        make(map[identifiers.LogicID]bool),
 		removedCacheStateObjects: make(map[identifiers.Address]struct{}),
 		latestStateObjects:       make(map[identifiers.Address]*state.Object),
 		accMetaInfos:             make(map[identifiers.Address]*common.AccountMetaInfo),
 	}
+}
+
+func (ms *MockStateManager) setPublicKey(addr identifiers.Address,
+	keyID uint64, publicKey []byte,
+) {
+	_, ok := ms.publicKey[addr]
+	if !ok {
+		ms.publicKey[addr] = make(map[uint64][]byte)
+	}
+
+	ms.publicKey[addr][keyID] = publicKey
+}
+
+func (ms *MockStateManager) GetPublicKey(addr identifiers.Address,
+	keyID uint64, stateHash common.Hash,
+) ([]byte, error) {
+	keys, ok := ms.publicKey[addr]
+	if ok {
+		if publicKey, ok := keys[keyID]; ok {
+			return publicKey, nil
+		}
+	}
+
+	return nil, common.ErrPublicKeyNotFound
+}
+
+// setLatestSequenceID updates the mock account with the latest sequenceID
+func (ms *MockStateManager) setLatestSequenceID(t *testing.T, addr identifiers.Address, keyID, nonce uint64) {
+	t.Helper()
+
+	_, ok := ms.sequenceID[addr]
+	if !ok {
+		ms.sequenceID[addr] = make(map[uint64]uint64)
+	}
+
+	ms.sequenceID[addr][keyID] = nonce
+}
+
+func (ms *MockStateManager) GetSequenceID(addr identifiers.Address,
+	keyID uint64, stateHash common.Hash,
+) (uint64, error) {
+	if accountKeys, ok := ms.sequenceID[addr]; ok {
+		if sequenceID, ok := accountKeys[keyID]; ok {
+			return sequenceID, nil
+		}
+	}
+
+	return 0, errors.New("account doesn't exists")
+}
+
+func (ms *MockStateManager) GetAccountKeys(addrs identifiers.Address,
+	stateHash common.Hash,
+) (common.AccountKeys, error) {
+	accountKeys, ok := ms.accountKeys[addrs]
+	if ok {
+		return accountKeys, nil
+	}
+
+	return nil, errors.New("account keys not found")
 }
 
 func (ms *MockStateManager) SetAccountMetaInfo(addr identifiers.Address, accMetaInfo *common.AccountMetaInfo) {
@@ -102,16 +169,21 @@ func (ms *MockStateManager) setTestMOIBalance(t *testing.T, addrs ...identifiers
 	}
 }
 
-func (ms *MockStateManager) GetAssetInfo(
-	assetID identifiers.AssetID,
-	stateHash common.Hash,
-) (*common.AssetDescriptor, error) {
-	info, ok := ms.assetInfo[assetID]
-	if !ok {
-		return nil, common.ErrAssetNotFound
-	}
+func (ms *MockStateManager) setAccountKeysAndPublicKeys(t *testing.T, addrs ...identifiers.Address) {
+	t.Helper()
 
-	return info, nil
+	for i := 0; i < len(addrs); i++ {
+		ms.setAccountKeys(addrs[i], common.AccountKeys{
+			{
+				Weight: 1000,
+			},
+		})
+		ms.setPublicKey(addrs[i], 0, addrs[i].Bytes())
+	}
+}
+
+func (ms *MockStateManager) setAccountKeys(addr identifiers.Address, accKeys common.AccountKeys) {
+	ms.accountKeys[addr] = accKeys
 }
 
 func (ms *MockStateManager) GetBalance(
@@ -148,6 +220,32 @@ func (ms *MockStateManager) setBalance(
 }
 
 const viewTimeOut = 10 * time.Second
+
+func (ms *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
+	_, ok := ms.accountRegistration[addr]
+
+	return ok, nil
+}
+
+func (ms *MockStateManager) registerAccounts(addrs ...identifiers.Address) {
+	for _, addr := range addrs {
+		ms.accountRegistration[addr] = true
+	}
+}
+
+func (ms *MockStateManager) IsLogicRegistered(logicID identifiers.LogicID) error {
+	if _, ok := ms.logicRegistration[logicID]; !ok {
+		return errors.New("logic id is not registered")
+	}
+
+	return nil
+}
+
+func (ms *MockStateManager) registerLogicID(t *testing.T, logicID identifiers.LogicID) {
+	t.Helper()
+
+	ms.logicRegistration[logicID] = true
+}
 
 // CreateTestIxpool returns a new instance of IxPool
 func CreateTestIxpool(
@@ -190,48 +288,6 @@ func CreateTestIxpool(
 		verifier,
 		0,
 	)
-}
-
-// GetLatestNonce returns the latest nonce from the mock account
-func (ms *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
-	if account, ok := ms.nonce[addr]; ok {
-		return account, nil
-	}
-
-	return 0, errors.New("account doesn't exists")
-}
-
-func (ms *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
-	_, ok := ms.accountRegistration[addr]
-
-	return ok, nil
-}
-
-func (ms *MockStateManager) registerAccounts(addrs ...identifiers.Address) {
-	for _, addr := range addrs {
-		ms.accountRegistration[addr] = true
-	}
-}
-
-func (ms *MockStateManager) IsLogicRegistered(logicID identifiers.LogicID) error {
-	if _, ok := ms.logicRegistration[logicID]; !ok {
-		return errors.New("logic id is not registered")
-	}
-
-	return nil
-}
-
-func (ms *MockStateManager) registerLogicID(t *testing.T, logicID identifiers.LogicID) {
-	t.Helper()
-
-	ms.logicRegistration[logicID] = true
-}
-
-// setLatestNonce updates the mock account with the latest nonce
-func (ms *MockStateManager) setLatestNonce(t *testing.T, addr identifiers.Address, nonce uint64) {
-	t.Helper()
-
-	ms.nonce[addr] = nonce
 }
 
 type MockExecutionManager struct {
@@ -365,7 +421,9 @@ func getIXParams(
 ) *tests.CreateIxParams {
 	return &tests.CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.Sender = address
+			ix.Sender = common.Sender{
+				Address: address,
+			}
 			ix.FuelPrice = fuelPrice
 			ix.FuelLimit = 1
 			ix.Funds = []common.IxFund{
@@ -395,7 +453,7 @@ func getIXParams(
 				},
 			}
 		},
-		Sign: sign,
+		SenderSign: sign,
 	}
 }
 
@@ -433,6 +491,20 @@ func getOperationInfo(
 		}
 
 		return ixOperation, nil, ixParticipant
+
+	case common.IXAccountConfigure:
+		payload, ok := opPayload.(common.AccountConfigurePayload)
+		require.True(t, ok)
+
+		rawPayload, err := payload.Bytes()
+		require.NoError(t, err)
+
+		ixOperation := &common.IxOpRaw{
+			Type:    ixType,
+			Payload: rawPayload,
+		}
+
+		return ixOperation, nil, nil
 
 	case common.IxAssetTransfer:
 		payload, ok := opPayload.(common.AssetActionPayload)
@@ -536,6 +608,7 @@ func newTestInteraction(
 	opPayload interface{},
 	nonce int,
 	address identifiers.Address,
+	keyID uint64,
 	cb func(ixData *common.IxData),
 ) *common.Interaction {
 	t.Helper()
@@ -545,8 +618,11 @@ func newTestInteraction(
 	}
 
 	ixData := &common.IxData{
-		Sender:    address,
-		Nonce:     uint64(nonce),
+		Sender: common.Sender{
+			Address:    address,
+			KeyID:      keyID,
+			SequenceID: uint64(nonce),
+		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 1,
 		Funds:     []common.IxFund{},
@@ -575,7 +651,12 @@ func newTestInteraction(
 		cb(ixData)
 	}
 
-	ix, err := common.NewInteraction(*ixData, nil)
+	signatures := common.Signatures{{
+		Address: address,
+		KeyID:   keyID,
+	}}
+
+	ix, err := common.NewInteraction(*ixData, signatures)
 	require.NoError(t, err)
 
 	return ix
@@ -595,7 +676,7 @@ func createTestIxs(
 	for nonce := startNonce; nonce < endNonce; nonce++ {
 		ixs = append(ixs, newTestInteraction(
 			t, common.IxParticipantCreate, tests.CreateParticipantCreatePayload(t, identifiers.NilAddress),
-			nonce, address, nil,
+			nonce, address, 0, nil,
 		))
 	}
 
@@ -608,6 +689,7 @@ func createTestAssetTransferIxs(
 	startNonce int,
 	endNonce int,
 	address identifiers.Address,
+	keyCount int,
 	sm *MockStateManager,
 ) []*common.Interaction {
 	t.Helper()
@@ -615,13 +697,15 @@ func createTestAssetTransferIxs(
 	ixs := make([]*common.Interaction, 0)
 
 	for nonce := startNonce; nonce < endNonce; nonce++ {
-		ben := tests.RandomAddress(t)
-		ixs = append(ixs, newTestInteraction(
-			t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, ben),
-			nonce, address, nil,
-		))
+		for i := 0; i < keyCount; i++ {
+			ben := tests.RandomAddress(t)
+			ixs = append(ixs, newTestInteraction(
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, ben),
+				nonce, address, uint64(i), nil,
+			))
 
-		sm.registerAccounts(ben)
+			sm.registerAccounts(ben)
+		}
 	}
 
 	return ixs
@@ -633,7 +717,7 @@ func getTesseractWithIxs(t *testing.T, address identifiers.Address, nonce int) *
 
 	ixs := common.NewInteractionsWithLeaderCheck(false, newTestInteraction(
 		t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
-		nonce, address, nil,
+		nonce, address, 0, nil,
 	))
 
 	tsParams := &tests.CreateTesseractParams{
@@ -653,7 +737,7 @@ func newIxWithFuelPrice(t *testing.T, nonce int, address identifiers.Address, fu
 
 	return newTestInteraction(
 		t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
-		nonce, address, func(ixData *common.IxData) {
+		nonce, address, 0, func(ixData *common.IxData) {
 			ixData.FuelPrice = big.NewInt(fuelPrice)
 		},
 	)
@@ -665,7 +749,7 @@ func newIxWithWaitCounter(t *testing.T, nonce int, address identifiers.Address, 
 
 	ix := newTestInteraction(
 		t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, identifiers.NilAddress),
-		nonce, address, nil,
+		nonce, address, 0, nil,
 	)
 
 	return &WaitInteractions{waitCounter, ix}
@@ -681,7 +765,7 @@ func newIxWithPayload(
 ) *common.Interaction {
 	t.Helper()
 
-	return newTestInteraction(t, common.IxInvalid, nil, nonce, address, func(ixData *common.IxData) {
+	return newTestInteraction(t, common.IxInvalid, nil, nonce, address, 0, func(ixData *common.IxData) {
 		ixData.IxOps = []common.IxOpRaw{
 			{
 				Type:    ixType,
@@ -691,12 +775,12 @@ func newIxWithPayload(
 	})
 }
 
-// addAndProcessIxs enqueues and promotes the ixs based on nonce
+// addAndProcessIxs enqueues and promotes the ixs based on sequenceID
 func addAndProcessIxs(t *testing.T, sm *MockStateManager, ixPool *IxPool, ixs ...*common.Interaction) {
 	t.Helper()
 
 	for _, v := range ixs {
-		sm.setTestMOIBalance(t, v.Sender())
+		sm.setTestMOIBalance(t, v.SenderAddr())
 	}
 
 	errs := ixPool.AddLocalInteractions(common.NewInteractionsWithLeaderCheck(false, ixs...))
@@ -745,14 +829,14 @@ func setDelayCounter(t *testing.T, acc *account, delayCount int32) {
 	acc.delayCounter = delayCount
 }
 
-// getIxNonce returns a map of ix sender address to nonce
+// getIxNonce returns a map of ix sender address to sequenceID
 func getIxNonce(t *testing.T, ixs []*common.Interaction) map[identifiers.Address]uint64 {
 	t.Helper()
 
 	ixNonce := make(map[identifiers.Address]uint64)
 
 	for _, ix := range ixs {
-		ixNonce[ix.Sender()] = ix.Nonce()
+		ixNonce[ix.SenderAddr()] = ix.SequenceID()
 	}
 
 	return ixNonce
@@ -838,9 +922,9 @@ func addBatches(t *testing.T, registry *IxBatchRegistry, batchesList []CreateBat
 
 func insertIxnsInPromotedQueue(ixPool *IxPool, input []*common.Interaction) {
 	for _, ix := range input {
-		acc := ixPool.accounts.initOnce(ix.Sender(), 0)
-		acc.promoted.push(ix)
-		ixPool.accounts.addToSortedAccounts(ix.Sender())
+		_, accKey := ixPool.getOrCreateAccountQueue(ix.SenderAddr(), ix.SenderKeyID(), ix.SequenceID())
+		accKey.promoted.push(ix)
+		ixPool.accounts.addToSortedAccounts(ix.SenderAddr())
 	}
 }
 
@@ -857,7 +941,7 @@ func validateAllocatedView(t *testing.T, allocatedView uint64, currentView uint6
 // - The first element in each group represents the sender.
 // - If the second element is a "sarga" address, a "participant creation" interaction is created.
 // - Otherwise, an "asset transfer" interaction is generated.
-// interactions are generated in increasing nonce order starting from zero
+// interactions are generated in increasing sequenceID order starting from zero
 func createIxnsFromParticipants(t *testing.T, input [][]int) []*common.Interaction {
 	t.Helper()
 
@@ -887,7 +971,7 @@ func createIxnsFromParticipants(t *testing.T, input [][]int) []*common.Interacti
 		if list[1] == 999 {
 			ixns[i] = newTestInteraction(
 				t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
-				nonce, participants[list[0]], func(ixData *common.IxData) {
+				nonce, participants[list[0]], 0, func(ixData *common.IxData) {
 					for i := 2; i < len(list); i++ {
 						ixData.Participants = append(ixData.Participants, common.IxParticipant{
 							Address: participants[list[i]],
@@ -898,7 +982,7 @@ func createIxnsFromParticipants(t *testing.T, input [][]int) []*common.Interacti
 		} else {
 			ixns[i] = newTestInteraction(
 				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, participants[list[1]]),
-				nonce, participants[list[0]], func(ixData *common.IxData) {
+				nonce, participants[list[0]], 0, func(ixData *common.IxData) {
 					for i := 2; i < len(list); i++ {
 						ixData.Participants = append(ixData.Participants, common.IxParticipant{
 							Address: participants[list[i]],

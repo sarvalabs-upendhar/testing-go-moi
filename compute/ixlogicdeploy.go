@@ -28,7 +28,7 @@ func RunLogicDeploy(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the deployer and logic account state objects
-	deployer := transition.GetObject(op.Sender())
+	deployer := transition.GetObject(op.SenderAddr())
 	logicacc := transition.GetObject(op.Target())
 
 	// Create an options chain

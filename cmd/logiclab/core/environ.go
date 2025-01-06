@@ -25,8 +25,8 @@ type Environment struct {
 	eventsHead uint64
 	eventsSize uint64
 
-	ID    string
-	Nonce uint64
+	ID         string
+	SequenceID uint64
 
 	Addrs  map[identifiers.Address]struct{}
 	Users  map[string]identifiers.Address
@@ -50,12 +50,12 @@ func NewEnvironment(name string, database db.Database) *Environment {
 		eventsHead: 0,
 		eventsSize: 0,
 
-		ID:       name,
-		Nonce:    0,
-		Addrs:    map[identifiers.Address]struct{}{},
-		Users:    make(map[string]identifiers.Address),
-		Logics:   make(map[string]LogicMetadata),
-		CallFuel: LabDefaultFuel,
+		ID:         name,
+		SequenceID: 0,
+		Addrs:      map[identifiers.Address]struct{}{},
+		Users:      make(map[string]identifiers.Address),
+		Logics:     make(map[string]LogicMetadata),
+		CallFuel:   LabDefaultFuel,
 
 		Config: ReplConfig{
 			HexBigInt: true,
@@ -293,9 +293,9 @@ func (env *Environment) Enlist(addr identifiers.Address, logic identifiers.Logic
 	return nil
 }
 
-// IncrementNonce increases the nonce by 1.
-func (env *Environment) IncrementNonce() {
-	env.Nonce += 1
+// IncrementSequenceID increases the sequenceID by 1.
+func (env *Environment) IncrementSequenceID() {
+	env.SequenceID += 1
 }
 
 func (env *Environment) generateUniqueRandomAddress() identifiers.Address {
