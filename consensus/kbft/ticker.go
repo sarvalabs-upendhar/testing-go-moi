@@ -12,7 +12,7 @@ type timeoutInfo struct {
 	// Represents the duration of the timeout
 	Duration time.Duration `json:"duration"`
 	// Represents the height that the timeout applies for
-	Height map[identifiers.Address]uint64 `json:"height"`
+	Height map[identifiers.Identifier]uint64 `json:"height"`
 	// Represents the view that the timout applies for
 	View uint64 `json:"view"`
 	// Represents the view step type that the timout applies for

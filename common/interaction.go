@@ -49,11 +49,11 @@ func (ixRaw *IxOpRaw) Copy() IxOpRaw {
 	return op
 }
 
-// IxParticipant represents a participant with an Address and LockType.
+// IxParticipant represents a participant with an id and LockType.
 type IxParticipant struct {
-	Address  identifiers.Address `json:"address"`
-	LockType LockType            `json:"lock_type"`
-	Notary   bool                `json:"notary"`
+	ID       identifiers.Identifier `json:"id"`
+	LockType LockType               `json:"lock_type"`
+	Notary   bool                   `json:"notary"`
 }
 
 // IxConsensusPreference contains preferences related to consensus.
@@ -100,15 +100,15 @@ func (ixPreferences *IxPreferences) Copy() *IxPreferences {
 }
 
 type Sender struct {
-	Address    identifiers.Address `json:"address"`
-	SequenceID uint64              `json:"sequence_id"`
-	KeyID      uint64              `json:"key_id"`
+	ID         identifiers.Identifier `json:"id"`
+	SequenceID uint64                 `json:"sequence_id"`
+	KeyID      uint64                 `json:"key_id"`
 }
 
 // IxData represents interaction related information.
 type IxData struct {
-	Sender Sender              `json:"sender"`
-	Payer  identifiers.Address `json:"payer"`
+	Sender Sender                 `json:"sender"`
+	Payer  identifiers.Identifier `json:"payer"`
 
 	FuelPrice *big.Int `json:"fuel_price"`
 	FuelLimit uint64   `json:"fuel_limit"`
@@ -180,17 +180,17 @@ func (ixData *IxData) FromBytes(bytes []byte) error {
 	return nil
 }
 
-func (ixData *IxData) ParticipantsInfo() map[identifiers.Address]*ParticipantInfo {
-	psInfo := make(map[identifiers.Address]*ParticipantInfo, len(ixData.Participants))
+func (ixData *IxData) ParticipantsInfo() map[identifiers.Identifier]*ParticipantInfo {
+	psInfo := make(map[identifiers.Identifier]*ParticipantInfo, len(ixData.Participants))
 	for _, ps := range ixData.Participants {
-		psInfo[ps.Address] = &ParticipantInfo{
+		psInfo[ps.ID] = &ParticipantInfo{
 			LockType: ps.LockType,
-			Address:  ps.Address,
+			ID:       ps.ID,
 			AccType:  RegularAccount,
 		}
 
-		if ps.Address == ixData.Sender.Address {
-			psInfo[ps.Address].IsSigner = true
+		if ps.ID == ixData.Sender.ID {
+			psInfo[ps.ID].IsSigner = true
 		}
 	}
 
@@ -200,7 +200,7 @@ func (ixData *IxData) ParticipantsInfo() map[identifiers.Address]*ParticipantInf
 // IxOp represents an ix operation. It inherits fields and methods from Interaction.
 type IxOp struct {
 	*Interaction
-	target  identifiers.Address
+	target  identifiers.Identifier
 	OpType  IxOpType     `json:"type"`
 	Payload *IxOpPayload `json:"payload"`
 }
@@ -313,16 +313,16 @@ func (op *IxOp) Calldata() []byte {
 func (op *IxOp) LogicID() identifiers.LogicID {
 	payload, err := op.GetLogicPayload()
 	if err != nil {
-		return ""
+		return identifiers.Nil
 	}
 
 	return payload.Logic
 }
 
-// Target returns the address of the op beneficiary.
-func (op *IxOp) Target() identifiers.Address {
-	// Based on the op type return the address
-	if op.target != identifiers.NilAddress {
+// Target returns the id of the op beneficiary.
+func (op *IxOp) Target() identifiers.Identifier {
+	// Based on the op type return the id
+	if op.target != identifiers.Nil {
 		return op.target
 	}
 
@@ -333,9 +333,21 @@ func (op *IxOp) Target() identifiers.Address {
 			panic(err)
 		}
 
-		op.target = payload.Address
+		op.target = payload.ID
 	case IxAssetCreate:
-		op.target = NewAccountAddress(op.SenderAddr(), op.SenderKeyID(), op.SequenceID())
+		payload, err := op.GetAssetCreatePayload()
+		if err != nil {
+			panic(err)
+		}
+
+		assetID, _ := identifiers.GenerateAssetIDv0(
+			NewAccountID(op.Sender()),
+			0,
+			uint16(payload.Standard),
+			payload.Flags()...,
+		)
+
+		op.target = assetID.AsIdentifier()
 	case IxAssetTransfer, IxAssetApprove, IxAssetRevoke, IxAssetLockup, IxAssetRelease:
 		payload, err := op.GetAssetActionPayload()
 		if err != nil {
@@ -349,16 +361,27 @@ func (op *IxOp) Target() identifiers.Address {
 			panic(err)
 		}
 
-		op.target = payload.AssetID.Address()
+		op.target = payload.AssetID.AsIdentifier()
 	case IxLogicDeploy:
-		op.target = NewAccountAddress(op.SenderAddr(), op.SenderKeyID(), op.SequenceID())
+		payload, err := op.GetLogicPayload()
+		if err != nil {
+			panic(err)
+		}
+
+		logicID, _ := identifiers.GenerateLogicIDv0(
+			NewAccountID(op.Sender()),
+			0,
+			payload.Flags()...,
+		)
+
+		op.target = logicID.AsIdentifier()
 	case IxLogicInvoke, IxLogicEnlist:
 		payload, err := op.GetLogicPayload()
 		if err != nil {
 			panic(err)
 		}
 
-		op.target = payload.Logic.Address()
+		op.target = payload.Logic.AsIdentifier()
 
 	default:
 		panic(ErrInvalidInteractionType)
@@ -368,7 +391,7 @@ func (op *IxOp) Target() identifiers.Address {
 }
 
 type Signature struct {
-	Address   identifiers.Address
+	ID        identifiers.Identifier
 	KeyID     uint64
 	Signature []byte
 }
@@ -394,8 +417,8 @@ func (s *Signatures) FromBytes(data []byte) error {
 	return nil
 }
 
-// Benefactor returns the benefactor's address if applicable; otherwise, returns nil address.
-func (op *IxOp) Benefactor() identifiers.Address {
+// Benefactor returns the benefactor's id if applicable; otherwise, returns nil id.
+func (op *IxOp) Benefactor() identifiers.Identifier {
 	if op.Type() == IxAssetTransfer || op.Type() == IxAssetRelease {
 		payload, err := op.GetAssetActionPayload()
 		if err != nil {
@@ -405,14 +428,14 @@ func (op *IxOp) Benefactor() identifiers.Address {
 		return payload.Benefactor
 	}
 
-	return identifiers.NilAddress
+	return identifiers.Nil
 }
 
 // Interaction represents a batch of ops with associated data and metadata.
 type Interaction struct {
 	inner              IxData
 	ops                []*IxOp
-	ps                 map[identifiers.Address]*ParticipantInfo
+	ps                 map[identifiers.Identifier]*ParticipantInfo
 	leaderCandidateAcc *ParticipantInfo
 	hash               atomic.Value
 	size               atomic.Value
@@ -438,7 +461,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 		return nil, err
 	}
 
-	if _, ok := ix.ps[ix.SenderAddr()]; !ok {
+	if _, ok := ix.ps[ix.SenderID()]; !ok {
 		return nil, ErrMissingSender
 	}
 
@@ -458,6 +481,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 
 			ix.ops[idx] = &IxOp{
 				Interaction: ix,
+				target:      psCreatePayload.ID,
 				OpType:      op.Type,
 				Payload: &IxOpPayload{
 					participant: &ParticipantPayload{
@@ -466,18 +490,18 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				},
 			}
 
-			_, ok := ix.ps[SargaAddress]
+			_, ok := ix.ps[SargaAccountID]
 			if !ok {
-				ix.ps[SargaAddress] = &ParticipantInfo{
+				ix.ps[SargaAccountID] = &ParticipantInfo{
 					AccType:   SargaAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
-					Address:   SargaAddress,
+					ID:        SargaAccountID,
 				}
 			}
 
-			info, ok := ix.ps[psCreatePayload.Address]
+			info, ok := ix.ps[psCreatePayload.ID]
 			if !ok {
 				return nil, ErrMissingBeneficiary
 			}
@@ -532,8 +556,19 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				return nil, err
 			}
 
+			assetID, err := identifiers.GenerateAssetIDv0(
+				NewAccountID(ix.Sender()),
+				0,
+				uint16(assetCreatePayload.Standard),
+				assetCreatePayload.Flags()...,
+			)
+			if err != nil {
+				return nil, err
+			}
+
 			ix.ops[idx] = &IxOp{
 				Interaction: ix,
+				target:      assetID.AsIdentifier(),
 				OpType:      op.Type,
 				Payload: &IxOpPayload{
 					asset: &AssetPayload{
@@ -542,27 +577,25 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				},
 			}
 
-			_, ok := ix.ps[SargaAddress]
+			_, ok := ix.ps[SargaAccountID]
 			if !ok {
-				ix.ps[SargaAddress] = &ParticipantInfo{
+				ix.ps[SargaAccountID] = &ParticipantInfo{
 					AccType:   SargaAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
-					Address:   SargaAddress,
+					ID:        SargaAccountID,
 				}
 			}
 
-			assetAddr := NewAccountAddress(ix.SenderAddr(), ix.SenderKeyID(), ix.SequenceID())
-
-			_, ok = ix.ps[assetAddr]
+			_, ok = ix.ps[assetID.AsIdentifier()]
 			if !ok {
-				ix.ps[assetAddr] = &ParticipantInfo{
+				ix.ps[assetID.AsIdentifier()] = &ParticipantInfo{
 					AccType:   AssetAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: true,
-					Address:   assetAddr,
+					ID:        assetID.AsIdentifier(),
 				}
 			}
 
@@ -574,6 +607,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 
 			ix.ops[idx] = &IxOp{
 				Interaction: ix,
+				target:      assetActionPayload.Beneficiary,
 				OpType:      op.Type,
 				Payload: &IxOpPayload{
 					asset: &AssetPayload{
@@ -608,6 +642,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 
 			ix.ops[idx] = &IxOp{
 				Interaction: ix,
+				target:      assetSupplyPayload.AssetID.AsIdentifier(),
 				OpType:      op.Type,
 				Payload: &IxOpPayload{
 					asset: &AssetPayload{
@@ -616,7 +651,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				},
 			}
 
-			info, ok := ix.ps[assetSupplyPayload.AssetID.Address()]
+			info, ok := ix.ps[assetSupplyPayload.AssetID.AsIdentifier()]
 			if !ok {
 				return nil, ErrMissingAssetAccount
 			}
@@ -638,7 +673,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			}
 
 			if IxLogicDeploy != op.Type {
-				info, ok := ix.ps[logicPayload.Logic.Address()]
+				info, ok := ix.ps[logicPayload.Logic.AsIdentifier()]
 				if !ok {
 					return nil, ErrMissingLogicAccount
 				}
@@ -646,7 +681,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				info.AccType = LogicAccount
 
 				for _, logic := range logicPayload.Interfaces {
-					account, ok := ix.ps[logic.Address()]
+					account, ok := ix.ps[logic.AsIdentifier()]
 					if !ok {
 						return nil, ErrMissingForeignLogicAccount
 					}
@@ -655,32 +690,40 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 					account.IsSigner = false
 				}
 
+				ix.ops[idx].target = logicPayload.Logic.AsIdentifier()
+
 				continue
 			}
 
-			_, ok := ix.ps[SargaAddress]
+			_, ok := ix.ps[SargaAccountID]
 			if !ok {
-				ix.ps[SargaAddress] = &ParticipantInfo{
+				ix.ps[SargaAccountID] = &ParticipantInfo{
 					AccType:   SargaAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
-					Address:   SargaAddress,
+					ID:        SargaAccountID,
 				}
 			}
 
-			logicAddrs := NewAccountAddress(ix.SenderAddr(), ix.SenderKeyID(), ix.SequenceID())
+			logicID, _ := identifiers.GenerateLogicIDv0(
+				NewAccountID(ix.Sender()),
+				0,
+				logicPayload.Flags()...,
+			)
 
-			_, ok = ix.ps[logicAddrs]
+			_, ok = ix.ps[logicID.AsIdentifier()]
 			if !ok {
-				ix.ps[logicAddrs] = &ParticipantInfo{
+				ix.ps[logicID.AsIdentifier()] = &ParticipantInfo{
 					AccType:   LogicAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: true,
-					Address:   logicAddrs,
+					ID:        logicID.AsIdentifier(),
 				}
 			}
+
+			ix.ops[idx].target = logicID.AsIdentifier()
 
 		default:
 			return nil, ErrInvalidInteractionType
@@ -695,15 +738,15 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 	ix.hash.Store(GetHash(data))
 	ix.size.Store(uint64(len(data) + len(signaturesBytes)))
 
-	return ix, ix.UpdateLeaderCandidateAddr()
+	return ix, ix.UpdateLeaderCandidateID()
 }
 
-func (ix *Interaction) Participants() map[identifiers.Address]*ParticipantInfo {
+func (ix *Interaction) Participants() map[identifiers.Identifier]*ParticipantInfo {
 	return ix.ps
 }
 
-func (ix *Interaction) LeaderCandidateAcc() identifiers.Address {
-	return ix.leaderCandidateAcc.Address
+func (ix *Interaction) LeaderCandidateAcc() identifiers.Identifier {
+	return ix.leaderCandidateAcc.ID
 }
 
 // IXData returns a copy of the interaction data.
@@ -716,9 +759,9 @@ func (ix *Interaction) Signatures() Signatures {
 	return ix.signatures
 }
 
-// SenderAddr returns the address of the Interaction sender
-func (ix *Interaction) SenderAddr() identifiers.Address {
-	return ix.inner.Sender.Address
+// SenderID returns the id of the Interaction sender
+func (ix *Interaction) SenderID() identifiers.Identifier {
+	return ix.inner.Sender.ID
 }
 
 func (ix *Interaction) SenderKeyID() uint64 {
@@ -733,8 +776,8 @@ func (ix *Interaction) SetSender(sender Sender) {
 	ix.inner.Sender = sender
 }
 
-// Payer returns the address of the Interaction payer
-func (ix *Interaction) Payer() identifiers.Address {
+// Payer returns the id of the Interaction payer
+func (ix *Interaction) Payer() identifiers.Identifier {
 	return ix.inner.Payer
 }
 
@@ -862,10 +905,12 @@ func (ix *Interaction) Polorize() (*polo.Polorizer, error) {
 
 // Depolorize deserializes the interaction.
 func (ix *Interaction) Depolorize(depolorizer *polo.Depolorizer) (err error) {
-	depolorizer, err = depolorizer.DepolorizePacked()
-	if errors.Is(err, polo.ErrNullPack) {
+	if depolorizer.IsNull() {
 		return nil
-	} else if err != nil {
+	}
+
+	depolorizer, err = depolorizer.Unpacked()
+	if err != nil {
 		return err
 	}
 
@@ -958,17 +1003,17 @@ func (ix *Interaction) Preferences() *IxPreferences {
 	return ix.inner.Preferences
 }
 
-func (ix *Interaction) UpdateLeaderCandidateAddr() error {
+func (ix *Interaction) UpdateLeaderCandidateID() error {
 	if len(ix.ps) == 0 {
 		return errors.New("empty ix participants")
 	}
 
-	regularAccounts := make(Addresses, 0, len(ix.ps))
-	nonRegularAccounts := make(Addresses, 0, len(ix.ps))
+	regularAccounts := make(IdentifierList, 0, len(ix.ps))
+	nonRegularAccounts := make(IdentifierList, 0, len(ix.ps))
 
-	for addr, info := range ix.ps {
-		if addr == SargaAddress {
-			ix.leaderCandidateAcc = ix.ps[addr]
+	for id, info := range ix.ps {
+		if id == SargaAccountID {
+			ix.leaderCandidateAcc = ix.ps[id]
 
 			return nil
 		}
@@ -978,14 +1023,14 @@ func (ix *Interaction) UpdateLeaderCandidateAddr() error {
 		}
 
 		if info.AccType == RegularAccount {
-			regularAccounts = append(regularAccounts, addr)
+			regularAccounts = append(regularAccounts, id)
 
 			continue
 		}
 
 		// Non-regular account with mutate lock
 		if info.LockType < ReadLock {
-			nonRegularAccounts = append(nonRegularAccounts, addr)
+			nonRegularAccounts = append(nonRegularAccounts, id)
 		}
 	}
 
@@ -1020,9 +1065,9 @@ func (ix *Interaction) AllottedView() uint64 {
 }
 
 type Interactions struct {
-	ixns                   []*Interaction
-	leaderCandidateAddress identifiers.Address
-	ps                     atomic.Value
+	ixns              []*Interaction
+	leaderCandidateID identifiers.Identifier
+	ps                atomic.Value
 }
 
 func NewInteractions() *Interactions {
@@ -1038,20 +1083,20 @@ func NewInteractionsWithLeaderCheck(checkForLeader bool, l ...*Interaction) Inte
 		return ixns
 	}
 
-	nonRegularAccounts := make(Addresses, 0)
-	regularAccounts := make(Addresses, 0)
+	nonRegularAccounts := make(IdentifierList, 0)
+	regularAccounts := make(IdentifierList, 0)
 
 	for _, ixn := range ixns.ixns {
 		if ixn.leaderCandidateAcc.AccType == SargaAccount {
-			ixns.leaderCandidateAddress = ixn.leaderCandidateAcc.Address
+			ixns.leaderCandidateID = ixn.leaderCandidateAcc.ID
 
 			return ixns
 		}
 
 		if ixn.leaderCandidateAcc.AccType == RegularAccount {
-			regularAccounts = append(regularAccounts, ixn.leaderCandidateAcc.Address)
+			regularAccounts = append(regularAccounts, ixn.leaderCandidateAcc.ID)
 		} else {
-			nonRegularAccounts = append(nonRegularAccounts, ixn.leaderCandidateAcc.Address)
+			nonRegularAccounts = append(nonRegularAccounts, ixn.leaderCandidateAcc.ID)
 		}
 	}
 
@@ -1059,7 +1104,7 @@ func NewInteractionsWithLeaderCheck(checkForLeader bool, l ...*Interaction) Inte
 	if len(nonRegularAccounts) > 0 {
 		sort.Sort(nonRegularAccounts)
 
-		ixns.leaderCandidateAddress = nonRegularAccounts[0]
+		ixns.leaderCandidateID = nonRegularAccounts[0]
 
 		return ixns
 	}
@@ -1067,7 +1112,7 @@ func NewInteractionsWithLeaderCheck(checkForLeader bool, l ...*Interaction) Inte
 	if len(regularAccounts) > 0 {
 		sort.Sort(regularAccounts)
 
-		ixns.leaderCandidateAddress = regularAccounts[0]
+		ixns.leaderCandidateID = regularAccounts[0]
 
 		return ixns
 	}
@@ -1079,8 +1124,8 @@ func (ixs *Interactions) Append(ix *Interaction) {
 	ixs.ixns = append(ixs.ixns, ix)
 }
 
-func (ixs Interactions) LeaderCandidateAddress() identifiers.Address {
-	return ixs.leaderCandidateAddress
+func (ixs Interactions) LeaderCandidateID() identifiers.Identifier {
+	return ixs.leaderCandidateID
 }
 
 func (ixs Interactions) Hashes() Hashes {
@@ -1093,27 +1138,27 @@ func (ixs Interactions) Hashes() Hashes {
 	return hashes
 }
 
-func (ixs Interactions) Participants() map[identifiers.Address]ParticipantInfo {
+func (ixs Interactions) Participants() map[identifiers.Identifier]ParticipantInfo {
 	v := ixs.ps.Load()
 	if v != nil {
-		ps := v.(map[identifiers.Address]ParticipantInfo) //nolint
+		ps := v.(map[identifiers.Identifier]ParticipantInfo) //nolint
 
 		return ps
 	}
 
-	ps := make(map[identifiers.Address]ParticipantInfo)
+	ps := make(map[identifiers.Identifier]ParticipantInfo)
 	for _, ixn := range ixs.ixns {
-		for addr, info := range ixn.ps {
-			oldInfo, ok := ps[addr]
+		for id, info := range ixn.ps {
+			oldInfo, ok := ps[id]
 			if !ok {
-				ps[addr] = *info
+				ps[id] = *info
 			}
 
 			if oldInfo.LockType < info.LockType {
 				continue
 			}
 
-			ps[addr] = *info
+			ps[id] = *info
 		}
 	}
 
@@ -1122,16 +1167,16 @@ func (ixs Interactions) Participants() map[identifiers.Address]ParticipantInfo {
 	return ps
 }
 
-func (ixs Interactions) Locks() map[identifiers.Address]LockType {
+func (ixs Interactions) Locks() map[identifiers.Identifier]LockType {
 	v := ixs.ps.Load()
 	if v == nil {
 		v = ixs.Participants()
 	}
 
-	locks := make(map[identifiers.Address]LockType)
+	locks := make(map[identifiers.Identifier]LockType)
 
-	for addr, info := range v.(map[identifiers.Address]ParticipantInfo) { //nolint
-		locks[addr] = info.LockType
+	for id, info := range v.(map[identifiers.Identifier]ParticipantInfo) { //nolint
+		locks[id] = info.LockType
 	}
 
 	return locks
@@ -1231,19 +1276,19 @@ func (ixs Interactions) FuelLimit() (limit uint64) {
 	return limit
 }
 
-// AccountType returns the type of the given address or an error if not found.
-func (ixs Interactions) AccountType(address identifiers.Address) (AccountType, error) {
-	if SargaAddress == address {
+// AccountType returns the type of the given id or an error if not found.
+func (ixs Interactions) AccountType(id identifiers.Identifier) (AccountType, error) {
+	if SargaAccountID == id {
 		return RegularAccount, nil
 	}
 
 	for _, ix := range ixs.ixns {
-		if ix.SenderAddr() == address || ix.Payer() == address {
+		if ix.SenderID() == id || ix.Payer() == id {
 			return RegularAccount, nil
 		}
 
 		for _, op := range ix.Ops() {
-			if op.Target() != address && op.Benefactor() != address {
+			if op.Target() != id && op.Benefactor() != id {
 				continue
 			}
 

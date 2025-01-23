@@ -4,7 +4,7 @@ var (
 	genesisFilePath   string
 	instancesFilePath string
 	moiID             string
-	address           string
+	participantID     string
 	accountType       int
 	artifact          string
 	allocations       []string

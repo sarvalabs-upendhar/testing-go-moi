@@ -9,8 +9,9 @@ import (
 )
 
 type AccountWithMnemonic struct {
-	Addr     identifiers.Address `json:"address"`
-	Mnemonic string              `json:"mnemonic"`
+	ID        identifiers.Identifier `json:"id"`
+	Mnemonic  string                 `json:"mnemonic"`
+	PublicKey []byte                 `json:"public_key"`
 }
 
 func WriteToAccountsFile(filePath string, accounts []AccountWithMnemonic) error {
@@ -28,9 +29,8 @@ func WriteToAccountsFile(filePath string, accounts []AccountWithMnemonic) error 
 	return nil
 }
 
-func GetAddressFromAccountsFile(filePath string) ([]string, error) {
+func GetAccountsFromFile(filePath string) ([]AccountWithMnemonic, error) {
 	accounts := make([]AccountWithMnemonic, 0)
-	addresses := make([]string, 0)
 
 	file, err := os.ReadFile(filePath)
 	if err != nil {
@@ -41,9 +41,5 @@ func GetAddressFromAccountsFile(filePath string) ([]string, error) {
 		return nil, err
 	}
 
-	for index := range accounts {
-		addresses = append(addresses, accounts[index].Addr.String())
-	}
-
-	return addresses, nil
+	return accounts, nil
 }

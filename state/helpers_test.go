@@ -62,7 +62,7 @@ func (m *MockServer) Subscribe(
 
 type MockDB struct {
 	tesseracts          map[common.Hash]*common.Tesseract
-	latestTesseractHash map[identifiers.Address]common.Hash
+	latestTesseractHash map[identifiers.Identifier]common.Hash
 	accounts            map[common.Hash][]byte
 	context             map[common.Hash][]byte
 	balances            map[common.Hash][]byte
@@ -78,7 +78,7 @@ type MockDB struct {
 func mockDB() *MockDB {
 	return &MockDB{
 		tesseracts:          make(map[common.Hash]*common.Tesseract),
-		latestTesseractHash: make(map[identifiers.Address]common.Hash),
+		latestTesseractHash: make(map[identifiers.Identifier]common.Hash),
 		accounts:            make(map[common.Hash][]byte),
 		assetDeeds:          make(map[common.Hash][]byte),
 		context:             make(map[common.Hash][]byte),
@@ -100,7 +100,7 @@ func (m *MockDB) setAccountKeys(t *testing.T, hash common.Hash, accountKeys comm
 	m.accountKeys[hash] = bytes
 }
 
-func (m *MockDB) GetAccountKeys(addr identifiers.Address, stateHash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) ([]byte, error) {
 	accountKeys, ok := m.accountKeys[stateHash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -137,7 +137,7 @@ func (m *MockDB) ReadEntry(key []byte) ([]byte, error) {
 	return data, nil
 }
 
-func (m *MockDB) GetDeeds(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetDeeds(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	data, ok := m.assetDeeds[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -198,7 +198,7 @@ func (m *MockDB) GetEntries(prefix []byte) chan common.DBEntry {
 	return nil
 }
 
-func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
+func (m *MockDB) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
 	accMetaInfo, ok := m.accMetaInfo[id.Hex()]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -208,10 +208,10 @@ func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMeta
 }
 
 func (m *MockDB) setAccountMetaInfo(acc *common.AccountMetaInfo) {
-	m.accMetaInfo[acc.Address.Hex()] = acc
+	m.accMetaInfo[acc.ID.Hex()] = acc
 }
 
-func (m *MockDB) GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
+func (m *MockDB) GetMerkleTreeEntry(id identifiers.Identifier, prefix storage.PrefixTag, key []byte) ([]byte, error) {
 	entry, ok := m.merkleTreeEntries[string(key)]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -220,14 +220,14 @@ func (m *MockDB) GetMerkleTreeEntry(address identifiers.Address, prefix storage.
 	return entry, nil
 }
 
-func (m *MockDB) SetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key, value []byte) error {
+func (m *MockDB) SetMerkleTreeEntry(id identifiers.Identifier, prefix storage.PrefixTag, key, value []byte) error {
 	m.merkleTreeEntries[string(key)] = value
 
 	return nil
 }
 
 func (m *MockDB) SetMerkleTreeEntries(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	prefix storage.PrefixTag,
 	entries map[string][]byte,
 ) error {
@@ -238,7 +238,7 @@ func (m *MockDB) SetMerkleTreeEntries(
 	return nil
 }
 
-func (m *MockDB) WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error {
+func (m *MockDB) WritePreImages(id identifiers.Identifier, entries map[common.Hash][]byte) error {
 	for k, v := range entries {
 		m.preImages[k] = v
 	}
@@ -246,7 +246,7 @@ func (m *MockDB) WritePreImages(address identifiers.Address, entries map[common.
 	return nil
 }
 
-func (m *MockDB) GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetPreImage(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	preImage, ok := m.preImages[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -264,25 +264,13 @@ func (m *MockDB) setAccount(t *testing.T, hash common.Hash, acc *common.Account)
 	m.accounts[hash] = bytes
 }
 
-func (m *MockDB) GetAccount(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAccount(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	account, ok := m.accounts[hash]
 	if !ok {
 		return nil, common.ErrAccountNotFound
 	}
 
 	return account, nil
-}
-
-func (m *MockDB) setContext(t *testing.T, object *ContextObject) {
-	t.Helper()
-
-	hash, err := object.Hash()
-	require.NoError(t, err)
-
-	bytes, err := polo.Polorize(object)
-	require.NoError(t, err)
-
-	m.context[hash] = bytes
 }
 
 func (m *MockDB) setMetaContext(t *testing.T, object *MetaContextObject) {
@@ -297,7 +285,7 @@ func (m *MockDB) setMetaContext(t *testing.T, object *MetaContextObject) {
 	m.context[hash] = bytes
 }
 
-func (m *MockDB) GetContext(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetContext(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	tsContext, ok := m.context[hash]
 	if !ok {
 		return nil, common.ErrContextStateNotFound
@@ -306,7 +294,7 @@ func (m *MockDB) GetContext(addr identifiers.Address, hash common.Hash) ([]byte,
 	return tsContext, nil
 }
 
-func (m *MockDB) GetBalance(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetBalance(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	balance, ok := m.balances[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -367,7 +355,7 @@ func insertSargaAccount(t *testing.T, db Store) {
 	stateHash := tests.RandomHash(t)
 
 	mDB.setAccountMetaInfo(&common.AccountMetaInfo{
-		Address:   common.SargaAddress,
+		ID:        common.SargaAccountID,
 		StateHash: stateHash,
 	})
 
@@ -381,16 +369,6 @@ func insertAssetDeedsInDB(t *testing.T, db Store, hashes []common.Hash, deeds ..
 
 	for i, bal := range deeds {
 		mDB.setAssetDeeds(t, hashes[i], bal)
-	}
-}
-
-func insertContextsInDB(t *testing.T, db Store, context ...*ContextObject) {
-	t.Helper()
-
-	mDB := getMockDB(t, db)
-
-	for _, ctx := range context {
-		mDB.setContext(t, ctx)
 	}
 }
 
@@ -653,11 +631,11 @@ func createAssetObject(t *testing.T) *AssetObject {
 
 	return &AssetObject{
 		Balance: big.NewInt(45000),
-		Lockup: map[identifiers.Address]*big.Int{
-			tests.RandomAddress(t): big.NewInt(3000),
+		Lockup: map[identifiers.Identifier]*big.Int{
+			tests.RandomIdentifier(t): big.NewInt(3000),
 		},
-		Mandate: map[identifiers.Address]*Mandate{
-			tests.RandomAddress(t): {
+		Mandate: map[identifiers.Identifier]*Mandate{
+			tests.RandomIdentifier(t): {
 				Amount:    big.NewInt(2000),
 				ExpiresAt: uint64(time.Now().Add(1 * time.Hour).Unix()),
 			},
@@ -698,11 +676,11 @@ func getLogicObjectParamsWithLogicID(logicID identifiers.LogicID) *createLogicOb
 	}
 }
 
-func getTesseractParamsWithStateHash(address identifiers.Address, hash common.Hash) *tests.CreateTesseractParams {
+func getTesseractParamsWithStateHash(id identifiers.Identifier, hash common.Hash) *tests.CreateTesseractParams {
 	return &tests.CreateTesseractParams{
-		Addresses: []identifiers.Address{address},
+		IDs: []identifiers.Identifier{id},
 		Participants: common.ParticipantsState{
-			address: {
+			id: {
 				StateHash: hash,
 			},
 		},
@@ -713,8 +691,8 @@ func storeTesseractHashInCache(t *testing.T, cache *lru.Cache, tesseracts ...*co
 	t.Helper()
 
 	for _, ts := range tesseracts {
-		for addr := range ts.Participants() {
-			cache.Add(addr, ts.Hash())
+		for id := range ts.Participants() {
+			cache.Add(id, ts.Hash())
 		}
 	}
 }
@@ -809,14 +787,14 @@ func setGuardianPublicKeys(t *testing.T, state *Object, ids []kramaid.KramaID, p
 func createGuardianLogic(t *testing.T, sm *StateManager, kramaIDs []kramaid.KramaID, publicKeys [][]byte) {
 	t.Helper()
 
-	so := sm.CreateStateObject(common.GuardianLogicAddr, common.RegularAccount, true)
+	so := sm.CreateStateObject(common.GuardianAccountID, common.RegularAccount, true)
 	so.storageTreeTxns[common.GuardianLogicID] = iradix.New().Txn()
-	sm.objectCache.Add(common.GuardianLogicAddr, so)
+	sm.objectCache.Add(common.GuardianAccountID, so)
 	setGuardianPublicKeys(t, so, kramaIDs, publicKeys)
 }
 
 type createStateObjectParams struct {
-	address                   identifiers.Address
+	id                        identifiers.Identifier
 	cache                     *lru.Cache
 	db                        *MockDB
 	account                   *common.Account
@@ -830,7 +808,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 	t.Helper()
 
 	var (
-		addr  = tests.RandomAddress(t)
+		id    = tests.RandomIdentifier(t)
 		mDB   = mockDB()
 		cache = mockCache(t)
 		data  = new(common.Account)
@@ -840,8 +818,8 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 		params = &createStateObjectParams{}
 	}
 
-	if !params.address.IsNil() {
-		addr = params.address
+	if !params.id.IsNil() {
+		id = params.id
 	}
 
 	if params.db != nil {
@@ -860,7 +838,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 		data = params.account
 	}
 
-	so := NewStateObject(addr, cache, tests.NewTestTreeCache(), mDB, *data, NilMetrics(), false)
+	so := NewStateObject(id, cache, tests.NewTestTreeCache(), mDB, *data, NilMetrics(), false)
 	so.metaStorageTree = mockMerkleTreeWithDB()
 	so.logicTree = mockMerkleTreeWithDB()
 
@@ -912,7 +890,7 @@ func stateObjectParamsWithDeeds(
 
 func stateObjectParamsWithAssetTree(
 	t *testing.T,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	db Store,
 	assetTree tree.MerkleTree,
 	root common.Hash,
@@ -923,8 +901,8 @@ func stateObjectParamsWithAssetTree(
 	mDB := getMockDB(t, db)
 
 	return &createStateObjectParams{
-		address: address,
-		db:      mDB,
+		id: id,
+		db: mDB,
 		soCallback: func(so *Object) {
 			so.assetTree = assetTree
 			so.assetTreeTxn = txn
@@ -979,12 +957,12 @@ func stateObjectParamsWithStorageTree(
 func stateObjectParamsWithInvalidMST(t *testing.T) *createStateObjectParams {
 	t.Helper()
 
-	return stateObjectParamsWithMST(t, identifiers.NilAddress, nil, nil, tests.RandomHash(t))
+	return stateObjectParamsWithMST(t, identifiers.Nil, nil, nil, tests.RandomHash(t))
 }
 
 func stateObjectParamsWithMST(
 	t *testing.T,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	db Store,
 	mst tree.MerkleTree,
 	root common.Hash,
@@ -994,8 +972,8 @@ func stateObjectParamsWithMST(
 	mDB := getMockDB(t, db)
 
 	return &createStateObjectParams{
-		address: address,
-		db:      mDB,
+		id: id,
+		db: mDB,
 		soCallback: func(so *Object) {
 			so.metaStorageTree = mst
 			so.data.StorageRoot = root
@@ -1005,7 +983,7 @@ func stateObjectParamsWithMST(
 
 func stateObjectParamsWithLogicTree(
 	t *testing.T,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	db Store,
 	logicTree tree.MerkleTree,
 	root common.Hash,
@@ -1016,8 +994,8 @@ func stateObjectParamsWithLogicTree(
 	mDB := getMockDB(t, db)
 
 	return &createStateObjectParams{
-		address: address,
-		db:      mDB,
+		id: id,
+		db: mDB,
 		soCallback: func(so *Object) {
 			so.logicTree = logicTree
 			so.data.LogicRoot = root // set logic root as it needs to be returned
@@ -1057,36 +1035,6 @@ func stateObjectParamsWithMetaContextObject(
 	}
 }
 
-// stateObjectParamsWithContextObject stores object in db if inDB is true else stores in cache
-func stateObjectParamsWithContextObject(
-	t *testing.T,
-	obj *ContextObject,
-	hash common.Hash,
-	addToDB bool,
-) *createStateObjectParams {
-	t.Helper()
-
-	if addToDB {
-		return &createStateObjectParams{
-			soCallback: func(so *Object) {
-				mDB, ok := so.db.(*MockDB)
-				require.True(t, ok)
-
-				rawData, err := obj.Bytes()
-				require.NoError(t, err)
-
-				mDB.context[hash] = rawData
-			},
-		}
-	}
-
-	return &createStateObjectParams{
-		soCallback: func(so *Object) {
-			so.cache.Add(hash, obj)
-		},
-	}
-}
-
 func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateObjectParams {
 	t.Helper()
 
@@ -1113,8 +1061,8 @@ func stateObjectParamsWithTestData(t *testing.T, areTreesNil bool) *createStateO
 			s.files[tests.RandomHash(t)] = tests.RandomHash(t).Bytes()
 			s.deeds, _ = getTestDeeds(
 				t,
-				map[string]struct{}{
-					tests.RandomHash(t).String(): {},
+				map[identifiers.Identifier]struct{}{
+					tests.RandomIdentifier(t): {},
 				})
 
 			logicIDs := tests.GetLogicIDs(t, 1)
@@ -1144,13 +1092,13 @@ func getAssetIDsAndBalances(t *testing.T, count int) ([]identifiers.AssetID, []*
 
 	ids := make([]identifiers.AssetID, count)
 	for i := 0; i < count; i++ {
-		ids[i] = tests.GetRandomAssetID(t, tests.RandomAddress(t))
+		ids[i] = tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	}
 
 	return ids, tests.GetRandomNumbers(t, 10000, count)
 }
 
-func getTestDeeds(t *testing.T, entries map[string]struct{}) (*Deeds, common.Hash) {
+func getTestDeeds(t *testing.T, entries map[identifiers.Identifier]struct{}) (*Deeds, common.Hash) {
 	t.Helper()
 
 	deeds := &Deeds{
@@ -1173,15 +1121,15 @@ func setAssetBalance(t *testing.T, so *Object, assetID identifiers.AssetID, amou
 
 func setAssetLockups(
 	t *testing.T, so *Object, assetIDs []identifiers.AssetID,
-	amounts []*big.Int, addresses []identifiers.Address, lockupAmounts []*big.Int,
+	amounts []*big.Int, ids []identifiers.Identifier, lockupAmounts []*big.Int,
 ) {
 	t.Helper()
 
-	lockups := make(map[identifiers.Address]*big.Int)
+	lockups := make(map[identifiers.Identifier]*big.Int)
 
-	if len(addresses) > 0 {
-		for idx, address := range addresses {
-			lockups[address] = lockupAmounts[idx]
+	if len(ids) > 0 {
+		for idx, id := range ids {
+			lockups[id] = lockupAmounts[idx]
 		}
 	}
 
@@ -1195,15 +1143,15 @@ func setAssetLockups(
 
 func setAssetMandates(
 	t *testing.T, so *Object, assetIDs []identifiers.AssetID,
-	amounts []*big.Int, addresses []identifiers.Address, mandateAmounts []*big.Int,
+	amounts []*big.Int, ids []identifiers.Identifier, mandateAmounts []*big.Int,
 ) {
 	t.Helper()
 
-	mandates := make(map[identifiers.Address]*Mandate)
+	mandates := make(map[identifiers.Identifier]*Mandate)
 
-	if len(addresses) > 0 {
-		for idx, address := range addresses {
-			mandates[address] = &Mandate{
+	if len(ids) > 0 {
+		for idx, id := range ids {
+			mandates[id] = &Mandate{
 				Amount:    mandateAmounts[idx],
 				ExpiresAt: uint64(time.Now().Add(1 * time.Hour).Unix()),
 			}
@@ -1247,7 +1195,7 @@ func setLogicObject(t *testing.T, so *Object, logicID identifiers.LogicID, logic
 
 func createTestAssets(
 	t *testing.T,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	db *MockDB,
 	assetIDs []identifiers.AssetID,
 	balances []*big.Int,
@@ -1256,7 +1204,7 @@ func createTestAssets(
 
 	assets := make(common.AssetMap)
 
-	so := NewStateObject(addr, mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
+	so := NewStateObject(id, mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
 
 	for i := 0; i < len(assetIDs); i++ {
 		assert.NoError(t, so.InsertNewAssetObject(assetIDs[i], &AssetObject{
@@ -1281,7 +1229,7 @@ func createTestAssetInAssetAccount(
 ) (identifiers.AssetID, common.Hash) {
 	t.Helper()
 
-	assetID, err := so.CreateAsset(so.Address(), assetInfo)
+	assetID, err := so.CreateAsset(so.Identifier(), assetInfo)
 	require.NoError(t, err)
 
 	assetRoot, err := so.commitAssets()
@@ -1319,7 +1267,7 @@ func getTestAccountKeys(t *testing.T, count int) (common.AccountKeys, common.Has
 	for i := 0; i < count; i++ {
 		keys[i] = &common.AccountKey{
 			ID:                 uint64(i),
-			PublicKey:          tests.RandomAddress(t).Bytes(),
+			PublicKey:          tests.RandomIdentifier(t).Bytes(),
 			Weight:             2000,
 			SignatureAlgorithm: 0,
 			Revoked:            false,
@@ -1351,16 +1299,14 @@ func getTestAccounts(t *testing.T, balanceHash []common.Hash, count int) ([]*com
 	return accounts, hashes
 }
 
-func getMetaContextObject(
-	t *testing.T,
-	behHash common.Hash,
-	randHash common.Hash,
-) (*MetaContextObject, common.Hash) {
+func getMetaContextObject(t *testing.T) (*MetaContextObject, common.Hash) {
 	t.Helper()
 
 	mCtx := &MetaContextObject{
-		BehaviouralContext: behHash,
-		RandomContext:      randHash,
+		ConsensusNodesHash: tests.RandomHash(t),
+		ConsensusNodes:     tests.RandomKramaIDs(t, 2),
+		ComputeContext:     tests.RandomHash(t),
+		DefaultMTQ:         44,
 	}
 
 	hash, err := mCtx.Hash()
@@ -1369,18 +1315,14 @@ func getMetaContextObject(
 	return mCtx, hash
 }
 
-func getMetaContextObjects(t *testing.T, hashes []common.Hash) ([]*MetaContextObject, []common.Hash) {
+func getMetaContextObjects(t *testing.T, count int) ([]*MetaContextObject, []common.Hash) {
 	t.Helper()
 
-	count := len(hashes)
-	mObj := make([]*MetaContextObject, count/2)
-	mHashes := make([]common.Hash, count/2)
+	mObj := make([]*MetaContextObject, count)
+	mHashes := make([]common.Hash, count)
 
-	j := 0
-
-	for i := 0; i < count; i += 2 {
-		mObj[j], mHashes[j] = getMetaContextObject(t, hashes[i], hashes[i+1])
-		j += 1
+	for i := 0; i < count; i += 1 {
+		mObj[i], mHashes[i] = getMetaContextObject(t)
 	}
 
 	return mObj, mHashes
@@ -1401,21 +1343,6 @@ func getRawMetaObjects(t *testing.T, mObj []*MetaContextObject) [][]byte {
 	return rawMetaObjects
 }
 
-func getRawContextObjects(t *testing.T, obj []*ContextObject) [][]byte {
-	t.Helper()
-
-	rawContextObjects := make([][]byte, len(obj))
-
-	for i := 0; i < len(obj); i++ {
-		rawContextObject, err := polo.Polorize(obj[i])
-		assert.NoError(t, err)
-
-		rawContextObjects[i] = rawContextObject
-	}
-
-	return rawContextObjects
-}
-
 func getStateHashes(t *testing.T, so []*Object) []common.Hash {
 	t.Helper()
 
@@ -1431,7 +1358,7 @@ func getStateHashes(t *testing.T, so []*Object) []common.Hash {
 	return stateHashes
 }
 
-func getTestAssetDescriptor(t *testing.T, operator identifiers.Address, symbol string) *common.AssetDescriptor {
+func getTestAssetDescriptor(t *testing.T, operator identifiers.Identifier, symbol string) *common.AssetDescriptor {
 	t.Helper()
 
 	return &common.AssetDescriptor{
@@ -1441,26 +1368,26 @@ func getTestAssetDescriptor(t *testing.T, operator identifiers.Address, symbol s
 		Dimension:  4,
 		IsStateFul: false,
 		IsLogical:  false,
-		LogicID:    tests.GetLogicID(t, tests.RandomAddress(t)),
+		LogicID:    identifiers.RandomLogicIDv0().AsIdentifier(),
 	}
 }
 
 func createMetaStorageTree(
 	t *testing.T,
 	db Store,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	logicID identifiers.LogicID,
 	storageKeys [][]byte,
 	storageValues [][]byte,
 ) (*tree.KramaHashTree, common.Hash) {
 	t.Helper()
 
-	_, storageRoot := createTestKramaHashTree(t, db, address, storage.Storage, storageKeys, storageValues)
+	_, storageRoot := createTestKramaHashTree(t, db, id, storage.Storage, storageKeys, storageValues)
 
 	return createTestKramaHashTree(
 		t,
 		db,
-		address,
+		id,
 		storage.Storage,
 		[][]byte{logicID.Bytes()},
 		[][]byte{storageRoot.Bytes()})
@@ -1469,14 +1396,14 @@ func createMetaStorageTree(
 func createTestKramaHashTree(
 	t *testing.T,
 	db Store,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	prefix storage.PrefixTag,
 	keys [][]byte,
 	values [][]byte,
 ) (*tree.KramaHashTree, common.Hash) {
 	t.Helper()
 
-	kt, err := tree.NewKramaHashTree(address, common.NilHash, db, blake256.New(),
+	kt, err := tree.NewKramaHashTree(id, common.NilHash, db, blake256.New(),
 		prefix, tests.NewTestTreeCache(), tree.NilMetrics())
 	require.NoError(t, err)
 
@@ -1586,56 +1513,6 @@ func getActiveStorageTreesWithFlushHook(
 	return activeStorageTrees
 }
 
-func getContextObjFromCache(t *testing.T, so *Object, hash common.Hash) *ContextObject {
-	t.Helper()
-
-	bCtxData, ok := so.cache.Get(hash)
-	require.True(t, ok)
-	ctx, ok := bCtxData.(*ContextObject)
-	require.True(t, ok)
-
-	return ctx
-}
-
-func getMetaContextObjFromCache(t *testing.T, so *Object, hash common.Hash) *MetaContextObject {
-	t.Helper()
-
-	bCtxData, ok := so.cache.Get(hash)
-	require.True(t, ok)
-	ctx, ok := bCtxData.(*MetaContextObject)
-	require.True(t, ok)
-
-	return ctx
-}
-
-func getMetaContextObjectFromDirtyEntries(t *testing.T, s *Object, hash common.Hash) *MetaContextObject {
-	t.Helper()
-
-	key := common.BytesToHex(storage.ContextObjectKey(s.address, hash))
-	rawData, err := s.GetDirtyEntry(key)
-	require.NoError(t, err)
-
-	obj := new(MetaContextObject)
-	err = obj.FromBytes(rawData)
-	require.NoError(t, err)
-
-	return obj
-}
-
-func getContextObjectFromDirtyEntries(t *testing.T, s *Object, hash common.Hash) *ContextObject {
-	t.Helper()
-
-	key := common.BytesToHex(storage.ContextObjectKey(s.address, hash))
-	rawData, err := s.GetDirtyEntry(key)
-	require.NoError(t, err)
-
-	obj := new(ContextObject)
-	err = obj.FromBytes(rawData)
-	require.NoError(t, err)
-
-	return obj
-}
-
 func checkForTesseractInSMCache(
 	t *testing.T,
 	sm *StateManager,
@@ -1658,38 +1535,6 @@ func checkForTesseractInSMCache(
 	require.True(t, ok)
 
 	require.Equal(t, ts, cachedTS) // make sure cached tesseract matches
-}
-
-func checkIfContextMatches(
-	t *testing.T,
-	expectedBeh *ContextObject,
-	expectedRand *ContextObject,
-	beh []kramaid.KramaID,
-	rand []kramaid.KramaID,
-) {
-	t.Helper()
-
-	require.Equal(t, expectedBeh.Ids, beh)
-	require.Equal(t, expectedRand.Ids, rand)
-}
-
-func checkIfNodesetEqual(
-	t *testing.T,
-	expectedBeh []kramaid.KramaID,
-	expectedRand []kramaid.KramaID,
-	expectedBehPk [][]byte,
-	expectedRandPk [][]byte,
-	beh []kramaid.KramaID,
-	rand []kramaid.KramaID,
-	behPk [][]byte,
-	randPk [][]byte,
-) {
-	t.Helper()
-
-	require.Equal(t, expectedBeh, beh)
-	require.Equal(t, expectedRand, rand)
-	require.Equal(t, expectedBehPk, behPk)
-	require.Equal(t, expectedRandPk, randPk)
 }
 
 func checkIfTreesAreEqual(t *testing.T, oldTree, newTree tree.MerkleTree) {
@@ -1720,12 +1565,12 @@ func checkIfTxnsAreEqual(t *testing.T, oldTxn, newTxn *iradix.Txn) {
 	require.Equal(t, oldTxn.CommitOnly().Len(), newTxn.CommitOnly().Len())
 }
 
-func validateStateObject(t *testing.T, so *Object, accType common.AccountType, address identifiers.Address,
+func validateStateObject(t *testing.T, so *Object, accType common.AccountType, id identifiers.Identifier,
 	isGenesis bool,
 ) {
 	t.Helper()
 
-	require.Equal(t, address, so.address)
+	require.Equal(t, id, so.id)
 	require.Equal(t, accType, so.accType)
 	require.Equal(t, isGenesis, so.isGenesis)
 	require.NotNil(t, so.db)
@@ -1737,7 +1582,7 @@ func checkForStateObject(t *testing.T, expectedObj *Object, obj *Object) {
 	t.Helper()
 
 	require.Equal(t, expectedObj.data, obj.data)
-	require.Equal(t, expectedObj.address, obj.address)
+	require.Equal(t, expectedObj.id, obj.id)
 	require.Equal(t, expectedObj.accType, obj.accType)
 }
 
@@ -1801,11 +1646,11 @@ func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int, asse
 
 func checkForMandates(
 	t *testing.T, sObj *Object, assetID identifiers.AssetID,
-	address identifiers.Address, expectedAmount *big.Int,
+	id identifiers.Identifier, expectedAmount *big.Int,
 ) {
 	t.Helper()
 
-	mandate, err := sObj.GetMandate(assetID, address)
+	mandate, err := sObj.GetMandate(assetID, id)
 
 	if expectedAmount.Cmp(big.NewInt(0)) == 0 {
 		require.Error(t, err)
@@ -1820,11 +1665,11 @@ func checkForMandates(
 
 func checkForLockups(
 	t *testing.T, sObj *Object, assetID identifiers.AssetID,
-	address identifiers.Address, expectedAmount *big.Int,
+	id identifiers.Identifier, expectedAmount *big.Int,
 ) {
 	t.Helper()
 
-	lockupAmount, err := sObj.GetLockup(assetID, address)
+	lockupAmount, err := sObj.GetLockup(assetID, id)
 
 	if expectedAmount.Cmp(big.NewInt(0)) == 0 {
 		require.Error(t, err)
@@ -1852,7 +1697,7 @@ func checkForDeeds(
 	require.Equal(t, expectedDeedsHash, actualDeedsHash)
 
 	// check if deeds data in dirty entries and state object is same
-	key := common.BytesToHex(storage.DeedsKey(sObj.address, expectedDeedsHash))
+	key := common.BytesToHex(storage.DeedsKey(sObj.id, expectedDeedsHash))
 	actualDeedsData, err := sObj.GetDirtyEntry(key) // get deeds data from dirty entries
 	require.NoError(t, err)
 
@@ -1877,7 +1722,7 @@ func checkForAccount(
 	require.Equal(t, expectedAccHash, generatedAccHash)
 
 	// check if account data in dirty entries and state object is same
-	key := common.BytesToHex(storage.AccountKey(sObj.address, expectedAccHash))
+	key := common.BytesToHex(storage.AccountKey(sObj.id, expectedAccHash))
 	actualAccData, err := sObj.GetDirtyEntry(key) // get account data from dirty entries
 	require.NoError(t, err)
 	require.Equal(t, expectedAccData, actualAccData)
@@ -1886,43 +1731,26 @@ func checkForAccount(
 func checkForContextObject(
 	t *testing.T,
 	sObj *Object,
-	ctxObject ContextObject,
-	actualCtxHash common.Hash,
+	ctxObject *MetaContextObject,
 ) {
 	t.Helper()
 
-	expectedObjData, err := ctxObject.Bytes()
+	expectedCtxHash, err := ctxObject.Hash()
 	require.NoError(t, err)
 
-	expectedCtxHash := common.GetHash(expectedObjData)
-	require.Equal(t, expectedCtxHash, actualCtxHash)
+	objectContextHash, err := sObj.metaContext.Hash()
+	require.NoError(t, err)
+
+	require.Equal(t, expectedCtxHash, objectContextHash)
+
+	rawBytes, err := ctxObject.Bytes()
+	require.NoError(t, err)
 
 	// check if ctxObject data in dirty entries matches
-	key := common.BytesToHex(storage.ContextObjectKey(sObj.address, expectedCtxHash))
+	key := common.BytesToHex(storage.ContextObjectKey(sObj.id, expectedCtxHash))
 	actualObjData, err := sObj.GetDirtyEntry(key) // get ctx object data from dirty entries
 	require.NoError(t, err)
-	require.Equal(t, expectedObjData, actualObjData)
-}
-
-func checkForMetaContextObject(
-	t *testing.T,
-	sObj *Object,
-	ctxObject MetaContextObject,
-	actualCtxHash common.Hash,
-) {
-	t.Helper()
-
-	expectedObjData, err := ctxObject.Bytes()
-	require.NoError(t, err)
-
-	expectedCtxHash := common.GetHash(expectedObjData)
-	require.Equal(t, expectedCtxHash, actualCtxHash)
-
-	// check if ctxObject data in dirty entries matches
-	key := common.BytesToHex(storage.ContextObjectKey(sObj.address, expectedCtxHash))
-	actualObjData, err := sObj.GetDirtyEntry(key) // get ctx object data from dirty entries
-	require.NoError(t, err)
-	require.Equal(t, expectedObjData, actualObjData)
+	require.Equal(t, rawBytes, actualObjData)
 }
 
 func checkIfStorageTreesAreCommitted(
@@ -2070,27 +1898,27 @@ func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []identifiers.Logic
 	}
 }
 
-func checkForContextUpdate(
+func checkForConsensusNodesUpdate(
 	t *testing.T,
 	sObj *Object,
-	cObj []*ContextObject,
-	metaHash common.Hash,
-	behaviouralNodes []kramaid.KramaID,
-	randomNodes []kramaid.KramaID,
+	oldMetaObject *MetaContextObject,
+	consensusNodes []kramaid.KramaID,
 ) {
 	t.Helper()
 
-	// get context objects from dirty entries
-	actualMetaContext := getMetaContextObjectFromDirtyEntries(t, sObj, metaHash)
-	actualBehaviouralContext := getContextObjectFromDirtyEntries(t, sObj, actualMetaContext.BehaviouralContext)
-	actualRandomContext := getContextObjectFromDirtyEntries(t, sObj, actualMetaContext.RandomContext)
+	consensusNodesHash, err := common.PoloHash(consensusNodes)
+	require.NoError(t, err)
 
-	cObj[0].Ids = append(cObj[0].Ids, behaviouralNodes...)
-	cObj[1].Ids = append(cObj[1].Ids, randomNodes...)
+	require.Equal(t, sObj.metaContext.ConsensusNodes, consensusNodes)
 
-	// check if context objects has updated nodes
-	require.Equal(t, cObj[0].Ids, actualBehaviouralContext.Ids)
-	require.Equal(t, cObj[1].Ids, actualRandomContext.Ids)
+	require.Equal(t, sObj.metaContext.ConsensusNodesHash, consensusNodesHash)
+
+	// we should also ensure that only consensusNodes related fields are updated
+	if oldMetaObject != nil {
+		require.Equal(t, sObj.metaContext.ComputeContext, oldMetaObject.ComputeContext)
+		require.Equal(t, sObj.metaContext.StorageContext, oldMetaObject.StorageContext)
+		require.Equal(t, sObj.metaContext.DefaultMTQ, oldMetaObject.DefaultMTQ)
+	}
 }
 
 func checkForEntryInMST(t *testing.T, s *Object, key []byte, value []byte) {
@@ -2150,8 +1978,8 @@ func createAndSignTesseracts(t *testing.T, count int) ([]*common.Tesseract, [][]
 
 	for i := 0; i < count; i++ {
 		tesseract := tests.CreateTesseract(t, &tests.CreateTesseractParams{
-			Addresses: []identifiers.Address{tests.RandomAddress(t), tests.RandomAddress(t)},
-			Heights:   []uint64{1, 4},
+			IDs:     []identifiers.Identifier{tests.RandomIdentifier(t), tests.RandomIdentifier(t)},
+			Heights: []uint64{1, 4},
 		})
 
 		rawData, err := tesseract.SignBytes()
@@ -2195,7 +2023,7 @@ func getDirtyEntries(t *testing.T, count int) Storage {
 	d := make(Storage, count)
 
 	for i := 0; i < count; i++ {
-		d[tests.RandomHash(t).Hex()] = tests.RandomAddress(t).Bytes()
+		d[tests.RandomHash(t).Hex()] = tests.RandomIdentifier(t).Bytes()
 	}
 
 	return d
@@ -2219,42 +2047,7 @@ func CheckAssetCreation(
 	require.NoError(t, err)
 
 	require.Equal(t, actualDeedsData, expectedDeedsData)
-	require.Equal(t, s.Address(), assetDescriptor.Operator) // check if address is assigned to operator
-}
-
-func getTestAssetID(addr identifiers.Address, asset *common.AssetDescriptor) identifiers.AssetID {
-	identifiers.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, uint16(asset.Standard), addr)
-
-	return identifiers.NewAssetIDv0(asset.IsLogical, asset.IsStateFul, asset.Dimension, uint16(asset.Standard), addr)
-}
-
-func getContextObjects(
-	t *testing.T,
-	ids []kramaid.KramaID,
-	idsPerObj int,
-	objCount int,
-) ([]*ContextObject, []common.Hash) {
-	t.Helper()
-
-	obj := make([]*ContextObject, objCount)
-	hashes := make([]common.Hash, objCount)
-
-	for i := 0; i < objCount; i++ {
-		copiedIds := make([]kramaid.KramaID, idsPerObj)
-
-		copy(copiedIds, ids[i*idsPerObj:i*idsPerObj+idsPerObj])
-
-		obj[i] = &ContextObject{
-			Ids: copiedIds,
-		}
-
-		hash, err := obj[i].Hash()
-		require.NoError(t, err)
-
-		hashes[i] = hash
-	}
-
-	return obj, hashes
+	require.Equal(t, s.Identifier(), assetDescriptor.Operator) // check if id is assigned to operator
 }
 
 func getStorageTxnsWithEntries(
@@ -2307,3 +2100,55 @@ func getTxnWithLogicObjects(t *testing.T, objects ...*LogicObject) *iradix.Txn {
 
 	return txn
 }
+
+/*
+
+func getMetaContextObjFromCache(t *testing.T, so *Object, hash common.Hash) *MetaContextObject {
+	t.Helper()
+
+	bCtxData, ok := so.cache.Get(hash)
+	require.True(t, ok)
+	ctx, ok := bCtxData.(*MetaContextObject)
+	require.True(t, ok)
+
+	return ctx
+}
+
+func getMetaContextObjectFromDirtyEntries(t *testing.T, s *Object, hash common.Hash) *MetaContextObject {
+	t.Helper()
+
+	key := common.BytesToHex(storage.ContextObjectKey(s.id, hash))
+	rawData, err := s.GetDirtyEntry(key)
+	require.NoError(t, err)
+
+	obj := new(MetaContextObject)
+	err = obj.FromBytes(rawData)
+	require.NoError(t, err)
+
+	return obj
+}
+
+
+func checkForMetaContextObject(
+	t *testing.T,
+	sObj *Object,
+	ctxObject MetaContextObject,
+	actualCtxHash common.Hash,
+) {
+	t.Helper()
+
+	expectedObjData, err := ctxObject.Bytes()
+	require.NoError(t, err)
+
+	expectedCtxHash := common.GetHash(expectedObjData)
+	require.Equal(t, expectedCtxHash, actualCtxHash)
+
+	// check if ctxObject data in dirty entries matches
+	key := common.BytesToHex(storage.ContextObjectKey(sObj.id, expectedCtxHash))
+	actualObjData, err := sObj.GetDirtyEntry(key) // get ctx object data from dirty entries
+	require.NoError(t, err)
+	require.Equal(t, expectedObjData, actualObjData)
+}
+
+
+*/

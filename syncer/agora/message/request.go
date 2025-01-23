@@ -9,12 +9,12 @@ import (
 )
 
 type AgoraRequestMsg struct {
-	SessionID identifiers.Address
+	SessionID identifiers.Identifier
 	StateHash cid.CID
 	WantList  []cid.CID
 }
 
-func (req *AgoraRequestMsg) GetSessionID() identifiers.Address {
+func (req *AgoraRequestMsg) GetSessionID() identifiers.Identifier {
 	return req.SessionID
 }
 

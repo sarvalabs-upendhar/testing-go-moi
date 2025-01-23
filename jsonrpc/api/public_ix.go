@@ -75,12 +75,12 @@ func validateArgumentsWithSign(args *rpcargs.SendIX) (*common.IxData, error) {
 }
 
 func validateIxData(ixData *common.IxData, requiresFuel bool) error {
-	if ixData.Sender.Address.IsNil() {
-		return common.ErrInvalidAddress
+	if ixData.Sender.ID.IsNil() {
+		return common.ErrInvalidIdentifier
 	}
 
 	// Reject genesis account interaction
-	if ixData.Sender.Address == common.SargaAddress {
+	if ixData.Sender.ID == common.SargaAccountID {
 		return common.ErrGenesisAccount
 	}
 
@@ -147,7 +147,7 @@ func validateIxOps(ixOps []common.IxOpRaw) error {
 func constructIxn(sm backend.StateManager, ixData *common.IxData) (ix *common.Interaction, err error) {
 	for _, op := range ixData.IxOps {
 		if op.Type == common.IxLogicDeploy || op.Type == common.IxAssetCreate {
-			sequenceID, err := sm.GetSequenceID(ixData.Sender.Address, ixData.Sender.KeyID, common.NilHash)
+			sequenceID, err := sm.GetSequenceID(ixData.Sender.ID, ixData.Sender.KeyID, common.NilHash)
 			if err != nil {
 				return nil, err
 			}
@@ -195,7 +195,7 @@ func createIxData(ixArgs *rpcargs.IxArgs) *common.IxData {
 		ixData.Participants = make([]common.IxParticipant, len(ixArgs.Participants))
 		for idx, participant := range ixArgs.Participants {
 			ixData.Participants[idx] = common.IxParticipant{
-				Address:  participant.Address,
+				ID:       participant.ID,
 				LockType: participant.LockType,
 			}
 		}

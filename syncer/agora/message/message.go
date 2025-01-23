@@ -5,5 +5,5 @@ import (
 )
 
 type Message interface {
-	GetSessionID() identifiers.Address
+	GetSessionID() identifiers.Identifier
 }

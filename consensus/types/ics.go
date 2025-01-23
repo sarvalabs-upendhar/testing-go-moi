@@ -9,7 +9,6 @@ import (
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/utils"
 	gtypes "github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-polo"
 )
@@ -60,7 +59,7 @@ func NewICS(
 	reqTime time.Time,
 	selfID kramaid.KramaID,
 	committee *ICSCommittee,
-	participants map[identifiers.Address]*common.Participant,
+	participants map[identifiers.Identifier]*common.Participant,
 	viewInfos common.Views,
 	currentView uint64,
 ) *ClusterState {
@@ -92,8 +91,8 @@ func (cs *ClusterState) SelfKramaID() kramaid.KramaID {
 	return cs.selfID
 }
 
-func (cs *ClusterState) ParticipantHeight(addr identifiers.Address) uint64 {
-	ps, ok := cs.Participants[addr]
+func (cs *ClusterState) ParticipantHeight(id identifiers.Identifier) uint64 {
+	ps, ok := cs.Participants[id]
 	if ok {
 		return ps.Height
 	}
@@ -101,8 +100,8 @@ func (cs *ClusterState) ParticipantHeight(addr identifiers.Address) uint64 {
 	return 0
 }
 
-func (cs *ClusterState) ParticipantTSHash(addr identifiers.Address) common.Hash {
-	ps, ok := cs.Participants[addr]
+func (cs *ClusterState) ParticipantTSHash(id identifiers.Identifier) common.Hash {
+	ps, ok := cs.Participants[id]
 	if ok {
 		return ps.TSHash()
 	}
@@ -165,8 +164,8 @@ func (cs *ClusterState) IsOperatorIncluded() bool {
 	return cs.operatorIncluded
 }
 
-func (cs *ClusterState) ExcludeParticipantsFromICS(addrs common.Addresses) {
-	cs.Participants.ExcludeFromICS(addrs)
+func (cs *ClusterState) ExcludeParticipantsFromICS(ids common.IdentifierList) {
+	cs.Participants.ExcludeFromICS(ids)
 
 	for _, info := range cs.Participants {
 		if info.ExcludedFromICS() {
@@ -175,10 +174,10 @@ func (cs *ClusterState) ExcludeParticipantsFromICS(addrs common.Addresses) {
 	}
 }
 
-func (cs *ClusterState) NewHeights() map[identifiers.Address]uint64 {
-	heights := make(map[identifiers.Address]uint64, len(cs.Participants))
-	for addr, ps := range cs.Participants {
-		heights[addr] = ps.NewHeight()
+func (cs *ClusterState) NewHeights() map[identifiers.Identifier]uint64 {
+	heights := make(map[identifiers.Identifier]uint64, len(cs.Participants))
+	for id, ps := range cs.Participants {
+		heights[id] = ps.NewHeight()
 	}
 
 	return heights
@@ -216,7 +215,7 @@ func (cs *ClusterState) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 	return m, nil
 }
 
-func (cs *ClusterState) GetBehaviouralContextDelta(
+func (cs *ClusterState) GetConsensusNodesDelta(
 	nodeSetPosition int,
 	newPeer kramaid.KramaID,
 ) (added, replaced kramaid.KramaID) {
@@ -226,52 +225,11 @@ func (cs *ClusterState) GetBehaviouralContextDelta(
 		}
 	}
 
-	if len(cs.committee.Sets[nodeSetPosition].Infos) >= common.BehaviouralContextSize {
+	if len(cs.committee.Sets[nodeSetPosition].Infos) >= common.ConsensusNodesSize {
 		replaced = cs.committee.Sets[nodeSetPosition].Infos[0].ID
 	}
 
 	return newPeer, replaced
-}
-
-func (cs *ClusterState) GetRandomContextDelta(
-	nodeSetPosition int,
-	requiredCount int,
-	skipPeers ...kramaid.KramaID,
-) (addedPeers, replacedPeers []kramaid.KramaID) {
-	addedPeers = make([]kramaid.KramaID, 0, requiredCount)
-
-	if cs.committee.Sets[nodeSetPosition] != nil {
-		if count := len(cs.committee.Sets[nodeSetPosition].Infos) + requiredCount - common.StochasticSetSize; count > 0 {
-			replacedPeers = cs.committee.Sets[nodeSetPosition].KramaIDs()[0:count]
-		}
-	}
-
-	if len(cs.TrustedPeers) > 0 {
-		for _, trustedPeer := range cs.TrustedPeers {
-			if !utils.ContainsKramaID(skipPeers, trustedPeer) {
-				addedPeers = append(addedPeers, trustedPeer)
-			}
-
-			if len(addedPeers) == requiredCount {
-				break
-			}
-		}
-
-		return addedPeers, replacedPeers
-	}
-
-	set := cs.committee.RandomSet()
-	for index, info := range set.Infos {
-		if set.Responses.GetIndex(index) && !utils.ContainsKramaID(skipPeers, info.ID) {
-			addedPeers = append(addedPeers, info.ID)
-		}
-
-		if len(addedPeers) == requiredCount {
-			break
-		}
-	}
-
-	return addedPeers, replacedPeers
 }
 
 func (cs *ClusterState) LocalViewInfo() []*common.ViewInfo {
@@ -427,9 +385,9 @@ func (cs *ClusterState) IncrementICSRespCount(count int) {
 func (cs *ClusterState) ContextDelta() common.ContextDelta {
 	contextDelta := make(common.ContextDelta)
 
-	for addr, ps := range cs.Participants {
+	for id, ps := range cs.Participants {
 		if !ps.ExcludeFromICS && ps.ContextDelta != nil {
-			contextDelta[addr] = ps.ContextDelta
+			contextDelta[id] = ps.ContextDelta
 
 			continue
 		}
@@ -451,7 +409,7 @@ func (cs *ClusterState) PrepareQc() *PreparedInfo {
 
 type AccountInfo struct {
 	AccType       common.AccountType
-	Address       identifiers.Address
+	ID            identifiers.Identifier
 	IsGenesis     bool
 	ContextHash   common.Hash
 	TesseractHash common.Hash
@@ -462,43 +420,43 @@ type AccountInfo struct {
 func AccountInfoFromAccMetaInfo(metaInfo *common.AccountMetaInfo, isGenesis bool) *AccountInfo {
 	return &AccountInfo{
 		AccType:       metaInfo.Type,
-		Address:       metaInfo.Address,
+		ID:            metaInfo.ID,
 		IsGenesis:     isGenesis,
 		Height:        metaInfo.Height,
 		TesseractHash: metaInfo.TesseractHash,
 	}
 }
 
-type AccountInfos map[identifiers.Address]*AccountInfo
+type AccountInfos map[identifiers.Identifier]*AccountInfo
 
-func (a AccountInfos) GetLatestHash(addr identifiers.Address) common.Hash {
-	if v, ok := a[addr]; ok {
+func (a AccountInfos) GetLatestHash(id identifiers.Identifier) common.Hash {
+	if v, ok := a[id]; ok {
 		return v.TesseractHash
 	}
 
 	return common.NilHash
 }
 
-func (a AccountInfos) GetHeight(addr identifiers.Address) uint64 {
-	if v, ok := a[addr]; ok {
+func (a AccountInfos) GetHeight(id identifiers.Identifier) uint64 {
+	if v, ok := a[id]; ok {
 		return v.Height
 	}
 
 	return 0
 }
 
-func (a AccountInfos) IsGenesis(addr identifiers.Address) bool {
-	return a[addr].IsGenesis
+func (a AccountInfos) IsGenesis(id identifiers.Identifier) bool {
+	return a[id].IsGenesis
 }
 
-func (a AccountInfos) Address() []identifiers.Address {
-	addrs := make([]identifiers.Address, 0, len(a))
+func (a AccountInfos) Identifiers() []identifiers.Identifier {
+	ids := make([]identifiers.Identifier, 0, len(a))
 
-	for addr := range a {
-		addrs = append(addrs, addr)
+	for id := range a {
+		ids = append(ids, id)
 	}
 
-	return addrs
+	return ids
 }
 
 func GenerateClusterID() (common.ClusterID, error) {

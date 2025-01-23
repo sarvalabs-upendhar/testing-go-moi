@@ -11,10 +11,10 @@ import (
 
 // TesseractArgs is an argument wrapper for retrieving the latest ts
 type TesseractArgs struct {
-	Address          identifiers.Address   `json:"address"` // Address for which to retrieve the latest ts
-	WithInteractions bool                  `json:"with_interactions"`
-	WithCommitInfo   bool                  `json:"with_commit_info"`
-	Options          TesseractNumberOrHash `json:"options"`
+	ID               identifiers.Identifier `json:"id"` // ID for which to retrieve the latest ts
+	WithInteractions bool                   `json:"with_interactions"`
+	WithCommitInfo   bool                   `json:"with_commit_info"`
+	Options          TesseractNumberOrHash  `json:"options"`
 }
 
 type GetAssetInfoArgs struct {
@@ -23,31 +23,31 @@ type GetAssetInfoArgs struct {
 }
 
 type GetAssetMandateOrLockupArgs struct {
-	Address identifiers.Address   `json:"address"`
-	Options TesseractNumberOrHash `json:"options"`
+	ID      identifiers.Identifier `json:"id"`
+	Options TesseractNumberOrHash  `json:"options"`
 }
 
 type QueryArgs struct {
-	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest ts
-	Options TesseractNumberOrHash `json:"options"`
+	ID      identifiers.Identifier `json:"id"` // ID for which to retrieve the latest ts
+	Options TesseractNumberOrHash  `json:"options"`
 }
 
 // BalArgs is an argument wrapper for retrieving balance of an asset
 type BalArgs struct {
-	Address identifiers.Address   `json:"address"`  // Address for which to retrieve the balance
-	AssetID identifiers.AssetID   `json:"asset_id"` // AssetID for which to retrieve balance
-	Options TesseractNumberOrHash `json:"options"`
+	ID      identifiers.Identifier `json:"id"`       // ID for which to retrieve the balance
+	AssetID identifiers.AssetID    `json:"asset_id"` // AssetID for which to retrieve balance
+	Options TesseractNumberOrHash  `json:"options"`
 }
 
 type ContextInfoArgs struct {
-	Address identifiers.Address   `json:"address"` // Address for which to retrieve the latest ts
-	Options TesseractNumberOrHash `json:"options"`
+	ID      identifiers.Identifier `json:"id"` // ID for which to retrieve the latest ts
+	Options TesseractNumberOrHash  `json:"options"`
 }
 
 type InteractionByTesseract struct {
-	Address identifiers.Address   `json:"address"`
-	Options TesseractNumberOrHash `json:"options"`
-	IxIndex *hexutil.Uint64       `json:"ix_index"`
+	ID      identifiers.Identifier `json:"id"`
+	Options TesseractNumberOrHash  `json:"options"`
+	IxIndex *hexutil.Uint64        `json:"ix_index"`
 }
 
 type InteractionByHashArgs struct {
@@ -60,31 +60,31 @@ type ReceiptArgs struct {
 }
 
 type GetAccountArgs struct {
-	Address identifiers.Address   `json:"address"`
-	Options TesseractNumberOrHash `json:"options"`
+	ID      identifiers.Identifier `json:"id"`
+	Options TesseractNumberOrHash  `json:"options"`
 }
 
 type GetAccountKeysArgs struct {
-	Address identifiers.Address   `json:"address"`
-	Options TesseractNumberOrHash `json:"options"`
+	ID      identifiers.Identifier `json:"id"`
+	Options TesseractNumberOrHash  `json:"options"`
 }
 
 type LogicEnlistedArgs struct {
-	Address identifiers.Address `json:"address"`
-	LogicID identifiers.LogicID `json:"logic_id"`
+	ID      identifiers.Identifier `json:"id"`
+	LogicID identifiers.LogicID    `json:"logic_id"`
 }
 
 type InteractionCountArgs struct {
-	Address identifiers.Address   `json:"address"`
-	KeyID   uint64                `json:"key_id"`
-	Options TesseractNumberOrHash `json:"options"`
+	ID      identifiers.Identifier `json:"id"`
+	KeyID   uint64                 `json:"key_id"`
+	Options TesseractNumberOrHash  `json:"options"`
 }
 
 type GetLogicStorageArgs struct {
-	Address    identifiers.Address   `json:"address"`
-	LogicID    identifiers.LogicID   `json:"logic_id"`
-	StorageKey hexutil.Bytes         `json:"storage_key"`
-	Options    TesseractNumberOrHash `json:"options"`
+	ID         identifiers.Identifier `json:"id"`
+	LogicID    identifiers.LogicID    `json:"logic_id"`
+	StorageKey hexutil.Bytes          `json:"storage_key"`
+	Options    TesseractNumberOrHash  `json:"options"`
 }
 
 type LogicManifestArgs struct {
@@ -94,13 +94,13 @@ type LogicManifestArgs struct {
 }
 
 type CallArgs struct {
-	IxArgs  *IxArgs                                        `json:"ix_args"`
-	Options map[identifiers.Address]*TesseractNumberOrHash `json:"options"`
+	IxArgs  *IxArgs                                           `json:"ix_args"`
+	Options map[identifiers.Identifier]*TesseractNumberOrHash `json:"options"`
 }
 
 type SyncStatusRequest struct {
-	Address         identifiers.Address `json:"address"`
-	PendingAccounts bool                `json:"pending_accounts"`
+	ID              identifiers.Identifier `json:"id"`
+	PendingAccounts bool                   `json:"pending_accounts"`
 }
 
 // Public debug args
@@ -127,7 +127,7 @@ type DiagnosisRequest struct {
 }
 
 type SyncJobRequest struct {
-	Address identifiers.Address `json:"address"`
+	ID identifiers.Identifier `json:"id"`
 }
 
 type PeerScoreRequest struct{}
@@ -150,8 +150,8 @@ type IxOp struct {
 }
 
 type IxParticipant struct {
-	Address  identifiers.Address `json:"address"`
-	LockType common.LockType     `json:"lock_type"`
+	ID       identifiers.Identifier `json:"id"`
+	LockType common.LockType        `json:"lock_type"`
 }
 
 type IxConsensusPreference struct {
@@ -165,8 +165,8 @@ type IxPreferences struct {
 }
 
 type IxArgs struct {
-	Sender common.Sender       `json:"sender"`
-	Payer  identifiers.Address `json:"payer"`
+	Sender common.Sender          `json:"sender"`
+	Payer  identifiers.Identifier `json:"payer"`
 
 	SequenceID hexutil.Uint64 `json:"sequence_id"`
 
@@ -187,7 +187,7 @@ type IxArgs struct {
 type ContentArgs struct{}
 
 type IxPoolArgs struct {
-	Address identifiers.Address `json:"address"`
+	ID identifiers.Identifier `json:"id"`
 }
 
 type StatusArgs struct{}
@@ -201,8 +201,8 @@ type NetArgs struct{}
 // Other args
 
 type GetLogicIDArgs struct {
-	Address identifiers.Address   `json:"address"`
-	Options TesseractNumberOrHash `json:"options"`
+	ID      identifiers.Identifier `json:"id"`
+	Options TesseractNumberOrHash  `json:"options"`
 }
 
 type RPCAssetCreation struct {
@@ -224,8 +224,8 @@ type RPCAssetSupply struct {
 }
 
 type RPCParticipantCreate struct {
-	Address identifiers.Address `json:"address"`
-	Amount  *hexutil.Big        `json:"amount"`
+	ID     identifiers.Identifier `json:"id"`
+	Amount *hexutil.Big           `json:"amount"`
 }
 
 type KeyAddPayload struct {
@@ -270,11 +270,11 @@ func GetRPCAccountConfigurePayload(payload *common.AccountConfigurePayload) *RPC
 }
 
 type RPCAssetAction struct {
-	Benefactor  identifiers.Address `json:"benefactor"`
-	Beneficiary identifiers.Address `json:"beneficiary"`
-	AssetID     identifiers.AssetID `json:"asset_id"`
-	Amount      *hexutil.Big        `json:"amount"`
-	Timestamp   *hexutil.Uint64     `json:"timestamp"`
+	Benefactor  identifiers.Identifier `json:"benefactor"`
+	Beneficiary identifiers.Identifier `json:"beneficiary"`
+	AssetID     identifiers.AssetID    `json:"asset_id"`
+	Amount      *hexutil.Big           `json:"amount"`
+	Timestamp   *hexutil.Uint64        `json:"timestamp"`
 }
 
 type RPCLogicPayload struct {
@@ -286,7 +286,7 @@ type RPCLogicPayload struct {
 
 func (l *RPCLogicPayload) LogicPayload() *common.LogicPayload {
 	return &common.LogicPayload{
-		Logic:    identifiers.LogicID(l.LogicID),
+		Logic:    identifiers.MustLogicIDFromHex(l.LogicID),
 		Calldata: l.Calldata,
 		Callsite: l.Callsite,
 	}
@@ -299,7 +299,7 @@ func RPCLogicPayloadFromLogicPayload(payload *common.LogicPayload) *RPCLogicPayl
 
 	return &RPCLogicPayload{
 		Manifest: payload.Manifest,
-		LogicID:  string(payload.Logic),
+		LogicID:  payload.Logic.String(),
 		Callsite: payload.Callsite,
 		Calldata: payload.Calldata,
 	}

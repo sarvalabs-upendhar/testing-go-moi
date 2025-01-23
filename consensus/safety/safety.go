@@ -20,15 +20,15 @@ type vault interface {
 }
 
 type store interface {
-	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
-	GetSafetyData(addr identifiers.Address) ([]byte, error)
+	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
+	GetSafetyData(id identifiers.Identifier) ([]byte, error)
 	GetCommitInfo(tsHash common.Hash) ([]byte, error)
-	SetSafetyData(addr identifiers.Address, data []byte) error
+	SetSafetyData(id identifiers.Identifier, data []byte) error
 	SetConsensusProposalInfo(tsHash common.Hash, data []byte) error
 	GetConsensusProposalInfo(tsHash common.Hash) ([]byte, error)
 	DeleteConsensusProposalInfo(tsHash common.Hash) error
 	GetAllConsensusProposalInfo(ctx context.Context) ([][]byte, error)
-	DeleteSafetyData(addr identifiers.Address) error
+	DeleteSafetyData(id identifiers.Identifier) error
 }
 
 type ProposalInfo struct {
@@ -78,16 +78,16 @@ func NewConsensusSafety(db store, v vault) *ConsensusSafety {
 	}
 }
 
-func (s *ConsensusSafety) GetLatestSafetyInfo(addr identifiers.Address) (*ktypes.SafetyData, error) {
+func (s *ConsensusSafety) GetLatestSafetyInfo(id identifiers.Identifier) (*ktypes.SafetyData, error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	metaInfo, err := s.db.GetAccountMetaInfo(addr)
+	metaInfo, err := s.db.GetAccountMetaInfo(id)
 	if err != nil {
 		return nil, err
 	}
 
-	info, err := s.getSafetyData(metaInfo.Address)
+	info, err := s.getSafetyData(metaInfo.ID)
 	if info != nil {
 		return info, nil
 	}
@@ -116,8 +116,8 @@ func (s *ConsensusSafety) UpdateSafetyInfo(p *ktypes.Proposal, qc *common.Qc) er
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	for addr := range p.Heights() {
-		safetyInfo, err := s.getSafetyData(addr)
+	for id := range p.Heights() {
+		safetyInfo, err := s.getSafetyData(id)
 		if err != nil {
 			safetyInfo = &ktypes.SafetyData{
 				Qc:       []*common.Qc{qc},
@@ -127,7 +127,7 @@ func (s *ConsensusSafety) UpdateSafetyInfo(p *ktypes.Proposal, qc *common.Qc) er
 			safetyInfo.UpdateQc(qc)
 		}
 
-		if err = s.setSafetyData(addr, safetyInfo); err != nil {
+		if err = s.setSafetyData(id, safetyInfo); err != nil {
 			return err
 		}
 	}
@@ -192,8 +192,8 @@ func (s *ConsensusSafety) GetTesseract(tsHash common.Hash) (*common.Tesseract, e
 	return info.Tesseract(), nil
 }
 
-func (s *ConsensusSafety) getSafetyData(addr identifiers.Address) (*ktypes.SafetyData, error) {
-	raw, err := s.db.GetSafetyData(addr)
+func (s *ConsensusSafety) getSafetyData(id identifiers.Identifier) (*ktypes.SafetyData, error) {
+	raw, err := s.db.GetSafetyData(id)
 	if err != nil {
 		return nil, err
 	}
@@ -207,15 +207,15 @@ func (s *ConsensusSafety) getSafetyData(addr identifiers.Address) (*ktypes.Safet
 	return safetyData, nil
 }
 
-func (s *ConsensusSafety) setSafetyData(addr identifiers.Address, data *ktypes.SafetyData) error {
+func (s *ConsensusSafety) setSafetyData(id identifiers.Identifier, data *ktypes.SafetyData) error {
 	raw, err := data.Bytes()
 	if err != nil {
 		return err
 	}
 
-	return s.db.SetSafetyData(addr, raw)
+	return s.db.SetSafetyData(id, raw)
 }
 
-func (s *ConsensusSafety) DeleteSafetyData(addr identifiers.Address) error {
-	return s.db.DeleteSafetyData(addr)
+func (s *ConsensusSafety) DeleteSafetyData(id identifiers.Identifier) error {
+	return s.db.DeleteSafetyData(id)
 }

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/compute/exlogics/tokenledger"
 
 	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -40,7 +41,13 @@ var (
 
 		return "0x" + common.BytesToHex(encoded)
 	}()
-	deployCalldata = "0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"
+
+	inputs = tokenledger.InputSeed{
+		Symbol: "MOI",
+		Supply: 100000000,
+	}
+
+	DeployCallData, _ = polo.PolorizeDocument(inputs, polo.DocStructs())
 )
 
 func (te *TestEnvironment) deployLogic(
@@ -48,7 +55,7 @@ func (te *TestEnvironment) deployLogic(
 	logicPayload *common.LogicPayload,
 ) (common.Hash, error) {
 	te.logger.Debug("deploy logic ",
-		"sender", acc.Addr, "manifest", logicPayload.Manifest,
+		"sender", acc.ID, "manifest", logicPayload.Manifest,
 		"call site", logicPayload.Callsite, "call data", logicPayload.Calldata)
 
 	payload, err := logicPayload.Bytes()
@@ -56,8 +63,8 @@ func (te *TestEnvironment) deployLogic(
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    acc.Addr,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.Addr, 0),
+			ID:         acc.ID,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.ID, 0),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -69,7 +76,7 @@ func (te *TestEnvironment) deployLogic(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  acc.Addr,
+				ID:       acc.ID,
 				LockType: common.MutateLock,
 			},
 		},
@@ -77,7 +84,7 @@ func (te *TestEnvironment) deployLogic(
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
-			Addr:     acc.Addr,
+			ID:       acc.ID,
 			KeyID:    0,
 			Mnemonic: acc.Mnemonic,
 		},
@@ -93,7 +100,7 @@ func (te *TestEnvironment) deployLogic(
 // 5. fetch ledger state and ensure it matches call data of logic payload
 func validateLogicDeploy(
 	te *TestEnvironment,
-	sender identifiers.Address,
+	sender identifiers.Identifier,
 	payload *common.LogicPayload,
 	txnID int,
 	ixHash common.Hash,
@@ -116,7 +123,7 @@ func validateLogicDeploy(
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), expectedManifest, actualManifest)
 
-	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID, []identifiers.Address{sender})
+	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, logicID, []identifiers.Identifier{sender})
 
 	require.Equal(te.T(), "MOI", state.Symbol)
 	require.Equal(te.T(), initialSeederAmount, state.Supply.Uint64())
@@ -136,7 +143,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 		logicPayload *common.LogicPayload
 		postTest     func(
 			te *TestEnvironment,
-			sender identifiers.Address,
+			sender identifiers.Identifier,
 			payload *common.LogicPayload,
 			txnID int,
 			ixHash common.Hash,
@@ -149,7 +156,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Callsite: "Seed",
-				Calldata: common.Hex2Bytes(deployCalldata),
+				Calldata: DeployCallData.Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
 			postTest: validateLogicDeploy,
@@ -169,7 +176,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Callsite: "",
-				Calldata: common.Hex2Bytes(deployCalldata),
+				Calldata: DeployCallData.Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
 			checkReceiptSuccess: checkForReceiptSuccess, // TODO check if this can be structured in better way
@@ -189,7 +196,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			sender: sender,
 			logicPayload: &common.LogicPayload{
 				Callsite: "random",
-				Calldata: common.Hex2Bytes(deployCalldata),
+				Calldata: DeployCallData.Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
 			expectedError: errors.New("failed to validate logic deploy"),
@@ -227,7 +234,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 				return
 			}
 
-			test.postTest(te, test.sender.Addr, test.logicPayload, 0, ixHash)
+			test.postTest(te, test.sender.ID, test.logicPayload, 0, ixHash)
 		})
 	}
 }

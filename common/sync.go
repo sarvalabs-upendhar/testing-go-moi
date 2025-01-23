@@ -25,7 +25,7 @@ const (
 )
 
 type AccountSyncStatus struct {
-	Address            identifiers.Address
+	ID                 identifiers.Identifier
 	ExpectedHeight     uint64
 	SnapshotDownloaded bool
 	Mode               SyncMode

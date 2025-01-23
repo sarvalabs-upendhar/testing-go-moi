@@ -32,18 +32,12 @@ import (
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/crypto"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/senatus"
 	"github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-moi/storage"
 )
-
-type Context struct {
-	behaviourNodes []kramaid.KramaID
-	randomNodes    []kramaid.KramaID
-}
 
 type ixData struct {
 	ix           *common.Interaction
@@ -56,7 +50,7 @@ type MockChainManager struct {
 	receipts                   map[common.Hash]*common.Receipt
 	tesseractsByHash           map[common.Hash]*common.Tesseract
 	tesseractsByHeight         map[string]*common.Tesseract
-	latestTesseracts           map[identifiers.Address]*common.Tesseract
+	latestTesseracts           map[identifiers.Identifier]*common.Tesseract
 	ixByTesseract              map[common.Hash]ixData
 	ixByHash                   map[common.Hash]ixData
 	TSHashByHeight             map[string]common.Hash
@@ -71,7 +65,7 @@ func NewMockChainManager(t *testing.T) *MockChainManager {
 	mockChain.receipts = make(map[common.Hash]*common.Receipt)
 	mockChain.tesseractsByHash = make(map[common.Hash]*common.Tesseract)
 	mockChain.tesseractsByHeight = make(map[string]*common.Tesseract)
-	mockChain.latestTesseracts = make(map[identifiers.Address]*common.Tesseract)
+	mockChain.latestTesseracts = make(map[identifiers.Identifier]*common.Tesseract)
 	mockChain.ixByHash = make(map[common.Hash]ixData)
 	mockChain.ixByTesseract = make(map[common.Hash]ixData)
 	mockChain.TSHashByHeight = make(map[string]common.Hash)
@@ -106,13 +100,13 @@ func (c *MockChainManager) GetInteractionAndParticipantsByTSHash(
 	return data.ix, data.participants, nil
 }
 
-func (c *MockChainManager) SetTesseractHeightEntry(address identifiers.Address, height uint64, hash common.Hash) {
-	key := address.Hex() + strconv.FormatUint(height, 10)
+func (c *MockChainManager) SetTesseractHeightEntry(id identifiers.Identifier, height uint64, hash common.Hash) {
+	key := id.Hex() + strconv.FormatUint(height, 10)
 	c.TSHashByHeight[key] = hash
 }
 
-func (c *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error) {
-	key := address.Hex() + strconv.FormatUint(height, 10)
+func (c *MockChainManager) GetTesseractHeightEntry(id identifiers.Identifier, height uint64) (common.Hash, error) {
+	key := id.Hex() + strconv.FormatUint(height, 10)
 
 	hash, ok := c.TSHashByHeight[key]
 	if !ok {
@@ -149,8 +143,8 @@ func (c *MockChainManager) SetInteractionDataByIxHash(
 }
 
 // Chain manager mock functions
-func (c *MockChainManager) GetLatestTesseract(addr identifiers.Address, withIxns bool) (*common.Tesseract, error) {
-	ts, ok := c.latestTesseracts[addr]
+func (c *MockChainManager) GetLatestTesseract(id identifiers.Identifier, withIxns bool) (*common.Tesseract, error) {
+	ts, ok := c.latestTesseracts[id]
 	if !ok {
 		return nil, common.ErrFetchingTesseract
 	}
@@ -209,19 +203,19 @@ func (c *MockChainManager) setTesseractByHash(
 }
 
 type MockStateManager struct {
-	sequenceID              map[identifiers.Address]uint64
+	sequenceID              map[identifiers.Identifier]uint64
 	storage                 map[common.Hash][]byte
-	balances                map[identifiers.Address]common.AssetMap
-	mandates                map[identifiers.Address][]common.AssetMandateOrLockup
-	lockups                 map[identifiers.Address][]common.AssetMandateOrLockup
-	accounts                map[identifiers.Address]*common.Account
-	context                 map[identifiers.Address]*Context
+	balances                map[identifiers.Identifier]common.AssetMap
+	mandates                map[identifiers.Identifier][]common.AssetMandateOrLockup
+	lockups                 map[identifiers.Identifier][]common.AssetMandateOrLockup
+	accounts                map[identifiers.Identifier]*common.Account
+	consensusNodes          map[identifiers.Identifier][]kramaid.KramaID
 	assetDeeds              map[identifiers.AssetID]*common.AssetDescriptor
 	logicManifests          map[string][]byte
 	logicStorage            map[string]map[string]string // first key denotes logic id, second key denotes storage key
-	accMetaInfo             map[identifiers.Address]*common.AccountMetaInfo
-	logicIDs                map[identifiers.Address][]identifiers.LogicID
-	deeds                   map[identifiers.Address]map[string]*common.AssetDescriptor
+	accMetaInfo             map[identifiers.Identifier]*common.AccountMetaInfo
+	logicIDs                map[identifiers.Identifier][]identifiers.LogicID
+	deeds                   map[identifiers.Identifier]map[identifiers.Identifier]*common.AssetDescriptor
 	fetchIxStateObjectsHook func() error
 }
 
@@ -229,46 +223,46 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 
 	mockState := new(MockStateManager)
-	mockState.sequenceID = make(map[identifiers.Address]uint64)
+	mockState.sequenceID = make(map[identifiers.Identifier]uint64)
 	mockState.assetDeeds = make(map[identifiers.AssetID]*common.AssetDescriptor)
-	mockState.balances = make(map[identifiers.Address]common.AssetMap)
-	mockState.mandates = make(map[identifiers.Address][]common.AssetMandateOrLockup)
-	mockState.lockups = make(map[identifiers.Address][]common.AssetMandateOrLockup)
+	mockState.balances = make(map[identifiers.Identifier]common.AssetMap)
+	mockState.mandates = make(map[identifiers.Identifier][]common.AssetMandateOrLockup)
+	mockState.lockups = make(map[identifiers.Identifier][]common.AssetMandateOrLockup)
 	mockState.storage = make(map[common.Hash][]byte)
-	mockState.accounts = make(map[identifiers.Address]*common.Account)
-	mockState.context = make(map[identifiers.Address]*Context)
+	mockState.accounts = make(map[identifiers.Identifier]*common.Account)
+	mockState.consensusNodes = make(map[identifiers.Identifier][]kramaid.KramaID)
 	mockState.logicManifests = make(map[string][]byte)
 	mockState.logicStorage = make(map[string]map[string]string)
-	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
-	mockState.logicIDs = make(map[identifiers.Address][]identifiers.LogicID)
-	mockState.deeds = make(map[identifiers.Address]map[string]*common.AssetDescriptor)
+	mockState.accMetaInfo = make(map[identifiers.Identifier]*common.AccountMetaInfo)
+	mockState.logicIDs = make(map[identifiers.Identifier][]identifiers.LogicID)
+	mockState.deeds = make(map[identifiers.Identifier]map[identifiers.Identifier]*common.AssetDescriptor)
 
 	return mockState
 }
 
-func (s *MockStateManager) GetAccountKeys(addrs identifiers.Address,
+func (s *MockStateManager) GetAccountKeys(id identifiers.Identifier,
 	stateHash common.Hash,
 ) (common.AccountKeys, error) {
 	panic("implement me")
 }
 
-func (s *MockStateManager) setSequenceID(addr identifiers.Address, sequenceID uint64) {
-	s.sequenceID[addr] = sequenceID
+func (s *MockStateManager) setSequenceID(id identifiers.Identifier, sequenceID uint64) {
+	s.sequenceID[id] = sequenceID
 }
 
-func (s *MockStateManager) GetSequenceID(addr identifiers.Address,
+func (s *MockStateManager) GetSequenceID(id identifiers.Identifier,
 	keyID uint64, stateHash common.Hash,
 ) (uint64, error) {
-	id, ok := s.sequenceID[addr]
+	seqID, ok := s.sequenceID[id]
 	if !ok {
 		return 0, common.ErrInvalidSequenceID
 	}
 
-	return id, nil
+	return seqID, nil
 }
 
 func (s *MockStateManager) FetchIxStateObjects(ixns common.Interactions,
-	hashes map[identifiers.Address]common.Hash,
+	hashes map[identifiers.Identifier]common.Hash,
 ) (*state.Transition, error) {
 	if s.fetchIxStateObjectsHook != nil {
 		return nil, s.fetchIxStateObjectsHook()
@@ -277,37 +271,37 @@ func (s *MockStateManager) FetchIxStateObjects(ixns common.Interactions,
 	return nil, nil
 }
 
-func (s *MockStateManager) CreateStateObject(address identifiers.Address,
+func (s *MockStateManager) CreateStateObject(id identifiers.Identifier,
 	accountType common.AccountType, isGenesis bool,
 ) *state.Object {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *MockStateManager) GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error) {
+func (s *MockStateManager) GetStateObjectByHash(id identifiers.Identifier, hash common.Hash) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *MockStateManager) IsAccountRegistered(address identifiers.Address) (bool, error) {
+func (s *MockStateManager) IsAccountRegistered(id identifiers.Identifier) (bool, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (s *MockStateManager) setDeeds(
-	t *testing.T, addr identifiers.Address,
-	deeds map[string]*common.AssetDescriptor,
+	t *testing.T, id identifiers.Identifier,
+	deeds map[identifiers.Identifier]*common.AssetDescriptor,
 ) {
 	t.Helper()
 
-	s.deeds[addr] = deeds
+	s.deeds[id] = deeds
 }
 
 func (s *MockStateManager) GetDeeds(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	stateHash common.Hash,
-) (map[string]*common.AssetDescriptor, error) {
-	deeds, ok := s.deeds[addr]
+) (map[identifiers.Identifier]*common.AssetDescriptor, error) {
+	deeds, ok := s.deeds[id]
 	if !ok {
 		return nil, errors.New("deeds not found")
 	}
@@ -316,9 +310,9 @@ func (s *MockStateManager) GetDeeds(
 }
 
 func (s *MockStateManager) GetMandates(
-	address identifiers.Address, hash common.Hash,
+	id identifiers.Identifier, hash common.Hash,
 ) ([]common.AssetMandateOrLockup, error) {
-	if mandates, ok := s.mandates[address]; ok {
+	if mandates, ok := s.mandates[id]; ok {
 		return mandates, nil
 	}
 
@@ -326,9 +320,9 @@ func (s *MockStateManager) GetMandates(
 }
 
 func (s *MockStateManager) GetLockups(
-	address identifiers.Address, hash common.Hash,
+	id identifiers.Identifier, hash common.Hash,
 ) ([]common.AssetMandateOrLockup, error) {
-	if lockups, ok := s.lockups[address]; ok {
+	if lockups, ok := s.lockups[id]; ok {
 		return lockups, nil
 	}
 
@@ -352,7 +346,7 @@ func (s *MockStateManager) addAsset(assetID identifiers.AssetID, descriptor *com
 }
 
 func (s *MockStateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash common.Hash) ([]byte, error) {
-	logicManifest, ok := s.logicManifests[string(logicID)]
+	logicManifest, ok := s.logicManifests[hex.EncodeToString(logicID.Bytes())]
 	if !ok {
 		return logicManifest, errors.New("logic manifest not found")
 	}
@@ -362,16 +356,19 @@ func (s *MockStateManager) GetLogicManifest(logicID identifiers.LogicID, stateHa
 
 func (s *MockStateManager) setLogicIDs(
 	t *testing.T,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	logicIDs []identifiers.LogicID,
 ) {
 	t.Helper()
 
-	s.logicIDs[addr] = logicIDs
+	s.logicIDs[id] = logicIDs
 }
 
-func (s *MockStateManager) GetLogicIDs(addr identifiers.Address, stateHash common.Hash) ([]identifiers.LogicID, error) {
-	logicIDs, ok := s.logicIDs[addr]
+func (s *MockStateManager) GetLogicIDs(
+	id identifiers.Identifier,
+	stateHash common.Hash,
+) ([]identifiers.LogicID, error) {
+	logicIDs, ok := s.logicIDs[id]
 	if !ok {
 		return nil, errors.New("logic IDs not found")
 	}
@@ -381,16 +378,16 @@ func (s *MockStateManager) GetLogicIDs(addr identifiers.Address, stateHash commo
 
 func (s *MockStateManager) setAccountMetaInfo(
 	t *testing.T,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	accMetaInfo *common.AccountMetaInfo,
 ) {
 	t.Helper()
 
-	s.accMetaInfo[address] = accMetaInfo
+	s.accMetaInfo[id] = accMetaInfo
 }
 
-func (s *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
-	accMetaInfo, ok := s.accMetaInfo[addr]
+func (s *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
+	accMetaInfo, ok := s.accMetaInfo[id]
 	if !ok {
 		return nil, common.ErrAccountNotFound
 	}
@@ -401,7 +398,7 @@ func (s *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common
 func (s *MockStateManager) setStorageEntry(t *testing.T, logicID identifiers.LogicID, storage map[string]string) {
 	t.Helper()
 
-	s.logicStorage[string(logicID)] = storage
+	s.logicStorage[hex.EncodeToString(logicID.Bytes())] = storage
 }
 
 func (s *MockStateManager) GetPersistentStorageEntry(
@@ -410,7 +407,7 @@ func (s *MockStateManager) GetPersistentStorageEntry(
 ) (
 	[]byte, error,
 ) {
-	logicStorage, ok := s.logicStorage[string(logicID)]
+	logicStorage, ok := s.logicStorage[hex.EncodeToString(logicID.Bytes())]
 	if !ok {
 		return nil, common.ErrLogicStorageTreeNotFound
 	}
@@ -424,13 +421,13 @@ func (s *MockStateManager) GetPersistentStorageEntry(
 }
 
 func (s *MockStateManager) GetEphemeralStorageEntry(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	logicID identifiers.LogicID,
 	key []byte, _ common.Hash,
 ) (
 	[]byte, error,
 ) {
-	logicStorage, ok := s.logicStorage[string(logicID)]
+	logicStorage, ok := s.logicStorage[hex.EncodeToString(logicID.Bytes())]
 	if !ok {
 		return nil, common.ErrLogicStorageTreeNotFound
 	}
@@ -443,13 +440,13 @@ func (s *MockStateManager) GetEphemeralStorageEntry(
 	return []byte(value), nil
 }
 
-func (s *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
+func (s *MockStateManager) GetLatestStateObject(id identifiers.Identifier) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (s *MockStateManager) GetAccountState(addr identifiers.Address, stateHash common.Hash) (*common.Account, error) {
-	account, ok := s.accounts[addr]
+func (s *MockStateManager) GetAccountState(id identifiers.Identifier, stateHash common.Hash) (*common.Account, error) {
+	account, ok := s.accounts[id]
 	if !ok {
 		return nil, common.ErrAccountNotFound
 	}
@@ -457,33 +454,33 @@ func (s *MockStateManager) GetAccountState(addr identifiers.Address, stateHash c
 	return account, nil
 }
 
-func (s *MockStateManager) GetContextByHash(address identifiers.Address,
+func (s *MockStateManager) GetConsensusNodesByHash(id identifiers.Identifier,
 	hash common.Hash,
-) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error) {
-	context, ok := s.context[address]
+) ([]kramaid.KramaID, error) {
+	nodes, ok := s.consensusNodes[id]
 	if !ok {
-		return common.NilHash, nil, nil, common.ErrContextStateNotFound
+		return nil, common.ErrContextStateNotFound
 	}
 
-	return hash, context.behaviourNodes, context.randomNodes, nil
+	return nodes, nil
 }
 
-func (s *MockStateManager) GetBalances(addr identifiers.Address, stateHash common.Hash) (common.AssetMap, error) {
-	if _, ok := s.balances[addr]; ok {
-		return s.balances[addr].Copy(), nil
+func (s *MockStateManager) GetBalances(id identifiers.Identifier, stateHash common.Hash) (common.AssetMap, error) {
+	if _, ok := s.balances[id]; ok {
+		return s.balances[id].Copy(), nil
 	}
 
 	return nil, common.ErrAccountNotFound
 }
 
 func (s *MockStateManager) GetBalance(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	assetID identifiers.AssetID,
 	stateHash common.Hash,
 ) (*big.Int, error) {
-	if _, ok := s.balances[addr]; ok {
-		if _, ok := s.balances[addr][assetID]; ok {
-			return s.balances[addr][assetID], nil
+	if _, ok := s.balances[id]; ok {
+		if _, ok := s.balances[id][assetID]; ok {
+			return s.balances[id][assetID], nil
 		}
 
 		return nil, common.ErrAssetNotFound
@@ -492,39 +489,41 @@ func (s *MockStateManager) GetBalance(
 	return nil, common.ErrAccountNotFound
 }
 
-func (s *MockStateManager) IsGenesis(addr identifiers.Address) (bool, error) {
-	if _, ok := s.storage[common.GetHash(addr.Bytes())]; ok {
+func (s *MockStateManager) IsGenesis(id identifiers.Identifier) (bool, error) {
+	if _, ok := s.storage[common.GetHash(id.Bytes())]; ok {
 		return true, nil
 	}
 
 	return false, nil
 }
 
-func (s *MockStateManager) setBalance(addr identifiers.Address, assetID identifiers.AssetID, balance *big.Int) {
-	s.balances[addr] = make(common.AssetMap)
-	s.balances[addr][assetID] = balance
+func (s *MockStateManager) setBalance(id identifiers.Identifier, assetID identifiers.AssetID, balance *big.Int) {
+	s.balances[id] = make(common.AssetMap)
+	s.balances[id][assetID] = balance
 }
 
-func (s *MockStateManager) setContext(t *testing.T, address identifiers.Address, context *Context) {
+func (s *MockStateManager) setConsensusNodes(t *testing.T, id identifiers.Identifier,
+	consensusNodes []kramaid.KramaID,
+) {
 	t.Helper()
 
-	s.context[address] = context
+	s.consensusNodes[id] = consensusNodes
 }
 
-func (s *MockStateManager) setAccount(addr identifiers.Address, acc common.Account) {
-	s.accounts[addr] = &acc
+func (s *MockStateManager) setAccount(id identifiers.Identifier, acc common.Account) {
+	s.accounts[id] = &acc
 }
 
-func (s *MockStateManager) setMandates(address identifiers.Address, mandates []common.AssetMandateOrLockup) {
-	s.mandates[address] = mandates
+func (s *MockStateManager) setMandates(id identifiers.Identifier, mandates []common.AssetMandateOrLockup) {
+	s.mandates[id] = mandates
 }
 
-func (s *MockStateManager) setLockups(address identifiers.Address, lockups []common.AssetMandateOrLockup) {
-	s.lockups[address] = lockups
+func (s *MockStateManager) setLockups(id identifiers.Identifier, lockups []common.AssetMandateOrLockup) {
+	s.lockups[id] = lockups
 }
 
-func (s *MockStateManager) getTDU(addr identifiers.Address, stateHash common.Hash) common.AssetMap {
-	return s.balances[addr]
+func (s *MockStateManager) getTDU(id identifiers.Identifier, stateHash common.Hash) common.AssetMap {
+	return s.balances[id]
 }
 
 func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte) {
@@ -562,40 +561,40 @@ func (exec *MockExecutionManager) InteractionCall(
 }
 
 type MockSyncer struct {
-	accSyncStatus         map[identifiers.Address]*rpcargs.AccSyncStatus
+	accSyncStatus         map[identifiers.Identifier]*rpcargs.AccSyncStatus
 	nodeSyncStatus        *rpcargs.NodeSyncStatus
 	pendingNodeSyncStatus *rpcargs.NodeSyncStatus
-	syncJobInfo           map[identifiers.Address]*rpcargs.SyncJobInfo
+	syncJobInfo           map[identifiers.Identifier]*rpcargs.SyncJobInfo
 }
 
 func NewMockSyncer(t *testing.T) *MockSyncer {
 	t.Helper()
 
 	syncer := new(MockSyncer)
-	syncer.accSyncStatus = make(map[identifiers.Address]*rpcargs.AccSyncStatus)
-	syncer.syncJobInfo = make(map[identifiers.Address]*rpcargs.SyncJobInfo)
+	syncer.accSyncStatus = make(map[identifiers.Identifier]*rpcargs.AccSyncStatus)
+	syncer.syncJobInfo = make(map[identifiers.Identifier]*rpcargs.SyncJobInfo)
 
 	return syncer
 }
 
-func (syncer *MockSyncer) setAccountSyncStatus(addr identifiers.Address, accSyncStatus *rpcargs.AccSyncStatus) {
-	syncer.accSyncStatus[addr] = accSyncStatus
+func (syncer *MockSyncer) setAccountSyncStatus(id identifiers.Identifier, accSyncStatus *rpcargs.AccSyncStatus) {
+	syncer.accSyncStatus[id] = accSyncStatus
 }
 
-func (syncer *MockSyncer) GetAccountSyncStatus(addr identifiers.Address) (*rpcargs.AccSyncStatus, error) {
-	if accSyncStatus, ok := syncer.accSyncStatus[addr]; ok {
+func (syncer *MockSyncer) GetAccountSyncStatus(id identifiers.Identifier) (*rpcargs.AccSyncStatus, error) {
+	if accSyncStatus, ok := syncer.accSyncStatus[id]; ok {
 		return accSyncStatus, nil
 	}
 
 	return nil, common.ErrAccSyncStatusNotFound
 }
 
-func (syncer *MockSyncer) setSyncJobInfo(addr identifiers.Address, syncJobInfo *rpcargs.SyncJobInfo) {
-	syncer.syncJobInfo[addr] = syncJobInfo
+func (syncer *MockSyncer) setSyncJobInfo(id identifiers.Identifier, syncJobInfo *rpcargs.SyncJobInfo) {
+	syncer.syncJobInfo[id] = syncJobInfo
 }
 
-func (syncer *MockSyncer) GetSyncJobInfo(addr identifiers.Address) (*rpcargs.SyncJobInfo, error) {
-	syncJobStatus, ok := syncer.syncJobInfo[addr]
+func (syncer *MockSyncer) GetSyncJobInfo(id identifiers.Identifier) (*rpcargs.SyncJobInfo, error) {
+	syncJobStatus, ok := syncer.syncJobInfo[id]
 	if !ok {
 		return nil, common.ErrSyncJobNotFound
 	}
@@ -621,10 +620,10 @@ func (syncer *MockSyncer) GetNodeSyncStatus(includePendingAccounts bool) *rpcarg
 
 type MockIxPool struct {
 	interactions       map[common.Hash]*common.Interaction
-	nextNonce          map[identifiers.Address]uint64
-	waitTime           map[identifiers.Address]*big.Int
-	pending            map[identifiers.Address][]*common.Interaction
-	queued             map[identifiers.Address][]*common.Interaction
+	nextNonce          map[identifiers.Identifier]uint64
+	waitTime           map[identifiers.Identifier]*big.Int
+	pending            map[identifiers.Identifier][]*common.Interaction
+	queued             map[identifiers.Identifier][]*common.Interaction
 	pendingIX          map[common.Hash]*common.Interaction
 	addInteractionHook func() []error
 }
@@ -634,17 +633,17 @@ func NewMockIxPool(t *testing.T) *MockIxPool {
 
 	ixpool := new(MockIxPool)
 	ixpool.interactions = make(map[common.Hash]*common.Interaction)
-	ixpool.nextNonce = make(map[identifiers.Address]uint64)
-	ixpool.waitTime = make(map[identifiers.Address]*big.Int)
-	ixpool.pending = make(map[identifiers.Address][]*common.Interaction)
-	ixpool.queued = make(map[identifiers.Address][]*common.Interaction)
+	ixpool.nextNonce = make(map[identifiers.Identifier]uint64)
+	ixpool.waitTime = make(map[identifiers.Identifier]*big.Int)
+	ixpool.pending = make(map[identifiers.Identifier][]*common.Interaction)
+	ixpool.queued = make(map[identifiers.Identifier][]*common.Interaction)
 	ixpool.pendingIX = make(map[common.Hash]*common.Interaction)
 
 	return ixpool
 }
 
-func (mc *MockIxPool) GetSequenceID(addr identifiers.Address, keyID uint64) (uint64, error) {
-	if nextNonce, ok := mc.nextNonce[addr]; ok {
+func (mc *MockIxPool) GetSequenceID(id identifiers.Identifier, keyID uint64) (uint64, error) {
+	if nextNonce, ok := mc.nextNonce[id]; ok {
 		return atomic.LoadUint64(&nextNonce), nil
 	}
 
@@ -676,45 +675,45 @@ func (mc *MockIxPool) AddLocalInteractions(ixs common.Interactions) []error {
 	return nil
 }
 
-func (mc *MockIxPool) GetIxs(addr identifiers.Address, inclQueued bool) (promoted, enqueued []*common.Interaction) {
+func (mc *MockIxPool) GetIxs(id identifiers.Identifier, inclQueued bool) (promoted, enqueued []*common.Interaction) {
 	if inclQueued {
-		return mc.pending[addr], mc.queued[addr]
+		return mc.pending[id], mc.queued[id]
 	}
 
-	return mc.pending[addr], []*common.Interaction{}
+	return mc.pending[id], []*common.Interaction{}
 }
 
-func (mc *MockIxPool) GetAllIxs(inclQueued bool) (promoted, enqueued map[identifiers.Address][]*common.Interaction) {
+func (mc *MockIxPool) GetAllIxs(inclQueued bool) (promoted, enqueued map[identifiers.Identifier][]*common.Interaction) {
 	if inclQueued {
 		return mc.pending, mc.queued
 	}
 
-	return mc.pending, map[identifiers.Address][]*common.Interaction{}
+	return mc.pending, map[identifiers.Identifier][]*common.Interaction{}
 }
 
-func (mc *MockIxPool) GetAccountWaitTime(addr identifiers.Address) (*big.Int, error) {
-	if waitTime, ok := mc.waitTime[addr]; ok {
+func (mc *MockIxPool) GetAccountWaitTime(id identifiers.Identifier) (*big.Int, error) {
+	if waitTime, ok := mc.waitTime[id]; ok {
 		return waitTime, nil
 	}
 
 	return nil, common.ErrAccountNotFound
 }
 
-func (mc *MockIxPool) GetAllAccountsWaitTime() map[identifiers.Address]*big.Int {
+func (mc *MockIxPool) GetAllAccountsWaitTime() map[identifiers.Identifier]*big.Int {
 	return mc.waitTime
 }
 
-func (mc *MockIxPool) setNonce(addr identifiers.Address, nonce uint64) {
-	mc.nextNonce[addr] = nonce
+func (mc *MockIxPool) setNonce(id identifiers.Identifier, nonce uint64) {
+	mc.nextNonce[id] = nonce
 }
 
-func (mc *MockIxPool) setWaitTime(addr identifiers.Address, waitTime int64) {
-	mc.waitTime[addr] = big.NewInt(waitTime)
+func (mc *MockIxPool) setWaitTime(id identifiers.Identifier, waitTime int64) {
+	mc.waitTime[id] = big.NewInt(waitTime)
 }
 
-func (mc *MockIxPool) setIxs(addr identifiers.Address, pending, queued []*common.Interaction) {
-	mc.pending[addr] = pending
-	mc.queued[addr] = queued
+func (mc *MockIxPool) setIxs(id identifiers.Identifier, pending, queued []*common.Interaction) {
+	mc.pending[id] = pending
+	mc.queued[id] = queued
 }
 
 type MockNetwork struct {
@@ -936,7 +935,7 @@ func createConns(t *testing.T, connCount int, streamCount int) []network.Conn {
 
 type MockDatabase struct {
 	database map[string][]byte
-	addrList []identifiers.Address
+	addrList []identifiers.Identifier
 }
 
 func NewMockDatabase(t *testing.T) *MockDatabase {
@@ -960,13 +959,13 @@ func (d *MockDatabase) ReadEntry(key []byte) ([]byte, error) {
 	return nil, common.ErrKeyNotFound
 }
 
-func (d *MockDatabase) setList(t *testing.T, addressList []identifiers.Address) {
+func (d *MockDatabase) setList(t *testing.T, idList []identifiers.Identifier) {
 	t.Helper()
 
-	d.addrList = addressList
+	d.addrList = idList
 }
 
-func (d *MockDatabase) GetRegisteredAccounts() ([]identifiers.Address, error) {
+func (d *MockDatabase) GetRegisteredAccounts() ([]identifiers.Identifier, error) {
 	return d.addrList, nil
 }
 
@@ -1036,17 +1035,17 @@ func createMandatesOrLockups(t *testing.T) ([]common.AssetMandateOrLockup, []rpc
 	rpcList := make([]rpcargs.RPCMandateOrLockup, 0)
 
 	for _, assetID := range assetIDs {
-		addr := tests.RandomAddress(t)
+		id := tests.RandomIdentifier(t)
 		amount := big.NewInt(int64(rand.Uint64()))
 
 		list = append(list, common.AssetMandateOrLockup{
 			AssetID: assetID,
-			Address: addr,
+			ID:      id,
 			Amount:  amount,
 		})
 
 		rpcList = append(rpcList, rpcargs.RPCMandateOrLockup{
-			Address: addr,
+			ID:      id,
 			AssetID: assetID.String(),
 			Amount:  (*hexutil.Big)(amount),
 		})
@@ -1078,32 +1077,23 @@ func getDeeds(
 	t *testing.T,
 	assetIDs []identifiers.AssetID,
 	assetDescriptors []*common.AssetDescriptor,
-) (map[string]*common.AssetDescriptor, []rpcargs.RPCDeeds) {
+) (map[identifiers.Identifier]*common.AssetDescriptor, []rpcargs.RPCDeeds) {
 	t.Helper()
 
 	count := len(assetIDs)
-	deedsMap := make(map[string]*common.AssetDescriptor, count)
+	deedsMap := make(map[identifiers.Identifier]*common.AssetDescriptor, count)
 	deedsEntries := make([]rpcargs.RPCDeeds, 0, count)
 
 	for i := 0; i < count; i++ {
 		deedsEntries = append(deedsEntries, rpcargs.RPCDeeds{
 			AssetID:   assetIDs[i].String(),
-			AssetInfo: rpcargs.GetRPCAssetDescriptor(assetDescriptors[i]),
+			AssetInfo: *rpcargs.GetRPCAssetDescriptor(assetDescriptors[i]),
 		})
 
-		deedsMap[string(assetIDs[i])] = assetDescriptors[i]
+		deedsMap[assetIDs[i].AsIdentifier()] = assetDescriptors[i]
 	}
 
 	return deedsMap, deedsEntries
-}
-
-func getContext(t *testing.T, count int) *Context {
-	t.Helper()
-
-	return &Context{
-		tests.RandomKramaIDs(t, count),
-		tests.RandomKramaIDs(t, count),
-	}
 }
 
 func getSignatureBytes(t *testing.T, ixData *common.IxData, mnemonic string) []byte {
@@ -1121,18 +1111,6 @@ func getSignatureBytes(t *testing.T, ixData *common.IxData, mnemonic string) []b
 	return signBytes
 }
 
-func checkForContext(
-	t *testing.T,
-	actualContext *Context,
-	expectedBehaviouralNodes []string,
-	expectedRandomNodes []string,
-) {
-	t.Helper()
-
-	require.Equal(t, expectedBehaviouralNodes, utils.KramaIDToString(actualContext.behaviourNodes))
-	require.Equal(t, expectedRandomNodes, utils.KramaIDToString(actualContext.randomNodes))
-}
-
 func newTestInteraction(
 	t *testing.T,
 	ixType common.IxOpType,
@@ -1145,7 +1123,7 @@ func newTestInteraction(
 		IxOps: []common.IxOpRaw{
 			{
 				Type:    ixType,
-				Payload: tests.CreateTxPayload(t, ixType, tests.RandomAddress(t)),
+				Payload: tests.CreateTxPayload(t, ixType, tests.RandomIdentifier(t)),
 			},
 		},
 	}
@@ -1156,7 +1134,7 @@ func newTestInteraction(
 
 	ixData.Participants = []common.IxParticipant{
 		{
-			Address:  ixData.Sender.Address,
+			ID:       ixData.Sender.ID,
 			LockType: common.MutateLock,
 		},
 	}
@@ -1172,7 +1150,7 @@ type tsFilter struct {
 }
 
 type tsByAccFilter struct {
-	tsByAccFilterParams identifiers.Address
+	tsByAccFilterParams identifiers.Identifier
 	tsByAccChanges      []*rpcargs.RPCTesseract
 }
 
@@ -1223,9 +1201,9 @@ func (f *MockFilterManager) NewTesseractFilter(ws jsonrpc.ConnManager) string {
 	return filterID
 }
 
-func (f *MockFilterManager) setTSByAccFilter(id string, addr identifiers.Address) {
-	f.tsByAccFilter[id] = tsByAccFilter{
-		tsByAccFilterParams: addr,
+func (f *MockFilterManager) setTSByAccFilter(filterID string, id identifiers.Identifier) {
+	f.tsByAccFilter[filterID] = tsByAccFilter{
+		tsByAccFilterParams: id,
 	}
 }
 
@@ -1238,10 +1216,10 @@ func (f *MockFilterManager) getTSByAccFilter(id string) (tsByAccFilter, bool) {
 	return resp, exists
 }
 
-func (f *MockFilterManager) NewTesseractsByAccountFilter(ws jsonrpc.ConnManager, addr identifiers.Address) string {
+func (f *MockFilterManager) NewTesseractsByAccountFilter(ws jsonrpc.ConnManager, id identifiers.Identifier) string {
 	filterID := uuid.New().String()
 
-	f.setTSByAccFilter(filterID, addr)
+	f.setTSByAccFilter(filterID, id)
 
 	return filterID
 }

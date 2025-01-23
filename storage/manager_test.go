@@ -17,7 +17,7 @@ import (
 func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
-	address := tests.RandomAddress(t)
+	Identifier := tests.RandomIdentifier(t)
 	testcases := []struct {
 		name          string
 		accMetaInfo   *common.AccountMetaInfo
@@ -25,21 +25,21 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:        "nil address",
+			name:        "nil ID",
 			accMetaInfo: nil,
 			args: &common.AccountMetaInfo{
-				Address:       identifiers.NilAddress,
+				ID:            identifiers.Nil,
 				Type:          common.AccountType(1),
 				Height:        7,
 				TesseractHash: tests.RandomHash(t),
 			},
-			expectedError: common.ErrInvalidAddress,
+			expectedError: common.ErrInvalidIdentifier,
 		},
 		{
 			name:        "nil hash",
 			accMetaInfo: nil,
 			args: &common.AccountMetaInfo{
-				Address:       tests.RandomAddress(t),
+				ID:            tests.RandomIdentifier(t),
 				Type:          common.AccountType(1),
 				Height:        8,
 				TesseractHash: common.NilHash,
@@ -49,13 +49,13 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 		{
 			name: "hash mismatch",
 			accMetaInfo: &common.AccountMetaInfo{
-				Address:       address,
+				ID:            Identifier,
 				Type:          common.AccountType(1),
 				Height:        8,
 				TesseractHash: tests.RandomHash(t),
 			},
 			args: &common.AccountMetaInfo{
-				Address:       address,
+				ID:            Identifier,
 				Type:          common.AccountType(1),
 				Height:        8,
 				TesseractHash: tests.RandomHash(t),
@@ -71,11 +71,12 @@ func TestUpdateAccMetaInfo_CheckErrors(t *testing.T) {
 			}
 
 			_, _, err := pm.UpdateAccMetaInfo(
-				test.args.Address,
+				test.args.ID,
 				test.args.Height,
 				test.args.TesseractHash,
 				test.args.StateHash,
 				test.args.ContextHash,
+				test.args.ConsensusNodesHash,
 				test.args.CommitHash,
 				test.args.Type,
 				true,
@@ -93,11 +94,12 @@ func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 	args := tests.GetRandomAccMetaInfo(t, 1)
 
 	bucketID, isInsert, err := pm.UpdateAccMetaInfo(
-		args.Address,
+		args.ID,
 		args.Height,
 		args.TesseractHash,
 		args.StateHash,
 		args.ContextHash,
+		args.ConsensusNodesHash,
 		args.CommitHash,
 		args.Type,
 		true,
@@ -110,10 +112,10 @@ func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 	require.True(t, isInsert)
 
 	// check BucketID
-	_, bucket := BucketKeyAndID(args.Address)
+	_, bucket := BucketKeyAndID(NewIdentifierKey(args.ID))
 	require.Equal(t, int32(bucket), bucketID)
 
-	afterAccMetaInfo, err := pm.GetAccountMetaInfo(args.Address)
+	afterAccMetaInfo, err := pm.GetAccountMetaInfo(args.ID)
 	require.NoError(t, err)
 
 	// check account state
@@ -123,7 +125,7 @@ func TestUpdateAccMetaInfo_AddNewAccount(t *testing.T) {
 func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
-	addresses := tests.GetAddresses(t, 3)
+	Identifiers := tests.GetIdentifiers(t, 3)
 	height := uint64(30)
 	hash := tests.RandomHash(t)
 
@@ -136,23 +138,25 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 		{
 			name: "should update with new height",
 			accMetaInfo: &common.AccountMetaInfo{
-				Address:              addresses[0],
+				ID:                   Identifiers[0],
 				Type:                 common.AccountType(1),
 				Height:               height,
 				TesseractHash:        tests.RandomHash(t),
 				StateHash:            tests.RandomHash(t),
 				ContextHash:          tests.RandomHash(t),
+				ConsensusNodesHash:   tests.RandomHash(t),
 				CommitHash:           tests.RandomHash(t),
 				PositionInContextSet: 1,
 			},
 			shouldUpdateContextPosition: true,
 			args: &common.AccountMetaInfo{
-				Address:              addresses[0],
+				ID:                   Identifiers[0],
 				Type:                 common.AccountType(1),
 				Height:               height + 1,
 				TesseractHash:        tests.RandomHash(t),
 				StateHash:            tests.RandomHash(t),
 				ContextHash:          tests.RandomHash(t),
+				ConsensusNodesHash:   tests.RandomHash(t),
 				CommitHash:           tests.RandomHash(t),
 				PositionInContextSet: 2,
 			},
@@ -160,23 +164,25 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 		{
 			name: "should update with equal height ",
 			accMetaInfo: &common.AccountMetaInfo{
-				Address:              addresses[1],
+				ID:                   Identifiers[1],
 				Type:                 common.AccountType(3),
 				Height:               height,
 				TesseractHash:        hash,
 				StateHash:            tests.RandomHash(t),
 				ContextHash:          tests.RandomHash(t),
+				ConsensusNodesHash:   tests.RandomHash(t),
 				CommitHash:           tests.RandomHash(t),
 				PositionInContextSet: 3,
 			},
 			shouldUpdateContextPosition: true,
 			args: &common.AccountMetaInfo{
-				Address:              addresses[1],
+				ID:                   Identifiers[1],
 				Type:                 common.AccountType(3),
 				Height:               height,
 				TesseractHash:        hash,
 				StateHash:            tests.RandomHash(t),
 				ContextHash:          tests.RandomHash(t),
+				ConsensusNodesHash:   tests.RandomHash(t),
 				CommitHash:           tests.RandomHash(t),
 				PositionInContextSet: 4,
 			},
@@ -184,23 +190,25 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 		{
 			name: "shouldn't update with low height",
 			accMetaInfo: &common.AccountMetaInfo{
-				Address:              addresses[2],
+				ID:                   Identifiers[2],
 				Type:                 common.AccountType(1),
 				Height:               height,
 				TesseractHash:        tests.RandomHash(t),
 				StateHash:            tests.RandomHash(t),
 				ContextHash:          tests.RandomHash(t),
+				ConsensusNodesHash:   tests.RandomHash(t),
 				CommitHash:           tests.RandomHash(t),
 				PositionInContextSet: 5,
 			},
 			shouldUpdateContextPosition: false,
 			args: &common.AccountMetaInfo{
-				Address:              addresses[2],
+				ID:                   Identifiers[2],
 				Type:                 common.AccountType(3),
 				Height:               height - 1,
 				TesseractHash:        tests.RandomHash(t),
 				StateHash:            tests.RandomHash(t),
 				ContextHash:          tests.RandomHash(t),
+				ConsensusNodesHash:   tests.RandomHash(t),
 				CommitHash:           tests.RandomHash(t),
 				PositionInContextSet: 6,
 			},
@@ -212,15 +220,16 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			// insert test accMetaInfo , so that it can be updated
 			insertAccMetaInfo(t, pm, *test.accMetaInfo)
 
-			beforeAccMetaInfo, err := pm.GetAccountMetaInfo(test.args.Address)
+			beforeAccMetaInfo, err := pm.GetAccountMetaInfo(test.args.ID)
 			require.NoError(t, err)
 
 			_, isInsert, err := pm.UpdateAccMetaInfo(
-				test.args.Address,
+				test.args.ID,
 				test.args.Height,
 				test.args.TesseractHash,
 				test.args.StateHash,
 				test.args.ContextHash,
+				test.args.ConsensusNodesHash,
 				test.args.CommitHash,
 				test.args.Type,
 				test.shouldUpdateContextPosition,
@@ -231,28 +240,14 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 			// check if updated
 			require.False(t, isInsert)
 
-			afterAccMetaInfo, err := pm.GetAccountMetaInfo(test.args.Address)
+			afterAccMetaInfo, err := pm.GetAccountMetaInfo(test.args.ID)
 			require.NoError(t, err)
 
 			// changes should take place if new height is greater than equal to current height
 			if test.args.Height >= beforeAccMetaInfo.Height {
-				require.Equal(t, test.args.TesseractHash, afterAccMetaInfo.TesseractHash)
-				require.Equal(t, test.args.StateHash, afterAccMetaInfo.StateHash)
-				require.Equal(t, test.args.ContextHash, afterAccMetaInfo.ContextHash)
-				require.Equal(t, test.args.Address, afterAccMetaInfo.Address)
-				require.Equal(t, test.args.Height, afterAccMetaInfo.Height)
-				require.Equal(t, test.args.Type, afterAccMetaInfo.Type)
-				require.Equal(t, test.args.PositionInContextSet, afterAccMetaInfo.PositionInContextSet)
-				require.Equal(t, test.args.CommitHash, afterAccMetaInfo.CommitHash)
+				require.Equal(t, test.args, afterAccMetaInfo)
 			} else { // changes shouldn't take place if new height less than current height
-				require.Equal(t, beforeAccMetaInfo.TesseractHash, afterAccMetaInfo.TesseractHash)
-				require.Equal(t, beforeAccMetaInfo.StateHash, afterAccMetaInfo.StateHash)
-				require.Equal(t, beforeAccMetaInfo.ContextHash, afterAccMetaInfo.ContextHash)
-				require.Equal(t, beforeAccMetaInfo.Address, afterAccMetaInfo.Address)
-				require.Equal(t, beforeAccMetaInfo.Height, afterAccMetaInfo.Height)
-				require.Equal(t, beforeAccMetaInfo.Type, afterAccMetaInfo.Type)
-				require.Equal(t, beforeAccMetaInfo.PositionInContextSet, afterAccMetaInfo.PositionInContextSet)
-				require.Equal(t, beforeAccMetaInfo.CommitHash, afterAccMetaInfo.CommitHash)
+				require.Equal(t, beforeAccMetaInfo, afterAccMetaInfo)
 			}
 		})
 	}
@@ -261,16 +256,16 @@ func TestUpdateAccMetaInfo_CheckHeight(t *testing.T) {
 func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
-	address := tests.RandomAddress(t)
+	Identifier := tests.RandomIdentifier(t)
 
 	accMetaInfo := common.AccountMetaInfo{
-		Address:       address,
+		ID:            Identifier,
 		Type:          common.AccountType(1),
 		Height:        1,
 		TesseractHash: tests.RandomHash(t),
 	}
 	args := &common.AccountMetaInfo{
-		Address:       address,
+		ID:            Identifier,
 		Type:          common.AccountType(1),
 		Height:        3,
 		TesseractHash: tests.RandomHash(t),
@@ -280,11 +275,12 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 	insertAccMetaInfo(t, pm, accMetaInfo)
 
 	bucketID, _, err := pm.UpdateAccMetaInfo(
-		args.Address,
+		args.ID,
 		args.Height,
 		args.TesseractHash,
 		args.StateHash,
 		args.ContextHash,
+		args.ConsensusNodesHash,
 		args.CommitHash,
 		args.Type,
 		true,
@@ -293,7 +289,7 @@ func TestUpdateAccMetaInfo_CheckBucketID(t *testing.T) {
 	require.NoError(t, err)
 
 	// check if BucketID matches
-	_, bucket := BucketKeyAndID(args.Address)
+	_, bucket := BucketKeyAndID(NewIdentifierKey(args.ID))
 	require.Equal(t, int32(bucket), bucketID)
 }
 
@@ -308,19 +304,19 @@ func TestGetAccountMetaInfo(t *testing.T) {
 
 	testcases := []struct {
 		name                string
-		address             identifiers.Address
+		Identifier          identifiers.Identifier
 		expectedAccMetaInfo *common.AccountMetaInfo
 		expectedError       error
 	}{
 		{
 			name:                "account doesn't exist",
-			address:             tests.RandomAddress(t),
+			Identifier:          tests.RandomIdentifier(t),
 			expectedAccMetaInfo: &common.AccountMetaInfo{},
 			expectedError:       common.ErrAccountNotFound,
 		},
 		{
 			name:                "account exists",
-			address:             AccMetaInfo.Address,
+			Identifier:          AccMetaInfo.ID,
 			expectedAccMetaInfo: AccMetaInfo,
 			expectedError:       nil,
 		},
@@ -328,7 +324,7 @@ func TestGetAccountMetaInfo(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accMetaInfo, err := pm.GetAccountMetaInfo(test.address)
+			accMetaInfo, err := pm.GetAccountMetaInfo(test.Identifier)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -351,28 +347,28 @@ func TestHasAccMetaInfoAt(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		address          identifiers.Address
+		Identifier       identifiers.Identifier
 		height           uint64
 		hasAccMetaInfoAt bool
 	}{
 		{
-			name:    "account meta info doesn't exist",
-			address: tests.RandomAddress(t),
+			name:       "account meta info doesn't exist",
+			Identifier: tests.RandomIdentifier(t),
 		},
 		{
-			name:    "account meta info doesn't exist at given height",
-			address: AccMetaInfo.Address,
-			height:  7,
+			name:       "account meta info doesn't exist at given height",
+			Identifier: AccMetaInfo.ID,
+			height:     7,
 		},
 		{
 			name:             "account meta info exists at given equal height",
-			address:          AccMetaInfo.Address,
+			Identifier:       AccMetaInfo.ID,
 			height:           6,
 			hasAccMetaInfoAt: true,
 		},
 		{
 			name:             "account meta info exists at given lesser height",
-			address:          AccMetaInfo.Address,
+			Identifier:       AccMetaInfo.ID,
 			height:           5,
 			hasAccMetaInfoAt: true,
 		},
@@ -380,7 +376,7 @@ func TestHasAccMetaInfoAt(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			hasAccMetaInfoAt := pm.HasAccMetaInfoAt(test.address, test.height)
+			hasAccMetaInfoAt := pm.HasAccMetaInfoAt(test.Identifier, test.height)
 
 			require.Equal(t, test.hasAccMetaInfoAt, hasAccMetaInfoAt)
 		})
@@ -391,11 +387,11 @@ func TestIncrementBucketCount(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 
 	type args struct {
-		address identifiers.Address
-		count   uint64
+		Identifier identifiers.Identifier
+		count      uint64
 	}
 
-	address := tests.RandomAddress(t)
+	Identifier := tests.RandomIdentifier(t)
 
 	testcases := []struct {
 		name          string
@@ -405,16 +401,16 @@ func TestIncrementBucketCount(t *testing.T) {
 		{
 			name: "account doesn't exist",
 			arg: args{
-				address: address,
-				count:   1,
+				Identifier: Identifier,
+				count:      1,
 			},
 			expectedCount: 1,
 		},
 		{
 			name: "account exists",
 			arg: args{
-				address: address,
-				count:   1,
+				Identifier: Identifier,
+				count:      1,
 			},
 			expectedCount: 2,
 		},
@@ -422,7 +418,7 @@ func TestIncrementBucketCount(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			_, bucket := BucketKeyAndID(test.arg.address)
+			_, bucket := BucketKeyAndID(NewIdentifierKey(test.arg.Identifier))
 
 			err := pm.incrementBucketCount(bucket, test.arg.count)
 			require.NoError(t, err)
@@ -435,7 +431,7 @@ func TestIncrementBucketCount(t *testing.T) {
 	}
 }
 
-// here we increment bucket count for 10000 addresses and check if number of addresses in each bucket are as expected
+// here we increment bucket count for 10000 ids and check if number of ids in each bucket are as expected
 func TestGetBucketSizes(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 	incrementBucketCounts := incrementBuckets(t, pm)
@@ -593,14 +589,14 @@ func TestGetEntriesWithPrefix(t *testing.T) {
 func TestWritePreImages(t *testing.T) {
 	pm := NewTestPersistenceManager(t)
 	// create random entries
-	address := tests.RandomAddress(t)
+	Identifier := tests.RandomIdentifier(t)
 	testEntries := getRandomPreImageEntries(t, 10)
 	// write preimages
-	err := pm.WritePreImages(address, testEntries)
+	err := pm.WritePreImages(Identifier, testEntries)
 	require.NoError(t, err)
 
 	for k, v := range testEntries {
-		dbValue, err := pm.ReadEntry(PreImageKey(address, k))
+		dbValue, err := pm.ReadEntry(PreImageKey(Identifier, k))
 		require.NoError(t, err)
 		require.Equal(t, v, dbValue)
 	}
@@ -688,7 +684,7 @@ func TestGetReceipts(t *testing.T) {
 	}
 }
 
-func keyWithPrefix(prefix identifiers.Address, k int) []byte {
+func keyWithPrefix(prefix identifiers.Identifier, k int) []byte {
 	return append(prefix.Bytes(), []byte(fmt.Sprintf("%d", k))...)
 }
 
@@ -711,10 +707,10 @@ func TestPersistenceManager_GetAccountSnapshot(t *testing.T) {
 	pm1 := NewTestPersistenceManagerWithBadger(t, dir1)
 	pm2 := NewTestPersistenceManagerWithBadger(t, dir2)
 
-	address := tests.GetRandomAddressList(t, 3)
+	Identifier := tests.GetIdentifiers(t, 3)
 	count := 10000
 
-	for _, prefix := range address {
+	for _, prefix := range Identifier {
 		bw := pm1.db.NewBatchWriter()
 		for i := 1; i <= count; i++ {
 			require.NoError(t, bw.Set(keyWithPrefix(prefix, i), value(i)))
@@ -723,7 +719,7 @@ func TestPersistenceManager_GetAccountSnapshot(t *testing.T) {
 		require.NoError(t, bw.Flush())
 	}
 
-	for _, prefix := range address {
+	for _, prefix := range Identifier {
 		var (
 			exit              = make(chan bool)
 			receivedData      = make([]byte, 0)
@@ -771,7 +767,7 @@ func TestPersistenceManager_GetAccountSnapshot(t *testing.T) {
 		require.True(t, sentSnapSize == totalReceivedSize)
 	}
 
-	for _, prefix := range address {
+	for _, prefix := range Identifier {
 		for i := 1; i <= count; i++ {
 			val, err := pm2.ReadEntry(keyWithPrefix(prefix, i))
 			require.NoError(t, err)

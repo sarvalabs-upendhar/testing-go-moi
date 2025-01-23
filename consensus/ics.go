@@ -14,23 +14,23 @@ func (k *Engine) GetICSCommittee(
 	ts *common.Tesseract,
 	info *common.CommitInfo,
 ) (*types.ICSCommittee, error) {
-	addrs := ts.Addresses()
+	ids := ts.AccountIDs()
 	ps := ts.Participants()
 
-	ics := types.NewICSCommittee(len(addrs) + 1)
+	ics := types.NewICSCommittee(len(ids) + 1)
 
-	for index, addr := range addrs {
-		if ps[addr].PreviousContext == common.NilHash {
+	for index, id := range ids {
+		if ps[id].PreviousContext == common.NilHash {
 			continue
 		}
 
-		behaviourSet, _, err := k.fetchParticipantContextByHash(addr, ps[addr].PreviousContext)
+		consensusNodes, err := k.fetchParticipantContextByHash(id, ps[id].PreviousContext)
 		if err != nil {
 			return nil, err
 		}
 
-		if behaviourSet != nil {
-			ics.UpdateNodeSet(index, behaviourSet)
+		if consensusNodes != nil {
+			ics.UpdateNodeSet(index, consensusNodes)
 		}
 	}
 
@@ -62,51 +62,37 @@ func (k *Engine) NodeSet(ids []kramaid.KramaID, setSizeWithoutDelta uint32) (*ty
 	return types.NewNodeSet(ids, publicKeys, setSizeWithoutDelta), nil
 }
 
-func (k *Engine) NodeSetFromRawContextObject(raw []byte) (*types.NodeSet, error) {
-	obj := new(state.ContextObject)
-	if err := obj.FromBytes(raw); err != nil {
-		return nil, err
-	}
-
-	return k.NodeSet(obj.Ids, uint32(len(obj.Ids)))
-}
-
 func (k *Engine) GetICSCommitteeFromRawContext(
 	ts *common.Tesseract,
 	rawContext map[string][]byte,
 	info *common.CommitInfo,
 ) (*types.ICSCommittee, error) {
 	contextHashes := make([]common.Hash, 0)
-	addrs := ts.Addresses()
+	ids := ts.AccountIDs()
 	ps := ts.Participants()
 
-	ics := types.NewICSCommittee(len(addrs) + 1)
+	ics := types.NewICSCommittee(len(ids) + 1)
 
-	for index, addr := range addrs {
+	for index, id := range ids {
 		position := index
 
-		if ps[addr].PreviousContext == common.NilHash {
+		if ps[id].PreviousContext == common.NilHash {
 			continue
 		}
 
 		metaObject := new(state.MetaContextObject)
-		if err := metaObject.FromBytes(rawContext[ps[addr].PreviousContext.String()]); err != nil {
+		if err := metaObject.FromBytes(rawContext[ps[id].PreviousContext.String()]); err != nil {
 			return nil, err
 		}
 
-		rawBytes, ok := rawContext[metaObject.BehaviouralContext.String()]
-		if ok {
-			nodeSet, err := k.NodeSetFromRawContextObject(rawBytes)
-			if err != nil {
-				return nil, err
-			}
-
-			ics.UpdateNodeSet(position, nodeSet)
+		nodeSet, err := k.NodeSet(metaObject.ConsensusNodes, uint32(len(metaObject.ConsensusNodes)))
+		if err != nil {
+			return nil, err
 		}
 
-		contextHashes = append(contextHashes, ps[addr].PreviousContext)
-		contextHashes = append(contextHashes, metaObject.BehaviouralContext)
-		contextHashes = append(contextHashes, metaObject.RandomContext)
+		ics.UpdateNodeSet(position, nodeSet)
+
+		contextHashes = append(contextHashes, ps[id].PreviousContext)
 	}
 
 	// delete the context hashes from delta separately instead of deleting in above for loop
@@ -128,38 +114,27 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 
 // fetchParticipantContextByHash fetches the context info based on the give hash
 // and returns a NodeSet which holds the kramaIDs and public keys
-func (k *Engine) fetchParticipantContextByHash(addr identifiers.Address, hash common.Hash) (
-	behaviouralSet, randomSet *types.NodeSet,
+func (k *Engine) fetchParticipantContextByHash(id identifiers.Identifier, hash common.Hash) (
+	consensusSet *types.NodeSet,
 	err error,
 ) {
-	behaviouralContext, randomContext, err := k.state.GetContext(addr, hash)
+	consensusNodes, err := k.state.GetConsensusNodes(id, hash)
 	if err != nil {
-		k.logger.Error("failed to retrieve context nodes", "err", err, "addr", addr)
+		k.logger.Error("failed to retrieve context nodes", "err", err, "id", id)
 
-		return nil, nil, err
+		return nil, err
 	}
 
-	if len(behaviouralContext) > 0 {
-		publicKeys, err := k.state.GetPublicKeys(context.Background(), behaviouralContext...)
+	if len(consensusNodes) > 0 {
+		publicKeys, err := k.state.GetPublicKeys(context.Background(), consensusNodes...)
 		if err != nil {
-			k.logger.Error("failed to retrieve the public key of behavioural set", "err", err)
+			k.logger.Error("failed to retrieve the public key of consensus nodes", "err", err)
 
-			return nil, nil, common.ErrPublicKeyNotFound
+			return nil, common.ErrPublicKeyNotFound
 		}
 
-		behaviouralSet = types.NewNodeSet(behaviouralContext, publicKeys, uint32(len(behaviouralContext)))
+		consensusSet = types.NewNodeSet(consensusNodes, publicKeys, uint32(len(consensusNodes)))
 	}
 
-	if len(randomContext) > 0 {
-		publicKeys, err := k.state.GetPublicKeys(context.Background(), randomContext...)
-		if err != nil {
-			k.logger.Error("failed to retrieve the public key of random set", "err", err)
-
-			return nil, nil, common.ErrPublicKeyNotFound
-		}
-
-		randomSet = types.NewNodeSet(randomContext, publicKeys, uint32(len(randomContext)))
-	}
-
-	return behaviouralSet, randomSet, nil
+	return consensusSet, nil
 }

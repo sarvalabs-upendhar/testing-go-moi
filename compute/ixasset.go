@@ -27,9 +27,9 @@ func RunAssetTransfer(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderAddr())
+	sender := transition.GetObject(op.SenderID())
 	target := transition.GetObject(op.Target())
-	sarga := transition.GetAuxiliaryObject(common.SargaAddress)
+	sarga := transition.GetAuxiliaryObject(common.SargaAccountID)
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -87,7 +87,7 @@ func RunAssetCreate(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the operator and asset account state objects
-	operator := transition.GetObject(op.SenderAddr())
+	operator := transition.GetObject(op.SenderID())
 	assetacc := transition.GetObject(op.Target())
 
 	// todo: [asset logics] handle logic deployment for logical assets
@@ -103,7 +103,7 @@ func RunAssetCreate(
 	}
 
 	// Validate asset create payload
-	if err := validateAssetCreate(operator, assetacc, payload); err != nil {
+	if err := validateAssetCreate(operator, identifiers.MustAssetID(op.Target())); err != nil {
 		return opResult.WithStatus(common.ResultStateReverted)
 	}
 
@@ -113,14 +113,13 @@ func RunAssetCreate(
 		return opResult.WithStatus(common.ResultStateReverted)
 	}
 
-	if err = addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), assetacc.Address()); err != nil {
+	if err = addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), assetacc.Identifier()); err != nil {
 		return opResult.WithStatus(common.ResultStateReverted)
 	}
 
 	// Generate and set the result payload
 	common.SetResultPayload(opResult, common.AssetCreationResult{
-		AssetID:      assetID,
-		AssetAccount: assetacc.Address(),
+		AssetID: assetID,
 	})
 
 	return opResult.WithStatus(common.ResultOk)
@@ -142,7 +141,7 @@ func RunAssetApprove(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderAddr())
+	sender := transition.GetObject(op.SenderID())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -181,7 +180,7 @@ func RunAssetRevoke(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderAddr())
+	sender := transition.GetObject(op.SenderID())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -224,7 +223,7 @@ func RunAssetMint(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the operator and asset account state objects
-	operator := objects.GetObject(op.SenderAddr())
+	operator := objects.GetObject(op.SenderID())
 	assetacc := objects.GetObject(op.Target())
 
 	// Exhaust fuel from tank
@@ -271,7 +270,7 @@ func RunAssetBurn(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the operator and asset account state objects
-	operator := objects.GetObject(op.SenderAddr())
+	operator := objects.GetObject(op.SenderID())
 	assetacc := objects.GetObject(op.Target())
 
 	// Exhaust fuel from tank
@@ -313,7 +312,7 @@ func RunAssetLockup(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderAddr())
+	sender := transition.GetObject(op.SenderID())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -351,10 +350,10 @@ func RunAssetRelease(
 	payload, _ := op.GetAssetActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderAddr())
+	sender := transition.GetObject(op.SenderID())
 	target := transition.GetObject(op.Target())
 	benefactor := transition.GetObject(payload.Benefactor)
-	sarga := transition.GetAuxiliaryObject(common.SargaAddress)
+	sarga := transition.GetAuxiliaryObject(common.SargaAccountID)
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -380,15 +379,7 @@ func RunAssetRelease(
 // helper function
 
 // validateAssetCreate checks if the asset already exists and returns an error if it is already registered.
-func validateAssetCreate(operator, assetacc *state.Object, payload *common.AssetCreatePayload) error {
-	assetID := identifiers.NewAssetIDv0(
-		payload.IsLogical,
-		payload.IsStateFul,
-		payload.Dimension,
-		uint16(payload.Standard),
-		assetacc.Address(),
-	)
-
+func validateAssetCreate(operator *state.Object, assetID identifiers.AssetID) error {
 	// Check if the asset already exists
 	assetObject, _ := operator.FetchAssetObject(assetID, true)
 	if assetObject != nil {
@@ -401,24 +392,24 @@ func validateAssetCreate(operator, assetacc *state.Object, payload *common.Asset
 // createAsset creates a new asset and assigns it to the operator.
 func createAsset(operator, assetacc *state.Object, payload *common.AssetCreatePayload) (identifiers.AssetID, error) {
 	// Generate a new Asset Descriptor
-	descriptor := common.NewAssetDescriptor(operator.Address(), *payload)
+	descriptor := common.NewAssetDescriptor(operator.Identifier(), *payload)
 
 	// Create a new asset on the asset state object and get the asset ID
-	assetID, err := assetacc.CreateAsset(assetacc.Address(), descriptor)
+	assetID, err := assetacc.CreateAsset(assetacc.Identifier(), descriptor)
 	if err != nil {
-		return "", err
+		return identifiers.Nil, err
 	}
 
 	assetObject := state.NewAssetObject(descriptor.Supply, nil)
 
 	// Create a new asset on the operator state object
 	if err = operator.InsertNewAssetObject(assetID, assetObject); err != nil {
-		return "", err
+		return identifiers.Nil, err
 	}
 
-	// Registers a new asset in the operator's deeds registry.
-	if err = operator.CreateDeedsEntry(string(assetID)); err != nil {
-		return "", err
+	// Registers a new asset in the operator's deed registry.
+	if err = operator.CreateDeedsEntry(assetID.AsIdentifier()); err != nil {
+		return identifiers.Nil, err
 	}
 
 	return assetID, nil
@@ -428,7 +419,7 @@ func createAsset(operator, assetacc *state.Object, payload *common.AssetCreatePa
 func validateAssetTransfer(sender, target, sarga *state.Object, payload *common.AssetActionPayload) error {
 	// Check if the target account is registered
 	// Fetch the account info from genesis state
-	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Address().Bytes()); err != nil {
+	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Identifier().Bytes()); err != nil {
 		return common.ErrBeneficiaryNotRegistered
 	}
 
@@ -467,7 +458,7 @@ func transferAsset(sender, target *state.Object, payload *common.AssetActionPayl
 func validateAssetConsume(sender, target, sarga, benefactor *state.Object, payload *common.AssetActionPayload) error {
 	// Check if the target account is registered
 	// Fetch the account info from genesis state
-	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Address().Bytes()); err != nil {
+	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Identifier().Bytes()); err != nil {
 		return common.ErrBeneficiaryNotRegistered
 	}
 
@@ -481,7 +472,7 @@ func validateAssetConsume(sender, target, sarga, benefactor *state.Object, paylo
 		return common.ErrInsufficientFunds
 	}
 
-	mandate, ok := assetObject.Mandate[sender.Address()]
+	mandate, ok := assetObject.Mandate[sender.Identifier()]
 	if !ok {
 		return common.ErrMandateNotFound
 	}
@@ -500,7 +491,7 @@ func validateAssetConsume(sender, target, sarga, benefactor *state.Object, paylo
 // consumeMandate transfers the asset balance from benefactor to target account.
 func consumeMandate(sender, target, benefactor *state.Object, payload *common.AssetActionPayload) error {
 	// Deduct the transfer amount from the benefactor's asset and mandate balance
-	if err := benefactor.ConsumeMandate(payload.AssetID, sender.Address(), payload.Amount); err != nil {
+	if err := benefactor.ConsumeMandate(payload.AssetID, sender.Identifier(), payload.Amount); err != nil {
 		return err
 	}
 
@@ -565,7 +556,7 @@ func validateAssetMint(operator, assetacc *state.Object, payload *common.AssetSu
 	}
 
 	// only operator can mint asset
-	if assetInfo.Operator != operator.Address() {
+	if assetInfo.Operator != operator.Identifier() {
 		return common.ErrOperatorMismatch
 	}
 
@@ -597,7 +588,7 @@ func validateAssetBurn(operator, assetacc *state.Object, payload *common.AssetSu
 	}
 
 	// only operator can burn asset
-	if assetInfo.Operator != operator.Address() {
+	if assetInfo.Operator != operator.Identifier() {
 		return common.ErrOperatorMismatch
 	}
 
@@ -664,11 +655,11 @@ func lockupAsset(sender *state.Object, payload *common.AssetActionPayload) error
 func validateAssetRelease(sender, target, sarga, benefactor *state.Object, payload *common.AssetActionPayload) error {
 	// Check if the target account is registered
 	// Fetch the account info from genesis state
-	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Address().Bytes()); err != nil {
+	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Identifier().Bytes()); err != nil {
 		return common.ErrBeneficiaryNotRegistered
 	}
 
-	lockupAmount, err := benefactor.GetLockup(payload.AssetID, sender.Address())
+	lockupAmount, err := benefactor.GetLockup(payload.AssetID, sender.Identifier())
 	if err != nil {
 		return common.ErrLockupNotFound
 	}
@@ -682,7 +673,7 @@ func validateAssetRelease(sender, target, sarga, benefactor *state.Object, paylo
 
 // releaseAsset releases the specified amount from sender's lockup and updates the target's balance.
 func releaseAsset(sender, target, benefactor *state.Object, payload *common.AssetActionPayload) error {
-	if err := benefactor.ReleaseLockup(payload.AssetID, sender.Address(), payload.Amount); err != nil {
+	if err := benefactor.ReleaseLockup(payload.AssetID, sender.Identifier(), payload.Amount); err != nil {
 		return err
 	}
 

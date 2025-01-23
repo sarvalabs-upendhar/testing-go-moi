@@ -4,10 +4,10 @@ import (
 	"encoding/binary"
 	"math/big"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 )
 
-func BucketKeyAndID(addr identifiers.Address) ([]byte, uint64) {
+func BucketKeyAndID(addr IdentifierKey) ([]byte, uint64) {
 	accID := new(big.Int).SetBytes(addr.Bytes())
 
 	bucketNo := accID.Mod(accID, new(big.Int).SetUint64(MaxBucketCount))
@@ -20,7 +20,7 @@ func bucketPrefix(id uint64) []byte {
 
 	binary.BigEndian.PutUint64(countBytes, id)
 
-	return dbKey(identifiers.NilAddress, Bucket, countBytes)
+	return dbKey(identifiers.Nil, Bucket, countBytes)
 }
 
 func bucketCountKey(count uint64) []byte {
@@ -28,5 +28,5 @@ func bucketCountKey(count uint64) []byte {
 
 	binary.BigEndian.PutUint64(countBytes, count)
 
-	return dbKey(identifiers.NilAddress, BucketCount, countBytes)
+	return dbKey(identifiers.Nil, BucketCount, countBytes)
 }

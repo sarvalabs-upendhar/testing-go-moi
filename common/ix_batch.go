@@ -6,17 +6,17 @@ import (
 
 type IxBatch struct {
 	ixs []*Interaction
-	ps  map[identifiers.Address]struct{}
+	ps  map[identifiers.Identifier]struct{}
 }
 
 func NewIxnBatch() *IxBatch {
 	return &IxBatch{
 		ixs: make([]*Interaction, 0),
-		ps:  make(map[identifiers.Address]struct{}),
+		ps:  make(map[identifiers.Identifier]struct{}),
 	}
 }
 
-func (ib *IxBatch) Ps() map[identifiers.Address]struct{} {
+func (ib *IxBatch) Ps() map[identifiers.Identifier]struct{} {
 	return ib.ps
 }
 
@@ -52,12 +52,12 @@ func (ib *IxBatch) Add(ixn *Interaction) bool {
 
 	ib.ixs = append(ib.ixs, ixn)
 
-	for addr, info := range ixn.ps {
+	for id, info := range ixn.ps {
 		if info.IsGenesis {
 			continue
 		}
 
-		ib.ps[addr] = struct{}{}
+		ib.ps[id] = struct{}{}
 	}
 
 	return true

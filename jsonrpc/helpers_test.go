@@ -120,7 +120,7 @@ func (m *MockChainManager) GetInteractionAndParticipantsByTSHash(tsHash common.H
 	panic("implement me")
 }
 
-func (m *MockChainManager) GetLatestTesseract(_ identifiers.Address, _ bool) (*common.Tesseract, error) {
+func (m *MockChainManager) GetLatestTesseract(_ identifiers.Identifier, _ bool) (*common.Tesseract, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -162,13 +162,13 @@ func (m *MockChainManager) GetReceiptByIxHash(ixHash common.Hash) (*common.Recei
 	panic("implement me")
 }
 
-func (m *MockChainManager) setTesseractHeightEntry(address identifiers.Address, height uint64, hash common.Hash) {
-	key := address.Hex() + strconv.FormatUint(height, 10)
+func (m *MockChainManager) setTesseractHeightEntry(id identifiers.Identifier, height uint64, hash common.Hash) {
+	key := id.Hex() + strconv.FormatUint(height, 10)
 	m.TSHashByHeight[key] = hash
 }
 
-func (m *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error) {
-	key := address.Hex() + strconv.FormatUint(height, 10)
+func (m *MockChainManager) GetTesseractHeightEntry(id identifiers.Identifier, height uint64) (common.Hash, error) {
+	key := id.Hex() + strconv.FormatUint(height, 10)
 
 	if hash, ok := m.TSHashByHeight[key]; ok {
 		return hash, nil
@@ -179,7 +179,7 @@ func (m *MockChainManager) GetTesseractHeightEntry(address identifiers.Address, 
 
 type MockStateManager struct {
 	storage     map[common.Hash][]byte
-	accMetaInfo map[identifiers.Address]*common.AccountMetaInfo
+	accMetaInfo map[identifiers.Identifier]*common.AccountMetaInfo
 }
 
 func NewMockStateManager(t *testing.T) *MockStateManager {
@@ -187,91 +187,90 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 
 	mockState := new(MockStateManager)
 	mockState.storage = make(map[common.Hash][]byte)
-	mockState.accMetaInfo = make(map[identifiers.Address]*common.AccountMetaInfo)
+	mockState.accMetaInfo = make(map[identifiers.Identifier]*common.AccountMetaInfo)
 
 	return mockState
 }
 
-func (m *MockStateManager) GetAccountKeys(addrs identifiers.Address,
+func (m *MockStateManager) GetAccountKeys(id identifiers.Identifier,
 	stateHash common.Hash,
 ) (common.AccountKeys, error) {
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetSequenceID(addr identifiers.Address,
+func (m *MockStateManager) GetSequenceID(id identifiers.Identifier,
 	keyID uint64, stateHash common.Hash,
 ) (uint64, error) {
 	panic("implement me")
 }
 
 func (m *MockStateManager) GetMandates(
-	address identifiers.Address, hash common.Hash,
+	id identifiers.Identifier, hash common.Hash,
 ) ([]common.AssetMandateOrLockup, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockStateManager) GetLockups(
-	address identifiers.Address, hash common.Hash,
+	id identifiers.Identifier, hash common.Hash,
 ) ([]common.AssetMandateOrLockup, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockStateManager) FetchIxStateObjects(ixns common.Interactions,
-	hashes map[identifiers.Address]common.Hash,
+	hashes map[identifiers.Identifier]common.Hash,
 ) (*state.Transition, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) CreateStateObject(address identifiers.Address,
+func (m *MockStateManager) CreateStateObject(id identifiers.Identifier,
 	accountType common.AccountType, isGenesis bool,
 ) *state.Object {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error) {
+func (m *MockStateManager) GetStateObjectByHash(id identifiers.Identifier, hash common.Hash) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) IsAccountRegistered(address identifiers.Address) (bool, error) {
+func (m *MockStateManager) IsAccountRegistered(id identifiers.Identifier) (bool, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
+func (m *MockStateManager) GetLatestStateObject(id identifiers.Identifier) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetContextByHash(
-	address identifiers.Address,
+func (m *MockStateManager) GetConsensusNodesByHash(id identifiers.Identifier,
 	hash common.Hash,
-) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error) {
+) ([]kramaid.KramaID, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetBalances(addrs identifiers.Address, stateHash common.Hash) (common.AssetMap, error) {
+func (m *MockStateManager) GetBalances(id identifiers.Identifier, stateHash common.Hash) (common.AssetMap, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetBalance(addr identifiers.Address, assetID identifiers.AssetID, stateHash common.Hash,
+func (m *MockStateManager) GetBalance(id identifiers.Identifier, assetID identifiers.AssetID, stateHash common.Hash,
 ) (*big.Int, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetNonce(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
+func (m *MockStateManager) GetNonce(id identifiers.Identifier, stateHash common.Hash) (uint64, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetAccountState(addr identifiers.Address, stateHash common.Hash) (*common.Account, error) {
+func (m *MockStateManager) GetAccountState(id identifiers.Identifier, stateHash common.Hash) (*common.Account, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -287,7 +286,7 @@ func (m *MockStateManager) GetPersistentStorageEntry(_ identifiers.LogicID, _ []
 }
 
 func (m *MockStateManager) GetEphemeralStorageEntry(
-	_ identifiers.Address, _ identifiers.LogicID, _ []byte, _ common.Hash,
+	_ identifiers.Identifier, _ identifiers.LogicID, _ []byte, _ common.Hash,
 ) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
@@ -295,16 +294,16 @@ func (m *MockStateManager) GetEphemeralStorageEntry(
 
 func (m *MockStateManager) setAccountMetaInfo(
 	t *testing.T,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	accMetaInfo *common.AccountMetaInfo,
 ) {
 	t.Helper()
 
-	m.accMetaInfo[address] = accMetaInfo
+	m.accMetaInfo[id] = accMetaInfo
 }
 
-func (m *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
-	accMetaInfo, ok := m.accMetaInfo[addr]
+func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
+	accMetaInfo, ok := m.accMetaInfo[id]
 	if !ok {
 		return nil, common.ErrKeyNotFound
 	}
@@ -312,7 +311,10 @@ func (m *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common
 	return accMetaInfo, nil
 }
 
-func (m *MockStateManager) GetLogicIDs(addr identifiers.Address, stateHash common.Hash) ([]identifiers.LogicID, error) {
+func (m *MockStateManager) GetLogicIDs(
+	id identifiers.Identifier,
+	stateHash common.Hash,
+) ([]identifiers.LogicID, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -326,8 +328,8 @@ func (m *MockStateManager) GetAssetInfo(
 }
 
 func (m *MockStateManager) GetDeeds(
-	addr identifiers.Address, stateHash common.Hash,
-) (map[string]*common.AssetDescriptor, error) {
+	id identifiers.Identifier, stateHash common.Hash,
+) (map[identifiers.Identifier]*common.AssetDescriptor, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -353,20 +355,20 @@ func createReceipt(t *testing.T, callBack func(r *common.Receipt)) *common.Recei
 
 // createTSandLogs creates 3 dummy tesseracts with receipts.
 // The receipts contain dummy logs.
-// Dummy logs are created using address, hash, logic ID and data.
+// Dummy logs are created using id, hash, logic ID and data.
 func createTSandLogs(
 	t *testing.T,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	hashes []common.Hash,
 ) ([]*common.Tesseract, common.Log) {
 	t.Helper()
 
-	logic := tests.GetLogicID(t, address)
+	logic := tests.GetLogicID(t, id)
 	data := []byte{1}
 
 	// create dummy logs
 	logs := common.Log{
-		Address: address,
+		ID:      id,
 		Topics:  hashes,
 		LogicID: logic,
 		Data:    data,
@@ -382,22 +384,22 @@ func createTSandLogs(
 
 	paramsMap := map[int]*tests.CreateTesseractParams{
 		0: {
-			Addresses: []identifiers.Address{address},
-			Heights:   []uint64{6},
-			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:      common.NewInteractionsWithLeaderCheck(false, ixns),
+			IDs:      []identifiers.Identifier{id},
+			Heights:  []uint64{6},
+			Receipts: common.Receipts{tests.RandomHash(t): receipts},
+			Ixns:     common.NewInteractionsWithLeaderCheck(false, ixns),
 		},
 		1: {
-			Addresses: []identifiers.Address{address},
-			Heights:   []uint64{10},
-			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:      common.NewInteractionsWithLeaderCheck(false, ixns),
+			IDs:      []identifiers.Identifier{id},
+			Heights:  []uint64{10},
+			Receipts: common.Receipts{tests.RandomHash(t): receipts},
+			Ixns:     common.NewInteractionsWithLeaderCheck(false, ixns),
 		},
 		2: {
-			Addresses: []identifiers.Address{address},
-			Heights:   []uint64{14},
-			Receipts:  common.Receipts{tests.RandomHash(t): receipts},
-			Ixns:      common.NewInteractionsWithLeaderCheck(false, ixns),
+			IDs:      []identifiers.Identifier{id},
+			Heights:  []uint64{14},
+			Receipts: common.Receipts{tests.RandomHash(t): receipts},
+			Ixns:     common.NewInteractionsWithLeaderCheck(false, ixns),
 		},
 	}
 	tesseracts := tests.CreateTesseracts(t, 3, paramsMap)
@@ -408,7 +410,7 @@ func createTSandLogs(
 func validateLogs(t *testing.T, log common.Log, rpcLog *rpcargs.RPCLog) {
 	t.Helper()
 
-	require.Equal(t, log.Address, rpcLog.Address)
+	require.Equal(t, log.ID, rpcLog.ID)
 	require.Equal(t, log.LogicID, rpcLog.LogicID)
 	require.Equal(t, log.Topics, rpcLog.Topics)
 	require.Equal(t, hexutil.Bytes(log.Data), rpcLog.Data)
@@ -518,9 +520,9 @@ func assertRPCTesseract(
 	// match result field in subscriptionTemplate
 	require.Equal(t, len(expectedTesseract.Participants()), len(rpcTesseract.Participants))
 
-	for _, addr := range expectedTesseract.Addresses() {
-		require.True(t, rpcTesseract.HasParticipant(addr))
-		require.Equal(t, expectedTesseract.Height(addr), rpcTesseract.Height(addr))
+	for _, id := range expectedTesseract.AccountIDs() {
+		require.True(t, rpcTesseract.HasParticipant(id))
+		require.Equal(t, expectedTesseract.Height(id), rpcTesseract.Height(id))
 	}
 }
 
@@ -562,7 +564,7 @@ func subscribeToNewTesseractEvent(t *testing.T, dispatcher *dispatcher, mockConn
 	request := Request{
 		ID:     1.0,
 		Method: "moi.subscribe",
-		Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"address": "%s"}]`, tests.RandomAddress(t))),
+		Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 	}
 
 	// Forward the message to dispatcher
@@ -587,12 +589,12 @@ func setupTestHTTPServer(t *testing.T) (*gorillaWS.Conn, *http.Response) {
 	port, err := tests.GetAvailablePort(t)
 	require.NoError(t, err)
 
-	addr := &net.TCPAddr{
+	id := &net.TCPAddr{
 		IP:   net.IPv4(127, 0, 0, 1),
 		Port: port,
 	}
 
-	s := MockServer(t, addr)
+	s := MockServer(t, id)
 
 	s.router.HandleFunc("/ws", s.handleWs)
 

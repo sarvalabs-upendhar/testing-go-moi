@@ -67,8 +67,8 @@ type AssetCreatePayload struct {
 }
 
 // Bytes serializes AssetCreatePayload to bytes.
-func (asset *AssetCreatePayload) Bytes() ([]byte, error) {
-	data, err := polo.Polorize(asset)
+func (ac *AssetCreatePayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(ac)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to polorize asset create payload")
 	}
@@ -77,12 +77,26 @@ func (asset *AssetCreatePayload) Bytes() ([]byte, error) {
 }
 
 // FromBytes deserializes AssetCreatePayload from bytes.
-func (asset *AssetCreatePayload) FromBytes(data []byte) error {
-	if err := polo.Depolorize(asset, data); err != nil {
+func (ac *AssetCreatePayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(ac, data); err != nil {
 		return errors.Wrap(err, "failed to depolorize asset create payload")
 	}
 
 	return nil
+}
+
+func (ac *AssetCreatePayload) Flags() []identifiers.Flag {
+	flags := make([]identifiers.Flag, 0)
+
+	if ac.IsLogical {
+		flags = append(flags, identifiers.AssetLogical)
+	}
+
+	if ac.IsStateFul {
+		flags = append(flags, identifiers.AssetStateful)
+	}
+
+	return flags
 }
 
 // AssetSupplyPayload holds data for minting or burning an asset.
@@ -124,7 +138,7 @@ type KeyRevokePayload struct {
 
 // ParticipantCreatePayload holds the data for creating a new participant account
 type ParticipantCreatePayload struct {
-	Address     identifiers.Address
+	ID          identifiers.Identifier
 	KeysPayload []KeyAddPayload
 	Amount      *big.Int
 }
@@ -194,10 +208,10 @@ func (configure *AccountConfigurePayload) FromBytes(data []byte) error {
 
 // AssetActionPayload holds data for transferring, approving, or revoking an asset.
 type AssetActionPayload struct {
-	// Benefactor is the address that authorized access to his asset funds.
-	Benefactor identifiers.Address
-	// Beneficiary is the recipient address for the transfer/approve/revoke operation
-	Beneficiary identifiers.Address
+	// Benefactor is the id that authorized access to his asset funds.
+	Benefactor identifiers.Identifier
+	// Beneficiary is the recipient id for the transfer/approve/revoke operation
+	Beneficiary identifiers.Identifier
 	// AssetID is used to specify the AssetID for which to transfer/approve/revoke
 	AssetID identifiers.AssetID
 	// Amount is used to specify the Amount for transfer/approve/revoke
@@ -270,4 +284,13 @@ func (payload *LogicPayload) FromBytes(data []byte) error {
 	}
 
 	return nil
+}
+
+func (payload *LogicPayload) Flags() []identifiers.Flag {
+	flags := make([]identifiers.Flag, 0)
+
+	// TODO: fix this
+	// flags = append(flags, identifiers.LogicIntrinsic, identifiers.LogicExtrinsic)
+
+	return flags
 }

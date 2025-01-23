@@ -251,7 +251,7 @@ func (c *Client) TDU(ctx context.Context, args *rpcargs.QueryArgs) ([]rpcargs.TD
 func (c *Client) ContextInfo(ctx context.Context, args *rpcargs.ContextInfoArgs) (*rpcargs.ContextResponse, error) {
 	var contextResp rpcargs.ContextResponse
 
-	err := c.Call(ctx, &contextResp, "moi.ContextInfo", args)
+	err := c.Call(ctx, &contextResp, "moi.ConsensusNodes", args)
 	if err != nil {
 		return nil, err
 	}
@@ -747,15 +747,15 @@ func (c *Client) NodeMetaInfo(
 }
 
 // Accounts returns the address of all the accounts
-func (c *Client) Accounts(ctx context.Context) ([]identifiers.Address, error) {
-	var addrs []identifiers.Address
+func (c *Client) Accounts(ctx context.Context) ([]identifiers.Identifier, error) {
+	var ids []identifiers.Identifier
 
-	err := c.Call(ctx, &addrs, "debug.Accounts", nil)
+	err := c.Call(ctx, &ids, "debug.Accounts", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return addrs, nil
+	return ids, nil
 }
 
 // Connections returns the total connections of the node

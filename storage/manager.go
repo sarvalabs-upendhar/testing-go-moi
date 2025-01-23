@@ -83,9 +83,9 @@ func (p *PersistenceManager) GetBucketSizes() (map[uint64]uint64, error) {
 	return buckets, nil
 }
 
-// GetAccountMetaInfo fetches the account meta info for a given address
-func (p *PersistenceManager) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
-	key, _ := BucketKeyAndID(id)
+// GetAccountMetaInfo fetches the account meta info for a given identifier
+func (p *PersistenceManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
+	key, _ := BucketKeyAndID(NewIdentifierKey(id))
 
 	data, err := p.ReadEntry(key)
 	if err != nil {
@@ -100,8 +100,8 @@ func (p *PersistenceManager) GetAccountMetaInfo(id identifiers.Address) (*common
 	return accMetaInfo, nil
 }
 
-func (p *PersistenceManager) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool {
-	accMetaInfo, err := p.GetAccountMetaInfo(addr)
+func (p *PersistenceManager) HasAccMetaInfoAt(id identifiers.Identifier, height uint64) bool {
+	accMetaInfo, err := p.GetAccountMetaInfo(id)
 	if err != nil {
 		return false
 	}
@@ -113,7 +113,7 @@ func (p *PersistenceManager) HasAccMetaInfoAt(addr identifiers.Address, height u
 	return true
 }
 
-// incrementBucketCount is used to increment bucket count when new address is added to lattice
+// incrementBucketCount is used to increment bucket count when new id is added to lattice
 func (p *PersistenceManager) incrementBucketCount(bucket uint64, count uint64) error {
 	var (
 		rawCount = make([]byte, 8)
@@ -139,24 +139,25 @@ func (p *PersistenceManager) incrementBucketCount(bucket uint64, count uint64) e
 // UpdateAccMetaInfo is used to update the meta-data of an account, this meta-data includes
 // Height - Current height of the lattice
 func (p *PersistenceManager) UpdateAccMetaInfo(
-	id identifiers.Address,
+	id identifiers.Identifier,
 	height uint64,
 	tesseractHash common.Hash,
 	stateHash, contextHash common.Hash,
+	consensusNodesHash common.Hash,
 	commitHash common.Hash,
 	accType common.AccountType,
 	shouldUpdateContextSetPosition bool,
 	positionInContextSet int,
 ) (int32, bool, error) {
 	if id.IsNil() {
-		return 0, false, common.ErrInvalidAddress
+		return 0, false, common.ErrInvalidIdentifier
 	}
 
 	if tesseractHash.IsNil() {
 		return 0, false, common.ErrEmptyHash
 	}
 
-	key, bucketID := BucketKeyAndID(id)
+	key, bucketID := BucketKeyAndID(NewIdentifierKey(id))
 
 	data, err := p.ReadEntry(key)
 	if err == nil {
@@ -169,17 +170,21 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			return -1, false, common.ErrHashMismatch
 		}
 
-		if shouldUpdateContextSetPosition {
-			accMetaInfo.PositionInContextSet = positionInContextSet
-		}
-
 		if height >= accMetaInfo.Height {
 			accMetaInfo.TesseractHash = tesseractHash
 			accMetaInfo.StateHash = stateHash
 			accMetaInfo.ContextHash = contextHash
-			accMetaInfo.Address = id
+			accMetaInfo.ID = id
 			accMetaInfo.Height = height
 			accMetaInfo.CommitHash = commitHash
+
+			if shouldUpdateContextSetPosition {
+				accMetaInfo.PositionInContextSet = positionInContextSet
+			}
+
+			if !consensusNodesHash.IsNil() {
+				accMetaInfo.ConsensusNodesHash = consensusNodesHash
+			}
 		}
 
 		rawData, err := accMetaInfo.Bytes()
@@ -194,9 +199,10 @@ func (p *PersistenceManager) UpdateAccMetaInfo(
 			StateHash:            stateHash,
 			ContextHash:          contextHash,
 			Type:                 accType,
-			Address:              id,
+			ID:                   id,
 			Height:               height,
 			CommitHash:           commitHash,
+			ConsensusNodesHash:   consensusNodesHash,
 			PositionInContextSet: positionInContextSet,
 		}
 
@@ -299,7 +305,7 @@ func (p *PersistenceManager) DropSenatusEntries() error {
 		return errors.Wrap(err, "failed to drop senatus entries")
 	}
 
-	if err := p.db.Delete(dbKey(identifiers.NilAddress, SenatusPeerCount, nil)); err != nil {
+	if err := p.db.Delete(dbKey(identifiers.Nil, SenatusPeerCount, nil)); err != nil {
 		return errors.Wrap(err, "failed to drop senatus peer count entry")
 	}
 
@@ -340,50 +346,50 @@ func (p *PersistenceManager) GetEntriesWithPrefix(ctx context.Context, prefix []
 	return ch, nil
 }
 
-func (p *PersistenceManager) SetAccount(addr identifiers.Address, stateHash common.Hash, data []byte) error {
-	key := dbKey(addr, Account, stateHash.Bytes())
+func (p *PersistenceManager) SetAccount(id identifiers.Identifier, stateHash common.Hash, data []byte) error {
+	key := dbKey(id, Account, stateHash.Bytes())
 
 	return p.CreateEntry(key, data)
 }
 
-func (p *PersistenceManager) GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error) {
-	key := dbKey(addr, Account, stateHash.Bytes())
+func (p *PersistenceManager) GetAccount(id identifiers.Identifier, stateHash common.Hash) ([]byte, error) {
+	key := dbKey(id, Account, stateHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetAccountKeys(addr identifiers.Address, accountKeysHash common.Hash) ([]byte, error) {
-	key := dbKey(addr, AccountKeys, accountKeysHash.Bytes())
+func (p *PersistenceManager) GetAccountKeys(id identifiers.Identifier, accountKeysHash common.Hash) ([]byte, error) {
+	key := dbKey(id, AccountKeys, accountKeysHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error) {
-	key := dbKey(addr, Context, contextHash.Bytes())
+func (p *PersistenceManager) GetContext(id identifiers.Identifier, contextHash common.Hash) ([]byte, error) {
+	key := dbKey(id, Context, contextHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) GetStorage(addr identifiers.Address, hash common.Hash) ([]byte, error) {
-	key := dbKey(addr, Storage, hash.Bytes())
+func (p *PersistenceManager) GetStorage(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
+	key := dbKey(id, Storage, hash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) GetRawTesseract(tsHash common.Hash) ([]byte, error) {
-	key := dbKey(identifiers.NilAddress, Tesseract, tsHash.Bytes())
+	key := dbKey(identifiers.Nil, Tesseract, tsHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) SetTesseract(tsHash common.Hash, data []byte) error {
-	key := dbKey(identifiers.NilAddress, Tesseract, tsHash.Bytes())
+	key := dbKey(identifiers.Nil, Tesseract, tsHash.Bytes())
 
 	return p.CreateEntry(key, data)
 }
 
 func (p *PersistenceManager) HasTesseract(tsHash common.Hash) bool {
-	key := dbKey(identifiers.NilAddress, Tesseract, tsHash.Bytes())
+	key := dbKey(identifiers.Nil, Tesseract, tsHash.Bytes())
 
 	exists, err := p.db.Has(key)
 	if err != nil {
@@ -393,24 +399,24 @@ func (p *PersistenceManager) HasTesseract(tsHash common.Hash) bool {
 	return exists
 }
 
-func (p *PersistenceManager) GetTesseractHeightEntry(addr identifiers.Address, height uint64) ([]byte, error) {
-	return p.ReadEntry(tesseractHeightKey(addr, height))
+func (p *PersistenceManager) GetTesseractHeightEntry(id identifiers.Identifier, height uint64) ([]byte, error) {
+	return p.ReadEntry(tesseractHeightKey(id, height))
 }
 
-func (p *PersistenceManager) SetTesseractHeightEntry(addr identifiers.Address, height uint64, hash common.Hash) error {
-	return p.CreateEntry(tesseractHeightKey(addr, height), hash.Bytes())
+func (p *PersistenceManager) SetTesseractHeightEntry(id identifiers.Identifier, height uint64, hash common.Hash) error {
+	return p.CreateEntry(tesseractHeightKey(id, height), hash.Bytes())
 }
 
 // SetInteractions stores tesseract hash and raw interactions data as key value pair
 func (p *PersistenceManager) SetInteractions(tsHash common.Hash, data []byte) error {
-	key := dbKey(identifiers.NilAddress, Interaction, tsHash.Bytes())
+	key := dbKey(identifiers.Nil, Interaction, tsHash.Bytes())
 
 	return p.CreateEntry(key, data)
 }
 
 // GetInteractions returns raw interactions data for the given tesseract hash
 func (p *PersistenceManager) GetInteractions(tsHash common.Hash) ([]byte, error) {
-	key := dbKey(identifiers.NilAddress, Interaction, tsHash.Bytes())
+	key := dbKey(identifiers.Nil, Interaction, tsHash.Bytes())
 
 	return p.ReadEntry(key)
 }
@@ -427,7 +433,7 @@ func (p *PersistenceManager) GetIXLookup(ixHash common.Hash) ([]byte, error) {
 
 // SetReceipts stores tesseract hash and raw receipt data as key value pair
 func (p *PersistenceManager) SetReceipts(tsHash common.Hash, data []byte) error {
-	key := dbKey(identifiers.NilAddress, Receipt, tsHash.Bytes())
+	key := dbKey(identifiers.Nil, Receipt, tsHash.Bytes())
 
 	return p.CreateEntry(key, data)
 }
@@ -440,13 +446,13 @@ func (p *PersistenceManager) SetCommitInfo(tsHash common.Hash, data []byte) erro
 
 // GetReceipts returns raw receipt data for the given tesseract hash
 func (p *PersistenceManager) GetReceipts(tsHash common.Hash) ([]byte, error) {
-	key := dbKey(identifiers.NilAddress, Receipt, tsHash.Bytes())
+	key := dbKey(identifiers.Nil, Receipt, tsHash.Bytes())
 
 	return p.ReadEntry(key)
 }
 
-func (p *PersistenceManager) SetAccountSyncStatus(address identifiers.Address, status *common.AccountSyncStatus) error {
-	key := dbKey(identifiers.NilAddress, AccountSyncJob, address.Bytes())
+func (p *PersistenceManager) SetAccountSyncStatus(id identifiers.Identifier, status *common.AccountSyncStatus) error {
+	key := dbKey(identifiers.Nil, AccountSyncJob, id.Bytes())
 
 	rawData, err := status.Bytes()
 	if err != nil {
@@ -456,34 +462,34 @@ func (p *PersistenceManager) SetAccountSyncStatus(address identifiers.Address, s
 	return p.UpdateEntry(key, rawData)
 }
 
-func (p *PersistenceManager) CleanupAccountSyncStatus(address identifiers.Address) error {
-	key := dbKey(identifiers.NilAddress, AccountSyncJob, address.Bytes())
+func (p *PersistenceManager) CleanupAccountSyncStatus(id identifiers.Identifier) error {
+	key := dbKey(identifiers.Nil, AccountSyncJob, id.Bytes())
 
 	return p.DeleteEntry(key)
 }
 
 func (p *PersistenceManager) GetMerkleTreeEntry(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	prefix PrefixTag,
 	actualKey []byte,
 ) ([]byte, error) {
-	key := dbKey(address, prefix, actualKey)
+	key := dbKey(id, prefix, actualKey)
 
 	return p.ReadEntry(key)
 }
 
 func (p *PersistenceManager) SetMerkleTreeEntry(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	prefix PrefixTag,
 	actualKey, value []byte,
 ) error {
-	key := dbKey(address, prefix, actualKey)
+	key := dbKey(id, prefix, actualKey)
 
 	return p.CreateEntry(key, value)
 }
 
 func (p *PersistenceManager) SetMerkleTreeEntries(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	prefix PrefixTag,
 	entries map[string][]byte,
 ) error {
@@ -491,7 +497,7 @@ func (p *PersistenceManager) SetMerkleTreeEntries(
 	batchWriter := p.NewBatchWriter()
 
 	for k, v := range entries {
-		key := dbKey(address, prefix, []byte(k))
+		key := dbKey(id, prefix, []byte(k))
 		// Add to batch writer
 		if err := batchWriter.Set(key, v); err != nil {
 			return err
@@ -502,13 +508,13 @@ func (p *PersistenceManager) SetMerkleTreeEntries(
 }
 
 func (p *PersistenceManager) WritePreImages(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	entries map[common.Hash][]byte,
 ) error {
 	batchWriter := p.NewBatchWriter()
 
 	for k, v := range entries {
-		key := PreImageKey(address, k)
+		key := PreImageKey(id, k)
 		// Add to batch writer
 		if err := batchWriter.Set(key, v); err != nil {
 			return err
@@ -519,10 +525,10 @@ func (p *PersistenceManager) WritePreImages(
 }
 
 func (p *PersistenceManager) GetPreImage(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	hash common.Hash,
 ) ([]byte, error) {
-	key := PreImageKey(address, hash)
+	key := PreImageKey(id, hash)
 
 	return p.ReadEntry(key)
 }
@@ -531,13 +537,13 @@ func (p *PersistenceManager) GetPreImage(
 // Snapshot contains all the entries with version > sinceTs
 func (p *PersistenceManager) StreamSnapshot(
 	ctx context.Context,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	sinceTS uint64,
 	respChan chan<- common.SnapResponse,
 ) (uint64, error) {
 	kv := NewKVCollector(ctx, p.logger, p.config.MaxSnapSize, respChan)
 
-	err := p.db.Snapshot(ctx, address.Bytes(), sinceTS, kv)
+	err := p.db.Snapshot(ctx, id.Bytes(), sinceTS, kv)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to generate snapshot")
 	}
@@ -574,8 +580,8 @@ func (p *PersistenceManager) StoreAccountSnapShot(snap *common.Snapshot) error {
 	return nil
 }
 
-func (p *PersistenceManager) GetRegisteredAccounts() ([]identifiers.Address, error) {
-	addrsList := make([]identifiers.Address, 0)
+func (p *PersistenceManager) GetRegisteredAccounts() ([]identifiers.Identifier, error) {
+	idsList := make([]identifiers.Identifier, 0)
 
 	for i := uint64(0); i < 1024; i++ {
 		prefix := bucketPrefix(i)
@@ -586,12 +592,12 @@ func (p *PersistenceManager) GetRegisteredAccounts() ([]identifiers.Address, err
 		}
 
 		for entry := range entries {
-			addr := entry.Key[9:]
-			addrsList = append(addrsList, identifiers.NewAddressFromBytes(addr))
+			id := entry.Key[16:]
+			idsList = append(idsList, identifiers.Identifier(id))
 		}
 	}
 
-	return addrsList, nil
+	return idsList, nil
 }
 
 func (p *PersistenceManager) GetAccountsSyncStatus() ([]*common.AccountSyncStatus, error) {
@@ -683,8 +689,8 @@ func (p *PersistenceManager) GetTesseract(
 	return ts, nil
 }
 
-func (p *PersistenceManager) GetDeeds(addr identifiers.Address, hash common.Hash) ([]byte, error) {
-	return p.ReadEntry(DeedsKey(addr, hash))
+func (p *PersistenceManager) GetDeeds(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
+	return p.ReadEntry(DeedsKey(id, hash))
 }
 
 func (p *PersistenceManager) DropPrefix(prefix []byte) error {
@@ -695,12 +701,12 @@ func (p *PersistenceManager) GetCommitInfo(tsHash common.Hash) ([]byte, error) {
 	return p.db.Get(TesseractCommitInfoKey(tsHash))
 }
 
-func (p *PersistenceManager) UpdatePrimarySyncStatus(address identifiers.Address) error {
-	return p.CreateEntry(AccSyncStatusKey(address), []byte{0x01})
+func (p *PersistenceManager) UpdatePrimarySyncStatus(id identifiers.Identifier) error {
+	return p.CreateEntry(AccSyncStatusKey(id), []byte{0x01})
 }
 
-func (p *PersistenceManager) IsAccountPrimarySyncDone(address identifiers.Address) bool {
-	isSynced, err := p.db.Has(AccSyncStatusKey(address))
+func (p *PersistenceManager) IsAccountPrimarySyncDone(id identifiers.Identifier) bool {
+	isSynced, err := p.db.Has(AccSyncStatusKey(id))
 	if err != nil {
 		p.logger.Error("Error checking the account sync status", "err", err)
 	}
@@ -758,14 +764,14 @@ func (p *PersistenceManager) GetAllConsensusProposalInfo(ctx context.Context) ([
 	return values, nil
 }
 
-func (p *PersistenceManager) GetSafetyData(addr identifiers.Address) ([]byte, error) {
-	return p.ReadEntry(AccountSafetyInfoKey(addr))
+func (p *PersistenceManager) GetSafetyData(id identifiers.Identifier) ([]byte, error) {
+	return p.ReadEntry(AccountSafetyInfoKey(id))
 }
 
-func (p *PersistenceManager) SetSafetyData(addr identifiers.Address, data []byte) error {
-	return p.UpdateEntry(AccountSafetyInfoKey(addr), data)
+func (p *PersistenceManager) SetSafetyData(id identifiers.Identifier, data []byte) error {
+	return p.UpdateEntry(AccountSafetyInfoKey(id), data)
 }
 
-func (p *PersistenceManager) DeleteSafetyData(addr identifiers.Address) error {
-	return p.DeleteEntry(AccountSafetyInfoKey(addr))
+func (p *PersistenceManager) DeleteSafetyData(id identifiers.Identifier) error {
+	return p.DeleteEntry(AccountSafetyInfoKey(id))
 }

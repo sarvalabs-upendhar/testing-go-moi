@@ -16,12 +16,12 @@ type BucketSyncResponse struct {
 }
 
 type SnapRequest struct {
-	Address identifiers.Address
-	Height  uint64
+	AccountID identifiers.Identifier
+	Height    uint64
 }
 
 type LatticeRequest struct {
-	Address     identifiers.Address
+	AccountID   identifiers.Identifier
 	StartHeight uint64
 	EndHeight   uint64
 }

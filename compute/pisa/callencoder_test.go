@@ -56,7 +56,7 @@ func TestCallEncoder_EncodeInputs(t *testing.T) {
 				"b": []byte{0xab, 0xc1, 0x23},
 			},
 			nil,
-			"invalid input data for 'b': incompatible wire: unexpected wiretype 'word'. expected one of: {null, pack, document}",
+			"invalid input data for 'b': incompatible wire: unexpected wiretype 'word'. expected one of: {pack, document}",
 		},
 
 		{
@@ -158,7 +158,7 @@ func TestCallEncoder_DecodeOutputs(t *testing.T) {
 			}.Bytes(),
 			nil,
 			"invalid output data for 'b': incompatible wire: unexpected wiretype 'negint'. " +
-				"expected one of: {null, pack, document}",
+				"expected one of: {pack, document}",
 		},
 
 		{

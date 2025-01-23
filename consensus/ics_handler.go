@@ -300,7 +300,7 @@ func (k *Engine) handlePrepared(
 
 	localVI := slot.ClusterState().LocalViewInfo()
 
-	lockedTS := make(map[identifiers.Address]*common.Tesseract)
+	lockedTS := make(map[identifiers.Identifier]*common.Tesseract)
 
 	for index, highestVI := range slot.ClusterState().HighestViewInfo() {
 		// Qc will be NIL for new accounts
@@ -322,7 +322,7 @@ func (k *Engine) handlePrepared(
 			return err
 		}
 
-		heightDiff := highestViewTS.Height(highestVI.Addr) - currentViewTS.Height(highestVI.Addr)
+		heightDiff := highestViewTS.Height(highestVI.ID) - currentViewTS.Height(highestVI.ID)
 
 		if heightDiff == 0 {
 			continue
@@ -338,7 +338,7 @@ func (k *Engine) handlePrepared(
 		}
 
 		if highestVI.Qc[0].Type == common.PREVOTE {
-			lockedTS[highestVI.Qc[0].Address] = highestViewTS
+			lockedTS[highestVI.Qc[0].ID] = highestViewTS
 
 			continue
 		}
@@ -353,7 +353,7 @@ func (k *Engine) handlePrepared(
 				return err
 			}
 
-			lockedTS[localVI[0].Qc[0].Address] = currentViewTS
+			lockedTS[localVI[0].Qc[0].ID] = currentViewTS
 		}
 	}
 
@@ -398,7 +398,7 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 		"send prepare",
 		"ix-Hash", cs.Ixns().Hashes(),
 		"cluster-id", cs.ClusterID,
-		"address", cs.Participants.Addrs(),
+		"ids", cs.Participants.IDs(),
 	)
 
 	_, span := tracing.Span(ctx, "Krama.Handler", "sendPrepare")
@@ -407,7 +407,7 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 	prepareMsg := &ktypes.Prepare{
 		View: cs.CurrentView(),
 		Ixns: cs.Ixns().Hashes(),
-		Ps:   cs.Participants.Addrs(),
+		Ps:   cs.Participants.IDs(),
 	}
 
 	if k.trustedPeersPresent {
@@ -444,41 +444,41 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 	return nil
 }
 
-func (k *Engine) loadViewInfo(ps []identifiers.Address) ([]*common.ViewInfo, error) {
+func (k *Engine) loadViewInfo(ps []identifiers.Identifier) ([]*common.ViewInfo, error) {
 	infos := make([]*common.ViewInfo, 0, len(ps))
 
-	for _, addr := range ps {
-		isRegistered, err := k.state.IsAccountRegistered(addr)
+	for _, id := range ps {
+		isRegistered, err := k.state.IsAccountRegistered(id)
 		if err != nil {
 			return nil, err
 		}
 
 		if !isRegistered {
 			infos = append(infos, &common.ViewInfo{
-				Addr:        addr,
+				ID:          id,
 				LastView:    0,
-				CurrentLock: k.accountLockStatus(addr),
+				CurrentLock: k.accountLockStatus(id),
 				Qc:          nil,
 			})
 
 			continue
 		}
 
-		safetyData, err := k.safety.GetLatestSafetyInfo(addr)
+		safetyData, err := k.safety.GetLatestSafetyInfo(id)
 		if err != nil {
 			return nil, err
 		}
 
 		infos = append(infos, &common.ViewInfo{
-			Addr:        addr,
+			ID:          id,
 			LastView:    safetyData.LastView(),
-			CurrentLock: k.accountLockStatus(addr),
+			CurrentLock: k.accountLockStatus(id),
 			Qc:          safetyData.Qc,
 		})
 	}
 
 	sort.Slice(infos, func(i, j int) bool {
-		return bytes.Compare(infos[i].Addr.Bytes(), infos[j].Addr.Bytes()) < 0
+		return bytes.Compare(infos[i].ID.Bytes(), infos[j].ID.Bytes()) < 0
 	})
 
 	return infos, nil
@@ -488,7 +488,7 @@ func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID kramaid.K
 	k.logger.Debug(
 		"validating peer qc",
 		"peer-id", peerID,
-		"addr", remote.Addr,
+		"id", remote.ID,
 	)
 
 	for _, qc := range remote.Qc {
@@ -499,7 +499,7 @@ func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID kramaid.K
 		k.logger.Debug(
 			"validating qc",
 			"view", qc.View,
-			"addr", qc.Address,
+			"id", qc.ID,
 			"type", qc.Type,
 			"signers", qc.SignerIndices.String(),
 			"peer-id", peerID,
@@ -516,7 +516,7 @@ func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID kramaid.K
 			return err
 		}
 
-		isVerified, err := k.verifyQc(ts.Addresses(), ts.Participants(), qc.View, ics, qc)
+		isVerified, err := k.verifyQc(ts.AccountIDs(), ts.Participants(), qc.View, ics, qc)
 		if err != nil {
 			return errors.Wrap(err, "failed to verify QC")
 		}
@@ -541,7 +541,7 @@ func (k *Engine) updateHighestVI(cs *ktypes.ClusterState, peerInfo common.Views,
 			continue
 		}
 
-		if peerInfo[i].Addr != viewInfo.Addr {
+		if peerInfo[i].ID != viewInfo.ID {
 			return errors.New("View Order doesn't match")
 		}
 
@@ -609,18 +609,18 @@ func (k *Engine) createNewTSFromLockedTS(cs *ktypes.ClusterState, ts *common.Tes
 // createProposalTS either creates a proposal tesseract from the locked tesseract
 // or creates a new tesseract by executing the interactions.
 func (k *Engine) createProposalTS(
-	lockedTS map[identifiers.Address]*common.Tesseract,
+	lockedTS map[identifiers.Identifier]*common.Tesseract,
 	cs *ktypes.ClusterState,
 ) (*common.Tesseract, error) {
 	var lockTS *common.Tesseract
 
 	clusterIxnsHash := cs.IxnsHash()
 
-	for addr, ts := range lockedTS {
+	for id, ts := range lockedTS {
 		if ts.InteractionsHash() != clusterIxnsHash {
 			k.logger.Error(
 				"Ixns hash doesn't match with locked tesseract",
-				"addr", addr,
+				"id", id,
 				"locked-ts", ts.Hash(),
 				"ixns-hash", clusterIxnsHash,
 			)
@@ -638,8 +638,8 @@ func (k *Engine) createProposalTS(
 	return k.createNewTSFromLockedTS(cs, lockTS)
 }
 
-func (k *Engine) accountLockStatus(addr identifiers.Address) common.LockType {
-	info, ok := k.accountLocks[addr]
+func (k *Engine) accountLockStatus(id identifiers.Identifier) common.LockType {
+	info, ok := k.accountLocks[id]
 	if !ok {
 		return common.NoLock
 	}

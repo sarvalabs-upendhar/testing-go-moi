@@ -17,7 +17,7 @@ func (te *TestEnvironment) lockupAsset(
 	sender tests.AccountWithMnemonic,
 	assetActionPayload *common.AssetActionPayload,
 ) (common.Hash, error) {
-	te.logger.Debug("lockup asset ", "sender", sender.Addr,
+	te.logger.Debug("lockup asset ", "sender", sender.ID,
 		"beneficiary", assetActionPayload.Beneficiary, "asset id", assetActionPayload.AssetID,
 		"amount", assetActionPayload.Amount,
 	)
@@ -27,8 +27,8 @@ func (te *TestEnvironment) lockupAsset(
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    sender.Addr,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.Addr, 0),
+			ID:         sender.ID,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.ID, 0),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -46,15 +46,15 @@ func (te *TestEnvironment) lockupAsset(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  sender.Addr,
+				ID:       sender.ID,
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  assetActionPayload.Beneficiary,
+				ID:       assetActionPayload.Beneficiary,
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  common.SargaAddress,
+				ID:       common.SargaAccountID,
 				LockType: common.ReadLock,
 			},
 		},
@@ -62,7 +62,7 @@ func (te *TestEnvironment) lockupAsset(
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
-			Addr:     sender.Addr,
+			ID:       sender.ID,
 			KeyID:    0,
 			Mnemonic: sender.Mnemonic,
 		},
@@ -77,7 +77,7 @@ func (te *TestEnvironment) lockupAsset(
 // 3. Check if the lockup for the specified asset, beneficiary, and amount exists.
 func validateAssetLockup(
 	te *TestEnvironment,
-	sender identifiers.Address,
+	sender identifiers.Identifier,
 	payload *common.AssetActionPayload,
 	ixHash common.Hash,
 ) {
@@ -87,7 +87,7 @@ func validateAssetLockup(
 
 	for _, lockup := range lockups {
 		if lockup.AssetID == payload.AssetID.String() &&
-			lockup.Address == payload.Beneficiary &&
+			lockup.ID == payload.Beneficiary &&
 			lockup.Amount.ToInt().Cmp(payload.Amount) == 0 {
 			return
 		}
@@ -117,7 +117,7 @@ func (te *TestEnvironment) TestAssetLockup() {
 		assetActionPayload *common.AssetActionPayload
 		postTest           func(
 			te *TestEnvironment,
-			sender identifiers.Address,
+			sender identifiers.Identifier,
 			payload *common.AssetActionPayload,
 			ixHash common.Hash,
 		)
@@ -127,7 +127,7 @@ func (te *TestEnvironment) TestAssetLockup() {
 			name:   "lockup MAS0 asset",
 			sender: sender,
 			assetActionPayload: &common.AssetActionPayload{
-				Beneficiary: receiver.Addr,
+				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(100),
 			},
@@ -137,7 +137,7 @@ func (te *TestEnvironment) TestAssetLockup() {
 			name:   "amount is invalid",
 			sender: sender,
 			assetActionPayload: &common.AssetActionPayload{
-				Beneficiary: receiver.Addr,
+				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(-50),
 			},
@@ -147,7 +147,7 @@ func (te *TestEnvironment) TestAssetLockup() {
 			name:   "beneficiary is sarga account",
 			sender: sender,
 			assetActionPayload: &common.AssetActionPayload{
-				Beneficiary: common.SargaAddress,
+				Beneficiary: common.SargaAccountID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(1),
 			},
@@ -166,7 +166,7 @@ func (te *TestEnvironment) TestAssetLockup() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.Addr, test.assetActionPayload, ixHash)
+			test.postTest(te, test.sender.ID, test.assetActionPayload, ixHash)
 		})
 	}
 }

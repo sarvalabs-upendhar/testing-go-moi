@@ -12,7 +12,7 @@ import (
 
 type Response struct {
 	PeerID    kramaid.KramaID
-	SessionID identifiers.Address
+	SessionID identifiers.Identifier
 	StateHash cid.CID
 	Status    bool
 	HaveList  block.HaveList
@@ -29,7 +29,7 @@ func (r *Response) GetAgoraMsg() *AgoraResponseMsg {
 }
 
 type AgoraResponseMsg struct {
-	SessionID identifiers.Address
+	SessionID identifiers.Identifier
 	Status    bool
 	HaveList  [][]byte
 	PeerSet   []kramaid.KramaID
@@ -45,7 +45,7 @@ func (resp *AgoraResponseMsg) GetBlocks() []block.Block {
 	return blocks
 }
 
-func (resp *AgoraResponseMsg) GetSessionID() identifiers.Address {
+func (resp *AgoraResponseMsg) GetSessionID() identifiers.Identifier {
 	return resp.SessionID
 }
 

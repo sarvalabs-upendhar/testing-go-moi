@@ -33,14 +33,14 @@ func TestCopyState(t *testing.T) {
 			require.Equal(t, expectedState, copiedState)
 			require.False(
 				t,
-				&expectedState.ContextDelta.BehaviouralNodes[0] == &copiedState.ContextDelta.BehaviouralNodes[0],
+				&expectedState.ContextDelta.ConsensusNodes[0] == &copiedState.ContextDelta.ConsensusNodes[0],
 			)
 		})
 	}
 }
 
 func TestCopyParticipant(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 
 	testcases := []struct {
 		name         string
@@ -49,7 +49,7 @@ func TestCopyParticipant(t *testing.T) {
 		{
 			name: "copy participants",
 			participants: common.ParticipantsState{
-				address: tests.CreateStateWithTestData(t),
+				id: tests.CreateStateWithTestData(t),
 			},
 		},
 	}
@@ -66,8 +66,8 @@ func TestCopyParticipant(t *testing.T) {
 				reflect.ValueOf(copiedParticipants).Pointer(),
 			)
 			require.NotEqual(t,
-				reflect.ValueOf(expectedParticipants[address].ContextDelta.BehaviouralNodes).Pointer(),
-				reflect.ValueOf(copiedParticipants[address].ContextDelta.BehaviouralNodes).Pointer(),
+				reflect.ValueOf(expectedParticipants[id].ContextDelta.ConsensusNodes).Pointer(),
+				reflect.ValueOf(copiedParticipants[id].ContextDelta.ConsensusNodes).Pointer(),
 			)
 		})
 	}
@@ -75,11 +75,11 @@ func TestCopyParticipant(t *testing.T) {
 
 func TestNewTesseract(t *testing.T) {
 	var (
-		address  = tests.RandomAddress(t)
-		ixParams = tests.GetIxParamsMapWithAddresses(
+		id       = tests.RandomIdentifier(t)
+		ixParams = tests.GetIxParamsMapWithIDs(
 			t,
-			[]identifiers.Address{tests.RandomAddress(t)},
-			[]identifiers.Address{tests.RandomAddress(t)},
+			[]identifiers.Identifier{tests.RandomIdentifier(t)},
+			[]identifiers.Identifier{tests.RandomIdentifier(t)},
 		)
 	)
 
@@ -102,7 +102,7 @@ func TestNewTesseract(t *testing.T) {
 		{
 			name: "create new tesseract",
 			participants: common.ParticipantsState{
-				address: tests.CreateStateWithTestData(t),
+				id: tests.CreateStateWithTestData(t),
 			},
 			interactionsHash: tests.RandomHash(t),
 			receiptHash:      tests.RandomHash(t),
@@ -163,10 +163,10 @@ func TestNewTesseract(t *testing.T) {
 			)
 
 			// make sure participants doesn't match
-			test.participants[address].ContextDelta.BehaviouralNodes[0] = tests.RandomKramaIDs(t, 1)[0]
+			test.participants[id].ContextDelta.ConsensusNodes[0] = tests.RandomKramaIDs(t, 1)[0]
 			require.NotEqual(t,
-				test.participants[address].ContextDelta.BehaviouralNodes,
-				tesseract.Participants()[address].ContextDelta.BehaviouralNodes,
+				test.participants[id].ContextDelta.ConsensusNodes,
+				tesseract.Participants()[id].ContextDelta.ConsensusNodes,
 			)
 
 			// make sure seal is copied

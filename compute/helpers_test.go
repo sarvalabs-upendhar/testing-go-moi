@@ -15,10 +15,10 @@ import (
 func createTestStateObject(t *testing.T) *state.Object {
 	t.Helper()
 
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 
 	return state.NewStateObject(
-		address, nil, tests.NewTestTreeCache(),
+		id, nil, tests.NewTestTreeCache(),
 		nil, common.Account{}, state.NilMetrics(), false,
 	)
 }
@@ -27,12 +27,12 @@ func createTestAsset(t *testing.T, supply *big.Int) (*state.Object, *state.Objec
 	t.Helper()
 
 	creator := state.NewStateObject(
-		tests.RandomAddress(t), nil, tests.NewTestTreeCache(),
+		tests.RandomIdentifier(t), nil, tests.NewTestTreeCache(),
 		nil, common.Account{}, state.NilMetrics(), false,
 	)
 
 	asset := state.NewStateObject(
-		tests.RandomAddress(t), nil, tests.NewTestTreeCache(),
+		tests.RandomIdentifier(t), nil, tests.NewTestTreeCache(),
 		nil, common.Account{}, state.NilMetrics(), false,
 	)
 
@@ -104,8 +104,8 @@ func checkMandateConsumption(
 	require.Equal(t, 0, expectedBenefactorBalance.Cmp(benefactorObject.Balance))
 	require.Equal(t, 0, expectedTargetBalance.Cmp(targetObject.Balance))
 
-	require.NotNil(t, benefactorObject.Mandate[sender.Address()])
-	require.Equal(t, 0, expectedMandateBalance.Cmp(benefactorObject.Mandate[sender.Address()].Amount))
+	require.NotNil(t, benefactorObject.Mandate[sender.Identifier()])
+	require.Equal(t, 0, expectedMandateBalance.Cmp(benefactorObject.Mandate[sender.Identifier()].Amount))
 }
 
 func checkAssetApprove(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
@@ -143,24 +143,27 @@ func checkAssetRelease(
 	require.Equal(t, payload.Amount, ao.Balance)
 
 	// Check whether the lockup amount got deducted
-	lockupAmount, err := benefactor.GetLockup(payload.AssetID, sender.Address())
+	lockupAmount, err := benefactor.GetLockup(payload.AssetID, sender.Identifier())
 	require.NoError(t, err)
 	require.Equal(t, expectedAmount, lockupAmount)
 }
 
 func createTestAssetID(
-	t *testing.T, assetAddr identifiers.Address,
+	t *testing.T, id identifiers.Identifier,
 	payload *common.AssetCreatePayload,
 ) identifiers.AssetID {
 	t.Helper()
 
-	return identifiers.NewAssetIDv0(
-		payload.IsLogical,
-		payload.IsStateFul,
-		payload.Dimension,
+	assetID, err := identifiers.GenerateAssetIDv0(
+		id.Fingerprint(),
+		id.Variant(),
 		uint16(payload.Standard),
-		assetAddr,
+		payload.Flags()...,
 	)
+
+	require.NoError(t, err)
+
+	return assetID
 }
 
 func createMandate(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
@@ -179,26 +182,26 @@ func insertTestAssetObject(
 }
 
 func createTestDeedsEntry(
-	t *testing.T, assetAddr identifiers.Address,
+	t *testing.T, id identifiers.Identifier,
 	creatorAcc *state.Object, payload *common.AssetCreatePayload,
 ) {
 	t.Helper()
 
-	assetID := identifiers.NewAssetIDv0(
-		payload.IsLogical,
-		payload.IsStateFul,
-		payload.Dimension,
+	assetID, err := identifiers.GenerateAssetIDv0(
+		id.Fingerprint(),
+		id.Variant(),
 		uint16(payload.Standard),
-		assetAddr,
+		payload.Flags()...,
 	)
 
-	assert.NoError(t, creatorAcc.CreateDeedsEntry(string(assetID)))
+	require.NoError(t, err)
+	assert.NoError(t, creatorAcc.CreateDeedsEntry(assetID.AsIdentifier()))
 }
 
 func createTestSargaStateObject(t *testing.T) *state.Object {
 	t.Helper()
 
-	sarga := state.NewStateObject(common.SargaAddress, nil, nil, nil, common.Account{
+	sarga := state.NewStateObject(common.SargaAccountID, nil, nil, nil, common.Account{
 		AccType: common.SargaAccount,
 	}, state.NilMetrics(), false)
 
@@ -208,10 +211,10 @@ func createTestSargaStateObject(t *testing.T) *state.Object {
 	return sarga
 }
 
-func registerParticipant(t *testing.T, sarga *state.Object, address identifiers.Address) {
+func registerParticipant(t *testing.T, sarga *state.Object, id identifiers.Identifier) {
 	t.Helper()
 
-	assert.NoError(t, sarga.SetStorageEntry(common.SargaLogicID, address.Bytes(), address.Bytes()))
+	assert.NoError(t, sarga.SetStorageEntry(common.SargaLogicID, id.Bytes(), id.Bytes()))
 }
 
 func createTestMandate(
@@ -221,7 +224,7 @@ func createTestMandate(
 	t.Helper()
 
 	assert.NoError(t, approveAsset(sender, &common.AssetActionPayload{
-		Beneficiary: beneficiary.Address(),
+		Beneficiary: beneficiary.Identifier(),
 		AssetID:     assetID,
 		Amount:      amount,
 		Timestamp:   timestamp,
@@ -235,7 +238,7 @@ func createLockup(
 	t.Helper()
 
 	assert.NoError(t, lockupAsset(sender, &common.AssetActionPayload{
-		Beneficiary: beneficiary.Address(),
+		Beneficiary: beneficiary.Identifier(),
 		AssetID:     assetID,
 		Amount:      amount,
 	}))
@@ -247,8 +250,12 @@ func setupAssetAccount(t *testing.T, operator, assetAcc *state.Object, assetID i
 	insertTestAssetObject(
 		t, assetID, assetAcc, state.NewAssetObject(big.NewInt(5000), nil),
 	)
+
 	assert.NoError(
 		t,
-		assetAcc.SetState(assetID, common.NewAssetDescriptor(operator.Address(), common.AssetCreatePayload{})),
+		assetAcc.SetState(
+			assetID,
+			common.NewAssetDescriptor(operator.Identifier(), common.AssetCreatePayload{}),
+		),
 	)
 }

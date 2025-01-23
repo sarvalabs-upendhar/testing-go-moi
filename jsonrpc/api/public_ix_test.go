@@ -17,7 +17,7 @@ import (
 
 // Interaction API Testcases
 func TestPublicCoreAPI_SendInteraction(t *testing.T) {
-	address, mnemonic := tests.RandomAddressWithMnemonic(t)
+	id, mnemonic := tests.RandomIDWithMnemonic(t)
 	assetPayload := common.AssetCreatePayload{}
 	rawAssetPayload, err := assetPayload.Bytes()
 	require.NoError(t, err)
@@ -26,7 +26,7 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 
 	validIXArgs := common.IxData{
 		Sender: common.Sender{
-			Address:    address,
+			ID:         id,
 			SequenceID: 2,
 		},
 		FuelPrice: big.NewInt(1),
@@ -39,7 +39,7 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  address,
+				ID:       id,
 				LockType: common.MutateLock,
 			},
 		},
@@ -48,7 +48,7 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 	expectedIxn, err := common.NewInteraction(
 		common.IxData{
 			Sender: common.Sender{
-				Address:    address,
+				ID:         id,
 				SequenceID: 2,
 			},
 			FuelPrice: big.NewInt(1),
@@ -61,14 +61,14 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 			},
 			Participants: []common.IxParticipant{
 				{
-					Address:  address,
+					ID:       id,
 					LockType: common.MutateLock,
 				},
 			},
 		},
 		common.Signatures{
 			{
-				Address:   address,
+				ID:        id,
 				Signature: getSignatureBytes(t, &validIXArgs, mnemonic),
 			},
 		},
@@ -86,14 +86,14 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 			name: "invalid send ix args",
 			ixData: common.IxData{
 				Sender: common.Sender{
-					Address: common.SargaAddress,
+					ID: common.SargaAccountID,
 				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 1,
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 					},
 				},
 			},
@@ -105,7 +105,7 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 1,
 				Sender: common.Sender{
-					Address:    address,
+					ID:         id,
 					SequenceID: 3,
 				},
 				IxOps: []common.IxOpRaw{
@@ -115,7 +115,7 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 				},
 				Participants: []common.IxParticipant{
 					{
-						Address:  address,
+						ID:       id,
 						LockType: common.MutateLock,
 					},
 				},
@@ -126,7 +126,7 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 			name: "failed to add interaction in ixpool",
 			ixData: common.IxData{
 				Sender: common.Sender{
-					Address:    address,
+					ID:         id,
 					SequenceID: 3,
 				},
 				FuelPrice: big.NewInt(1),
@@ -139,7 +139,7 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 				},
 				Participants: []common.IxParticipant{
 					{
-						Address:  address,
+						ID:       id,
 						LockType: common.MutateLock,
 					},
 				},
@@ -158,8 +158,8 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 			ixData:   validIXArgs,
 			expected: expectedIxn,
 			preTestFn: func(ixPool *MockIxPool, sm *MockStateManager) {
-				ixPool.setNonce(address, 2)
-				sm.setAccount(address, *acc)
+				ixPool.setNonce(id, 2)
+				sm.setAccount(id, *acc)
 			},
 		},
 	}
@@ -179,7 +179,7 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 
 			rawSig, err := common.Signatures{
 				{
-					Address:   test.ixData.Sender.Address,
+					ID:        test.ixData.Sender.ID,
 					KeyID:     test.ixData.Sender.KeyID,
 					Signature: getSignatureBytes(t, &test.ixData, mnemonic),
 				},
@@ -206,30 +206,30 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 }
 
 func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
-	address, mnemonic := tests.RandomAddressWithMnemonic(t)
+	address, mnemonic := tests.RandomIDWithMnemonic(t)
 
 	ixWithNilSender := common.IxData{
 		Sender: common.Sender{
-			Address: identifiers.NilAddress,
+			ID: identifiers.Nil,
 		},
 	}
 
 	ixWithSargaSender := common.IxData{
 		Sender: common.Sender{
-			Address: common.SargaAddress,
+			ID: common.SargaAccountID,
 		},
 	}
 
 	ix := &common.IxData{
 		Sender: common.Sender{
-			Address: address,
+			ID: address,
 		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 23,
 		IxOps: []common.IxOpRaw{
 			{
 				Type:    common.IxAssetTransfer,
-				Payload: tests.CreateRawAssetActionPayload(t, common.SargaAddress),
+				Payload: tests.CreateRawAssetActionPayload(t, common.SargaAccountID),
 			},
 		},
 	}
@@ -261,7 +261,7 @@ func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
 			ix: &rpcargs.SendIX{
 				IXArgs: hex.EncodeToString(rawIXWithNilSender),
 			},
-			expectedErr: common.ErrInvalidAddress,
+			expectedErr: common.ErrInvalidIdentifier,
 		},
 		{
 			name: "sender is sarga account",
@@ -310,25 +310,25 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 					},
 				},
 			},
 			requiresFuel: true,
-			expectedErr:  common.ErrInvalidAddress,
+			expectedErr:  common.ErrInvalidIdentifier,
 		},
 		{
 			name: "sender is sarga account",
 			ixArgs: &common.IxData{
 				Sender: common.Sender{
-					Address: common.SargaAddress,
+					ID: common.SargaAccountID,
 				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 23,
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, common.SargaAddress),
+						Payload: tests.CreateRawAssetActionPayload(t, common.SargaAccountID),
 					},
 				},
 			},
@@ -339,7 +339,7 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 			name: "empty ix ops",
 			ixArgs: &common.IxData{
 				Sender: common.Sender{
-					Address: tests.RandomAddress(t),
+					ID: tests.RandomIdentifier(t),
 				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 23,
@@ -351,12 +351,12 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 			name: "fuel price and limit required",
 			ixArgs: &common.IxData{
 				Sender: common.Sender{
-					Address: tests.RandomAddress(t),
+					ID: tests.RandomIdentifier(t),
 				},
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 					},
 					{
 						Type:    common.IxAssetCreate,
@@ -371,12 +371,12 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 			name: "fuel price and limit not required",
 			ixArgs: &common.IxData{
 				Sender: common.Sender{
-					Address: tests.RandomAddress(t),
+					ID: tests.RandomIdentifier(t),
 				},
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 					},
 					{
 						Type:    common.IxAssetCreate,
@@ -390,14 +390,14 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 			name: "valid ix data",
 			ixArgs: &common.IxData{
 				Sender: common.Sender{
-					Address: tests.RandomAddress(t),
+					ID: tests.RandomIdentifier(t),
 				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 23,
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 					},
 					{
 						Type:    common.IxAssetCreate,
@@ -485,15 +485,15 @@ func TestPublicCoreAPI_ValidateIxOps(t *testing.T) {
 				},
 				{
 					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 				},
 				{
 					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 				},
 				{
 					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 				},
 			},
 			expectedErr: ErrTooManyIxOps,
@@ -517,11 +517,11 @@ func TestPublicCoreAPI_ValidateIxOps(t *testing.T) {
 			txs: []common.IxOpRaw{
 				{
 					Type:    common.IxLogicDeploy,
-					Payload: tests.CreateRawLogicPayload(t, tests.RandomAddress(t)),
+					Payload: tests.CreateRawLogicPayload(t, identifiers.RandomLogicIDv0()),
 				},
 				{
 					Type:    common.IxLogicDeploy,
-					Payload: tests.CreateRawLogicPayload(t, tests.RandomAddress(t)),
+					Payload: tests.CreateRawLogicPayload(t, identifiers.RandomLogicIDv0()),
 				},
 			},
 			expectedErr: ErrLogicDeploymentLimit,
@@ -531,7 +531,7 @@ func TestPublicCoreAPI_ValidateIxOps(t *testing.T) {
 			txs: []common.IxOpRaw{
 				{
 					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 				},
 				{
 					Type:    common.IxAssetCreate,

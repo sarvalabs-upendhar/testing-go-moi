@@ -63,7 +63,7 @@ func CheckForRPCCommitInfo(t *testing.T, info *common.CommitInfo, rpcInfo *RPCCo
 	}
 
 	require.Equal(t, info.QC.Type, rpcInfo.QC.Type)
-	require.Equal(t, info.QC.Address, rpcInfo.QC.Address)
+	require.Equal(t, info.QC.ID, rpcInfo.QC.ID)
 	require.Equal(t, info.QC.LockType, rpcInfo.QC.LockType)
 	require.Equal(t, info.QC.View, rpcInfo.QC.View)
 	require.Equal(t, info.QC.TSHash, rpcInfo.QC.TSHash)
@@ -98,14 +98,14 @@ func CheckForRPCIxn(
 	require.Equal(t, len(ix.Signatures()), len(rpcIxn.Signatures))
 
 	for i := 0; i < len(ix.Signatures()); i++ {
-		require.Equal(t, ix.Signatures()[i].Address, rpcIxn.Signatures[i].Address)
+		require.Equal(t, ix.Signatures()[i].ID, rpcIxn.Signatures[i].ID)
 		require.Equal(t, ix.Signatures()[i].KeyID, rpcIxn.Signatures[i].KeyID.ToUint64())
 		require.Equal(t, ix.Signatures()[i].Signature, rpcIxn.Signatures[i].Signature.Bytes())
 	}
 
 	require.Equal(t, input.Sender.SequenceID, rpcIxn.Sender.SequenceID.ToUint64())
 
-	require.Equal(t, input.Sender.Address, rpcIxn.Sender.Address)
+	require.Equal(t, input.Sender.ID, rpcIxn.Sender.ID)
 	require.Equal(t, input.Sender.SequenceID, rpcIxn.Sender.SequenceID.ToUint64())
 	require.Equal(t, input.Sender.KeyID, rpcIxn.Sender.KeyID.ToUint64())
 	require.Equal(t, input.Payer, rpcIxn.Payer)
@@ -124,8 +124,8 @@ func CheckForRPCIxn(
 			require.NoError(t, err)
 
 			rpcAssetActionPayload := RPCParticipantCreate{
-				Address: participantCreatePayload.Address,
-				Amount:  (*hexutil.Big)(participantCreatePayload.Amount),
+				ID:     participantCreatePayload.ID,
+				Amount: (*hexutil.Big)(participantCreatePayload.Amount),
 			}
 
 			expectedPayload, err := json.Marshal(rpcAssetActionPayload)
@@ -179,7 +179,7 @@ func CheckForRPCIxn(
 
 			rpcLogicPayload := &RPCLogicPayload{
 				Manifest: (hexutil.Bytes)(logicPayload.Manifest),
-				LogicID:  string(logicPayload.Logic),
+				LogicID:  logicPayload.Logic.String(),
 				Callsite: logicPayload.Callsite,
 				Calldata: (hexutil.Bytes)(logicPayload.Calldata),
 			}
@@ -200,7 +200,7 @@ func CheckForRPCIxParticipants(t *testing.T, participants []common.IxParticipant
 	require.Equal(t, len(participants), len(rpcParticipants))
 
 	for idx, participant := range participants {
-		require.Equal(t, participant.Address, rpcParticipants[idx].Address)
+		require.Equal(t, participant.ID, rpcParticipants[idx].ID)
 		require.Equal(t, participant.LockType, rpcParticipants[idx].LockType)
 	}
 }
@@ -230,7 +230,7 @@ func CheckForRPCParticipantState(
 	require.Equal(t, len(participants), len(rpcParticipants))
 
 	for _, rpcParticipant := range rpcParticipants {
-		participant, ok := participants[rpcParticipant.Address]
+		participant, ok := participants[rpcParticipant.ID]
 		require.True(t, ok)
 
 		require.Equal(t, participant.Height, rpcParticipant.Height.ToUint64())
@@ -242,7 +242,7 @@ func CheckForRPCParticipantState(
 	}
 	// check if participants are sorted
 	for i := 1; i < len(rpcParticipants); i++ {
-		require.True(t, rpcParticipants[i-1].Address.Hex() < rpcParticipants[i].Address.Hex())
+		require.True(t, rpcParticipants[i-1].ID.Hex() < rpcParticipants[i].ID.Hex())
 	}
 }
 
@@ -275,7 +275,7 @@ func CheckForRPCReceipt(
 	CheckForRPCParticipantState(t, participants, rpcReceipt.Participants)
 	require.Equal(t, receipt.IxHash, rpcReceipt.IxHash)
 	require.Equal(t, receipt.FuelUsed, uint64(rpcReceipt.FuelUsed))
-	require.Equal(t, ix.SenderAddr(), rpcReceipt.From)
+	require.Equal(t, ix.SenderID(), rpcReceipt.From)
 	require.Equal(t, uint64(ixIndex), rpcReceipt.IXIndex.ToUint64())
 	require.Len(t, rpcReceipt.IxOps, len(receipt.IxOps))
 
@@ -291,10 +291,10 @@ func CreateInteractionWithTestData(t *testing.T, ixType common.IxOpType, payload
 
 	ixData := common.IxData{
 		Sender: common.Sender{
-			Address:    tests.RandomAddress(t),
+			ID:         tests.RandomIdentifier(t),
 			SequenceID: 2,
 		},
-		Payer:     tests.RandomAddress(t),
+		Payer:     tests.RandomIdentifier(t),
 		FuelLimit: 1043,
 		FuelPrice: new(big.Int).SetUint64(1),
 		IxOps: []common.IxOpRaw{
@@ -309,12 +309,12 @@ func CreateInteractionWithTestData(t *testing.T, ixType common.IxOpType, payload
 
 	ix, err := common.NewInteraction(ixData, common.Signatures{
 		{
-			Address:   tests.RandomAddress(t),
+			ID:        tests.RandomIdentifier(t),
 			KeyID:     2,
 			Signature: tests.RandomHash(t).Bytes(),
 		},
 		{
-			Address:   tests.RandomAddress(t),
+			ID:        tests.RandomIdentifier(t),
 			KeyID:     3,
 			Signature: tests.RandomHash(t).Bytes(),
 		},

@@ -229,7 +229,7 @@ func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
 	return nil
 }
 
-func (kbft *KBFT) enterNewView(heights map[identifiers.Address]uint64, view uint64) {
+func (kbft *KBFT) enterNewView(heights map[identifiers.Identifier]uint64, view uint64) {
 	if !areHeightsEqual(kbft.Heights, heights) ||
 		view < kbft.View ||
 		(kbft.View == view && kbft.Step != ViewStepNewHeight) {
@@ -267,7 +267,7 @@ func (kbft *KBFT) isProposalReceived() bool {
 	return true
 }
 
-func (kbft *KBFT) enterPropose(heights map[identifiers.Address]uint64, view uint64) {
+func (kbft *KBFT) enterPropose(heights map[identifiers.Identifier]uint64, view uint64) {
 	if !areHeightsEqual(kbft.Heights, heights) ||
 		kbft.View > view ||
 		(kbft.View == view && kbft.Step >= ViewStepPropose) {
@@ -305,7 +305,7 @@ func (kbft *KBFT) enterPropose(heights map[identifiers.Address]uint64, view uint
 }
 
 // createProposal will create a proposal message for the given height,view and tesseract
-func (kbft *KBFT) createProposal(heights map[identifiers.Address]uint64, view uint64) error {
+func (kbft *KBFT) createProposal(heights map[identifiers.Identifier]uint64, view uint64) error {
 	kbft.logger.Info("Creating proposal", "heights", heights, "view", view)
 
 	proposal := ktypes.NewProposal(kbft.ics.PrepareQc(), kbft.ics.Tesseract())
@@ -353,7 +353,7 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 	return nil
 }
 
-func (kbft *KBFT) enterPrevote(h map[identifiers.Address]uint64, view uint64) {
+func (kbft *KBFT) enterPrevote(h map[identifiers.Identifier]uint64, view uint64) {
 	kbft.logger.Trace("Entered pre-vote")
 
 	if !areHeightsEqual(kbft.Heights, h) || kbft.View > view || (kbft.View == view && kbft.Step >= ViewStepPrevote) {
@@ -375,7 +375,7 @@ func (kbft *KBFT) enterPrevote(h map[identifiers.Address]uint64, view uint64) {
 	kbft.sendVote(common.PREVOTE, kbft.ProposalTS.Hash(), kbft.isLeader(view, kbft.id))
 }
 
-func (kbft *KBFT) enterPreCommit(heights map[identifiers.Address]uint64, view uint64) {
+func (kbft *KBFT) enterPreCommit(heights map[identifiers.Identifier]uint64, view uint64) {
 	kbft.logger.Trace("Entered pre-commit", "view", view)
 
 	if !areHeightsEqual(kbft.Heights, heights) ||
@@ -431,7 +431,7 @@ func (kbft *KBFT) enterPreCommit(heights map[identifiers.Address]uint64, view ui
 	kbft.sendVote(common.PRECOMMIT, tsHash, kbft.isLeader(view, kbft.id))
 }
 
-func (kbft *KBFT) enterCommit(heights map[identifiers.Address]uint64, view uint64) {
+func (kbft *KBFT) enterCommit(heights map[identifiers.Identifier]uint64, view uint64) {
 	if !areHeightsEqual(kbft.Heights, heights) || ViewStepCommit <= kbft.Step {
 		return
 	}
@@ -469,7 +469,7 @@ func (kbft *KBFT) enterCommit(heights map[identifiers.Address]uint64, view uint6
 	}
 }
 
-func (kbft *KBFT) finalizeCommit(h map[identifiers.Address]uint64) {
+func (kbft *KBFT) finalizeCommit(h map[identifiers.Identifier]uint64) {
 	if !areHeightsEqual(kbft.Heights, h) {
 		panic("unmatched heights")
 	}
@@ -720,9 +720,9 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 
 	tesseract := kbft.ProposalTS
 
-	// for addr, _ := range kbft.Heights {
+	// for id, _ := range kbft.Heights {
 	// TODO: check this out
-	//	tesseract.SetEvidenceHash(addr, evidenceHash)
+	//	tesseract.SetEvidenceHash(id, evidenceHash)
 	// }
 
 	tesseract.SetCommitQc(qc)
@@ -748,7 +748,7 @@ func (kbft *KBFT) isLeader(view uint64, kramaID kramaid.KramaID) bool {
 }
 
 // scheduleTimeout will schedule a timeout for the given step,view and height
-func (kbft *KBFT) scheduleTimeout(d time.Duration, heights map[identifiers.Address]uint64,
+func (kbft *KBFT) scheduleTimeout(d time.Duration, heights map[identifiers.Identifier]uint64,
 	view uint64, step ViewStepType,
 ) {
 	kbft.logger.Debug("Scheduling timeout", "step", step, "duration", d, "heights", heights)
@@ -827,14 +827,16 @@ func (kbft *KBFT) publishEventNewView(state eventDataViewState) error {
 }
 
 // areHeightsEqual is a function that checks if the heights of the two sets are equal.
-func areHeightsEqual(systemHeights map[identifiers.Address]uint64, newHeights map[identifiers.Address]uint64) bool {
+func areHeightsEqual(
+	systemHeights, newHeights map[identifiers.Identifier]uint64,
+) bool {
 	if len(systemHeights) != len(newHeights) {
 		return false
 	}
 
 	// Iterate over system heights
-	for systemAddress, systemHeight := range systemHeights {
-		newHeight, ok := newHeights[systemAddress]
+	for systemID, systemHeight := range systemHeights {
+		newHeight, ok := newHeights[systemID]
 		if !ok || systemHeight != newHeight {
 			// if system address not found or system heights are not equal, return false
 			return false
@@ -846,14 +848,16 @@ func areHeightsEqual(systemHeights map[identifiers.Address]uint64, newHeights ma
 }
 
 // areHeightsGreater is a function that checks if the second set of heights is greater than the first.
-func areHeightsGreater(systemHeights map[identifiers.Address]uint64, newHeights map[identifiers.Address]uint64) bool {
+func areHeightsGreater(
+	systemHeights, newHeights map[identifiers.Identifier]uint64,
+) bool {
 	if len(systemHeights) != len(newHeights) {
 		return false
 	}
 
 	// Iterate over system heights
-	for systemAddress, systemHeight := range systemHeights {
-		newHeight, ok := newHeights[systemAddress]
+	for systemID, systemHeight := range systemHeights {
+		newHeight, ok := newHeights[systemID]
 		if !ok || systemHeight <= newHeight {
 			// if system address not found or system heights less than or equal to new height, return false
 			return false

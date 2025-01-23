@@ -37,7 +37,7 @@ type Slot struct {
 	// TODO: explore using sync pool for slots
 	SlotType                        SlotType
 	cs                              *ClusterState
-	ps                              map[identifiers.Address]common.LockType
+	ps                              map[identifiers.Identifier]common.LockType
 	Stage                           atomic.Uint32
 	Msgs                            chan ConsensusMessage
 	BftOutboundChan, BftInboundChan chan ConsensusMessage
@@ -47,7 +47,7 @@ type Slot struct {
 	InitTime                        time.Time
 }
 
-func NewSlot(slotType SlotType, ps map[identifiers.Address]common.LockType) *Slot {
+func NewSlot(slotType SlotType, ps map[identifiers.Identifier]common.LockType) *Slot {
 	return &Slot{
 		SlotType:        slotType,
 		ps:              ps,
@@ -119,7 +119,7 @@ type Slots struct {
 	slots                   map[common.ClusterID]*Slot
 	availableOperatorSlots  int
 	availableValidatorSlots int
-	activeAccounts          map[identifiers.Address][]*LockInfo
+	activeAccounts          map[identifiers.Identifier][]*LockInfo
 	mtx                     sync.RWMutex
 }
 
@@ -128,13 +128,13 @@ func NewSlots(operatorSlots, validatorSlots int) *Slots {
 		slots:                   make(map[common.ClusterID]*Slot),
 		availableOperatorSlots:  operatorSlots,
 		availableValidatorSlots: validatorSlots,
-		activeAccounts:          make(map[identifiers.Address][]*LockInfo, 0),
+		activeAccounts:          make(map[identifiers.Identifier][]*LockInfo, 0),
 	}
 }
 
-func (s *Slots) areAccountsActive(addrs map[identifiers.Address]common.LockType) bool {
-	for addr, requiredLock := range addrs {
-		activeLock, ok := s.activeAccounts[addr]
+func (s *Slots) areAccountsActive(ids map[identifiers.Identifier]common.LockType) bool {
+	for id, requiredLock := range ids {
+		activeLock, ok := s.activeAccounts[id]
 		if !ok {
 			continue
 		}
@@ -151,43 +151,43 @@ func (s *Slots) areAccountsActive(addrs map[identifiers.Address]common.LockType)
 	return false
 }
 
-func (s *Slots) addActiveAccount(addr identifiers.Address, lockInfo *LockInfo) {
-	_, ok := s.activeAccounts[addr]
+func (s *Slots) addActiveAccount(id identifiers.Identifier, lockInfo *LockInfo) {
+	_, ok := s.activeAccounts[id]
 	if !ok {
-		s.activeAccounts[addr] = make([]*LockInfo, 0)
+		s.activeAccounts[id] = make([]*LockInfo, 0)
 	}
 
-	s.activeAccounts[addr] = append(s.activeAccounts[addr], lockInfo)
+	s.activeAccounts[id] = append(s.activeAccounts[id], lockInfo)
 }
 
-func (s *Slots) AddActiveAccount(addr identifiers.Address, lockType common.LockType, clusterID common.ClusterID) bool {
+func (s *Slots) AddActiveAccount(id identifiers.Identifier, lockType common.LockType, clusterID common.ClusterID) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	m := map[identifiers.Address]common.LockType{addr: lockType}
+	m := map[identifiers.Identifier]common.LockType{id: lockType}
 
 	if s.areAccountsActive(m) {
 		return false
 	}
 
-	s.addActiveAccount(addr, &LockInfo{lockType: lockType, clusterID: clusterID})
+	s.addActiveAccount(id, &LockInfo{lockType: lockType, clusterID: clusterID})
 
 	return true
 }
 
-func (s *Slots) ClearActiveAccount(addr identifiers.Address, clusterID common.ClusterID) {
+func (s *Slots) ClearActiveAccount(id identifiers.Identifier, clusterID common.ClusterID) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if len(s.activeAccounts[addr]) == 0 {
+	if len(s.activeAccounts[id]) == 0 {
 		return
 	}
 
-	if len(s.activeAccounts[addr]) == 1 {
-		delete(s.activeAccounts, addr)
+	if len(s.activeAccounts[id]) == 1 {
+		delete(s.activeAccounts, id)
 	}
 
-	infos := s.activeAccounts[addr]
+	infos := s.activeAccounts[id]
 
 	for i := 0; i < len(infos); i++ {
 		if infos[i].clusterID != clusterID {
@@ -202,7 +202,7 @@ func (s *Slots) ClearActiveAccount(addr identifiers.Address, clusterID common.Cl
 func (s *Slots) CreateSlotAndLockAccounts(
 	clusterID common.ClusterID,
 	slotType SlotType,
-	locks map[identifiers.Address]common.LockType,
+	locks map[identifiers.Identifier]common.LockType,
 ) (*Slot, common.ClusterID) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -218,8 +218,8 @@ func (s *Slots) CreateSlotAndLockAccounts(
 	s.slots[clusterID] = NewSlot(slotType, locks)
 	s.decrementSlots(slotType)
 
-	for addr, lockType := range locks {
-		s.addActiveAccount(addr, &LockInfo{lockType: lockType, clusterID: clusterID})
+	for id, lockType := range locks {
+		s.addActiveAccount(id, &LockInfo{lockType: lockType, clusterID: clusterID})
 	}
 
 	return s.slots[clusterID], ""
@@ -254,8 +254,8 @@ func (s *Slots) CleanupSlot(id common.ClusterID) {
 	}()
 
 	if slot, ok := s.slots[id]; ok {
-		for addr := range slot.ps {
-			delete(s.activeAccounts, addr)
+		for id := range slot.ps {
+			delete(s.activeAccounts, id)
 		}
 
 		close(slot.BftInboundChan)
@@ -292,7 +292,7 @@ func (s *Slots) AvailableOperatorSlots() int {
 	return s.availableOperatorSlots
 }
 
-func (s *Slots) ActiveAccounts() map[identifiers.Address][]*LockInfo {
+func (s *Slots) ActiveAccounts() map[identifiers.Identifier][]*LockInfo {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 

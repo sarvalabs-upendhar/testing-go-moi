@@ -98,14 +98,15 @@ func (acc *Accounts) Bytes() ([]byte, error) {
 }
 
 type AccountMetaInfo struct {
-	Type                 AccountType         `json:"type"`
-	Address              identifiers.Address `json:"address"`
-	Height               uint64              `json:"height"`
-	TesseractHash        Hash                `json:"tesseract_hash"`
-	StateHash            Hash                `json:"state_hash"`
-	ContextHash          Hash                `json:"context_hash"`
-	CommitHash           Hash                `json:"commit_hash"`
-	PositionInContextSet int                 `json:"position"`
+	Type                 AccountType            `json:"type"`
+	ID                   identifiers.Identifier `json:"id"`
+	Height               uint64                 `json:"height"`
+	TesseractHash        Hash                   `json:"tesseract_hash"`
+	StateHash            Hash                   `json:"state_hash"`
+	ConsensusNodesHash   Hash                   `json:"consensus_nodes"`
+	ContextHash          Hash                   `json:"context_hash"`
+	CommitHash           Hash                   `json:"commit_hash"`
+	PositionInContextSet int                    `json:"position"`
 }
 
 func (ami *AccountMetaInfo) Bytes() ([]byte, error) {

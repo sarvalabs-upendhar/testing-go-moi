@@ -32,15 +32,15 @@ type TSTrackerEvent struct {
 
 // SyncRequestEvent is fired by krama engine to sync the tesseract lattice
 type SyncRequestEvent struct {
-	Address  identifiers.Address
+	ID       identifiers.Identifier
 	Height   uint64
 	BestPeer kramaid.KramaID
 }
 
 // PendingAccountEvent is fired to update the pending accounts variable in SyncStatusTracker
 type PendingAccountEvent struct {
-	Address identifiers.Address
-	Count   int64
+	ID    identifiers.Identifier
+	Count int64
 }
 
 // AddedInteractionEvent emits added interactions in the account queue

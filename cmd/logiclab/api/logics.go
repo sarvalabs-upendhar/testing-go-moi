@@ -22,7 +22,7 @@ type Logic struct {
 	Engine  string `json:"engine"`
 
 	LogicID  string `json:"logic_id"`
-	Address  string `json:"address"`
+	ID       string `json:"id"`
 	Manifest string `json:"manifest"`
 
 	Callsites map[string]core.LogicCallsite `json:"callsites"`
@@ -63,17 +63,17 @@ func (api *API) getLogic(c *gin.Context) {
 	}
 
 	// Obtain the identifier of the logic ID
-	identifier, _ := logic.Object.ID.Identifier()
+	identifier := logic.Object.ID.AsIdentifier()
 	manifest := logic.Object.ManifestHash()
 
 	c.JSON(http.StatusOK, Success().WithData(Logic{
 		Name:    logic.Name,
 		Ready:   logic.Ready,
-		Edition: identifier.Edition(),
+		Edition: uint64(identifier.Variant()),
 		Engine:  logic.Object.EngineKind.String(),
 
 		LogicID:  logic.Object.ID.String(),
-		Address:  logic.Object.ID.Address().String(),
+		ID:       strings.TrimPrefix(identifier.String(), "0x"),
 		Manifest: hex.EncodeToString(manifest[:]),
 
 		Callsites: logic.Callsites,
@@ -330,7 +330,7 @@ func (api *API) getLogicStorage(c *gin.Context) {
 	// Extract the storage key
 	storekey := c.Param("storekey")
 	// Generate the db key for the storage key
-	dbkey := db.StorageKey(env.ID, logicID.Address(), logicID, common.Hex2Bytes(storekey))
+	dbkey := db.StorageKey(env.ID, logicID.AsIdentifier(), logicID, common.Hex2Bytes(storekey))
 
 	// Get the logic state for the given name
 	storeval, err := api.lab.Database.Get(dbkey)

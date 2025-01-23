@@ -58,8 +58,8 @@ func TestCopyLog(t *testing.T) {
 		{
 			name: "copy log",
 			log: common.Log{
-				Address: tests.RandomAddress(t),
-				LogicID: tests.GetLogicID(t, tests.RandomAddress(t)),
+				ID:      tests.RandomIdentifier(t),
+				LogicID: tests.GetLogicID(t, tests.RandomIdentifier(t)),
 				Topics:  tests.GetHashes(t, 1),
 				Data:    []byte{1},
 			},
@@ -67,7 +67,7 @@ func TestCopyLog(t *testing.T) {
 		{
 			name: "empty addresses,topics,data",
 			log: common.Log{
-				LogicID: tests.GetLogicID(t, tests.RandomAddress(t)),
+				LogicID: tests.GetLogicID(t, tests.RandomIdentifier(t)),
 			},
 		},
 	}
@@ -79,7 +79,7 @@ func TestCopyLog(t *testing.T) {
 
 			// Add assertions to check individual fields of the copied log
 			require.Equal(t, expectedLog, copiedLog)
-			require.Equal(t, expectedLog.Address, copiedLog.Address)
+			require.Equal(t, expectedLog.ID, copiedLog.ID)
 
 			if len(expectedLog.Topics) > 0 {
 				// Compare Topics pointers

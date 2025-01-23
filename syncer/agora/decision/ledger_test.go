@@ -20,7 +20,7 @@ func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {
 
 	ledger := NewTestLedger(t, ctx)
 
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	ids := tests.RandomKramaIDs(t, 1)
 
@@ -29,7 +29,7 @@ func TestGetAssociatedPeers_FetchFromCache(t *testing.T) {
 
 	ledger.cache.Add(GetAgoraKey(stateHash.Key()), pList)
 
-	peers, err := ledger.GetAssociatedPeers(address, stateHash)
+	peers, err := ledger.GetAssociatedPeers(id, stateHash)
 	require.NoError(t, err, err)
 	require.Contains(t, peers, ids[0])
 }
@@ -42,7 +42,7 @@ func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
 
 	ledger := NewTestLedger(t, ctx)
 
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	ids := tests.RandomKramaIDs(t, 1)
 
@@ -53,10 +53,10 @@ func TestGetAssociatedPeers_FetchFromDB(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write the list to db
-	err = ledger.db.GetBatchWriter().Set(GetAgoraDBKey(address, stateHash.Key()), rawData)
+	err = ledger.db.GetBatchWriter().Set(GetAgoraDBKey(id, stateHash.Key()), rawData)
 	require.NoError(t, err)
 
-	peers, err := ledger.GetAssociatedPeers(address, stateHash)
+	peers, err := ledger.GetAssociatedPeers(id, stateHash)
 	require.NoError(t, err, err)
 	require.Contains(t, peers, ids[0])
 }
@@ -70,7 +70,7 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 	ledger := NewTestLedger(t, ctx)
 	ledger.Start()
 
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	ids := tests.RandomKramaIDs(t, 2)
 
@@ -82,15 +82,15 @@ func TestUpdateAssociatedPeers_EntryAlreadyExists(t *testing.T) {
 	require.NoError(t, err)
 
 	// Write the list to db
-	err = ledger.db.GetBatchWriter().Set(GetAgoraDBKey(address, stateHash.Key()), rawData)
+	err = ledger.db.GetBatchWriter().Set(GetAgoraDBKey(id, stateHash.Key()), rawData)
 	require.NoError(t, err)
 
-	err = ledger.UpdateAssociatedPeers(address, stateHash, ids[1])
+	err = ledger.UpdateAssociatedPeers(id, stateHash, ids[1])
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second) // wait for 3 seconds
 
-	peerList, err := ledger.fetchFromDB(address, stateHash)
+	peerList, err := ledger.fetchFromDB(id, stateHash)
 	require.NoError(t, err)
 
 	// check for the added peer
@@ -113,17 +113,17 @@ func TestUpdateAssociatedPeers_NewEntry(t *testing.T) {
 	ledger := NewTestLedger(t, ctx)
 	ledger.Start()
 
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	ids := tests.RandomKramaIDs(t, 1)
 
-	err := ledger.UpdateAssociatedPeers(address, stateHash, ids[0])
+	err := ledger.UpdateAssociatedPeers(id, stateHash, ids[0])
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second) // wait for 1 seconds
 
 	// fetch peer list from db
-	peerList, err := ledger.fetchFromDB(address, stateHash)
+	peerList, err := ledger.fetchFromDB(id, stateHash)
 	require.NoError(t, err)
 
 	// check for the added peer

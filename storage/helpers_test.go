@@ -232,11 +232,12 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 		AccMetaInfo := tests.GetRandomAccMetaInfo(t, 1)
 		// insert test data in to db
 		_, _, err := pm.UpdateAccMetaInfo(
-			AccMetaInfo.Address,
+			AccMetaInfo.ID,
 			AccMetaInfo.Height,
 			AccMetaInfo.TesseractHash,
 			AccMetaInfo.StateHash,
 			AccMetaInfo.ContextHash,
+			AccMetaInfo.ConsensusNodesHash,
 			AccMetaInfo.CommitHash,
 			AccMetaInfo.Type,
 			true,
@@ -245,7 +246,7 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 		require.NoError(t, err)
 
 		// store the data we inserted into db with key as bucket number and  value as account meta info
-		accID := new(big.Int).SetBytes(AccMetaInfo.Address.Bytes())
+		accID := new(big.Int).SetBytes(AccMetaInfo.ID.Bytes())
 		bucketNo := accID.Mod(accID, new(big.Int).SetUint64(MaxBucketCount))
 
 		insertedAccounts[bucketNo.Uint64()] = append(insertedAccounts[bucketNo.Uint64()], AccMetaInfo)
@@ -263,7 +264,7 @@ func incrementBuckets(t *testing.T, pm *PersistenceManager) map[uint64]uint64 {
 	incrementNumber := uint64(3)
 
 	for i := 0; i < 10000; i++ {
-		_, bucket := BucketKeyAndID(tests.RandomAddress(t))
+		_, bucket := BucketKeyAndID(NewIdentifierKey(tests.RandomIdentifier(t)))
 		err := pm.incrementBucketCount(bucket, incrementNumber)
 
 		require.NoError(t, err)
@@ -318,7 +319,7 @@ func insertTestEntries(t *testing.T, pm *PersistenceManager) (map[string]string,
 func insertAccMetaInfo(t *testing.T, pm *PersistenceManager, accMetaInfo common.AccountMetaInfo) {
 	t.Helper()
 
-	key, bucket := BucketKeyAndID(accMetaInfo.Address)
+	key, bucket := BucketKeyAndID(NewIdentifierKey(accMetaInfo.ID))
 
 	rawData, err := accMetaInfo.Bytes()
 	require.NoError(t, err)

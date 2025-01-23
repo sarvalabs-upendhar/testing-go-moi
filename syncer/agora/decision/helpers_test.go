@@ -72,7 +72,7 @@ func NewMockDB() *MockDB {
 	}
 }
 
-func (db *MockDB) DoesStateExists(address identifiers.Address, stateHash cid.CID) bool {
+func (db *MockDB) DoesStateExists(id identifiers.Identifier, stateHash cid.CID) bool {
 	db.mtx.Lock()
 	defer db.mtx.Unlock()
 
@@ -106,7 +106,7 @@ func (db *MockDB) GetBatchWriter() db.BatchWriter {
 
 func (db *MockDB) GetData(
 	ctx context.Context,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	keys []cid.CID,
 ) (map[cid.CID][]byte, error) {
 	db.mtx.Lock()
@@ -149,7 +149,7 @@ func NewMockLedger() *MockLedger {
 	}
 }
 
-func (mc *MockLedger) GetAssociatedPeers(addr identifiers.Address, stateHash cid.CID) ([]kramaid.KramaID, error) {
+func (mc *MockLedger) GetAssociatedPeers(id identifiers.Identifier, stateHash cid.CID) ([]kramaid.KramaID, error) {
 	peers, ok := mc.peers[stateHash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -158,7 +158,11 @@ func (mc *MockLedger) GetAssociatedPeers(addr identifiers.Address, stateHash cid
 	return peers, nil
 }
 
-func (mc *MockLedger) UpdateAssociatedPeers(addr identifiers.Address, stateHash cid.CID, peerID kramaid.KramaID) error {
+func (mc *MockLedger) UpdateAssociatedPeers(
+	id identifiers.Identifier,
+	stateHash cid.CID,
+	peerID kramaid.KramaID,
+) error {
 	peers, ok := mc.peers[stateHash]
 	if ok {
 		return common.ErrKeyNotFound

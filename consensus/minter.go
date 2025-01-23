@@ -42,7 +42,7 @@ func (k *Engine) minter() {
 						k.pool.Drop(ix)
 					default:
 						if !errors.Is(resp.Err, common.ErrSlotsFull) {
-							if err := k.pool.IncrementWaitTime(ix.SenderAddr(), k.avgICSTime); err != nil {
+							if err := k.pool.IncrementWaitTime(ix.SenderID(), k.avgICSTime); err != nil {
 								k.logger.Error("Error incrementing wait time", "err", err)
 							}
 

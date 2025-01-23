@@ -19,15 +19,15 @@ func (te *TestEnvironment) burnAsset(
 	assetSupplyPayload *common.AssetSupplyPayload,
 ) (common.Hash, error) {
 	te.logger.Debug("burn asset ",
-		"sender", acc.Addr, "asset", assetSupplyPayload.AssetID, "amount", assetSupplyPayload.Amount)
+		"sender", acc.ID, "asset", assetSupplyPayload.AssetID, "amount", assetSupplyPayload.Amount)
 
 	payload, err := assetSupplyPayload.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    acc.Addr,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.Addr, 0),
+			ID:         acc.ID,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.ID, 0),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -45,11 +45,11 @@ func (te *TestEnvironment) burnAsset(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  acc.Addr,
+				ID:       acc.ID,
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  assetSupplyPayload.AssetID.Address(),
+				ID:       assetSupplyPayload.AssetID.AsIdentifier(),
 				LockType: common.MutateLock,
 			},
 		},
@@ -57,7 +57,7 @@ func (te *TestEnvironment) burnAsset(
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
-			Addr:     acc.Addr,
+			ID:       acc.ID,
 			KeyID:    0,
 			Mnemonic: acc.Mnemonic,
 		},
@@ -70,7 +70,7 @@ func (te *TestEnvironment) burnAsset(
 // 2. make sure asset burned on senders side by payload amount
 func validateAssetBurn(
 	te *TestEnvironment,
-	sender identifiers.Address,
+	sender identifiers.Identifier,
 	payload common.AssetSupplyPayload,
 	ixHash common.Hash,
 ) {
@@ -109,7 +109,7 @@ func (te *TestEnvironment) TestAssetBurn() {
 	))
 
 	transferAsset(te, sender, &common.AssetActionPayload{
-		Beneficiary: nonOperator.Addr,
+		Beneficiary: nonOperator.ID,
 		AssetID:     MAS0AssetID,
 		Amount:      big.NewInt(100),
 	})
@@ -120,7 +120,7 @@ func (te *TestEnvironment) TestAssetBurn() {
 		assetSupplyPayload *common.AssetSupplyPayload
 		postTest           func(
 			te *TestEnvironment,
-			sender identifiers.Address,
+			sender identifiers.Identifier,
 			payload common.AssetSupplyPayload,
 			ixHash common.Hash,
 		)
@@ -166,7 +166,7 @@ func (te *TestEnvironment) TestAssetBurn() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.Addr, *test.assetSupplyPayload, ixHash)
+			test.postTest(te, test.sender.ID, *test.assetSupplyPayload, ixHash)
 		})
 	}
 }

@@ -9,7 +9,7 @@ import (
 func validateParticipantCreate(sender, target, sarga *state.Object, payload *common.ParticipantCreatePayload) error {
 	// Check if the account is already registered
 	// Fetch the account info from genesis state
-	_, err := sarga.GetStorageEntry(common.SargaLogicID, target.Address().Bytes())
+	_, err := sarga.GetStorageEntry(common.SargaLogicID, target.Identifier().Bytes())
 	if !errors.Is(err, common.ErrKeyNotFound) {
 		return common.ErrAlreadyRegistered
 	}
@@ -83,9 +83,9 @@ func RunParticipantCreate(
 	payload, _ := op.GetParticipantCreatePayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderAddr())
+	sender := transition.GetObject(op.SenderID())
 	target := transition.GetObject(op.Target())
-	sarga := transition.GetObject(common.SargaAddress)
+	sarga := transition.GetObject(common.SargaAccountID)
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -127,7 +127,7 @@ func RunAccountConfigure(
 	payload, _ := op.GetAccountConfigurePayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderAddr())
+	sender := transition.GetObject(op.SenderID())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())

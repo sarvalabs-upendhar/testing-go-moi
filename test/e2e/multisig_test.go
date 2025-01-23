@@ -19,23 +19,23 @@ import (
 
 // TODO Decide how to throw errors , use suite or require package
 func (te *TestEnvironment) createAssetWithMultiSig(
-	senderAddr identifiers.Address,
+	senderID identifiers.Identifier,
 	senderKeyID uint64,
 	assetCreatePayload *common.AssetCreatePayload,
 	accountKeys []moiclient.AccountKeyWithMnemonic,
-	notaryAccount []identifiers.Address,
+	notaryAccount []identifiers.Identifier,
 ) (common.Hash, error) {
 	te.logger.Debug("create asset ",
-		"sender", senderAddr, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.Supply)
+		"sender", senderID, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.Supply)
 
 	payload, err := assetCreatePayload.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    senderAddr,
+			ID:         senderID,
 			KeyID:      senderKeyID,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, senderAddr, senderKeyID),
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, senderID, senderKeyID),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -47,15 +47,15 @@ func (te *TestEnvironment) createAssetWithMultiSig(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  senderAddr,
+				ID:       senderID,
 				LockType: common.MutateLock,
 			},
 		},
 	}
 
-	for _, addr := range notaryAccount {
+	for _, id := range notaryAccount {
 		ixData.Participants = append(ixData.Participants, common.IxParticipant{
-			Address:  addr,
+			ID:       id,
 			LockType: common.MutateLock,
 			Notary:   true,
 		})
@@ -67,29 +67,29 @@ func (te *TestEnvironment) createAssetWithMultiSig(
 }
 
 func (te *TestEnvironment) TestMultiSig() {
-	newAcc := tests.RandomAddress(te.T())
+	newAcc := tests.RandomIdentifier(te.T())
 	acc := te.chooseRandomAccount()
 
 	accounts, err := cmdCommon.GetAccountsWithMnemonic(4)
 	require.NoError(te.T(), err)
 
 	createParticipant(te, acc, &common.ParticipantCreatePayload{
-		Address: newAcc,
+		ID: newAcc,
 		KeysPayload: []common.KeyAddPayload{
 			{
-				PublicKey: accounts[0].Addr.Bytes(),
+				PublicKey: accounts[0].PublicKey,
 				Weight:    400,
 			},
 			{
-				PublicKey: accounts[1].Addr.Bytes(),
+				PublicKey: accounts[1].PublicKey,
 				Weight:    400,
 			},
 			{
-				PublicKey: accounts[2].Addr.Bytes(),
+				PublicKey: accounts[2].PublicKey,
 				Weight:    200,
 			},
 			{
-				PublicKey: accounts[3].Addr.Bytes(),
+				PublicKey: accounts[3].PublicKey,
 				Weight:    400,
 			},
 		},
@@ -109,31 +109,31 @@ func (te *TestEnvironment) TestMultiSig() {
 
 	testcases := []struct {
 		name               string
-		senderAddr         identifiers.Address
+		senderID           identifiers.Identifier
 		senderKeyID        uint64
 		assetCreatePayload *common.AssetCreatePayload
 		signers            []moiclient.AccountKeyWithMnemonic
-		notaryAccounts     []identifiers.Address
+		notaryAccounts     []identifiers.Identifier
 		expectedError      error
 	}{
 		{
 			name:               "finalized ixn with multisig successfully",
-			senderAddr:         newAcc,
+			senderID:           newAcc,
 			senderKeyID:        2,
 			assetCreatePayload: assetCreatePayload,
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    0,
 					Mnemonic: accounts[0].Mnemonic,
 				},
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    1,
 					Mnemonic: accounts[1].Mnemonic,
 				},
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    2,
 					Mnemonic: accounts[2].Mnemonic,
 				},
@@ -141,22 +141,22 @@ func (te *TestEnvironment) TestMultiSig() {
 		},
 		{
 			name:               "sender key signature not found",
-			senderAddr:         newAcc,
+			senderID:           newAcc,
 			senderKeyID:        0,
 			assetCreatePayload: assetCreatePayload,
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    1,
 					Mnemonic: accounts[1].Mnemonic,
 				},
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    2,
 					Mnemonic: accounts[2].Mnemonic,
 				},
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    3,
 					Mnemonic: accounts[3].Mnemonic,
 				},
@@ -165,32 +165,32 @@ func (te *TestEnvironment) TestMultiSig() {
 		},
 		{
 			name:               "notary participant signature not found",
-			senderAddr:         newAcc,
+			senderID:           newAcc,
 			senderKeyID:        1,
 			assetCreatePayload: assetCreatePayload,
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    0,
 					Mnemonic: accounts[0].Mnemonic,
 				},
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    1,
 					Mnemonic: accounts[1].Mnemonic,
 				},
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    2,
 					Mnemonic: accounts[2].Mnemonic,
 				},
 			},
-			notaryAccounts: []identifiers.Address{te.accounts[1].Addr},
+			notaryAccounts: []identifiers.Identifier{te.accounts[1].ID},
 			expectedError:  errors.New("invalid notary participant signature"),
 		},
 		{
 			name:        "finalize ixn with notary signature successfully",
-			senderAddr:  newAcc,
+			senderID:    newAcc,
 			senderKeyID: 1,
 			assetCreatePayload: createAssetCreatePayload(
 				tests.GetRandomUpperCaseString(te.T(), 8),
@@ -202,35 +202,35 @@ func (te *TestEnvironment) TestMultiSig() {
 			),
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    0,
 					Mnemonic: accounts[0].Mnemonic,
 				},
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    1,
 					Mnemonic: accounts[1].Mnemonic,
 				},
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    2,
 					Mnemonic: accounts[2].Mnemonic,
 				},
 				{
-					Addr:     te.accounts[1].Addr,
+					ID:       te.accounts[1].ID,
 					KeyID:    0,
 					Mnemonic: te.accounts[1].Mnemonic,
 				},
 			},
-			notaryAccounts: []identifiers.Address{te.accounts[1].Addr},
+			notaryAccounts: []identifiers.Identifier{te.accounts[1].ID},
 		},
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
 			prevSequenceID, err := te.moiClient.InteractionCount(context.Background(), &args.InteractionCountArgs{
-				Address: test.senderAddr,
-				KeyID:   test.senderKeyID,
+				ID:    test.senderID,
+				KeyID: test.senderKeyID,
 				Options: args.TesseractNumberOrHash{
 					TesseractNumber: &args.LatestTesseractHeight,
 				},
@@ -238,7 +238,7 @@ func (te *TestEnvironment) TestMultiSig() {
 			require.NoError(te.T(), err)
 
 			ixHash, err := te.createAssetWithMultiSig(
-				test.senderAddr, test.senderKeyID, test.assetCreatePayload, test.signers, test.notaryAccounts)
+				test.senderID, test.senderKeyID, test.assetCreatePayload, test.signers, test.notaryAccounts)
 
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
@@ -253,8 +253,8 @@ func (te *TestEnvironment) TestMultiSig() {
 			checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 			sequenceID, err := te.moiClient.InteractionCount(context.Background(), &args.InteractionCountArgs{
-				Address: test.senderAddr,
-				KeyID:   test.senderKeyID,
+				ID:    test.senderID,
+				KeyID: test.senderKeyID,
 				Options: args.TesseractNumberOrHash{
 					TesseractNumber: &args.LatestTesseractHeight,
 				},

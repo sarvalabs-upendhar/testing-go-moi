@@ -135,7 +135,7 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 	instance, err := engine.SpawnInstance(
 		logic.Object,
 		env.CallFuel,
-		core.NewStorageDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
+		core.NewStorageDriver(env.ID, api.lab.Database, logicID.AsIdentifier(), logicID),
 		api.lab,
 		eventstream,
 	)
@@ -149,13 +149,13 @@ func (api *API) InteractLogicDeploy(c *gin.Context) {
 		return
 	}
 
-	// Get the address of the sender
-	senderAddress := env.Users[env.Sender]
+	// Get the id of the sender
+	senderID := env.Users[env.Sender]
 	// Generate the context object for the sender
-	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderAddress, logicID)
+	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderID, logicID)
 	// If the logic describes an ephemeral state, enlist the sender (deployer)
 	if _, ok = logic.Object.EphemeralState(); ok {
-		_ = env.Enlist(senderAddress, logicID)
+		_ = env.Enlist(senderID, logicID)
 	}
 
 	// Generate an interaction from the kind, callsite, calldata and manifest
@@ -279,7 +279,7 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 	instance, err := engine.SpawnInstance(
 		logic.Object,
 		env.CallFuel,
-		core.NewStorageDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
+		core.NewStorageDriver(env.ID, api.lab.Database, logicID.AsIdentifier(), logicID),
 		api.lab,
 		eventstream,
 	)
@@ -293,21 +293,22 @@ func (api *API) InteractLogicInvoke(c *gin.Context) {
 		return
 	}
 
-	// Get the address of the sender
-	senderAddress := env.Users[env.Sender]
+	// Get the id of the sender
+	senderID := env.Users[env.Sender]
 
-	identifier, _ := logicID.Identifier()
+	// TODO: Check if the sender is enlisted with the logic
+	// identifier := logicID.AsIdentifier()
 	// Check if the logic has an ephemeral state
-	if identifier.HasEphemeralState() {
-		// Check if sender has been enlisted for the logic ID
-		if !env.Enlisted(senderAddress, logicID) {
-			c.JSON(http.StatusExpectationFailed, "sender is not enlisted with ephemeral logic")
-			return
-		}
-	}
+	// if identifier.HasEphemeralState() {
+	//	// Check if sender has been enlisted for the logic ID
+	//	if !env.Enlisted(senderID, logicID) {
+	//		c.JSON(http.StatusExpectationFailed, "sender is not enlisted with ephemeral logic")
+	//		return
+	//	}
+	// }
 
 	// Generate the context object for the sender
-	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderAddress, logicID)
+	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderID, logicID)
 
 	// Generate an interaction from the kind, callsite, calldata and manifest
 	ixn := core.Interaction{
@@ -436,10 +437,10 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 		return
 	}
 
-	// Get the address of the sender
-	senderAddress := env.Users[env.Sender]
+	// Get the id of the sender
+	senderID := env.Users[env.Sender]
 	// Check if the user has already enlisted with logic
-	if env.Enlisted(senderAddress, logicID) {
+	if env.Enlisted(senderID, logicID) {
 		c.JSON(http.StatusBadRequest, Error(errors.New("user already enlisted with logic")))
 		return
 	}
@@ -448,7 +449,7 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 	instance, err := engine.SpawnInstance(
 		logic.Object,
 		env.CallFuel,
-		core.NewStorageDriver(env.ID, api.lab.Database, logicID.Address(), logicID),
+		core.NewStorageDriver(env.ID, api.lab.Database, logicID.AsIdentifier(), logicID),
 		api.lab,
 		eventstream,
 	)
@@ -458,7 +459,7 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 	}
 
 	// Generate the context object for the sender
-	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderAddress, logicID)
+	senderContext := core.NewStorageDriver(env.ID, api.lab.Database, senderID, logicID)
 
 	// Generate an interaction from the kind, callsite and calldata
 	ixn := core.Interaction{
@@ -492,7 +493,7 @@ func (api *API) InteractLogicEnlist(c *gin.Context) {
 	}
 
 	env.IncrementSequenceID()
-	_ = env.Enlist(senderAddress, logicID)
+	_ = env.Enlist(senderID, logicID)
 
 	// Get the logic interaction hash
 	hash := ixn.Hash()

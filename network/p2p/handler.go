@@ -8,8 +8,6 @@ import (
 	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-polo"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -145,10 +143,8 @@ func (eh *SubHandler) handleMsg(msg *networkmsg.Message) error {
 
 		// Unmarshal message proto into an InteractionsData message
 		ixns := new(common.Interactions)
-		if err := ixns.FromBytes(msg.Payload); err != nil {
-			if !errors.Is(err, polo.ErrNullPack) {
-				return err
-			}
+		if err = ixns.FromBytes(msg.Payload); err != nil {
+			return err
 		}
 
 		// Mark the interactions in the message as 'known' by the peer

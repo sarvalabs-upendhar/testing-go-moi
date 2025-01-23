@@ -21,7 +21,7 @@ type TogglerTestSuite struct {
 	engineio.TestSuite
 }
 
-var SeederAddress = identifiers.NewRandomAddress()
+var SeederID = identifiers.RandomParticipantIDv0().AsIdentifier()
 
 func (suite *TogglerTestSuite) SetupSuite() {
 	// Read manifest file
@@ -29,7 +29,7 @@ func (suite *TogglerTestSuite) SetupSuite() {
 	suite.Require().NoErrorf(err, "could not read manifest file")
 
 	// Initialise the test suite
-	_, err = suite.Initialise(engineio.PISA, manifest, SeederAddress)
+	_, err = suite.Initialise(engineio.PISA, manifest, SeederID)
 	suite.Require().NoErrorf(err, "could not read initialise test")
 
 	// Serialize the input args into calldata
@@ -41,7 +41,7 @@ func (suite *TogglerTestSuite) SetupSuite() {
 
 	// Check the balance of the seeder
 	keyValue := pisa.GenerateStorageKey(SlotValue)
-	suite.CheckEphemeralStorage(SeederAddress, keyValue, false)
+	suite.CheckEphemeralStorage(SeederID, keyValue, false)
 }
 
 func (suite *TogglerTestSuite) TestToggle() {
@@ -49,5 +49,5 @@ func (suite *TogglerTestSuite) TestToggle() {
 
 	// Check the balance of the seeder
 	keyValue := pisa.GenerateStorageKey(SlotValue)
-	suite.CheckEphemeralStorage(SeederAddress, keyValue, true)
+	suite.CheckEphemeralStorage(SeederID, keyValue, true)
 }

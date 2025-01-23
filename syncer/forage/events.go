@@ -3,8 +3,8 @@ package forage
 import "github.com/sarvalabs/go-moi-identifiers"
 
 type eventDataJobState struct {
-	address identifiers.Address
-	height  uint64
+	id     identifiers.Identifier
+	height uint64
 }
 
 type eventBucketSync struct{}

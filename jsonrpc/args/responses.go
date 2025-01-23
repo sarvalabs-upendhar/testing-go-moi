@@ -23,9 +23,9 @@ type RPCDeeds struct {
 }
 
 type RPCMandateOrLockup struct {
-	Address identifiers.Address `json:"address"`
-	AssetID string              `json:"asset_id"`
-	Amount  *hexutil.Big        `json:"amount"`
+	ID      identifiers.Identifier `json:"id"`
+	AssetID string                 `json:"asset_id"`
+	Amount  *hexutil.Big           `json:"amount"`
 }
 
 type RPCInteractions []*RPCInteraction
@@ -48,15 +48,14 @@ type RPCTesseract struct {
 
 // ContextResponse is response object for fetching context info
 type ContextResponse struct {
-	BehaviourNodes []string `json:"behaviour_nodes"`
-	RandomNodes    []string `json:"random_nodes"`
+	ConsensusNodes []string `json:"consensus_nodes"`
 	StorageNodes   []string `json:"storage_nodes"`
 }
 
 type RPCAssetDescriptor struct {
-	Symbol   string              `json:"symbol"`
-	Operator identifiers.Address `json:"operator"`
-	Supply   hexutil.Big         `json:"supply"`
+	Symbol   string                 `json:"symbol"`
+	Operator identifiers.Identifier `json:"operator"`
+	Supply   hexutil.Big            `json:"supply"`
 
 	Dimension hexutil.Uint8  `json:"dimension"`
 	Standard  hexutil.Uint16 `json:"standard"`
@@ -64,11 +63,11 @@ type RPCAssetDescriptor struct {
 	IsLogical  bool `json:"is_logical"`
 	IsStateFul bool `json:"is_stateful"`
 
-	LogicID identifiers.LogicID `json:"logic_id,omitempty"`
+	LogicID identifiers.Identifier `json:"logic_id,omitempty"`
 }
 
-func GetRPCAssetDescriptor(ad *common.AssetDescriptor) RPCAssetDescriptor {
-	return RPCAssetDescriptor{
+func GetRPCAssetDescriptor(ad *common.AssetDescriptor) *RPCAssetDescriptor {
+	return &RPCAssetDescriptor{
 		Symbol:     ad.Symbol,
 		Operator:   ad.Operator,
 		Dimension:  hexutil.Uint8(ad.Dimension),
@@ -91,15 +90,15 @@ type RPCIxOp struct {
 }
 
 type RPCSender struct {
-	Address    identifiers.Address `json:"address"`
-	SequenceID hexutil.Uint64      `json:"sequence_id"`
-	KeyID      hexutil.Uint64      `json:"key_id"`
+	ID         identifiers.Identifier `json:"id"`
+	SequenceID hexutil.Uint64         `json:"sequence_id"`
+	KeyID      hexutil.Uint64         `json:"key_id"`
 }
 
 type RPCSignature struct {
-	Address   identifiers.Address `json:"address"`
-	KeyID     hexutil.Uint64      `json:"key_id"`
-	Signature hexutil.Bytes       `json:"signature"`
+	ID        identifiers.Identifier `json:"id"`
+	KeyID     hexutil.Uint64         `json:"key_id"`
+	Signature hexutil.Bytes          `json:"signature"`
 }
 
 type RPCIxFund struct {
@@ -108,8 +107,8 @@ type RPCIxFund struct {
 }
 
 type RPCIxParticipant struct {
-	Address  identifiers.Address `json:"address"`
-	LockType common.LockType     `json:"lock_type"`
+	ID       identifiers.Identifier `json:"id"`
+	LockType common.LockType        `json:"lock_type"`
 }
 
 type RPCIxParticipants []RPCIxParticipant
@@ -120,10 +119,10 @@ type RPCInteraction struct {
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 
-	Sender         RPCSender           `json:"sender"`
-	Payer          identifiers.Address `json:"payer"`
-	IxParticipants RPCIxParticipants   `json:"ix_participants"`
-	Funds          []RPCIxFund         `json:"funds"`
+	Sender         RPCSender              `json:"sender"`
+	Payer          identifiers.Identifier `json:"payer"`
+	IxParticipants RPCIxParticipants      `json:"ix_participants"`
+	Funds          []RPCIxFund            `json:"funds"`
 
 	IxOps []RPCIxOp `json:"ix_operations"`
 
@@ -140,14 +139,14 @@ type RPCIxOpResult struct {
 }
 
 type RPCReceipt struct {
-	IxHash       common.Hash           `json:"ix_hash"`
-	Status       common.ReceiptStatus  `json:"status"`
-	FuelUsed     hexutil.Uint64        `json:"fuel_used"`
-	IxOps        []*RPCIxOpResult      `json:"ix_operations"`
-	From         identifiers.Address   `json:"from"`
-	IXIndex      hexutil.Uint64        `json:"ix_index,omitempty"`
-	TSHash       common.Hash           `json:"ts_hash,omitempty"`
-	Participants RPCParticipantsStates `json:"participants,omitempty"`
+	IxHash       common.Hash            `json:"ix_hash"`
+	Status       common.ReceiptStatus   `json:"status"`
+	FuelUsed     hexutil.Uint64         `json:"fuel_used"`
+	IxOps        []*RPCIxOpResult       `json:"ix_operations"`
+	From         identifiers.Identifier `json:"from"`
+	IXIndex      hexutil.Uint64         `json:"ix_index,omitempty"`
+	TSHash       common.Hash            `json:"ts_hash,omitempty"`
+	Participants RPCParticipantsStates  `json:"participants,omitempty"`
 }
 
 type RPCAccount struct {
@@ -172,10 +171,10 @@ type RPCAccountKey struct {
 }
 
 type RPCAccountMetaInfo struct {
-	Type          common.AccountType  `json:"type"`
-	Address       identifiers.Address `json:"address"`
-	Height        hexutil.Uint64      `json:"height"`
-	TesseractHash common.Hash         `json:"tesseract_hash"`
+	Type          common.AccountType     `json:"type"`
+	ID            identifiers.Identifier `json:"id"`
+	Height        hexutil.Uint64         `json:"height"`
+	TesseractHash common.Hash            `json:"tesseract_hash"`
 }
 
 type AccSyncStatus struct {
@@ -185,11 +184,11 @@ type AccSyncStatus struct {
 }
 
 type NodeSyncStatus struct {
-	TotalPendingAccounts  hexutil.Uint64        `json:"total_pending_accounts"`
-	PendingAccounts       []identifiers.Address `json:"pending_accounts"`
-	IsPrincipalSyncDone   bool                  `json:"is_principal_sync_done"`
-	PrincipalSyncDoneTime hexutil.Uint64        `json:"principal_sync_done_time"`
-	IsInitialSyncDone     bool                  `json:"is_initial_sync_done"`
+	TotalPendingAccounts  hexutil.Uint64           `json:"total_pending_accounts"`
+	PendingAccounts       []identifiers.Identifier `json:"pending_accounts"`
+	IsPrincipalSyncDone   bool                     `json:"is_principal_sync_done"`
+	PrincipalSyncDoneTime hexutil.Uint64           `json:"principal_sync_done_time"`
+	IsInitialSyncDone     bool                     `json:"is_initial_sync_done"`
 }
 
 type SyncStatusResponse struct {
@@ -198,10 +197,10 @@ type SyncStatusResponse struct {
 }
 
 type RPCLog struct {
-	Address identifiers.Address `json:"address"`
-	LogicID identifiers.LogicID `json:"logic_id,omitempty"`
-	Topics  []common.Hash       `json:"topics"`
-	Data    hexutil.Bytes       `json:"data"`
+	ID      identifiers.Identifier `json:"id"`
+	LogicID identifiers.LogicID    `json:"logic_id,omitempty"`
+	Topics  []common.Hash          `json:"topics"`
+	Data    hexutil.Bytes          `json:"data"`
 
 	// Derived fields, avoid serializing these fields while storing to DB
 	IxHash       common.Hash           `json:"ix_hash"`
@@ -213,14 +212,14 @@ type RPCLog struct {
 
 // InteractionResponse is a struct that represents a single interaction
 type InteractionResponse struct {
-	SequenceID hexutil.Uint64      `json:"sequence-id"`
-	Sender     identifiers.Address `json:"sender"`
-	Cost       *hexutil.Big        `json:"cost"`
-	FuelPrice  *hexutil.Big        `json:"fuel_price"`
-	FuelLimit  hexutil.Uint64      `json:"fuel_limit"`
-	IxOps      []IxOp              `json:"ix_operations"`
-	Input      string              `json:"input"`
-	Hash       common.Hash         `json:"hash"`
+	SequenceID hexutil.Uint64         `json:"sequence-id"`
+	Sender     identifiers.Identifier `json:"sender"`
+	Cost       *hexutil.Big           `json:"cost"`
+	FuelPrice  *hexutil.Big           `json:"fuel_price"`
+	FuelLimit  hexutil.Uint64         `json:"fuel_limit"`
+	IxOps      []IxOp                 `json:"ix_operations"`
+	Input      string                 `json:"input"`
+	Hash       common.Hash            `json:"hash"`
 }
 
 // NewInteractionResponse is a contructor function that generates
@@ -237,7 +236,7 @@ func NewInteractionResponse(ix *common.Interaction) *InteractionResponse {
 
 	return &InteractionResponse{
 		SequenceID: hexutil.Uint64(ix.SequenceID()),
-		Sender:     ix.SenderAddr(),
+		Sender:     ix.SenderID(),
 		Cost:       (*hexutil.Big)(ix.Cost()),
 		FuelPrice:  (*hexutil.Big)(ix.FuelPrice()),
 		FuelLimit:  hexutil.Uint64(ix.FuelLimit()),
@@ -247,8 +246,8 @@ func NewInteractionResponse(ix *common.Interaction) *InteractionResponse {
 }
 
 type ContentResponse struct {
-	Pending map[identifiers.Address]map[hexutil.Uint64]*InteractionResponse `json:"pending"`
-	Queued  map[identifiers.Address]map[hexutil.Uint64]*InteractionResponse `json:"queued"`
+	Pending map[identifiers.Identifier]map[hexutil.Uint64]*InteractionResponse `json:"pending"`
+	Queued  map[identifiers.Identifier]map[hexutil.Uint64]*InteractionResponse `json:"queued"`
 }
 
 type ContentFromResponse struct {
@@ -354,38 +353,38 @@ type DiagnosisResponse struct{}
 // Other RPC Responses
 
 type RPCState struct {
-	Address        identifiers.Address `json:"address"`
-	Height         hexutil.Uint64      `json:"height"`
-	TransitiveLink common.Hash         `json:"transitive_link"`
-	PrevContext    common.Hash         `json:"prev_context"`
-	LatestContext  common.Hash         `json:"latest_context"`
-	ContextDelta   *common.DeltaGroup  `json:"context_delta"`
-	StateHash      common.Hash         `json:"state_hash"`
+	ID             identifiers.Identifier `json:"id"`
+	Height         hexutil.Uint64         `json:"height"`
+	TransitiveLink common.Hash            `json:"transitive_link"`
+	PrevContext    common.Hash            `json:"prev_context"`
+	LatestContext  common.Hash            `json:"latest_context"`
+	ContextDelta   *common.DeltaGroup     `json:"context_delta"`
+	StateHash      common.Hash            `json:"state_hash"`
 }
 
 type RPCParticipantsStates []RPCState
 
 func (participants RPCParticipantsStates) Sort() {
 	sort.Slice(participants, func(i, j int) bool {
-		return participants[i].Address.Hex() < participants[j].Address.Hex()
+		return participants[i].ID.Hex() < participants[j].ID.Hex()
 	})
 }
 
 type RPCPoXtData struct {
-	Proposer     kramaid.KramaID                         `json:"operator"`
-	BinaryHash   common.Hash                             `json:"binary_hash"`
-	IdentityHash common.Hash                             `json:"identity_hash"`
-	View         hexutil.Uint64                          `json:"view"`
-	LastCommit   map[identifiers.Address]common.Hash     `json:"last_commit"`
-	AccountLocks map[identifiers.Address]common.LockType `json:"account_locks"`
-	ICSSeed      [32]byte                                `json:"ics_seed"`
-	ICSProof     hexutil.Bytes                           `json:"ics_proof"`
-	EvidenceHash map[identifiers.Address]common.Hash     `json:"evidence_hash"`
+	Proposer     kramaid.KramaID                            `json:"operator"`
+	BinaryHash   common.Hash                                `json:"binary_hash"`
+	IdentityHash common.Hash                                `json:"identity_hash"`
+	View         hexutil.Uint64                             `json:"view"`
+	LastCommit   map[identifiers.Identifier]common.Hash     `json:"last_commit"`
+	AccountLocks map[identifiers.Identifier]common.LockType `json:"account_locks"`
+	ICSSeed      [32]byte                                   `json:"ics_seed"`
+	ICSProof     hexutil.Bytes                              `json:"ics_proof"`
+	EvidenceHash map[identifiers.Identifier]common.Hash     `json:"evidence_hash"`
 }
 
-func (t *RPCTesseract) HasParticipant(addr identifiers.Address) bool {
+func (t *RPCTesseract) HasParticipant(id identifiers.Identifier) bool {
 	for _, s := range t.Participants {
-		if s.Address == addr {
+		if s.ID == id {
 			return true
 		}
 	}
@@ -393,9 +392,9 @@ func (t *RPCTesseract) HasParticipant(addr identifiers.Address) bool {
 	return false
 }
 
-func (t *RPCTesseract) Height(addr identifiers.Address) uint64 {
+func (t *RPCTesseract) Height(id identifiers.Identifier) uint64 {
 	for _, p := range t.Participants {
-		if p.Address == addr {
+		if p.ID == id {
 			return p.Height.ToUint64()
 		}
 	}
@@ -406,7 +405,7 @@ func (t *RPCTesseract) Height(addr identifiers.Address) uint64 {
 
 type RPCQc struct {
 	Type          common.ConsensusMsgType `json:"type"`
-	Address       identifiers.Address     `json:"address"`
+	ID            identifiers.Identifier  `json:"id"`
 	LockType      common.LockType         `json:"lock_type"`
 	View          uint64                  `json:"view"`
 	TSHash        common.Hash             `json:"ts_hash"`
@@ -439,7 +438,7 @@ func CreateRPCCommitInfo(info *common.CommitInfo) RPCCommitInfo {
 	if info.QC != nil {
 		rpcCommitInfo.QC = &RPCQc{
 			Type:      info.QC.Type,
-			Address:   info.QC.Address,
+			ID:        info.QC.ID,
 			LockType:  info.QC.LockType,
 			View:      info.QC.View,
 			TSHash:    info.QC.TSHash,
@@ -457,15 +456,15 @@ func CreateRPCCommitInfo(info *common.CommitInfo) RPCCommitInfo {
 // Not used
 
 type Hashes struct {
-	Address     identifiers.Address `json:"address"`
-	StateHash   common.Hash         `json:"state_hash"`
-	ContextHash common.Hash         `json:"context_hash"`
+	ID          identifiers.Identifier `json:"id"`
+	StateHash   common.Hash            `json:"state_hash"`
+	ContextHash common.Hash            `json:"context_hash"`
 }
 
 type RPCHashes []Hashes
 
 func (hashes RPCHashes) Sort() {
 	sort.Slice(hashes, func(i, j int) bool {
-		return hashes[i].Address.Hex() < hashes[j].Address.Hex()
+		return hashes[i].ID.Hex() < hashes[j].ID.Hex()
 	})
 }

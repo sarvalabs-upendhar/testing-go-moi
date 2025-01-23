@@ -6,6 +6,7 @@ import (
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -24,14 +25,15 @@ func TestCreateRPCInteraction(t *testing.T) {
 	require.NoError(t, err)
 
 	transferPayload := &common.AssetActionPayload{
-		Beneficiary: tests.RandomAddress(t),
+		Beneficiary: tests.RandomIdentifier(t),
+		AssetID:     identifiers.RandomAssetIDv0(),
 	}
 
 	transferPayloadBytes, err := transferPayload.Bytes()
 	require.NoError(t, err)
 
 	logicPayloadBytes, err := polo.Polorize(&common.LogicPayload{
-		Logic:    tests.GetLogicID(t, tests.RandomAddress(t)),
+		Logic:    tests.GetLogicID(t, tests.RandomIdentifier(t)),
 		Callsite: "call site",
 	})
 	require.NoError(t, err)
@@ -47,7 +49,7 @@ func TestCreateRPCInteraction(t *testing.T) {
 
 	ixWithNilFields, err := common.NewInteraction(ixData, common.Signatures{
 		{
-			Address:   ixData.Sender.Address,
+			ID:        ixData.Sender.ID,
 			Signature: tests.RandomHash(t).Bytes(),
 		},
 	})
@@ -64,7 +66,7 @@ func TestCreateRPCInteraction(t *testing.T) {
 		{
 			name: "create rpc interaction for participant create interaction",
 			ix: CreateInteractionWithTestData(t, common.IxParticipantCreate,
-				tests.CreateRawParticipantCreatePayload(t, tests.RandomAddress(t))),
+				tests.CreateRawParticipantCreatePayload(t, tests.RandomIdentifier(t))),
 		},
 		{
 			name: "create rpc interaction for asset transfer interaction",
@@ -182,7 +184,7 @@ func TestCreateRPCTesseract(t *testing.T) {
 			CommitInfo: &common.CommitInfo{
 				QC: &common.Qc{
 					Type:     3,
-					Address:  tests.RandomAddress(t),
+					ID:       tests.RandomIdentifier(t),
 					LockType: 2,
 					View:     334,
 					TSHash:   tests.RandomHash(t),
@@ -247,7 +249,7 @@ func TestCreateRPCTesseract(t *testing.T) {
 }
 
 func TestCreateRPCReceipt(t *testing.T) {
-	ixParams := tests.GetIxParamsWithAddress(t, tests.RandomAddress(t), tests.RandomAddress(t))
+	ixParams := tests.GetIxParamsWithID(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t))
 	testcases := []struct {
 		name         string
 		tsHash       common.Hash

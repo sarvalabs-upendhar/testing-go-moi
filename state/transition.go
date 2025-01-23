@@ -29,8 +29,8 @@ func (t *Transition) Snapshot() *Transition {
 	}
 
 	if len(t.objects) > 0 {
-		for addr, object := range t.objects {
-			snap.objects[addr] = object.Copy()
+		for id, object := range t.objects {
+			snap.objects[id] = object.Copy()
 		}
 	}
 
@@ -58,62 +58,68 @@ func (t *Transition) Receipts() common.Receipts {
 	return t.receipts
 }
 
-func (t *Transition) GetObject(addr identifiers.Address) *Object {
-	return t.objects[addr]
+func (t *Transition) GetObject(id identifiers.Identifier) *Object {
+	return t.objects[id]
 }
 
-func (t *Transition) GetAuxiliaryObject(addr identifiers.Address) *Object {
-	return t.auxiliaryObjects[addr]
+func (t *Transition) GetAuxiliaryObject(id identifiers.Identifier) *Object {
+	return t.auxiliaryObjects[id]
 }
 
-func (t *Transition) Delete(addr identifiers.Address) {
-	delete(t.objects, addr)
+func (t *Transition) Delete(id identifiers.Identifier) {
+	delete(t.objects, id)
 }
 
-func (t *Transition) IncrementSequenceID(addr identifiers.Address, keyID uint64) {
-	_ = t.objects[addr].IncrementSequenceID(keyID)
+func (t *Transition) IncrementSequenceID(id identifiers.Identifier, keyID uint64) {
+	_ = t.objects[id].IncrementSequenceID(keyID)
 }
 
-func (t *Transition) Flush(addr identifiers.Address) error {
-	return t.objects[addr].flush()
+func (t *Transition) Flush(id identifiers.Identifier) error {
+	return t.objects[id].flush()
 }
 
 func (t *Transition) CreateAsset(
-	addr identifiers.Address,
-	assetAddr identifiers.Address,
+	id identifiers.Identifier,
+	assetID identifiers.Identifier,
 	descriptor *common.AssetDescriptor,
 ) (identifiers.AssetID, error) {
-	return t.objects[addr].CreateAsset(assetAddr, descriptor)
+	return t.objects[id].CreateAsset(assetID, descriptor)
 }
 
 func (t *Transition) CreateContext(
-	addr identifiers.Address,
-	behaviouralNodes,
-	randomNodes []kramaid.KramaID,
-) (common.Hash, error) {
-	return t.objects[addr].CreateContext(behaviouralNodes, randomNodes)
+	id identifiers.Identifier,
+	consensusNodes []kramaid.KramaID,
+) error {
+	return t.objects[id].CreateContext(consensusNodes)
 }
 
 func (t *Transition) UpdateContext(
-	addr identifiers.Address,
-	behaviouralNodes,
-	randomNodes []kramaid.KramaID,
-) (common.Hash, error) {
-	return t.objects[addr].UpdateContext(behaviouralNodes, randomNodes)
+	id identifiers.Identifier,
+	consensusNodes []kramaid.KramaID,
+) error {
+	return t.objects[id].UpdateContext(consensusNodes)
 }
 
-func (t *Transition) DeductFuel(addr identifiers.Address, amount *big.Int) {
-	t.objects[addr].DeductFuel(amount)
+func (t *Transition) DeductFuel(id identifiers.Identifier, amount *big.Int) {
+	t.objects[id].DeductFuel(amount)
 }
 
-func (t *Transition) HasSufficientFuel(addr identifiers.Address, amount *big.Int) (bool, error) {
-	return t.objects[addr].HasSufficientFuel(amount)
+func (t *Transition) HasSufficientFuel(id identifiers.Identifier, amount *big.Int) (bool, error) {
+	return t.objects[id].HasSufficientFuel(amount)
 }
 
-func (t *Transition) GetAccTypeUsingStateObject(address identifiers.Address) common.AccountType {
-	return t.objects[address].accType
+func (t *Transition) GetAccTypeUsingStateObject(id identifiers.Identifier) common.AccountType {
+	return t.objects[id].accType
 }
 
-func (t *Transition) IsGenesis(addr identifiers.Address) bool {
-	return t.objects[addr].isGenesis
+func (t *Transition) ConsensusNodesHash(id identifiers.Identifier) common.Hash {
+	if t.objects[id].metaContext == nil {
+		return common.NilHash
+	}
+
+	return t.objects[id].metaContext.ConsensusNodesHash
+}
+
+func (t *Transition) IsGenesis(id identifiers.Identifier) bool {
+	return t.objects[id].isGenesis
 }

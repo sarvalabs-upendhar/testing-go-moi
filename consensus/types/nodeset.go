@@ -10,6 +10,13 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
+type NodeInfo struct {
+	ID          kramaid.KramaID
+	PublicKey   []byte
+	Msg         *Prepared
+	VotingPower int64
+}
+
 type NodeSet struct {
 	mtx                 sync.RWMutex
 	Infos               []*NodeInfo
@@ -17,13 +24,6 @@ type NodeSet struct {
 	ExcludedFromICS     bool
 	RespCount           atomic.Int32
 	SetSizeWithOutDelta uint32
-}
-
-type NodeInfo struct {
-	ID          kramaid.KramaID
-	PublicKey   []byte
-	Msg         *Prepared
-	VotingPower int64
 }
 
 // NewNodeSet creates and returns a new instance of NodeSet

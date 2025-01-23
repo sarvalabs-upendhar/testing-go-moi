@@ -19,8 +19,8 @@ func (te *TestEnvironment) createParticipant(
 	sender tests.AccountWithMnemonic,
 	participantCreatePayload *common.ParticipantCreatePayload,
 ) (common.Hash, error) {
-	te.logger.Debug("register participant ", "sender", sender.Addr,
-		"address", participantCreatePayload.Address, "amount", participantCreatePayload.Amount,
+	te.logger.Debug("register participant ", "sender", sender.ID,
+		"address", participantCreatePayload.ID, "amount", participantCreatePayload.Amount,
 	)
 
 	payload, err := participantCreatePayload.Bytes()
@@ -28,8 +28,8 @@ func (te *TestEnvironment) createParticipant(
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    sender.Addr,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.Addr, 0),
+			ID:         sender.ID,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.ID, 0),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -41,11 +41,11 @@ func (te *TestEnvironment) createParticipant(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  sender.Addr,
+				ID:       sender.ID,
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  participantCreatePayload.Address,
+				ID:       participantCreatePayload.ID,
 				LockType: common.MutateLock,
 			},
 		},
@@ -53,7 +53,7 @@ func (te *TestEnvironment) createParticipant(
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
-			Addr:     sender.Addr,
+			ID:       sender.ID,
 			KeyID:    0,
 			Mnemonic: sender.Mnemonic,
 		},
@@ -86,7 +86,7 @@ func checkForKeys(t *testing.T, keysPayload []common.KeyAddPayload, rpcAccountKe
 
 func validateParticipantCreate(
 	te *TestEnvironment,
-	sender identifiers.Address,
+	sender identifiers.Identifier,
 	payload *common.ParticipantCreatePayload,
 	ixHash common.Hash,
 ) {
@@ -97,13 +97,13 @@ func validateParticipantCreate(
 	senderPrevBal := getBalance(te, sender, common.KMOITokenAssetID, int64(senderHeight-1))
 	senderCurBal := getBalance(te, sender, common.KMOITokenAssetID, args.LatestTesseractHeight)
 
-	receiverCurBal := getBalance(te, payload.Address, common.KMOITokenAssetID, args.LatestTesseractHeight)
+	receiverCurBal := getBalance(te, payload.ID, common.KMOITokenAssetID, args.LatestTesseractHeight)
 
 	require.Equal(te.T(), payload.Amount.Uint64()+receipt.FuelUsed.ToUint64(), senderPrevBal-senderCurBal)
 	require.Equal(te.T(), payload.Amount.Uint64(), receiverCurBal)
 
 	accountKeys, err := te.moiClient.AccountKeys(context.Background(), &args.GetAccountKeysArgs{
-		Address: payload.Address,
+		ID: payload.ID,
 		Options: args.TesseractNumberOrHash{
 			TesseractNumber: &args.LatestTesseractHeight,
 		},
@@ -120,7 +120,7 @@ func (te *TestEnvironment) TestParticipantCreate() {
 	sender := accs[0]
 	receiver := accs[1]
 
-	addr := tests.RandomAddress(te.T())
+	id := tests.RandomIdentifier(te.T())
 
 	testcases := []struct {
 		name                     string
@@ -128,7 +128,7 @@ func (te *TestEnvironment) TestParticipantCreate() {
 		participantCreatePayload *common.ParticipantCreatePayload
 		postTest                 func(
 			te *TestEnvironment,
-			sender identifiers.Address,
+			sender identifiers.Identifier,
 			payload *common.ParticipantCreatePayload,
 			ixHash common.Hash,
 		)
@@ -138,10 +138,10 @@ func (te *TestEnvironment) TestParticipantCreate() {
 			name:   "participant registered successfully",
 			sender: sender,
 			participantCreatePayload: &common.ParticipantCreatePayload{
-				Address: addr,
+				ID: id,
 				KeysPayload: []common.KeyAddPayload{
 					{
-						PublicKey:          addr.Bytes(),
+						PublicKey:          id.Bytes(),
 						Weight:             1000,
 						SignatureAlgorithm: 0,
 					},
@@ -154,15 +154,15 @@ func (te *TestEnvironment) TestParticipantCreate() {
 			name:   "register participants with multiple keys",
 			sender: sender,
 			participantCreatePayload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(te.T()),
+				ID: tests.RandomIdentifier(te.T()),
 				KeysPayload: []common.KeyAddPayload{
 					{
-						PublicKey:          addr.Bytes(),
+						PublicKey:          id.Bytes(),
 						Weight:             200,
 						SignatureAlgorithm: 0,
 					},
 					{
-						PublicKey:          tests.RandomAddress(te.T()).Bytes(),
+						PublicKey:          tests.RandomIdentifier(te.T()).Bytes(),
 						Weight:             800,
 						SignatureAlgorithm: 0,
 					},
@@ -175,15 +175,15 @@ func (te *TestEnvironment) TestParticipantCreate() {
 			name:   "invalid weight of keys",
 			sender: sender,
 			participantCreatePayload: &common.ParticipantCreatePayload{
-				Address: addr,
+				ID: id,
 				KeysPayload: []common.KeyAddPayload{
 					{
-						PublicKey:          addr.Bytes(),
+						PublicKey:          id.Bytes(),
 						Weight:             600,
 						SignatureAlgorithm: 0,
 					},
 					{
-						PublicKey:          tests.RandomAddress(te.T()).Bytes(),
+						PublicKey:          tests.RandomIdentifier(te.T()).Bytes(),
 						Weight:             299,
 						SignatureAlgorithm: 0,
 					},
@@ -196,10 +196,10 @@ func (te *TestEnvironment) TestParticipantCreate() {
 			name:   "insufficient funds",
 			sender: sender,
 			participantCreatePayload: &common.ParticipantCreatePayload{
-				Address: receiver.Addr,
+				ID: receiver.ID,
 				KeysPayload: []common.KeyAddPayload{
 					{
-						PublicKey:          receiver.Addr.Bytes(),
+						PublicKey:          receiver.ID.Bytes(),
 						Weight:             1000,
 						SignatureAlgorithm: 0,
 					},
@@ -221,7 +221,7 @@ func (te *TestEnvironment) TestParticipantCreate() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.Addr, test.participantCreatePayload, ixHash)
+			test.postTest(te, test.sender.ID, test.participantCreatePayload, ixHash)
 		})
 	}
 }

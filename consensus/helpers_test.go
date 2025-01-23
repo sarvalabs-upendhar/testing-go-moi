@@ -157,23 +157,23 @@ func (e *MockExec) ExecuteInteractions(
 }
 
 type MockStateManager struct {
-	accountRegistration    map[identifiers.Address]bool
-	stateObjects           map[identifiers.Address]*state.Object
+	accountRegistration    map[identifiers.Identifier]bool
+	stateObjects           map[identifiers.Identifier]*state.Object
 	publicKeys             map[kramaid.KramaID][]byte
-	icsSeed                map[identifiers.Address][32]byte
-	accMetaInfo            map[identifiers.Address]*common.AccountMetaInfo
+	icsSeed                map[identifiers.Identifier][32]byte
+	accMetaInfo            map[identifiers.Identifier]*common.AccountMetaInfo
 	GetAccountMetaInfoHook func() error
 	IsInitialTesseractHook func() error
 	isSealValid            func() bool
 }
 
-func (ms *MockStateManager) GetLatestContextAndPublicKeys(addr identifiers.Address) (latestContextHash common.Hash,
+func (ms *MockStateManager) GetLatestContextAndPublicKeys(id identifiers.Identifier) (latestContextHash common.Hash,
 	behaviouralSet, randomSet []kramaid.KramaID, bePublicKeys, beRandomKeys [][]byte, err error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetContext(addr identifiers.Address,
+func (ms *MockStateManager) GetConsensusNodes(id identifiers.Identifier,
 hash common.Hash) (common.NodeList, common.NodeList, error) {
 	// TODO implement me
 	panic("implement me")
@@ -214,25 +214,25 @@ func (ms *MockStateManager) GetTotalIncentives() (uint64, error) {
 
 func NewMockStateManager() *MockStateManager {
 	return &MockStateManager{
-		accMetaInfo:         make(map[identifiers.Address]*common.AccountMetaInfo),
-		accountRegistration: make(map[identifiers.Address]bool),
-		stateObjects:        make(map[identifiers.Address]*state.Object),
+		accMetaInfo:         make(map[identifiers.Identifier]*common.AccountMetaInfo),
+		accountRegistration: make(map[identifiers.Identifier]bool),
+		stateObjects:        make(map[identifiers.Identifier]*state.Object),
 		publicKeys:          make(map[kramaid.KramaID][]byte),
-		icsSeed:             make(map[identifiers.Address][32]byte),
+		icsSeed:             make(map[identifiers.Identifier][32]byte),
 	}
 }
 
 func (ms *MockStateManager) LoadTransitionObjects(
-	ps map[identifiers.Address]common.ParticipantInfo,
+	ps map[identifiers.Identifier]common.ParticipantInfo,
 ) (*state.Transition, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) CreateStateObject(address identifiers.Address,
+func (ms *MockStateManager) CreateStateObject(id identifiers.Identifier,
 	accountType common.AccountType, isGenesis bool,
 ) *state.Object {
-	stateObject := state.NewStateObject(address,
+	stateObject := state.NewStateObject(id,
 		mockCache(),
 		nil,
 		nil,
@@ -244,12 +244,12 @@ func (ms *MockStateManager) CreateStateObject(address identifiers.Address,
 	return stateObject
 }
 
-func (ms *MockStateManager) IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error) {
+func (ms *MockStateManager) IsInitialTesseract(ts *common.Tesseract, id identifiers.Identifier) (bool, error) {
 	if ms.IsInitialTesseractHook != nil {
 		return false, ms.IsInitialTesseractHook()
 	}
 
-	if ts.Height(ts.AnyAddress()) == 0 {
+	if ts.Height(ts.AnyAccountID()) == 0 {
 		return true, nil
 	}
 
@@ -264,23 +264,23 @@ func (ms *MockStateManager) IsSealValid(ts *common.Tesseract) (bool, error) {
 	return true, nil
 }
 
-func (ms *MockStateManager) RemoveCachedObject(addr identifiers.Address) {
+func (ms *MockStateManager) RemoveCachedObject(id identifiers.Identifier) {
 	panic("implement me")
 }
 
-func (ms *MockStateManager) addAccMetaInfo(t *testing.T, addr identifiers.Address, info *common.AccountMetaInfo) {
+func (ms *MockStateManager) addAccMetaInfo(t *testing.T, id identifiers.Identifier, info *common.AccountMetaInfo) {
 	t.Helper()
 
-	ms.accMetaInfo[addr] = info
+	ms.accMetaInfo[id] = info
 }
 
-func (ms *MockStateManager) GetDirtyObject(address identifiers.Address) (*state.Object, error) {
+func (ms *MockStateManager) GetDirtyObject(id identifiers.Identifier) (*state.Object, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (ms *MockStateManager) CreateDirtyObject(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	accountType common.AccountType,
 ) *state.Object {
 	// TODO implement me
@@ -293,7 +293,7 @@ func (ms *MockStateManager) GetEmptyStateObject() *state.Object {
 }
 
 func (ms *MockStateManager) GetStateObjectByHash(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	hash common.Hash,
 ) (*state.Object, error) {
 	// TODO implement me
@@ -303,12 +303,12 @@ func (ms *MockStateManager) GetStateObjectByHash(
 func (ms *MockStateManager) FetchInteractionContext(
 	ctx context.Context,
 	ix *common.Interaction,
-) (map[identifiers.Address]common.Hash, []*ktypes.NodeSet, error) {
+) (map[identifiers.Identifier]common.Hash, []*ktypes.NodeSet, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) Cleanup(addr identifiers.Address) {}
+func (ms *MockStateManager) Cleanup(id identifiers.Identifier) {}
 
 func (ms *MockStateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error) {
 	pubKeys := make([][]byte, 0)
@@ -330,12 +330,12 @@ func (ms *MockStateManager) setPublicKey(kramaID kramaid.KramaID, pubKey []byte)
 	ms.publicKeys[kramaID] = pubKey
 }
 
-func (ms *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
+func (ms *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
 	if ms.GetAccountMetaInfoHook != nil {
 		return nil, ms.GetAccountMetaInfoHook()
 	}
 
-	info, ok := ms.accMetaInfo[addr]
+	info, ok := ms.accMetaInfo[id]
 	if !ok {
 		return nil, common.ErrFetchingAccMetaInfo
 	}
@@ -343,33 +343,33 @@ func (ms *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*commo
 	return info, nil
 }
 
-func (ms *MockStateManager) GetLatestStateObject(addr identifiers.Address) (*state.Object, error) {
-	if stateObject, ok := ms.stateObjects[addr]; ok {
+func (ms *MockStateManager) GetLatestStateObject(id identifiers.Identifier) (*state.Object, error) {
+	if stateObject, ok := ms.stateObjects[id]; ok {
 		return stateObject, nil
 	}
 
 	return nil, errors.New("state object doesn't exist")
 }
 
-func (ms *MockStateManager) setLatestStateObject(addr identifiers.Address, so *state.Object) {
-	ms.stateObjects[addr] = so
+func (ms *MockStateManager) setLatestStateObject(id identifiers.Identifier, so *state.Object) {
+	ms.stateObjects[id] = so
 }
 
-func (ms *MockStateManager) GetSequenceID(addr identifiers.Address, stateHash common.Hash) (uint64, error) {
+func (ms *MockStateManager) GetNonce(id identifiers.ID, stateHash common.Hash) (uint64, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetICSSeed(addr identifiers.Address) ([32]byte, error) {
-	if icsSeed, ok := ms.icsSeed[addr]; ok {
+func (ms *MockStateManager) GetICSSeed(id identifiers.Identifier) ([32]byte, error) {
+	if icsSeed, ok := ms.icsSeed[id]; ok {
 		return icsSeed, nil
 	}
 
 	return [32]byte{}, errors.New("seed not found")
 }
 
-func (ms *MockStateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
-	_, ok := ms.accountRegistration[addr]
+func (ms *MockStateManager) IsAccountRegistered(id identifiers.Identifier) (bool, error) {
+	_, ok := ms.accountRegistration[id]
 
 	return ok, nil
 }
@@ -409,15 +409,15 @@ signOptions ...crypto.SignOption) ([]byte, error) {
 }
 
 type MockDB struct {
-	accMetaInfo map[identifiers.Address]bool
+	accMetaInfo map[identifiers.Identifier]bool
 }
 
-func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
+func (m *MockDB) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) GetSafetyData(addr identifiers.Address) ([]byte, error) {
+func (m *MockDB) GetSafetyData(id identifiers.Identifier) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -427,7 +427,7 @@ func (m *MockDB) GetCommitInfo(tsHash common.Hash) ([]byte, error) {
 	panic("implement me")
 }
 
-func (m *MockDB) SetSafetyData(addr identifiers.Address, data []byte) error {
+func (m *MockDB) SetSafetyData(id identifiers.Identifier, data []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
@@ -452,29 +452,29 @@ func (m *MockDB) GetAllConsensusProposalInfo(ctx context.Context) ([][]byte, err
 	panic("implement me")
 }
 
-func (m *MockDB) DeleteSafetyData(addr identifiers.Address) error {
+func (m *MockDB) DeleteSafetyData(id identifiers.Identifier) error {
 	// TODO implement me
 	panic("implement me")
 }
 
 func NewMockDB() *MockDB {
 	return &MockDB{
-		accMetaInfo: make(map[identifiers.Address]bool),
+		accMetaInfo: make(map[identifiers.Identifier]bool),
 	}
 }
 
-func (m *MockDB) setAccMetaInfoAt(addr identifiers.Address) {
-	m.accMetaInfo[addr] = true
+func (m *MockDB) setAccMetaInfoAt(id identifiers.Identifier) {
+	m.accMetaInfo[id] = true
 }
 
-func (m *MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool {
-	_, ok := m.accMetaInfo[addr]
+func (m *MockDB) HasAccMetaInfoAt(id identifiers.Identifier, height uint64) bool {
+	_, ok := m.accMetaInfo[id]
 
 	return ok
 }
 
 type MockChainManager struct {
-	tesseractByAddress map[identifiers.Address]*common.Tesseract
+	tesseractByAddress map[identifiers.Identifier]*common.Tesseract
 	tesseractByHash    map[common.Hash]*common.Tesseract
 
 	addTesseractHook func() error
@@ -483,13 +483,13 @@ type MockChainManager struct {
 
 func NewMockChainManager() *MockChainManager {
 	return &MockChainManager{
-		tesseractByAddress: make(map[identifiers.Address]*common.Tesseract),
+		tesseractByAddress: make(map[identifiers.Identifier]*common.Tesseract),
 		tesseractByHash:    make(map[common.Hash]*common.Tesseract),
 	}
 }
 
 func (m *MockChainManager) AddTesseractWithState(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	dirtyStorage map[common.Hash][]byte,
 	ts *common.Tesseract,
 	transition *state.Transition,
@@ -499,7 +499,7 @@ func (m *MockChainManager) AddTesseractWithState(
 }
 
 func (m *MockChainManager) AddTesseract(
-	cache bool, addr identifiers.Address,
+	cache bool, id identifiers.Identifier,
 	t *common.Tesseract,
 	transition *state.Transition,
 	allParticipants bool,
@@ -508,8 +508,8 @@ func (m *MockChainManager) AddTesseract(
 		return m.addTesseractHook()
 	}
 
-	for _, addr := range t.Addresses() {
-		m.tesseractByAddress[addr] = t
+	for _, id := range t.AccountIDs() {
+		m.tesseractByAddress[id] = t
 	}
 
 	return nil
@@ -659,7 +659,7 @@ func createTestKramaEngine(t *testing.T, params *createKramaEngineParams) *Engin
 
 
 These utility functions are required for extending the tests down the line
-func createAssetMintIx(t *testing.T, sender, receiver identifiers.Address) *common.Interaction {
+func createAssetMintIx(t *testing.T, sender, receiver identifiers.Identifier) *common.Interaction {
 	t.Helper()
 
 	assetMintPayload := common.AssetMintOrBurnPayload{
@@ -674,7 +674,7 @@ func createAssetMintIx(t *testing.T, sender, receiver identifiers.Address) *comm
 			ix.Input = common.IxInput{
 				Type:      common.IxAssetMint,
 				SequenceID:     0,
-				SenderAddr:    sender,
+				SenderID:    sender,
 				FuelPrice: big.NewInt(1),
 				Payload:   rawAssetMintPayload,
 			}
@@ -684,7 +684,7 @@ func createAssetMintIx(t *testing.T, sender, receiver identifiers.Address) *comm
 	return tests.CreateIX(t, ixParams)
 }
 
-func createAssetTransferIx(t *testing.T, sender, receiver identifiers.Address) common.Interactions {
+func createAssetTransferIx(t *testing.T, sender, receiver identifiers.Identifier) common.Interactions {
 	t.Helper()
 
 	ixParams := map[int]*tests.CreateIxParams{
@@ -749,7 +749,7 @@ func createTestClusterState(
 	selfID kramaid.KramaID,
 	nodeset *ktypes.ICSCommittee,
 	ixs common.Interactions,
-	ps map[identifiers.Address]*common.Participant,
+	ps map[identifiers.Identifier]*common.Participant,
 	callback func(clusterState *ktypes.ClusterState),
 ) *ktypes.ClusterState {
 	t.Helper()
@@ -828,7 +828,7 @@ func defaultTesseractData() *tests.TesseractData {
 }
 
 type createTesseractParams struct {
-	Addresses            []identifiers.Address
+	AccountIDs            []identifiers.Identifier
 	Heights              []uint64
 	Participants         common.ParticipantsState
 	participantsCallback func(participants common.ParticipantsState)
@@ -858,13 +858,13 @@ func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesser
 		params.Participants = make(common.ParticipantsState)
 	}
 
-	if len(params.Addresses) == 0 {
-		addr := tests.RandomAddress(t)
-		params.Addresses = []identifiers.Address{addr}
-		params.Participants[addr] = common.State{}
+	if len(params.AccountIDs) == 0 {
+		id := tests.RandomAddress(t)
+		params.AccountIDs = []identifiers.Identifier{id}
+		params.Participants[id] = common.State{}
 
 		if len(params.Heights) != 0 {
-			params.Participants[addr] = common.State{
+			params.Participants[id] = common.State{
 				Height: params.Heights[0],
 			}
 		}
@@ -930,8 +930,8 @@ func getPublicKeys(t *testing.T, count int) [][]byte {
 	var pk [][]byte
 
 	for i := 0; i < count; i++ {
-		addr := tests.RandomAddress(t).Bytes()
-		pk = append(pk, addr)
+		id := tests.RandomAddress(t).Bytes()
+		pk = append(pk, id)
 	}
 
 	return pk
@@ -992,9 +992,9 @@ func createTesseractsWithChain(t *testing.T, count int,
 	for i := 1; i < count; i++ {
 		paramsMap[i].participantsCallback = func(participants common.ParticipantsState) {
 			hash := tesseracts[i-1].Hash()
-			p := participants[tesseracts[0].AnyAddress()]
+			p := participants[tesseracts[0].AnyAccountID()]
 			p.TransitiveLink = hash
-			participants[tesseracts[0].AnyAddress()] = p
+			participants[tesseracts[0].AnyAccountID()] = p
 		}
 
 		tesseracts[i] = createTesseract(t, paramsMap[i])
@@ -1005,7 +1005,7 @@ func createTesseractsWithChain(t *testing.T, count int,
 
 func getAccountSetupArgs(
 	t *testing.T,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	accType common.AccountType,
 	moiID string,
 	behNodes []kramaid.KramaID,
@@ -1014,7 +1014,7 @@ func getAccountSetupArgs(
 	t.Helper()
 
 	return &common.AccountSetupArgs{
-		Address:            address,
+		Identifier:            id,
 		MoiID:              moiID,
 		BehaviouralContext: behNodes,
 		RandomContext:      randNodes,
@@ -1027,15 +1027,15 @@ func getTestAccountWithAccType(t *testing.T, accType common.AccountType) common.
 
 	ids := tests.RandomKramaIDs(t, 4)
 
-	address := tests.RandomAddress(t)
+	id := tests.RandomAddress(t)
 
 	if accType == common.SargaAccount {
-		address = common.SargaAddress
+		id = common.SargaAddress
 	}
 
 	return *getAccountSetupArgs(
 		t,
-		address,
+		id,
 		accType,
 		"moi-id",
 		ids[:2],
@@ -1084,13 +1084,13 @@ func getAssetAccountSetupArgs(
 	}
 }
 
-func getTestAssetCreationArgs(t *testing.T, allocationAddr identifiers.Address) common.AssetCreationArgs {
+func getTestAssetCreationArgs(t *testing.T, allocationID identifiers.Identifier) common.AssetCreationArgs {
 	t.Helper()
 
-	info := tests.GetRandomAssetInfo(t, identifiers.NilAddress)
+	info := tests.GetRandomAssetInfo(t, identifiers.Nil)
 
-	if allocationAddr == identifiers.NilAddress {
-		allocationAddr = tests.RandomAddress(t)
+	if allocationID == identifiers.Nil {
+		allocationID = tests.RandomAddress(t)
 	}
 
 	return common.AssetCreationArgs{
@@ -1102,21 +1102,21 @@ func getTestAssetCreationArgs(t *testing.T, allocationAddr identifiers.Address) 
 		Operator:   info.Operator,
 		Allocations: []common.Allocation{
 			{
-				Address: allocationAddr,
+				Identifier: allocationID,
 				Amount:  (*hexutil.Big)(big.NewInt(rand.Int63())),
 			},
 		},
 	}
 }
 
-func getTestAccountWithAddress(t *testing.T, address identifiers.Address) common.AccountSetupArgs {
+func getTestAccountWithAddress(t *testing.T, id identifiers.Identifier) common.AccountSetupArgs {
 	t.Helper()
 
 	ids := tests.RandomKramaIDs(t, 4)
 
 	return *getAccountSetupArgs(
 		t,
-		address,
+		id,
 		common.RegularAccount,
 		"moi-id",
 		ids[:2],
@@ -1126,15 +1126,15 @@ func getTestAccountWithAddress(t *testing.T, address identifiers.Address) common
 
 func getAssetCreationArgs(
 	symbol string,
-	owner identifiers.Address,
-	address []identifiers.Address,
+	owner identifiers.Identifier,
+	id []identifiers.Identifier,
 	amount []*big.Int,
 ) *common.AssetCreationArgs {
-	alloc := make([]common.Allocation, len(address))
+	alloc := make([]common.Allocation, len(id))
 
-	for i, addr := range address {
+	for i, id := range id {
 		alloc[i] = common.Allocation{
-			Address: addr,
+			Identifier: id,
 			Amount:  (*hexutil.Big)(amount[i]),
 		}
 	}
@@ -1177,12 +1177,15 @@ func getReceipt(ixHash common.Hash) *common.Receipt {
 	}
 }
 
-func getIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifiers.Address) *tests.CreateIxParams {
+func getIxParamsWithAddress(
+t *testing.T,
+from identifiers.Identifier,
+to identifiers.Identifier) *tests.CreateIxParams {
 	t.Helper()
 
 	return &tests.CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.SenderAddr = from
+			ix.SenderID = from
 			ix.IxOps = []common.IxOpRaw{
 				{
 					Type:    common.IxAssetTransfer,
@@ -1245,10 +1248,10 @@ func checkForAssetAccounts(t *testing.T, expected, actual []common.AssetAccountS
 	}
 }
 
-func checkSargaStorageEntry(t *testing.T, obj *state.Object, addr identifiers.Address) {
+func checkSargaStorageEntry(t *testing.T, obj *state.Object, id identifiers.Identifier) {
 	t.Helper()
 
-	val, err := obj.GetStorageEntry(common.SargaLogicID, addr.Bytes())
+	val, err := obj.GetStorageEntry(common.SargaLogicID, id.Bytes())
 	require.NoError(t, err)
 
 	genesisInfo := common.AccountGenesisInfo{
@@ -1267,9 +1270,9 @@ func checkSargaObjectAccounts(
 ) {
 	t.Helper()
 
-	// check if other accounts address inserted in to sarga account storage
+	// check if other accounts id inserted in to sarga account storage
 	for _, info := range accounts {
-		checkSargaStorageEntry(t, obj, info.Address)
+		checkSargaStorageEntry(t, obj, info.Identifier)
 	}
 }
 
@@ -1280,7 +1283,7 @@ func checkSargaObjectLogicAccounts(
 ) {
 	t.Helper()
 
-	// check if logics address inserted in to sarga account storage
+	// check if logics id inserted in to sarga account storage
 	for _, logic := range logics {
 		checkSargaStorageEntry(t, obj, common.CreateAddressFromString(logic.Name))
 	}
@@ -1293,7 +1296,7 @@ func checkSargaObjectAssetAccounts(
 ) {
 	t.Helper()
 
-	// check if assert address inserted in to sarga account storage
+	// check if assert id inserted in to sarga account storage
 	for _, asset := range assets {
 		checkSargaStorageEntry(t, obj, common.CreateAddressFromString(asset.AssetInfo.Symbol))
 	}
@@ -1302,13 +1305,13 @@ func checkSargaObjectAssetAccounts(
 func validateContextInitialization(
 	t *testing.T,
 	obj *state.Object,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	contextHash common.Hash,
 ) {
 	t.Helper()
 
 	// check if context created
-	_, err := obj.GetDirtyEntry(common.BytesToHex(storage.ContextObjectKey(address, contextHash)))
+	_, err := obj.GetDirtyEntry(common.BytesToHex(storage.ContextObjectKey(id, contextHash)))
 	require.NoError(t, err)
 }
 
@@ -1331,14 +1334,14 @@ func checkForAssetRegistry(
 
 func checkForAllocations(
 	t *testing.T,
-	stateObjects map[identifiers.Address]*state.Object,
+	stateObjects map[identifiers.Identifier]*state.Object,
 	assetInfo *common.AssetCreationArgs,
 	assetID identifiers.AssetID,
 ) {
 	t.Helper()
 
 	for _, allocation := range assetInfo.Allocations {
-		so, ok := stateObjects[allocation.Address]
+		so, ok := stateObjects[allocation.Identifier]
 		require.True(t, ok)
 
 		balances, err := so.Balances()
@@ -1386,12 +1389,12 @@ func checkNodeSetForParticipant(t *testing.T, state *MockStateManager, ps common
 ns *ktypes.ICSCommittee) {
 	t.Helper()
 
-	for addr, p := range ps {
+	for id, p := range ps {
 		if p.IsGenesis {
 			continue
 		}
 		// fetch the context info from mock sm
-		storedContext := state.participantsContext[addr]
+		storedContext := state.participantsContext[id]
 		// this index access will validate nodeSetPositions
 		beSet := ns.Sets[p.NodeSetPosition]
 		rSet := ns.Sets[p.NodeSetPosition+1]
@@ -1411,29 +1414,29 @@ ns *ktypes.ICSCommittee) {
 func checkParticipantInfo(
 	t *testing.T,
 	state *MockStateManager,
-	ixnParticipant map[identifiers.Address]common.ParticipantInfo,
+	ixnParticipant map[identifiers.Identifier]common.ParticipantInfo,
 	ps common.Participants,
 ) {
 	t.Helper()
 
-	for addr, p := range ps {
-		if ixnParticipant[addr].IsGenesis {
-			require.Equal(t, p.LockType, ixnParticipant[addr].LockType)
+	for id, p := range ps {
+		if ixnParticipant[id].IsGenesis {
+			require.Equal(t, p.LockType, ixnParticipant[id].LockType)
 			require.Equal(t, p.ContextHash, common.NilHash)
 			require.Equal(t, p.TesseractHash, common.NilHash)
-			require.Equal(t, p.IsGenesis, ixnParticipant[addr].IsGenesis)
+			require.Equal(t, p.IsGenesis, ixnParticipant[id].IsGenesis)
 
 			continue
 		}
 		// fetch meta info from mock sm
-		storedMetaInfo := state.accMetaInfo[addr]
+		storedMetaInfo := state.accMetaInfo[id]
 
 		require.Equal(t, p.AccType, storedMetaInfo.Type)
-		require.Equal(t, p.IsGenesis, ixnParticipant[addr].IsGenesis)
+		require.Equal(t, p.IsGenesis, ixnParticipant[id].IsGenesis)
 		require.Equal(t, p.Height, storedMetaInfo.Height)
 		require.Equal(t, p.TesseractHash, storedMetaInfo.TesseractHash)
-		require.Equal(t, p.LockType, ixnParticipant[addr].LockType)
-		require.Equal(t, p.IsSigner, ixnParticipant[addr].IsSigner)
+		require.Equal(t, p.LockType, ixnParticipant[id].LockType)
+		require.Equal(t, p.IsSigner, ixnParticipant[id].IsSigner)
 	}
 }
 

@@ -159,7 +159,7 @@ func TestServer_handleWs_Message(t *testing.T) {
 		args RequestArgs
 	}{
 		{
-			name: "Subscription request message without address param",
+			name: "Subscription request message without id param",
 			args: RequestArgs{
 				MessageType: gorillaWS.TextMessage,
 				Message: []byte(`{
@@ -178,10 +178,10 @@ func TestServer_handleWs_Message(t *testing.T) {
 					"params": [
 						"newTesseractsByAccount",
  						{
-							"address": "%s"
+							"id": "%s"
 						}
 					]
-				}`, tests.RandomAddress(t))),
+				}`, tests.RandomIdentifier(t))),
 			},
 		},
 		{
@@ -194,10 +194,10 @@ func TestServer_handleWs_Message(t *testing.T) {
 					"params": [
 						"newLogs",
  						{
-							"address": "%s"
+							"id": "%s"
 						}
 					]
-				}`, tests.RandomAddress(t))),
+				}`, tests.RandomIdentifier(t))),
 			},
 		},
 		{

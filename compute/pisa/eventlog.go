@@ -23,7 +23,7 @@ func (stream EventStream) Reset() error {
 func (stream EventStream) Emit(event drivers.Event) error {
 	log := common.Log{
 		LogicID: stream.driver.Logic(),
-		Address: event.Address,
+		ID:      event.Address,
 		Data:    event.Data.Bytes(),
 	}
 
@@ -58,7 +58,7 @@ func (stream EventStream) GetAll() []drivers.Event {
 
 func Log2Event(log common.Log) drivers.Event {
 	return drivers.Event{
-		Address: log.Address,
+		Address: log.ID,
 		Topics: func() [][32]byte {
 			topics := make([][32]byte, 0, len(log.Topics))
 

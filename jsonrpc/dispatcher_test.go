@@ -37,7 +37,7 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "Subscription request without address param",
+			name: "Subscription request without id param",
 			request: Request{
 				Method: "moi.subscribe",
 				Params: json.RawMessage(`["newTesseractsByAccount"]`),
@@ -49,7 +49,7 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 			request: Request{
 				ID:     1.0,
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`[{"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`[{"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 			expectedErr: errors.New("subscribe method  not found"),
 		},
@@ -58,7 +58,7 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 			request: Request{
 				ID:     2.0,
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`["mockEvent", {"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`["mockEvent", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 			expectedErr: errors.New("subscribe method mockEvent not found"),
 		},
@@ -67,11 +67,11 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 			request: Request{
 				ID:     3.0,
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
 		{
-			name: "Log subscription request without address param",
+			name: "Log subscription request without id param",
 			request: Request{
 				Method: "moi.subscribe",
 				Params: json.RawMessage(`["newLogs"]`),
@@ -83,7 +83,7 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 			request: Request{
 				ID:     4.0,
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`["newLogs", {"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`["newLogs", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
 	}
@@ -270,7 +270,7 @@ func Test_handleSingleWs_formatID(t *testing.T) {
 			request: Request{
 				ID:     "id123",
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
 		{
@@ -278,14 +278,14 @@ func Test_handleSingleWs_formatID(t *testing.T) {
 			request: Request{
 				ID:     2.0,
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
 		{
 			name: "should not return error, if the request id is not sent",
 			request: Request{
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
 		{
@@ -293,7 +293,7 @@ func Test_handleSingleWs_formatID(t *testing.T) {
 			request: Request{
 				ID:     2.1,
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 			expectedErr: errors.New("invalid json request"),
 		},
@@ -302,7 +302,7 @@ func Test_handleSingleWs_formatID(t *testing.T) {
 			request: Request{
 				ID:     nil,
 				Method: "moi.subscribe",
-				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"address": "%s"}]`, tests.RandomAddress(t))),
+				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
 		{

@@ -25,11 +25,11 @@ func TestGuardianTestSuite(t *testing.T) {
 var (
 	prefixMOIID = "10"
 
-	MasterAddr  = identifiers.NewRandomAddress()
+	MasterAddr  = identifiers.RandomParticipantIDv0().AsIdentifier()
 	MasterMOIID = prefixMOIID + strings.TrimPrefix(MasterAddr.Hex(), "0x")
 
-	AdminAddr1 = identifiers.NewRandomAddress()
-	AdminAddr2 = identifiers.NewRandomAddress()
+	AdminAddr1 = identifiers.RandomParticipantIDv0().AsIdentifier()
+	AdminAddr2 = identifiers.RandomParticipantIDv0().AsIdentifier()
 
 	GuardianKramaID1 = "4a77f591c6aadc9f09c9aafe176186"
 	GuardianPubKey1  = []byte("14a359f1659c668f50d3b8e7d861db4e80a3ec307b28d8bc4baf97753e707b0f")
@@ -260,7 +260,7 @@ func (suite *GuardianTestSuite) testSetup(_ *testing.T) {
 	// Check if some other MOI ID was not verified
 	suite.Invoke(
 		"IsVerified",
-		suite.DocGen(map[string]any{"moiID": identifiers.NewRandomAddress().Hex()}),
+		suite.DocGen(map[string]any{"moiID": identifiers.RandomParticipantIDv0().AsIdentifier().Hex()}),
 		suite.DocGen(map[string]any{"ok": false}),
 		nil,
 	)
@@ -352,7 +352,7 @@ func (suite *GuardianTestSuite) TestRegistration() {
 	)
 
 	// Create a new address for the operator
-	newOp := identifiers.NewRandomAddress()
+	newOp := identifiers.RandomParticipantIDv0().AsIdentifier()
 	newOpID := prefixMOIID + strings.TrimPrefix(newOp.Hex(), "0x")
 
 	// Register a new operator
@@ -382,7 +382,7 @@ func (suite *GuardianTestSuite) TestRegistration() {
 	)
 
 	// Attempt to register an already existing guardian
-	// SenderAddr must be the address of the operator
+	// SenderID must be the address of the operator
 	// This should cause an exception
 	suite.Invoke(
 		"RegisterGuardian",
@@ -406,7 +406,7 @@ func (suite *GuardianTestSuite) TestRegistration() {
 	)
 
 	// Attempt to register a guardian that is not approved
-	// SenderAddr must be the address of the operator
+	// SenderID must be the address of the operator
 	// This should cause an exception
 	suite.Invoke(
 		"RegisterGuardian",
@@ -431,7 +431,7 @@ func (suite *GuardianTestSuite) TestRegistration() {
 	)
 
 	// Register an approved guardian
-	// SenderAddr must be the address of the operator
+	// SenderID must be the address of the operator
 	// This should work as expected
 	suite.Invoke(
 		"RegisterGuardian",
@@ -440,7 +440,7 @@ func (suite *GuardianTestSuite) TestRegistration() {
 				KramaID:    GuardianKramaID3,
 				OperatorID: newOpID,
 				Incentive: Incentive{
-					Wallet: identifiers.NewRandomAddress(),
+					Wallet: identifiers.RandomParticipantIDv0().AsIdentifier(),
 				},
 			},
 		}),
@@ -523,10 +523,10 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 	})
 
 	suite.T().Run("WithReferral", func(t *testing.T) {
-		referralWallet := identifiers.NewRandomAddress()
+		referralWallet := identifiers.RandomParticipantIDv0().AsIdentifier()
 
 		// Register an approved guardian
-		// SenderAddr must be the address of the operator
+		// SenderID must be the address of the operator
 		// This should work as expected
 		suite.Invoke(
 			"RegisterGuardian",
@@ -537,7 +537,7 @@ func (suite *GuardianTestSuite) TestIncentivisation() {
 					Incentive: Incentive{
 						ReferralPercent: 50,
 						ReferralWallet:  referralWallet,
-						Wallet:          identifiers.NewRandomAddress(),
+						Wallet:          identifiers.RandomParticipantIDv0().AsIdentifier(),
 					},
 				},
 			}),

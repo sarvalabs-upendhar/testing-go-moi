@@ -500,24 +500,17 @@ func testStreamReusewithTTL(t *testing.T, serverCM, clientCM *MockConnectionMana
 	call1 := newCall(testLogger, ctx, dest, "Arith", "Divide", &Args{20, 6}, &q, done)
 	// create a libp2p stream to the destination peer id.
 
-	t.Log("##### 1 ##### Calling send the first time")
-
 	stream1, err := c.send(call1, time.Millisecond*300)
 	assert.NoError(t, err)
 
 	streamID1 := stream1.ID()
 
-	t.Log("[testStreamReusewithTTL]", "stream-ID 1", streamID1)
-
 	call2 := newCall(testLogger, ctx, dest, "Arith", "Divide", &Args{20, 6}, &q, done)
-
-	t.Log("##### 2 ##### Calling send the second time")
 
 	stream2, err := c.send(call2, time.Millisecond*300)
 	assert.NoError(t, err)
 
 	streamID2 := stream2.ID()
-	t.Log("[testStreamReusewithTTL]", "stream-ID 2", streamID2)
 
 	assert.Equal(t, streamID1, streamID2)
 	t.Cleanup(func() {
@@ -562,26 +555,20 @@ func testNewStreamAfterTTLTimeout(t *testing.T, serverCM, clientCM *MockConnecti
 	call1 := newCall(testLogger, ctx, dest, "Arith", "Divide", &Args{20, 6}, &q, done)
 	// create a libp2p stream to the destination peer id.
 
-	t.Log("##### 1 ##### Calling send the first time")
-
 	stream1, err := c.send(call1, time.Millisecond*300)
 	assert.NoError(t, err)
 
 	streamID1 := stream1.ID()
-	t.Log("[testNewStreamAfterTTLTimeout]", "stream-ID 1", streamID1)
 
 	// sleeping for enough time so that stream1 TTL time out
 	time.Sleep(time.Second)
 
 	call2 := newCall(testLogger, ctx, dest, "Arith", "Divide", &Args{20, 6}, &q, done)
 
-	t.Log("##### 2 ##### Calling send the second time")
-
 	stream2, err := c.send(call2, time.Millisecond*300)
 	assert.NoError(t, err)
 
 	streamID2 := stream2.ID()
-	t.Log("[testNewStreamAfterTTLTimeout]", "stream-ID 2", streamID2)
 
 	assert.NotEqual(t, streamID1, streamID2)
 	t.Cleanup(func() {

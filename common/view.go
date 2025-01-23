@@ -5,7 +5,7 @@ import identifiers "github.com/sarvalabs/go-moi-identifiers"
 type Views []*ViewInfo
 
 type ViewInfo struct {
-	Addr        identifiers.Address
+	ID          identifiers.Identifier
 	LastView    uint64
 	CurrentLock LockType
 	Qc          []*Qc

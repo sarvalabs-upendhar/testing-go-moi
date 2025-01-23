@@ -170,10 +170,10 @@ func (f *FilterManager) NewTesseractFilter(ws ConnManager) string {
 }
 
 // NewTesseractsByAccountFilter subscribes to all new tesseract events for a given account
-func (f *FilterManager) NewTesseractsByAccountFilter(ws ConnManager, addr identifiers.Address) string {
+func (f *FilterManager) NewTesseractsByAccountFilter(ws ConnManager, id identifiers.Identifier) string {
 	filter := &tesseractByAccountFilter{
 		filterBase: newFilterBase(ws),
-		address:    addr,
+		identifier: id,
 	}
 
 	if filter.hasWSConn() {
@@ -212,12 +212,12 @@ func (f *FilterManager) PendingIxnsFilter(ws ConnManager) string {
 
 // GetLogsForQuery return array of logs for given LogQuery
 func (f *FilterManager) GetLogsForQuery(query LogQuery) ([]*rpcargs.RPCLog, error) {
-	startHeight, err := f.getNumericTesseractNumber(query.StartHeight, query.Address)
+	startHeight, err := f.getNumericTesseractNumber(query.StartHeight, query.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	endHeight, err := f.getNumericTesseractNumber(query.EndHeight, query.Address)
+	endHeight, err := f.getNumericTesseractNumber(query.EndHeight, query.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +233,7 @@ func (f *FilterManager) GetLogsForQuery(query LogQuery) ([]*rpcargs.RPCLog, erro
 	logs := make([]*rpcargs.RPCLog, 0)
 
 	for i := startHeight; i <= endHeight; i++ {
-		hash, err := f.getTesseractHashByHeight(query.Address, int64(i))
+		hash, err := f.getTesseractHashByHeight(query.ID, int64(i))
 		if err != nil {
 			break
 		}
@@ -388,7 +388,7 @@ func (f *FilterManager) processTesseractAddedEvent(event *utils.TesseractAddedEv
 		switch filter.getSubscriptionType() {
 		case NewLogsByFilter:
 			if s, ok := filter.(*logFilter); ok {
-				if ts.HasParticipant(s.query.Address) {
+				if ts.HasParticipant(s.query.ID) {
 					s.appendLog(s.createRPCLogs(ts, rpcTesseract))
 				}
 			}
@@ -400,7 +400,7 @@ func (f *FilterManager) processTesseractAddedEvent(event *utils.TesseractAddedEv
 
 		case NewTesseractsByAccount:
 			if s, ok := filter.(*tesseractByAccountFilter); ok {
-				if ts.HasParticipant(s.address) {
+				if ts.HasParticipant(s.identifier) {
 					s.appendTesseracts(rpcTesseract)
 				}
 			}
@@ -499,10 +499,10 @@ func (f *FilterManager) flushWsFilters(subType subscriptionType) error {
 }
 
 // getNumericTesseractNumber returns tesseract height based on current state or query height
-func (f *FilterManager) getNumericTesseractNumber(height int64, address identifiers.Address) (uint64, error) {
+func (f *FilterManager) getNumericTesseractNumber(height int64, id identifiers.Identifier) (uint64, error) {
 	switch height {
 	case rpcargs.LatestTesseractHeight:
-		accMeta, err := f.backend.SM.GetAccountMetaInfo(address)
+		accMeta, err := f.backend.SM.GetAccountMetaInfo(id)
 		if err != nil {
 			return 0, common.ErrAccountNotFound
 		}
@@ -518,9 +518,9 @@ func (f *FilterManager) getNumericTesseractNumber(height int64, address identifi
 }
 
 // getTesseractHashByHeight returns the tesseract hash based on tesseract height
-func (f *FilterManager) getTesseractHashByHeight(address identifiers.Address, height int64) (common.Hash, error) {
+func (f *FilterManager) getTesseractHashByHeight(id identifiers.Identifier, height int64) (common.Hash, error) {
 	if height == rpcargs.LatestTesseractHeight {
-		accMetaInfo, err := f.backend.SM.GetAccountMetaInfo(address)
+		accMetaInfo, err := f.backend.SM.GetAccountMetaInfo(id)
 		if err != nil {
 			return common.NilHash, err
 		}
@@ -528,7 +528,7 @@ func (f *FilterManager) getTesseractHashByHeight(address identifiers.Address, he
 		return accMetaInfo.TesseractHash, nil
 	}
 
-	return f.backend.Chain.GetTesseractHeightEntry(address, uint64(height))
+	return f.backend.Chain.GetTesseractHeightEntry(id, uint64(height))
 }
 
 // getTesseractByHash returns the tesseract based on tesseract hash and with interaction flag
@@ -555,7 +555,7 @@ func (f *FilterManager) getLogsFromTesseract(
 		for _, log := range receipt.Logs() {
 			if filter.MatchTopics(log) {
 				logs = append(logs, &rpcargs.RPCLog{
-					Address:      log.Address,
+					ID:           log.ID,
 					LogicID:      log.LogicID,
 					Topics:       log.Topics,
 					Data:         log.Data,

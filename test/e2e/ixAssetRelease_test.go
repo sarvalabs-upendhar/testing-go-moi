@@ -15,7 +15,7 @@ func (te *TestEnvironment) releaseAsset(
 	sender tests.AccountWithMnemonic,
 	assetActionPayload *common.AssetActionPayload,
 ) (common.Hash, error) {
-	te.logger.Debug("release asset ", "sender", sender.Addr, "benefactor", assetActionPayload.Benefactor,
+	te.logger.Debug("release asset ", "sender", sender.ID, "benefactor", assetActionPayload.Benefactor,
 		"beneficiary", assetActionPayload.Beneficiary, "asset id", assetActionPayload.AssetID,
 	)
 
@@ -24,8 +24,8 @@ func (te *TestEnvironment) releaseAsset(
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    sender.Addr,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.Addr, 0),
+			ID:         sender.ID,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.ID, 0),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -38,15 +38,15 @@ func (te *TestEnvironment) releaseAsset(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  sender.Addr,
+				ID:       sender.ID,
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  assetActionPayload.Beneficiary,
+				ID:       assetActionPayload.Beneficiary,
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  assetActionPayload.Benefactor,
+				ID:       assetActionPayload.Benefactor,
 				LockType: common.MutateLock,
 			},
 		},
@@ -54,7 +54,7 @@ func (te *TestEnvironment) releaseAsset(
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
-			Addr:     sender.Addr,
+			ID:       sender.ID,
 			KeyID:    0,
 			Mnemonic: sender.Mnemonic,
 		},
@@ -65,7 +65,7 @@ func (te *TestEnvironment) releaseAsset(
 
 func validateAssetRelease(
 	te *TestEnvironment,
-	sender identifiers.Address,
+	sender identifiers.Identifier,
 	payload *common.AssetActionPayload,
 	ixHash common.Hash,
 ) {
@@ -75,7 +75,7 @@ func validateAssetRelease(
 
 	for _, lockup := range lockups {
 		if lockup.AssetID == payload.AssetID.String() &&
-			lockup.Address == payload.Beneficiary {
+			lockup.ID == payload.Beneficiary {
 			te.T().Fatalf("Expected lockup to be released, but it still exists")
 		}
 	}
@@ -98,7 +98,7 @@ func (te *TestEnvironment) TestAssetRelease() {
 	))
 
 	lockupAsset(te, benefactor, &common.AssetActionPayload{
-		Beneficiary: sender.Addr,
+		Beneficiary: sender.ID,
 		AssetID:     MAS0AssetID,
 		Amount:      big.NewInt(100),
 	})
@@ -109,7 +109,7 @@ func (te *TestEnvironment) TestAssetRelease() {
 		assetActionPayload *common.AssetActionPayload
 		postTest           func(
 			te *TestEnvironment,
-			sender identifiers.Address,
+			sender identifiers.Identifier,
 			payload *common.AssetActionPayload,
 			ixHash common.Hash,
 		)
@@ -119,8 +119,8 @@ func (te *TestEnvironment) TestAssetRelease() {
 			name:   "release MAS0 asset",
 			sender: sender,
 			assetActionPayload: &common.AssetActionPayload{
-				Benefactor:  benefactor.Addr,
-				Beneficiary: receiver.Addr,
+				Benefactor:  benefactor.ID,
+				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(100),
 			},
@@ -130,8 +130,8 @@ func (te *TestEnvironment) TestAssetRelease() {
 			name:   "invalid ix participants",
 			sender: sender,
 			assetActionPayload: &common.AssetActionPayload{
-				Benefactor:  sender.Addr,
-				Beneficiary: receiver.Addr,
+				Benefactor:  sender.ID,
+				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(100),
 			},
@@ -141,8 +141,8 @@ func (te *TestEnvironment) TestAssetRelease() {
 			name:   "beneficiary is sarga account",
 			sender: sender,
 			assetActionPayload: &common.AssetActionPayload{
-				Benefactor:  benefactor.Addr,
-				Beneficiary: common.SargaAddress,
+				Benefactor:  benefactor.ID,
+				Beneficiary: common.SargaAccountID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(100),
 			},
@@ -161,7 +161,7 @@ func (te *TestEnvironment) TestAssetRelease() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.Addr, test.assetActionPayload, ixHash)
+			test.postTest(te, test.sender.ID, test.assetActionPayload, ixHash)
 		})
 	}
 }

@@ -134,8 +134,8 @@ func (p *PublicDebugAPI) NodeMetaInfo(args *rpcargs.NodeMetaInfoArgs) (
 	return nodeMetaInfo, nil
 }
 
-// Accounts returns a list of registered account addresses
-func (p *PublicDebugAPI) Accounts() ([]identifiers.Address, error) {
+// Accounts returns a list of registered account ids
+func (p *PublicDebugAPI) Accounts() ([]identifiers.Identifier, error) {
 	return p.db.GetRegisteredAccounts()
 }
 
@@ -202,7 +202,7 @@ func (p *PublicDebugAPI) RunDiagnosis(args *rpcargs.DiagnosisRequest) (*rpcargs.
 
 // SyncJob returns the sync job meta info for given address
 func (p *PublicDebugAPI) SyncJob(args *rpcargs.SyncJobRequest) (*rpcargs.SyncJobInfo, error) {
-	return p.syncer.GetSyncJobInfo(args.Address)
+	return p.syncer.GetSyncJobInfo(args.ID)
 }
 
 // PeersScore returns the scores of all connected peers

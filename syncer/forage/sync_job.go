@@ -43,12 +43,12 @@ type JobQueue struct {
 	mtx   sync.RWMutex
 	mux   *utils.TypeMux
 	krama kramaEngine
-	jobs  map[identifiers.Address]*SyncJob
+	jobs  map[identifiers.Identifier]*SyncJob
 }
 
 func NewJobQueue(mux *utils.TypeMux, krama kramaEngine) *JobQueue {
 	return &JobQueue{
-		jobs:  make(map[identifiers.Address]*SyncJob),
+		jobs:  make(map[identifiers.Identifier]*SyncJob),
 		mux:   mux,
 		krama: krama,
 	}
@@ -63,13 +63,13 @@ func (jq *JobQueue) len() int {
 	return len(jq.jobs)
 }
 
-func (jq *JobQueue) getJob(address identifiers.Address) (*SyncJob, bool) {
+func (jq *JobQueue) getJob(id identifiers.Identifier) (*SyncJob, bool) {
 	jq.mtx.RLock()
 	defer func() {
 		jq.mtx.RUnlock()
 	}()
 
-	job, ok := jq.jobs[address]
+	job, ok := jq.jobs[id]
 
 	return job, ok
 }
@@ -81,13 +81,13 @@ func (jq *JobQueue) AddJob(job *SyncJob) error {
 		jq.mtx.Unlock()
 	}()
 
-	if _, ok := jq.jobs[job.address]; ok {
+	if _, ok := jq.jobs[job.id]; ok {
 		return errors.New("job already exists")
 	}
 
-	jq.jobs[job.address] = job
+	jq.jobs[job.id] = job
 
-	if err := jq.mux.Post(utils.PendingAccountEvent{Address: job.address, Count: 1}); err != nil {
+	if err := jq.mux.Post(utils.PendingAccountEvent{ID: job.id, Count: 1}); err != nil {
 		log.Println("Error sending pending account event", "err", err)
 	}
 
@@ -114,12 +114,12 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 		return err
 	}
 
-	delete(jq.jobs, job.address)
+	delete(jq.jobs, job.id)
 
 	// unlock the account as it is synced
-	jq.krama.ClearActiveAccount(job.address, "syncer")
+	jq.krama.ClearActiveAccount(job.id, "syncer")
 
-	if err := jq.mux.Post(utils.PendingAccountEvent{Address: job.address, Count: -1}); err != nil {
+	if err := jq.mux.Post(utils.PendingAccountEvent{ID: job.id, Count: -1}); err != nil {
 		log.Println("Error sending pending account event", "err", err)
 	}
 
@@ -130,16 +130,16 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 	return nil
 }
 
-func (jq *JobQueue) GetPendingAccounts() []identifiers.Address {
+func (jq *JobQueue) GetPendingAccounts() []identifiers.Identifier {
 	jq.mtx.RLock()
 	defer func() {
 		jq.mtx.RUnlock()
 	}()
 
-	pendingAccounts := make([]identifiers.Address, 0, len(jq.jobs))
+	pendingAccounts := make([]identifiers.Identifier, 0, len(jq.jobs))
 
 	for _, jb := range jq.jobs {
-		pendingAccounts = append(pendingAccounts, jb.address)
+		pendingAccounts = append(pendingAccounts, jb.id)
 	}
 
 	return pendingAccounts
@@ -157,7 +157,7 @@ type SyncJob struct {
 	mtx                   sync.RWMutex
 	logger                hclog.Logger
 	db                    store
-	address               identifiers.Address
+	id                    identifiers.Identifier
 	mode                  common.SyncMode
 	creationTime          time.Time
 	snapDownloaded        bool
@@ -190,7 +190,7 @@ func SyncJobFromCanonicalInfo(
 	return &SyncJob{
 		db:              db,
 		logger:          logger.Named("Sync-Job"),
-		address:         data.Address,
+		id:              data.ID,
 		creationTime:    time.Now(),
 		snapDownloaded:  data.SnapshotDownloaded,
 		mode:            data.Mode,
@@ -283,11 +283,11 @@ func (j *SyncJob) updateSnap(snapReceived bool) error {
 		return err
 	}
 
-	return j.db.SetAccountSyncStatus(j.address, canonicalJob)
+	return j.db.SetAccountSyncStatus(j.id, canonicalJob)
 }
 
 func (j *SyncJob) done() error {
-	if err := j.db.CleanupAccountSyncStatus(j.address); err != nil {
+	if err := j.db.CleanupAccountSyncStatus(j.id); err != nil {
 		return errors.Wrap(err, "failed to delete entry in db")
 	}
 
@@ -312,7 +312,7 @@ func (j *SyncJob) updateJobState(newState JobState) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
-	j.logger.Debug("Updating job state", "addr", j.address, "state", newState)
+	j.logger.Debug("Updating job state", "accountID", j.id, "state", newState)
 
 	j.jobState = newState
 	j.lastModifiedAt = time.Now()
@@ -329,7 +329,7 @@ func (j *SyncJob) updateExpectedHeight(newHeight uint64) error {
 		return err
 	}
 
-	return j.db.SetAccountSyncStatus(j.address, canonicalJob)
+	return j.db.SetAccountSyncStatus(j.id, canonicalJob)
 }
 
 func (j *SyncJob) commitJob() error {
@@ -341,7 +341,7 @@ func (j *SyncJob) commitJob() error {
 		return err
 	}
 
-	return j.db.SetAccountSyncStatus(j.address, canonicalJob)
+	return j.db.SetAccountSyncStatus(j.id, canonicalJob)
 }
 
 func (j *SyncJob) canonicalJob() (*common.AccountSyncStatus, error) {
@@ -351,7 +351,7 @@ func (j *SyncJob) canonicalJob() (*common.AccountSyncStatus, error) {
 	}
 
 	return &common.AccountSyncStatus{
-		Address:            j.address,
+		ID:                 j.id,
 		SnapshotDownloaded: j.snapDownloaded,
 		Mode:               j.mode,
 		State:              int32(j.jobState),
@@ -372,7 +372,7 @@ func (j *SyncJob) signalNewTesseract() {
 
 func (j *SyncJob) jobStateEvent() eventDataJobState {
 	return eventDataJobState{
-		address: j.address,
-		height:  j.getCurrentHeight(),
+		id:     j.id,
+		height: j.getCurrentHeight(),
 	}
 }

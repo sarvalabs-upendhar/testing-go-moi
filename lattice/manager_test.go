@@ -60,7 +60,7 @@ func TestUpdateNodeInclusivity(t *testing.T) {
 	c := createTestChainManager(t, chainParams)
 
 	// create context delta
-	deltaGroup := getDeltaGroup(t, 2, 2, 2)
+	deltaGroup := getDeltaGroup(t, 2, 2)
 
 	err := c.UpdateNodeInclusivity(deltaGroup)
 	require.NoError(t, err)
@@ -93,7 +93,7 @@ func TestGetTesseract(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		address          identifiers.Address
+		id               identifiers.Identifier
 		tsHash           common.Hash
 		withInteractions bool
 		withCommitInfo   bool
@@ -166,7 +166,7 @@ func TestGetTesseract(t *testing.T) {
 
 func TestGetTesseractByHeight(t *testing.T) {
 	type args struct {
-		address          identifiers.Address
+		id               identifiers.Identifier
 		height           uint64
 		withInteractions bool
 		withCommitInfo   bool
@@ -192,8 +192,8 @@ func TestGetTesseractByHeight(t *testing.T) {
 		{
 			name: "fetch tesseract with Interactions and with commit info for a valid height",
 			args: args{
-				address:          ts.AnyAddress(),
-				height:           ts.Height(ts.AnyAddress()),
+				id:               ts.AnyAccountID(),
+				height:           ts.Height(ts.AnyAccountID()),
 				withInteractions: true,
 				withCommitInfo:   true,
 			},
@@ -202,8 +202,8 @@ func TestGetTesseractByHeight(t *testing.T) {
 		{
 			name: "fetch tesseract without Interactions and without commit info for a valid height",
 			args: args{
-				address:          ts.AnyAddress(),
-				height:           ts.Height(ts.AnyAddress()),
+				id:               ts.AnyAccountID(),
+				height:           ts.Height(ts.AnyAccountID()),
 				withInteractions: false,
 			},
 			expectedTS: ts,
@@ -211,7 +211,7 @@ func TestGetTesseractByHeight(t *testing.T) {
 		{
 			name: "should return error for invalid height",
 			args: args{
-				address:          ts.AnyAddress(),
+				id:               ts.AnyAccountID(),
 				height:           1,
 				withInteractions: true,
 			},
@@ -222,7 +222,7 @@ func TestGetTesseractByHeight(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			actualTS, err := c.GetTesseractByHeight(
-				test.args.address,
+				test.args.id,
 				test.args.height,
 				test.args.withInteractions,
 				test.args.withCommitInfo)
@@ -241,13 +241,13 @@ func TestGetTesseractByHeight(t *testing.T) {
 }
 
 func TestGetTesseractHashByHeight(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	height := uint64(33)
 	hash := tests.RandomHash(t)
 
 	chainParams := &CreateChainParams{
 		dbCallback: func(db *MockDB) {
-			err := db.SetTesseractHeightEntry(address, height, hash)
+			err := db.SetTesseractHeightEntry(id, height, hash)
 			require.NoError(t, err)
 		},
 	}
@@ -256,20 +256,20 @@ func TestGetTesseractHashByHeight(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       identifiers.Address
+		id            identifiers.Identifier
 		height        uint64
 		expectedHash  common.Hash
 		expectedError error
 	}{
 		{
 			name:         "successfully fetched tesseract hash",
-			address:      address,
+			id:           id,
 			height:       height,
 			expectedHash: hash,
 		},
 		{
 			name:          "failed to fetch tesseract hash",
-			address:       tests.RandomAddress(t),
+			id:            tests.RandomIdentifier(t),
 			height:        height,
 			expectedError: common.ErrKeyNotFound,
 		},
@@ -277,7 +277,7 @@ func TestGetTesseractHashByHeight(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			hash, err := c.GetTesseractHeightEntry(test.address, test.height)
+			hash, err := c.GetTesseractHeightEntry(test.id, test.height)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -410,23 +410,23 @@ func TestGetReceiptByIxHash(t *testing.T) {
 }
 
 func TestAddParticipantData(t *testing.T) {
-	addresses := tests.GetAddresses(t, 3)
-	objects := make(map[identifiers.Address]*state.Object)
+	ids := tests.GetIdentifiers(t, 3)
+	objects := make(map[identifiers.Identifier]*state.Object)
 	keys := getHexEntries(t, 2)
 	values := getHexEntries(t, 2)
 
 	tsParams := &tests.CreateTesseractParams{
-		Addresses: addresses,
+		IDs: ids,
 		Participants: common.ParticipantsState{
-			addresses[0]: {
+			ids[0]: {
 				Height:    11,
 				StateHash: tests.RandomHash(t),
 			},
-			addresses[1]: {
+			ids[1]: {
 				Height:    23,
 				StateHash: tests.RandomHash(t),
 			},
-			addresses[2]: {
+			ids[2]: {
 				Height: 28,
 			},
 		},
@@ -434,20 +434,20 @@ func TestAddParticipantData(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		address         identifiers.Address
+		id              identifiers.Identifier
 		allParticipants bool
 		dbCallback      func(db *MockDB)
 		expectedError   error
 	}{
 		{
-			name:            "address is not specified when a specific participant need to be added",
-			address:         identifiers.NilAddress,
+			name:            "id is not specified when a specific participant need to be added",
+			id:              identifiers.Nil,
 			allParticipants: false,
-			expectedError:   errors.New("address is not specified"),
+			expectedError:   errors.New("id is not specified"),
 		},
 		{
 			name:            "added only one participant data successfully",
-			address:         addresses[0],
+			id:              ids[0],
 			allParticipants: false,
 		},
 		{
@@ -501,18 +501,18 @@ func TestAddParticipantData(t *testing.T) {
 			c := createTestChainManager(t, chainParams)
 
 			for i := 0; i < 2; i++ {
-				obj := state.NewStateObject(addresses[i], mockCache(), nil, db,
+				obj := state.NewStateObject(ids[i], mockCache(), nil, db,
 					common.Account{AccType: common.RegularAccount}, state.NilMetrics(), false)
 
 				for i, k := range keys {
 					obj.SetDirtyEntry(k, []byte(values[i]))
 				}
 
-				objects[addresses[i]] = obj
+				objects[ids[i]] = obj
 			}
 
 			err := c.addParticipantsData(
-				test.address,
+				test.id,
 				ts,
 				state.NewTransition(objects, nil),
 				test.allParticipants,
@@ -531,26 +531,26 @@ func TestAddParticipantData(t *testing.T) {
 			if test.allParticipants {
 				participants = ts.Participants()
 			} else {
-				s, ok := ts.State(test.address)
+				s, ok := ts.State(test.id)
 				if !ok {
 					panic(ok)
 				}
 
-				participants[test.address] = s
+				participants[test.id] = s
 			}
 
-			for addr, participant := range participants {
+			for id, participant := range participants {
 				if participant.StateHash == common.NilHash {
-					_, found := db.GetAccMetaInfo(addr)
+					_, found := db.GetAccMetaInfo(id)
 					require.False(t, found)
 
 					continue
 				}
 
-				_, ok := pool.removedObjects[addr]
+				_, ok := pool.removedObjects[id]
 				require.True(t, ok)
 
-				checkForParticipantByHeight(t, c, addr, participant, true)
+				checkForParticipantByHeight(t, c, id, participant, true)
 
 				// make sure transition object flushed to db
 				for i, k := range keys {
@@ -560,13 +560,13 @@ func TestAddParticipantData(t *testing.T) {
 				}
 
 				// check if acc meta info inserted
-				accMetaInfo, found := db.GetAccMetaInfo(addr)
+				accMetaInfo, found := db.GetAccMetaInfo(id)
 				require.True(t, found)
 
 				checkIfAccMetaInfoMatches(
 					t,
 					accMetaInfo,
-					addr,
+					id,
 					participant.Height,
 					ts.Hash(),
 					common.RegularAccount,
@@ -575,9 +575,9 @@ func TestAddParticipantData(t *testing.T) {
 
 			// make sure other accounts are not stored in this case
 			if !test.allParticipants {
-				for addr, p := range ts.Participants() {
-					if addr != test.address {
-						checkForParticipantByHeight(t, c, addr, p, false)
+				for id, p := range ts.Participants() {
+					if id != test.id {
+						checkForParticipantByHeight(t, c, id, p, false)
 					}
 				}
 			}
@@ -849,23 +849,23 @@ func TestAddTesseractData(t *testing.T) {
 
 func TestAddTesseract(t *testing.T) {
 	ixns, receipts := getIxAndReceipts(t, 1)
-	addresses := tests.GetAddresses(t, 2)
-	objects := make(map[identifiers.Address]*state.Object)
+	ids := tests.GetIdentifiers(t, 2)
+	objects := make(map[identifiers.Identifier]*state.Object)
 	keys := getHexEntries(t, 2)
 	values := getHexEntries(t, 2)
 
 	tsParams := &tests.CreateTesseractParams{
-		Addresses: addresses,
+		IDs: ids,
 		Participants: common.ParticipantsState{
-			addresses[0]: {
+			ids[0]: {
 				Height:       11,
 				StateHash:    tests.RandomHash(t),
-				ContextDelta: getDeltaGroup(t, 1, 1, 1),
+				ContextDelta: getDeltaGroup(t, 1, 1),
 			},
-			addresses[1]: {
+			ids[1]: {
 				Height:       23,
 				StateHash:    tests.RandomHash(t),
-				ContextDelta: getDeltaGroup(t, 1, 1, 1),
+				ContextDelta: getDeltaGroup(t, 1, 1),
 			},
 		},
 		Ixns:     common.NewInteractionsWithLeaderCheck(false, ixns...),
@@ -969,19 +969,19 @@ func TestAddTesseract(t *testing.T) {
 			go utils.HandleMuxEvents(ctx, tsAddedEventSub, tsAddedResp, 1)
 
 			for i := 0; i < 2; i++ {
-				obj := state.NewStateObject(addresses[i], mockCache(), nil, db,
+				obj := state.NewStateObject(ids[i], mockCache(), nil, db,
 					common.Account{AccType: common.RegularAccount}, state.NilMetrics(), false)
 
 				for i, k := range keys {
 					obj.SetDirtyEntry(k, []byte(values[i]))
 				}
 
-				objects[addresses[i]] = obj
+				objects[ids[i]] = obj
 			}
 
 			err := c.AddTesseract(
 				test.shouldCache,
-				identifiers.NilAddress,
+				identifiers.Nil,
 				ts,
 				state.NewTransition(objects, nil),
 				true,
@@ -996,8 +996,8 @@ func TestAddTesseract(t *testing.T) {
 			require.NoError(t, err)
 
 			// check if participant data added
-			for addr, participant := range participants {
-				checkForParticipantByHeight(t, c, addr, participant, true)
+			for id, participant := range participants {
+				checkForParticipantByHeight(t, c, id, participant, true)
 			}
 
 			if c.db.HasTesseract(ts.Hash()) {
@@ -1012,10 +1012,10 @@ func TestAddTesseract(t *testing.T) {
 }
 
 func TestAddTesseractWithState(t *testing.T) {
-	addresses := tests.GetAddresses(t, 2)
+	ids := tests.GetIdentifiers(t, 2)
 	icsHash := tests.RandomHash(t)
 
-	objects := make(map[identifiers.Address]*state.Object)
+	objects := make(map[identifiers.Identifier]*state.Object)
 	keys := getHexEntries(t, 2)
 	values := getHexEntries(t, 2)
 
@@ -1029,17 +1029,17 @@ func TestAddTesseractWithState(t *testing.T) {
 	}
 
 	tsParams := &tests.CreateTesseractParams{
-		Addresses: addresses,
+		IDs: ids,
 		Participants: common.ParticipantsState{
-			addresses[0]: {
+			ids[0]: {
 				Height:       11,
 				StateHash:    tests.RandomHash(t),
-				ContextDelta: getDeltaGroup(t, 1, 1, 1),
+				ContextDelta: getDeltaGroup(t, 1, 1),
 			},
-			addresses[1]: {
+			ids[1]: {
 				Height:       23,
 				StateHash:    tests.RandomHash(t),
-				ContextDelta: getDeltaGroup(t, 1, 1, 1),
+				ContextDelta: getDeltaGroup(t, 1, 1),
 			},
 		},
 		TSDataCallback: func(ts *tests.TesseractData) {
@@ -1050,7 +1050,7 @@ func TestAddTesseractWithState(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		address         identifiers.Address
+		id              identifiers.Identifier
 		tsParams        *tests.CreateTesseractParams
 		dirtyStorage    map[common.Hash][]byte
 		allParticipants bool
@@ -1059,14 +1059,14 @@ func TestAddTesseractWithState(t *testing.T) {
 	}{
 		{
 			name:            "added tesseract with state successfully",
-			address:         identifiers.NilAddress,
+			id:              identifiers.Nil,
 			tsParams:        tsParams,
 			dirtyStorage:    dirtyStorage,
 			allParticipants: true,
 		},
 		{
 			name:            "added tesseract's participant successfully",
-			address:         addresses[0],
+			id:              ids[0],
 			tsParams:        tsParams,
 			dirtyStorage:    dirtyStorage,
 			allParticipants: false,
@@ -1118,18 +1118,18 @@ func TestAddTesseractWithState(t *testing.T) {
 			participants := ts.Participants()
 
 			for i := 0; i < 2; i++ {
-				obj := state.NewStateObject(addresses[i], mockCache(), nil, db,
+				obj := state.NewStateObject(ids[i], mockCache(), nil, db,
 					common.Account{AccType: common.RegularAccount}, state.NilMetrics(), false)
 
 				for i, k := range keys {
 					obj.SetDirtyEntry(k, []byte(values[i]))
 				}
 
-				objects[addresses[i]] = obj
+				objects[ids[i]] = obj
 			}
 
 			err := c.AddTesseractWithState(
-				test.address,
+				test.id,
 				test.dirtyStorage,
 				ts,
 				state.NewTransition(objects, nil),
@@ -1144,25 +1144,25 @@ func TestAddTesseractWithState(t *testing.T) {
 
 			require.NoError(t, err)
 
-			var expectedAddedAccounts []identifiers.Address
+			var expectedAddedAccounts []identifiers.Identifier
 
 			if test.allParticipants {
-				expectedAddedAccounts = ts.Addresses()
+				expectedAddedAccounts = ts.AccountIDs()
 			} else {
-				expectedAddedAccounts = []identifiers.Address{test.address}
+				expectedAddedAccounts = []identifiers.Identifier{test.id}
 			}
 
 			// check if participants data added
-			for _, addr := range expectedAddedAccounts {
-				checkForParticipantByHeight(t, c, addr, participants[addr], true)
+			for _, id := range expectedAddedAccounts {
+				checkForParticipantByHeight(t, c, id, participants[id], true)
 			}
 
 			// make sure other accounts are not stored in this case
 			if !test.allParticipants {
 				for _, expectedAddr := range expectedAddedAccounts {
-					for addr, p := range participants {
-						if addr != expectedAddr {
-							checkForParticipantByHeight(t, c, addr, p, false)
+					for id, p := range participants {
+						if id != expectedAddr {
+							checkForParticipantByHeight(t, c, id, p, false)
 						}
 					}
 				}
@@ -1181,10 +1181,10 @@ func TestAddTesseractWithState(t *testing.T) {
 func TestGetInteractionsByTSHash(t *testing.T) {
 	var (
 		tsHash    = tests.RandomHash(t)
-		paramsMap = tests.GetIxParamsMapWithAddresses(
+		paramsMap = tests.GetIxParamsMapWithIDs(
 			t,
-			[]identifiers.Address{tests.RandomAddress(t)},
-			[]identifiers.Address{tests.RandomAddress(t)},
+			[]identifiers.Identifier{tests.RandomIdentifier(t)},
+			[]identifiers.Identifier{tests.RandomIdentifier(t)},
 		)
 		ixns = tests.CreateIxns(t, 2, paramsMap)
 		c    = createTestChainManager(t, nil)

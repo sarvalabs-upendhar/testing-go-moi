@@ -46,8 +46,8 @@ package kbft
 //	// create ixn with two participants
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
 //
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //
@@ -149,8 +149,8 @@ package kbft
 //	icsNodes, valSet := createICSNodes(t, 2, 4, 32, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs)
@@ -234,8 +234,8 @@ package kbft
 //	icsNodes, valSet := createICSNodes(t, 2, 4, 32, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs)
@@ -334,8 +334,8 @@ package kbft
 //	icsNodes, valSet := createICSNodes(t, 2, 4, 32, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs)
@@ -439,8 +439,8 @@ package kbft
 //	icsNodes, valSet := createICSNodes(t, 2, 4, 32, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs)
@@ -547,8 +547,8 @@ package kbft
 //		0, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //
@@ -602,8 +602,8 @@ package kbft
 //		0, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //
@@ -678,8 +678,8 @@ package kbft
 //		4, 32, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //
@@ -779,8 +779,8 @@ package kbft
 //	_, randomVal := createTestNodeSet(t, 1)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs)
@@ -861,8 +861,8 @@ package kbft
 //	icsNodes, valSet := createICSNodes(t, 2, 4, 32, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs)
@@ -967,8 +967,8 @@ package kbft
 //		4, 32, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs)
@@ -1056,8 +1056,8 @@ package kbft
 //		4, 32, 0)
 //
 //	ixs := createIxs(t, tests.RandomAddress(t), tests.RandomAddress(t))
-//	heights := map[identifiers.Address]uint64{
-//		ixs[0].SenderAddr():                2,
+//	heights := map[identifiers.Identifier]uint64{
+//		ixs[0].Sender():                2,
 //		ixs[0].Transaction(0).Target(): 3,
 //	}
 //	clusterInfo := createTestClusterInfo(t, icsNodes, heights, ixs)

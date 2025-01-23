@@ -26,7 +26,7 @@ type MockDB struct {
 	dbStorage                   map[string][]byte
 	accounts                    map[common.Hash][]byte
 	balances                    map[common.Hash][]byte
-	accMetaInfos                map[identifiers.Address]*common.AccountMetaInfo
+	accMetaInfos                map[identifiers.Identifier]*common.AccountMetaInfo
 	tesseracts                  map[common.Hash]*common.Tesseract
 	TSHashByIxHash              map[string][]byte
 	batchWriter                 *mockBatchWriter
@@ -43,18 +43,18 @@ type MockDB struct {
 func mockDB() *MockDB {
 	return &MockDB{
 		dbStorage:      make(map[string][]byte),
-		accMetaInfos:   make(map[identifiers.Address]*common.AccountMetaInfo),
+		accMetaInfos:   make(map[identifiers.Identifier]*common.AccountMetaInfo),
 		TSHashByIxHash: make(map[string][]byte),
 		tesseracts:     make(map[common.Hash]*common.Tesseract),
 	}
 }
 
-func (m *MockDB) GetAccountKeys(addr identifiers.Address, stateHash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) ([]byte, error) {
 	panic("implement me")
 }
 
-func (m *MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool {
-	accMetaInfo, err := m.GetAccountMetaInfo(addr)
+func (m *MockDB) HasAccMetaInfoAt(id identifiers.Identifier, height uint64) bool {
+	accMetaInfo, err := m.GetAccountMetaInfo(id)
 	if err != nil {
 		return false
 	}
@@ -66,12 +66,12 @@ func (m *MockDB) HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool 
 	return true
 }
 
-func (m *MockDB) GetDeeds(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetDeeds(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error) {
+func (m *MockDB) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
 	// TODO implement me
 	metaInfo, ok := m.accMetaInfos[id]
 	if !ok {
@@ -142,11 +142,12 @@ func (m *MockDB) Contains(key []byte) (bool, error) {
 }
 
 func (m *MockDB) UpdateAccMetaInfo(
-	id identifiers.Address,
+	id identifiers.Identifier,
 	height uint64,
 	tesseractHash common.Hash,
 	stateHash common.Hash,
 	contextHash common.Hash,
+	consensusNodesHash common.Hash,
 	commitHash common.Hash,
 	accType common.AccountType,
 	shouldUpdateContextSetPosition bool,
@@ -157,13 +158,14 @@ func (m *MockDB) UpdateAccMetaInfo(
 	}
 
 	m.accMetaInfos[id] = &common.AccountMetaInfo{
-		Address:       id,
-		Type:          accType,
-		Height:        height,
-		TesseractHash: tesseractHash,
-		StateHash:     stateHash,
-		ContextHash:   contextHash,
-		CommitHash:    commitHash,
+		ID:                 id,
+		Type:               accType,
+		Height:             height,
+		TesseractHash:      tesseractHash,
+		StateHash:          stateHash,
+		ContextHash:        contextHash,
+		ConsensusNodesHash: consensusNodesHash,
+		CommitHash:         commitHash,
 	}
 
 	if shouldUpdateContextSetPosition {
@@ -173,7 +175,7 @@ func (m *MockDB) UpdateAccMetaInfo(
 	return 8, true, nil
 }
 
-func (m *MockDB) GetAccMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, bool) {
+func (m *MockDB) GetAccMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, bool) {
 	val, ok := m.accMetaInfos[id]
 
 	return val, ok
@@ -212,7 +214,7 @@ func (m *MockDB) GetInteractions(tesseractHash common.Hash) ([]byte, error) {
 	return nil, common.ErrKeyNotFound
 }
 
-func (m *MockDB) GetAccount(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetAccount(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	account, ok := m.accounts[hash]
 	if !ok {
 		return nil, common.ErrAccountNotFound
@@ -231,8 +233,8 @@ func (m *MockDB) SetInteractions(tsHash common.Hash, data []byte) error {
 	return nil
 }
 
-func (m *MockDB) GetTesseractHeightEntry(addr identifiers.Address, height uint64) ([]byte, error) {
-	key := addr.Hex() + strconv.Itoa(int(height))
+func (m *MockDB) GetTesseractHeightEntry(id identifiers.Identifier, height uint64) ([]byte, error) {
+	key := id.Hex() + strconv.Itoa(int(height))
 
 	data, ok := m.dbStorage[key]
 	if !ok {
@@ -242,19 +244,19 @@ func (m *MockDB) GetTesseractHeightEntry(addr identifiers.Address, height uint64
 	return data, nil
 }
 
-func (m *MockDB) SetTesseractHeightEntry(addr identifiers.Address, height uint64, hash common.Hash) error {
+func (m *MockDB) SetTesseractHeightEntry(id identifiers.Identifier, height uint64, hash common.Hash) error {
 	if m.setTesseractHeightEntryHook != nil {
 		return m.setTesseractHeightEntryHook()
 	}
 
-	key := addr.Hex() + strconv.Itoa(int(height))
+	key := id.Hex() + strconv.Itoa(int(height))
 
 	m.dbStorage[key] = hash.Bytes()
 
 	return nil
 }
 
-func (m *MockDB) GetBalance(addr identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetBalance(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	balance, ok := m.balances[hash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -286,23 +288,23 @@ func (m *MockDB) SetReceipts(tsHash common.Hash, data []byte) error {
 	return nil
 }
 
-func (m *MockDB) GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error) {
+func (m *MockDB) GetContext(id identifiers.Identifier, contextHash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error) {
+func (m *MockDB) GetMerkleTreeEntry(id identifiers.Identifier, prefix storage.PrefixTag, key []byte) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) SetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key, value []byte) error {
+func (m *MockDB) SetMerkleTreeEntry(id identifiers.Identifier, prefix storage.PrefixTag, key, value []byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockDB) SetMerkleTreeEntries(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	prefix storage.PrefixTag,
 	entries map[string][]byte,
 ) error {
@@ -310,12 +312,12 @@ func (m *MockDB) SetMerkleTreeEntries(
 	panic("implement me")
 }
 
-func (m *MockDB) WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error {
+func (m *MockDB) WritePreImages(id identifiers.Identifier, entries map[common.Hash][]byte) error {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockDB) GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error) {
+func (m *MockDB) GetPreImage(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -439,11 +441,11 @@ func (n *MockNetwork) Subscribe(
 
 type MockIXPool struct {
 	reset          map[common.Hash]bool
-	removedObjects map[identifiers.Address]struct{}
+	removedObjects map[identifiers.Identifier]struct{}
 }
 
-func (i *MockIXPool) RemoveCachedObject(addr identifiers.Address) {
-	i.removedObjects[addr] = struct{}{}
+func (i *MockIXPool) RemoveCachedObject(id identifiers.Identifier) {
+	i.removedObjects[id] = struct{}{}
 }
 
 type MockSenatus struct {
@@ -493,8 +495,8 @@ func createIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		params.ixDataCallback(data)
 	}
 
-	if data.Sender.Address == identifiers.NilAddress {
-		data.Sender.Address = tests.RandomAddress(t)
+	if data.Sender.ID == identifiers.Nil {
+		data.Sender.ID = tests.RandomIdentifier(t)
 	}
 
 	tests.AppendParticipantsInIxData(t, data)
@@ -526,12 +528,12 @@ func createIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) comm
 	return common.NewInteractionsWithLeaderCheck(false, ixns...)
 }
 
-func getIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifiers.Address) *CreateIxParams {
+func getIxParamsWithID(t *testing.T, from identifiers.Identifier, to identifiers.Identifier) *CreateIxParams {
 	t.Helper()
 
 	return &CreateIxParams{
 		ixDataCallback: func(ix *common.IxData) {
-			ix.Sender.Address = from
+			ix.Sender.ID = from
 			ix.IxOps = []common.IxOpRaw{
 				{
 					Type:    common.IxAssetCreate,
@@ -542,17 +544,17 @@ func getIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifie
 	}
 }
 
-func getIxParamsMapWithAddresses(
+func getIxParamsMapWithIDs(
 	t *testing.T,
-	from []identifiers.Address,
-	to []identifiers.Address,
+	from []identifiers.Identifier,
+	to []identifiers.Identifier,
 ) map[int]*CreateIxParams {
 	t.Helper()
 
 	ixParams := make(map[int]*CreateIxParams, len(from))
 
 	for i := 0; i < len(from); i++ {
-		ixParams[i] = getIxParamsWithAddress(t, from[i], to[i])
+		ixParams[i] = getIxParamsWithID(t, from[i], to[i])
 	}
 
 	return ixParams
@@ -592,7 +594,7 @@ func mockSenatus(t *testing.T) *MockSenatus {
 func mockIXPool() *MockIXPool {
 	return &MockIXPool{
 		reset:          make(map[common.Hash]bool),
-		removedObjects: make(map[identifiers.Address]struct{}),
+		removedObjects: make(map[identifiers.Identifier]struct{}),
 	}
 }
 
@@ -669,13 +671,12 @@ func insertTesseractsInDB(t *testing.T, db store, tesseracts ...*common.Tesserac
 	}
 }
 
-func getDeltaGroup(t *testing.T, behaviouralCount int, randomCount int, replaceCount int) *common.DeltaGroup {
+func getDeltaGroup(t *testing.T, consensusNodeCount int, replaceCount int) *common.DeltaGroup {
 	t.Helper()
 
 	return &common.DeltaGroup{
-		BehaviouralNodes: tests.RandomKramaIDs(t, behaviouralCount),
-		RandomNodes:      tests.RandomKramaIDs(t, randomCount),
-		ReplacedNodes:    tests.RandomKramaIDs(t, replaceCount),
+		ConsensusNodes: tests.RandomKramaIDs(t, consensusNodeCount),
+		ReplacedNodes:  tests.RandomKramaIDs(t, replaceCount),
 	}
 }
 
@@ -690,8 +691,8 @@ func insertTesseractsInCache(t *testing.T, c *ChainManager, tesseracts ...*commo
 func insertTesseractByHeight(t *testing.T, db store, ts *common.Tesseract) {
 	t.Helper()
 
-	for addr, s := range ts.Participants() {
-		err := db.SetTesseractHeightEntry(addr, s.Height, ts.Hash())
+	for id, s := range ts.Participants() {
+		err := db.SetTesseractHeightEntry(id, s.Height, ts.Hash())
 		require.NoError(t, err)
 	}
 }
@@ -714,7 +715,7 @@ func getIX(t *testing.T) *common.Interaction {
 
 	return createIX(
 		t,
-		getIxParamsWithAddress(t, tests.RandomAddress(t), tests.RandomAddress(t)),
+		getIxParamsWithID(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t)),
 	)
 }
 
@@ -751,8 +752,8 @@ func getTesseractParamsMapWithIxns(t *testing.T, tsCount int) map[int]*tests.Cre
 	t.Helper()
 
 	tesseractParams := make(map[int]*tests.CreateTesseractParams, tsCount)
-	addresses := tests.GetAddresses(t, 4*tsCount) // for each interaction, sender and receiver addresses needed
-	ixns := createIxns(t, 2*tsCount, getIxParamsMapWithAddresses(t, addresses[:2*tsCount], addresses[2*tsCount:]))
+	ids := tests.GetIdentifiers(t, 4*tsCount) // for each interaction, sender and receiver ids needed
+	ixns := createIxns(t, 2*tsCount, getIxParamsMapWithIDs(t, ids[:2*tsCount], ids[2*tsCount:]))
 
 	for i := 0; i < tsCount; i++ {
 		tesseractParams[i] = &tests.CreateTesseractParams{
@@ -792,11 +793,7 @@ func getTesseractAddedEvent(t *testing.T, data interface{}) utils.TesseractAdded
 func validateDeltaGroup(t *testing.T, senatus *MockSenatus, deltaGroup *common.DeltaGroup) {
 	t.Helper()
 
-	for _, kramaID := range deltaGroup.BehaviouralNodes {
-		require.Equal(t, senatus.WalletCount[kramaID], int32(1))
-	}
-
-	for _, kramaID := range deltaGroup.RandomNodes {
+	for _, kramaID := range deltaGroup.ConsensusNodes {
 		require.Equal(t, senatus.WalletCount[kramaID], int32(1))
 	}
 
@@ -847,14 +844,14 @@ func checkForTesseractData(
 func checkForParticipantByHeight(
 	t *testing.T,
 	c *ChainManager,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	participant common.State,
 	isPresent bool,
 ) {
 	t.Helper()
 
 	// check if tesseract height key added
-	_, err := c.db.GetTesseractHeightEntry(addr, participant.Height)
+	_, err := c.db.GetTesseractHeightEntry(id, participant.Height)
 
 	if isPresent {
 		require.NoError(t, err)
@@ -868,14 +865,14 @@ func checkForParticipantByHeight(
 func checkIfAccMetaInfoMatches(
 	t *testing.T,
 	accMetaInfo *common.AccountMetaInfo,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	height uint64,
 	tsHash common.Hash,
 	accType common.AccountType,
 ) {
 	t.Helper()
 
-	require.Equal(t, addr, accMetaInfo.Address)
+	require.Equal(t, id, accMetaInfo.ID)
 	require.Equal(t, height, accMetaInfo.Height)
 	require.Equal(t, tsHash, accMetaInfo.TesseractHash)
 	require.Equal(t, accType, accMetaInfo.Type)

@@ -16,7 +16,7 @@ type Vote struct {
 	View          uint64
 	SignerIndex   int32
 	Timestamp     int64
-	Heights       map[identifiers.Address]uint64
+	Heights       map[identifiers.Identifier]uint64
 	TSHash        common.Hash
 	SignerIndices *common.ArrayOfBits
 	Signature     []byte
@@ -185,7 +185,7 @@ func (p *Proposal) Validate() error {
 	return nil
 }
 
-func (p *Proposal) Heights() map[identifiers.Address]uint64 {
+func (p *Proposal) Heights() map[identifiers.Identifier]uint64 {
 	return p.Tesseract.Heights()
 }
 
@@ -197,7 +197,7 @@ func (p *Proposal) ClusterID() common.ClusterID {
 	return p.Tesseract.ClusterID()
 }
 
-func (p *Proposal) Locks() map[identifiers.Address]common.LockType {
+func (p *Proposal) Locks() map[identifiers.Identifier]common.LockType {
 	return p.Tesseract.ConsensusInfo().AccountLocks
 }
 

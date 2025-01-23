@@ -27,11 +27,11 @@ type TestSuite struct {
 	logicSnap *debugStateDriver
 	logicID   identifiers.LogicID
 
-	participants map[identifiers.Address]*debugStateDriver
-	snapshots    map[identifiers.Address]*debugStateDriver
+	participants map[identifiers.Identifier]*debugStateDriver
+	snapshots    map[identifiers.Identifier]*debugStateDriver
 
 	defaultFuel   uint64
-	defaultSender identifiers.Address
+	defaultSender identifiers.Identifier
 
 	cleaners []testSuiteOptionCleaner
 }
@@ -47,7 +47,7 @@ type (
 	TestSuiteOption        func(suite *TestSuite) error
 )
 
-func (suite *TestSuite) Initialise(kind EngineKind, manifest Manifest, sender identifiers.Address) (uint64, error) {
+func (suite *TestSuite) Initialise(kind EngineKind, manifest Manifest, sender identifiers.Identifier) (uint64, error) {
 	// Set up the engine runtime
 	engine, ok := FetchEngine(kind)
 	require.True(suite.T(), ok, "unsupported engine kind")
@@ -60,15 +60,15 @@ func (suite *TestSuite) Initialise(kind EngineKind, manifest Manifest, sender id
 	}
 
 	// Create an address for the logic
-	address := identifiers.NewRandomAddress()
+	logicID := identifiers.RandomLogicIDv0()
 	// Create a logic object from the
 	// descriptor and assign the logic ID
-	suite.logic = newDebugLogicDriver(suite.T(), address, descriptor)
+	suite.logic = newDebugLogicDriver(suite.T(), logicID, descriptor)
 	suite.logicID = suite.logic.LogicID()
 
 	// If a sender is not given, create a new address
-	if sender == identifiers.NilAddress {
-		sender = identifiers.NewRandomAddress()
+	if sender == identifiers.Nil {
+		sender = identifiers.RandomParticipantIDv0().AsIdentifier()
 	}
 
 	// Set defaults
@@ -76,11 +76,11 @@ func (suite *TestSuite) Initialise(kind EngineKind, manifest Manifest, sender id
 	suite.defaultFuel = defaultFuelLimit
 
 	// Initialise state maps
-	suite.participants = make(map[identifiers.Address]*debugStateDriver)
-	suite.snapshots = make(map[identifiers.Address]*debugStateDriver)
+	suite.participants = make(map[identifiers.Identifier]*debugStateDriver)
+	suite.snapshots = make(map[identifiers.Identifier]*debugStateDriver)
 
 	// Create a driver for the logic's local state
-	suite.logicSnap = newDebugStateDriver(suite.T(), address, suite.logicID)
+	suite.logicSnap = newDebugStateDriver(suite.T(), logicID.AsIdentifier(), suite.logicID)
 	// Create a driver for the sender's state
 	suite.participants[sender] = newDebugStateDriver(suite.T(), sender, suite.logicID)
 
@@ -105,8 +105,8 @@ func (suite *TestSuite) SetupTest() {
 	}
 
 	// For each known participant, take snapshot
-	for addr, snap := range suite.participants {
-		suite.snapshots[addr] = snap.Copy()
+	for id, snap := range suite.participants {
+		suite.snapshots[id] = snap.Copy()
 	}
 }
 
@@ -117,8 +117,8 @@ func (suite *TestSuite) TearDownTest() {
 	suite.X.SetLocalDriver(suite.logicSnap)
 
 	// For each known participant, restore state from snapshot
-	for addr, snap := range suite.snapshots {
-		suite.participants[addr] = snap
+	for id, snap := range suite.snapshots {
+		suite.participants[id] = snap
 	}
 }
 
@@ -146,8 +146,8 @@ func (suite *TestSuite) Invoke(
 	suite.callAndCheck(common.IxLogicInvoke, callsite, input, output, failure, opts...)
 }
 
-func (suite *TestSuite) CheckEphemeralStorage(addr identifiers.Address, key []byte, val any) {
-	party, ok := suite.participants[addr]
+func (suite *TestSuite) CheckEphemeralStorage(id identifiers.Identifier, key []byte, val any) {
+	party, ok := suite.participants[id]
 	require.True(suite.T(), ok, "participant not found for address")
 
 	suite.checkStorage(party, key, val)
@@ -172,26 +172,26 @@ func (suite *TestSuite) DocGen(values map[string]any) polo.Document {
 	return doc
 }
 
-func UseSender(addr identifiers.Address) TestSuiteOption {
+func UseSender(id identifiers.Identifier) TestSuiteOption {
 	return func(suite *TestSuite) error {
 		// If the address is already the current default sender, skip and return
-		if addr == suite.defaultSender {
+		if id == suite.defaultSender {
 			return nil
 		}
 
 		// Check if the address already has an active state driver
-		if _, ok := suite.participants[addr]; !ok {
+		if _, ok := suite.participants[id]; !ok {
 			// Create a new state driver
-			driver := newDebugStateDriver(suite.T(), addr, suite.logicID)
+			driver := newDebugStateDriver(suite.T(), id, suite.logicID)
 			// Attach it to the active and snapped states
-			suite.participants[addr] = driver
-			suite.snapshots[addr] = driver
+			suite.participants[id] = driver
+			suite.snapshots[id] = driver
 		}
 
 		// Capture the original sender address
 		original := suite.defaultSender
 		// Replace the default sender with the given address
-		suite.defaultSender = addr
+		suite.defaultSender = id
 
 		// Set up a cleaner that returns the sender address to the original
 		suite.cleaners = append(suite.cleaners, func(dirty *TestSuite) {
@@ -256,6 +256,7 @@ func (suite *TestSuite) check(result CallResult, expectedOut polo.Document, expe
 		require.NotNilf(suite.T(), expectedErr, "unexpected error: %v", expectedErr)
 
 		decoded := new(pisa.ErrorResult)
+
 		require.NoError(suite.T(), polo.Depolorize(decoded, result.Error()))
 		require.Equal(suite.T(), expectedErr.String(), decoded.String())
 	}

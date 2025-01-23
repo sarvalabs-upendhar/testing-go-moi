@@ -8,12 +8,12 @@ import (
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 )
 
-// tesseractByAccountFilter is a filter to log the updates of tesseract based on address
+// tesseractByAccountFilter is a filter to log the updates of tesseract based on id
 type tesseractByAccountFilter struct {
 	filterBase
 	sync.Mutex
 
-	address       identifiers.Address
+	identifier    identifiers.Identifier
 	rpcTesseracts []*args.RPCTesseract
 }
 
@@ -45,7 +45,7 @@ func (f *tesseractByAccountFilter) getUpdates() (interface{}, error) {
 	return rpcTesseracts, nil
 }
 
-// sendUpdate writes the new tesseracts to web socket stream, if the filter ID and tesseract address matches
+// sendUpdate writes the new tesseracts to web socket stream, if the filter ID and tesseract id matches
 func (f *tesseractByAccountFilter) sendUpdates() error {
 	rpcTesseracts := f.takeTesseractUpdates()
 

@@ -104,7 +104,7 @@ func getPrivKeysForTest(seed []byte) ([]byte, []byte, error) {
 	}
 	// Now tempKey points to extended private key at path: m/44'/6174'
 
-	// Deriving MOI Id at m/44'/6174'/0'/0/0
+	// Deriving MOI ID at m/44'/6174'/0'/0/0
 	moiIDPrivKey := tempKey
 
 	moiIDPath := new([3]uint32)

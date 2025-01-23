@@ -11,7 +11,7 @@ import (
 )
 
 func TestUnmarshalJSON(t *testing.T) {
-	addr1 := tests.RandomAddress(t)
+	addr1 := tests.RandomIdentifier(t)
 	hashes := tests.GetHashes(t, 3)
 
 	testcases := []struct {
@@ -24,15 +24,15 @@ func TestUnmarshalJSON(t *testing.T) {
 			name:          "Empty query",
 			args:          `{}`,
 			response:      nil,
-			expectedError: common.ErrInvalidAddress,
+			expectedError: common.ErrInvalidIdentifier,
 		},
 		{
-			name: "Filter query with address",
+			name: "Filter query with account id",
 			args: fmt.Sprintf(`{
-				"address": "%s"
+				"id": "%s"
 			}`, addr1.String()),
 			response: &LogQuery{
-				Address:     addr1,
+				ID:          addr1,
 				StartHeight: 0,
 				EndHeight:   0,
 				Topics:      nil,
@@ -40,9 +40,9 @@ func TestUnmarshalJSON(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name: "Filter query with address, heights and topics",
+			name: "Filter query with account id, heights and topics",
 			args: fmt.Sprintf(`{
-				"address": "%s",
+				"id": "%s",
 				"start_height": 1,
 				"end_height": 2,
 				"topics": [
@@ -66,7 +66,7 @@ func TestUnmarshalJSON(t *testing.T) {
 				hashes[2].String(),
 			),
 			response: &LogQuery{
-				Address:     addr1,
+				ID:          addr1,
 				StartHeight: 1,
 				EndHeight:   2,
 				Topics: [][]common.Hash{
@@ -91,7 +91,7 @@ func TestUnmarshalJSON(t *testing.T) {
 		{
 			name: "Filter query with invalid topic",
 			args: fmt.Sprintf(`{
-				"address": "%s",
+				"id": "%s",
 				"start_height": 1,
 				"end_height": 2,
 				"topics": [

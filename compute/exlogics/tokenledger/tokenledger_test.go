@@ -22,8 +22,8 @@ type TokenLedgerTestSuite struct {
 }
 
 var (
-	SeederAddress   = identifiers.NewRandomAddress()
-	ReceiverAddress = identifiers.NewRandomAddress()
+	SeederID   = identifiers.RandomParticipantIDv0().AsIdentifier()
+	ReceiverID = identifiers.RandomParticipantIDv0().AsIdentifier()
 
 	InitialSeed uint64 = 100000000
 )
@@ -34,7 +34,7 @@ func (suite *TokenLedgerTestSuite) SetupSuite() {
 	suite.Require().NoErrorf(err, "could not read manifest file")
 
 	// Initialise the test suite
-	_, err = suite.Initialise(engineio.PISA, manifest, SeederAddress)
+	_, err = suite.Initialise(engineio.PISA, manifest, SeederID)
 	suite.Require().NoErrorf(err, "could not read initialise test")
 
 	inputs := InputSeed{
@@ -50,7 +50,7 @@ func (suite *TokenLedgerTestSuite) SetupSuite() {
 	suite.Deploy("Seed", calldata, nil, nil)
 
 	// Check the balance of the seeder
-	keySeederBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(SeederAddress))
+	keySeederBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(SeederID))
 	suite.CheckPersistentStorage(keySeederBalance, InitialSeed)
 }
 
@@ -62,16 +62,16 @@ func (suite *TokenLedgerTestSuite) TestTransfer() {
 		"Transfer",
 		suite.DocGen(map[string]any{
 			"amount":   TransferAmount,
-			"receiver": ReceiverAddress,
+			"receiver": ReceiverID,
 		}),
 		nil, nil,
 	)
 
 	// Check the balance of the seeder
-	keySeederBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(SeederAddress))
+	keySeederBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(SeederID))
 	suite.CheckPersistentStorage(keySeederBalance, InitialSeed-TransferAmount)
 
 	// Check the balance of the receiver
-	keyReceiverBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(ReceiverAddress))
+	keyReceiverBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(ReceiverID))
 	suite.CheckPersistentStorage(keyReceiverBalance, TransferAmount)
 }

@@ -43,7 +43,7 @@ type KramaHashTree struct {
 }
 
 func NewKramaHashTree(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	root common.Hash,
 	db persistentDB,
 	hasher hash.Hash,
@@ -52,7 +52,7 @@ func NewKramaHashTree(
 	metrics *Metrics,
 ) (*KramaHashTree, error) {
 	kht := &KramaHashTree{
-		db: NewTreeDB(address, dataType, db, treeCache, metrics),
+		db: NewTreeDB(id, dataType, db, treeCache, metrics),
 		root: &common.RootNode{
 			MerkleRoot: common.NilHash,
 			HashTable:  make(map[string][]byte),

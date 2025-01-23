@@ -19,18 +19,18 @@ import (
 
 type IxPool interface {
 	AddLocalInteractions(ixs common.Interactions) []error
-	GetSequenceID(addr identifiers.Address, keyID uint64) (uint64, error)
-	GetIxs(addr identifiers.Address, inclQueued bool) (promoted, enqueued []*common.Interaction)
-	GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[identifiers.Address][]*common.Interaction)
+	GetSequenceID(id identifiers.Identifier, keyID uint64) (uint64, error)
+	GetIxs(id identifiers.Identifier, inclQueued bool) (promoted, enqueued []*common.Interaction)
+	GetAllIxs(inclQueued bool) (allPromoted, allEnqueued map[identifiers.Identifier][]*common.Interaction)
 	GetPendingIx(ixHash common.Hash) (*common.Interaction, bool)
-	GetAccountWaitTime(addr identifiers.Address) (*big.Int, error)
-	GetAllAccountsWaitTime() map[identifiers.Address]*big.Int
+	GetAccountWaitTime(id identifiers.Identifier) (*big.Int, error)
+	GetAllAccountsWaitTime() map[identifiers.Identifier]*big.Int
 }
 
 type ChainManager interface {
 	GetTesseract(hash common.Hash, withInteractions, withCommitInfo bool) (*common.Tesseract, error)
 	GetReceiptByIxHash(ixHash common.Hash) (*common.Receipt, error)
-	GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error)
+	GetTesseractHeightEntry(id identifiers.Identifier, height uint64) (common.Hash, error)
 	GetInteractionAndParticipantsByIxHash(ixHash common.Hash) (
 		*common.Interaction,
 		common.Hash,
@@ -46,29 +46,32 @@ type ChainManager interface {
 }
 
 type StateManager interface {
-	GetAccountKeys(addrs identifiers.Address, stateHash common.Hash) (common.AccountKeys, error)
-	GetLatestStateObject(identifiers.Address) (*state.Object, error)
-	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
-	GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*state.Object, error)
-	FetchIxStateObjects(common.Interactions, map[identifiers.Address]common.Hash) (*state.Transition, error)
+	GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) (common.AccountKeys, error)
+	GetLatestStateObject(identifiers.Identifier) (*state.Object, error)
+	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
+	GetStateObjectByHash(id identifiers.Identifier, hash common.Hash) (*state.Object, error)
+	FetchIxStateObjects(common.Interactions, map[identifiers.Identifier]common.Hash) (*state.Transition, error)
 
-	GetSequenceID(addr identifiers.Address, KeyID uint64, stateHash common.Hash) (uint64, error)
-	GetAccountState(identifiers.Address, common.Hash) (*common.Account, error)
-	GetAccountMetaInfo(identifiers.Address) (*common.AccountMetaInfo, error)
-	IsAccountRegistered(identifiers.Address) (bool, error)
-	GetContextByHash(identifiers.Address, common.Hash) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
+	GetSequenceID(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) (uint64, error)
+	GetAccountState(identifiers.Identifier, common.Hash) (*common.Account, error)
+	GetAccountMetaInfo(identifiers.Identifier) (*common.AccountMetaInfo, error)
+	IsAccountRegistered(identifiers.Identifier) (bool, error)
+	GetConsensusNodesByHash(
+		id identifiers.Identifier,
+		hash common.Hash,
+	) ([]kramaid.KramaID, error)
 
 	GetAssetInfo(identifiers.AssetID, common.Hash) (*common.AssetDescriptor, error)
-	GetBalances(identifiers.Address, common.Hash) (common.AssetMap, error)
-	GetBalance(identifiers.Address, identifiers.AssetID, common.Hash) (*big.Int, error)
-	GetDeeds(identifiers.Address, common.Hash) (map[string]*common.AssetDescriptor, error)
-	GetMandates(identifiers.Address, common.Hash) ([]common.AssetMandateOrLockup, error)
-	GetLockups(identifiers.Address, common.Hash) ([]common.AssetMandateOrLockup, error)
+	GetBalances(identifiers.Identifier, common.Hash) (common.AssetMap, error)
+	GetBalance(identifiers.Identifier, identifiers.AssetID, common.Hash) (*big.Int, error)
+	GetDeeds(identifiers.Identifier, common.Hash) (map[identifiers.Identifier]*common.AssetDescriptor, error)
+	GetMandates(identifiers.Identifier, common.Hash) ([]common.AssetMandateOrLockup, error)
+	GetLockups(identifiers.Identifier, common.Hash) ([]common.AssetMandateOrLockup, error)
 
-	GetLogicIDs(identifiers.Address, common.Hash) ([]identifiers.LogicID, error)
+	GetLogicIDs(identifiers.Identifier, common.Hash) ([]identifiers.LogicID, error)
 	GetLogicManifest(identifiers.LogicID, common.Hash) ([]byte, error)
 	GetPersistentStorageEntry(identifiers.LogicID, []byte, common.Hash) ([]byte, error)
-	GetEphemeralStorageEntry(identifiers.Address, identifiers.LogicID, []byte, common.Hash) ([]byte, error)
+	GetEphemeralStorageEntry(identifiers.Identifier, identifiers.LogicID, []byte, common.Hash) ([]byte, error)
 }
 
 type ExecutionManager interface {
@@ -80,9 +83,9 @@ type ExecutionManager interface {
 }
 
 type Syncer interface {
-	GetAccountSyncStatus(addr identifiers.Address) (*args.AccSyncStatus, error)
+	GetAccountSyncStatus(id identifiers.Identifier) (*args.AccSyncStatus, error)
 	GetNodeSyncStatus(includePendingAccounts bool) *args.NodeSyncStatus
-	GetSyncJobInfo(addr identifiers.Address) (*args.SyncJobInfo, error)
+	GetSyncJobInfo(id identifiers.Identifier) (*args.SyncJobInfo, error)
 }
 
 type Network interface {
@@ -98,7 +101,7 @@ type Network interface {
 
 type DB interface {
 	ReadEntry(key []byte) ([]byte, error)
-	GetRegisteredAccounts() ([]identifiers.Address, error)
+	GetRegisteredAccounts() ([]identifiers.Identifier, error)
 	GetEntriesWithPrefix(ctx context.Context, prefix []byte) (chan *common.DBEntry, error)
 }
 

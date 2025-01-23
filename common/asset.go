@@ -20,19 +20,19 @@ func (assets AssetMap) Copy() AssetMap {
 }
 
 type AssetDescriptor struct {
-	Symbol   string              `json:"symbol"`
-	Operator identifiers.Address `json:"operator"`
-	Supply   *big.Int            `json:"supply"`
+	Symbol   string                 `json:"symbol"`
+	Operator identifiers.Identifier `json:"operator"`
+	Supply   *big.Int               `json:"supply"`
 
 	Dimension  uint8         `json:"dimension"`
 	Standard   AssetStandard `json:"standard"`
 	IsLogical  bool          `json:"is_logical"`
 	IsStateFul bool          `json:"is_stateful"`
 
-	LogicID identifiers.LogicID `json:"logic_id"`
+	LogicID identifiers.Identifier `json:"logic_id"`
 }
 
-func NewAssetDescriptor(operator identifiers.Address, asset AssetCreatePayload) *AssetDescriptor {
+func NewAssetDescriptor(operator identifiers.Identifier, asset AssetCreatePayload) *AssetDescriptor {
 	return &AssetDescriptor{
 		Operator:   operator,
 		Symbol:     asset.Symbol,
@@ -59,6 +59,24 @@ func (ad *AssetDescriptor) FromBytes(data []byte) error {
 	}
 
 	return nil
+}
+
+func (ad *AssetDescriptor) Flags() []identifiers.Flag {
+	flags := make([]identifiers.Flag, 0)
+
+	if ad.Symbol == KMOITokenSymbol {
+		flags = append(flags, identifiers.Systemic)
+	}
+
+	if ad.IsLogical {
+		flags = append(flags, identifiers.AssetLogical)
+	}
+
+	if ad.IsStateFul {
+		flags = append(flags, identifiers.AssetStateful)
+	}
+
+	return flags
 }
 
 type AssetDimension byte
@@ -101,6 +119,6 @@ const (
 
 type AssetMandateOrLockup struct {
 	AssetID identifiers.AssetID
-	Address identifiers.Address
+	ID      identifiers.Identifier
 	Amount  *big.Int
 }

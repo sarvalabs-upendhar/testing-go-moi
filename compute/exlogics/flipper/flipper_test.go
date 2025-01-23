@@ -21,7 +21,7 @@ type FlipperTestSuite struct {
 	engineio.TestSuite
 }
 
-var SeederAddress = identifiers.NewRandomAddress()
+var SeederID = identifiers.RandomParticipantIDv0().AsIdentifier()
 
 func (suite *FlipperTestSuite) SetupSuite() {
 	// Read manifest file
@@ -29,7 +29,7 @@ func (suite *FlipperTestSuite) SetupSuite() {
 	suite.Require().NoErrorf(err, "could not read manifest file")
 
 	// Initialise the test suite
-	_, err = suite.Initialise(engineio.PISA, manifest, SeederAddress)
+	_, err = suite.Initialise(engineio.PISA, manifest, SeederID)
 	suite.Require().NoErrorf(err, "could not read initialise test")
 
 	// Serialize the input args into calldata

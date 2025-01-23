@@ -42,14 +42,8 @@ func parsePreDeployFlags(cmd *cobra.Command) {
 		"Path to logic artifact.json file.",
 	)
 	cmd.Flags().StringSliceVar(
-		&behaviourNodes,
-		"behaviour-nodes",
-		[]string{},
-		"List of krama ids. Format: <kramaID1,kramaID2,...>",
-	)
-	cmd.Flags().StringSliceVar(
-		&randomNodes,
-		"random-nodes",
+		&consensusNodes,
+		"consensus-nodes",
 		[]string{},
 		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
@@ -62,21 +56,19 @@ func addGenesisLogic(artifact *cmdcommon.Artifact) {
 		cmdcommon.Err(err)
 	}
 
-	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
-		behaviourNodes, randomNodes = getContextNodes(
+	if len(consensusNodes) == 0 {
+		consensusNodes = getContextNodes(
 			instancesFilePath,
-			common.BehaviouralContextSize,
-			cmdcommon.DefaultRandomCount,
+			common.ConsensusNodesSize,
 		)
 	}
 
 	genesis.AddLogic(common.LogicSetupArgs{
-		Name:               artifact.Name,
-		Callsite:           artifact.Callsite,
-		Calldata:           artifact.Calldata,
-		Manifest:           artifact.Manifest,
-		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
-		RandomContext:      utils.KramaIDFromString(randomNodes),
+		Name:           artifact.Name,
+		Callsite:       artifact.Callsite,
+		Calldata:       artifact.Calldata,
+		Manifest:       artifact.Manifest,
+		ConsensusNodes: utils.KramaIDFromString(consensusNodes),
 	})
 
 	if err = cmdcommon.WriteToGenesisFile(genesisFilePath, genesis); err != nil {

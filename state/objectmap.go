@@ -2,12 +2,12 @@ package state
 
 import "github.com/sarvalabs/go-moi-identifiers"
 
-type ObjectMap map[identifiers.Address]*Object
+type ObjectMap map[identifiers.Identifier]*Object
 
-func (objects ObjectMap) GetObject(addr identifiers.Address) *Object {
-	return objects[addr]
+func (objects ObjectMap) GetObject(id identifiers.Identifier) *Object {
+	return objects[id]
 }
 
-func (objects ObjectMap) SetObject(addr identifiers.Address, object *Object) {
-	objects[addr] = object
+func (objects ObjectMap) SetObject(id identifiers.Identifier, object *Object) {
+	objects[id] = object
 }

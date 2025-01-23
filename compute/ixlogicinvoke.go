@@ -30,7 +30,7 @@ func RunLogicInvoke(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the invoker and logic account state objects
-	invoker := objects.GetObject(op.SenderAddr())
+	invoker := objects.GetObject(op.SenderID())
 	logicacc := objects.GetObject(op.Target())
 
 	// Create an options chain
@@ -194,16 +194,12 @@ func (manager *Manager) ValidateLogicInvoke(
 	// Fetch logic ID
 	logicID := op.LogicID()
 
-	identifier, err := logicID.Identifier()
-	if err != nil {
-		return errors.Wrap(err, "invalid logic id")
-	}
-
+	// TODO:Fix this
 	// Check if the logic has an ephemeral state
-	if ok := identifier.HasEphemeralState(); ok {
+	if ok := logicID.Flag(identifiers.LogicIntrinsic); ok {
 		// Check if the call has a storage tree for the logic
 		// This means the account has enlisted (as required)
-		ok, err = callerAcc.HasStorageTree(logicID)
+		ok, err := callerAcc.HasStorageTree(logicID)
 		if err != nil {
 			return err
 		}

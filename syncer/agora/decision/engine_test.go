@@ -15,7 +15,7 @@ import (
 )
 
 func TestHandleRequest_StateNotAvailable(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 
 	engine, _, _, _ := NewTest(
@@ -50,7 +50,7 @@ func TestHandleRequest_StateNotAvailable(t *testing.T) {
 }
 
 func TestHandleRequest_RequestFromSamePeer(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 
 	engine, _, _, _ := NewTest(
@@ -100,7 +100,7 @@ func TestHandleRequest_RequestFromSamePeer(t *testing.T) {
 }
 
 func TestHandleRequest_RequestQueueIsFull(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 
 	engine, _, _, _ := NewTest(
@@ -143,7 +143,7 @@ func TestHandleRequest_RequestQueueIsFull(t *testing.T) {
 }
 
 func TestHandleRequest_AssociatedPeers(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	kramaIds := tests.RandomKramaIDs(t, 1)
 
@@ -195,7 +195,7 @@ func TestHandleRequest_AssociatedPeers(t *testing.T) {
 }
 
 func TestHandleRequest_ValidRequestAddedToQueue(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	kramaIds := tests.RandomKramaIDs(t, 1)
 
@@ -245,7 +245,7 @@ func TestHandleRequest_ValidRequestAddedToQueue(t *testing.T) {
 }
 
 func TestEngine_TimeOutRequest(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	kramaIds := tests.RandomKramaIDs(t, 1)
 
@@ -299,7 +299,7 @@ func TestEngine_TimeOutRequest(t *testing.T) {
 }
 
 func TestEngine_RequestWithEmptyWantList(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	stateData := []byte("MOI-State")
 

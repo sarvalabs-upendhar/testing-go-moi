@@ -6,7 +6,7 @@ import (
 
 type Qc struct {
 	Type          ConsensusMsgType
-	Address       identifiers.Address
+	ID            identifiers.Identifier
 	LockType      LockType
 	View          uint64
 	TSHash        Hash

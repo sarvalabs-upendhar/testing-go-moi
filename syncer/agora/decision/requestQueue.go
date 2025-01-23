@@ -13,14 +13,14 @@ import (
 
 type Request struct {
 	PeerID    kramaid.KramaID
-	SessionID identifiers.Address
+	SessionID identifiers.Identifier
 	StateHash cid.CID
 	WantList  []cid.CID
 	ReqTime   time.Time
 }
 
 func NewRequest(peerID kramaid.KramaID,
-	sessionID identifiers.Address,
+	sessionID identifiers.Identifier,
 	stateHash cid.CID,
 	wantList []cid.CID,
 	reqTime time.Time,

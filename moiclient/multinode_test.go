@@ -37,7 +37,7 @@ type TestMultiNode struct {
 
 const filterTimeout = 5 * time.Second
 
-var setupSuiteAssetAddr, setupSuiteSenderAddr identifiers.Address
+var setupSuiteAssetID, setupSuiteSenderID identifiers.Identifier
 
 func (tm *TestMultiNode) runCriticallyNecessaryTearDown() {
 	err := tm.bgClient.DestroyNetwork(context.Background(), true)
@@ -101,8 +101,8 @@ func (tm *TestMultiNode) SetupSuite() {
 
 	// a tesseract is generated to provide data for tesseract related api
 	// fire and finalize ixn and store ix hash
-	tm.ixHash, setupSuiteAssetAddr = createAsset(tm.T(), tm.moiClient, tm.accounts[0].Addr, tm.accounts[0])
-	setupSuiteSenderAddr = tm.accounts[0].Addr
+	tm.ixHash, setupSuiteAssetID = createAsset(tm.T(), tm.moiClient, tm.accounts[0].ID, tm.accounts[0])
+	setupSuiteSenderID = tm.accounts[0].ID
 
 	tm.suiteSetupDone = true
 }
@@ -245,7 +245,7 @@ func (tm *TestMultiNode) TestInteractionByHash() {
 			}
 
 			require.NoError(tm.T(), err)
-			require.Equal(tm.T(), tm.accounts[0].Addr, rpcIxn.Sender.Address)
+			require.Equal(tm.T(), tm.accounts[0].ID, rpcIxn.Sender.ID)
 		})
 	}
 }
@@ -262,7 +262,7 @@ func (tm *TestMultiNode) TestInteractionByTesseract() {
 		{
 			name: "fetch interaction for existing tesseract hash",
 			ixArgs: &rpcargs.InteractionByTesseract{
-				Address: tm.accounts[0].Addr,
+				ID: tm.accounts[0].ID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -292,7 +292,7 @@ func (tm *TestMultiNode) TestInteractionByTesseract() {
 			}
 
 			require.NoError(tm.T(), err)
-			require.Equal(tm.T(), tm.accounts[0].Addr, rpcIxn.Sender.Address)
+			require.Equal(tm.T(), tm.accounts[0].ID, rpcIxn.Sender.ID)
 		})
 	}
 }
@@ -346,13 +346,13 @@ func (tm *TestMultiNode) TestGetLogs() {
 			filterQueryArgs: &rpcargs.FilterQueryArgs{
 				StartHeight: NumPointer(0),
 				EndHeight:   NumPointer(1),
-				Address:     tm.accounts[0].Addr,
+				ID:          tm.accounts[0].ID,
 			},
 		},
 		{
 			name: "failed to get logs",
 			filterQueryArgs: &rpcargs.FilterQueryArgs{
-				Address: tests.RandomAddress(tm.T()),
+				ID: tests.RandomIdentifier(tm.T()),
 			},
 			expectedError: common.ErrAccountNotFound,
 		},
@@ -380,17 +380,17 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 		acc1             = tm.accounts[1]
 		acc2             = tm.accounts[2]
 		expectedIXHashes = make([]common.Hash, 2)
-		assetAddresses   = make([]identifiers.Address, 2)
+		assetAddresses   = make([]identifiers.Identifier, 2)
 	)
 
 	tsFilter := createTesseractFilter(tm.T(), ctx, tm.moiClient)
-	tsByAccFilter := createTesseractsByAccountFilter(tm.T(), ctx, tm.moiClient, acc2.Addr)
+	tsByAccFilter := createTesseractsByAccountFilter(tm.T(), ctx, tm.moiClient, acc2.ID)
 	ixnsFilter := createPendingIxnsFilter(tm.T(), ctx, tm.moiClient)
-	logFilter := createLogFilter(tm.T(), ctx, tm.moiClient, acc1.Addr)
+	logFilter := createLogFilter(tm.T(), ctx, tm.moiClient, acc1.ID)
 
 	// send create asset interactions
-	expectedIXHashes[0], assetAddresses[0] = createAsset(tm.T(), tm.moiClient, acc1.Addr, acc1)
-	expectedIXHashes[1], assetAddresses[1] = createAsset(tm.T(), tm.moiClient, acc2.Addr, acc2)
+	expectedIXHashes[0], assetAddresses[0] = createAsset(tm.T(), tm.moiClient, acc1.ID, acc1)
+	expectedIXHashes[1], assetAddresses[1] = createAsset(tm.T(), tm.moiClient, acc2.ID, acc2)
 
 	testcases := []struct {
 		name             string
@@ -469,9 +469,9 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 					rpcTSValues = append(rpcTSValues, *ptr)
 				}
 
-				var addresses []identifiers.Address
+				var addresses []identifiers.Identifier
 				for _, account := range tm.accounts {
-					addresses = append(addresses, account.Addr)
+					addresses = append(addresses, account.ID)
 				}
 
 				// TODO: tesseract addresses
@@ -481,22 +481,22 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 					len(rpcTSValues),
 					fmt.Sprintf("Expected length 2, but got %d. rpcTS: %+v", len(rpcTSValues), rpcTSValues),
 					fmt.Sprint(
-						"Sarga Address", common.SargaAddress,
-						"Sender Addresses", acc1.Addr, acc2.Addr,
-						"Asset Address", assetAddresses[0], assetAddresses[1],
-						"Setup Suite Sender Address", setupSuiteSenderAddr,
-						"Setup Suite Asset Address", setupSuiteAssetAddr,
+						"Sarga ID", common.SargaAccountID,
+						"Sender IDs", acc1.ID, acc2.ID,
+						"Asset ID", assetAddresses[0], assetAddresses[1],
+						"Setup Suite Sender ID", setupSuiteSenderID,
+						"Setup Suite Asset ID", setupSuiteAssetID,
 					),
 					fmt.Sprint("List of all account addresses", addresses),
 				)
 				// till here
 
 				// make sure sender and sarga tesseracts are there in generated tesseracts
-				require.True(tm.T(), rpcTS[0].HasParticipant(acc1.Addr))
-				require.True(tm.T(), rpcTS[0].HasParticipant(common.SargaAddress))
+				require.True(tm.T(), rpcTS[0].HasParticipant(acc1.ID))
+				require.True(tm.T(), rpcTS[0].HasParticipant(common.SargaAccountID))
 				require.True(tm.T(), rpcTS[0].HasParticipant(assetAddresses[0]))
-				require.True(tm.T(), rpcTS[1].HasParticipant(acc2.Addr))
-				require.True(tm.T(), rpcTS[1].HasParticipant(common.SargaAddress))
+				require.True(tm.T(), rpcTS[1].HasParticipant(acc2.ID))
+				require.True(tm.T(), rpcTS[1].HasParticipant(common.SargaAccountID))
 				require.True(tm.T(), rpcTS[1].HasParticipant(assetAddresses[1]))
 
 			case rpcargs.NewTesseractsByAccount:
@@ -510,8 +510,8 @@ func (tm *TestMultiNode) TestGetFilterChanges() {
 				)
 
 				require.Equal(tm.T(), 1, len(rpcTS))
-				require.True(tm.T(), rpcTS[0].HasParticipant(acc2.Addr))
-				require.True(tm.T(), rpcTS[0].HasParticipant(common.SargaAddress))
+				require.True(tm.T(), rpcTS[0].HasParticipant(acc2.ID))
+				require.True(tm.T(), rpcTS[0].HasParticipant(common.SargaAccountID))
 
 			case rpcargs.PendingIxns:
 				ixHashes := getIxHashesUntilTimeout(

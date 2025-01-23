@@ -26,28 +26,28 @@ func NewPublicIXPoolAPI(ixpool backend.IxPool) *PublicIXPoolAPI {
 // Content returns the interactions present in the IxPool.
 func (p *PublicIXPoolAPI) Content() (*rpcargs.ContentResponse, error) {
 	content := &rpcargs.ContentResponse{
-		Pending: make(map[identifiers.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse),
-		Queued:  make(map[identifiers.Address]map[hexutil.Uint64]*rpcargs.InteractionResponse),
+		Pending: make(map[identifiers.Identifier]map[hexutil.Uint64]*rpcargs.InteractionResponse),
+		Queued:  make(map[identifiers.Identifier]map[hexutil.Uint64]*rpcargs.InteractionResponse),
 	}
 	pendingIxs, queuedIxs := p.ixpool.GetAllIxs(true)
 
 	// update pending ixs
-	for addr, ixs := range pendingIxs {
-		content.Pending[addr] = make(map[hexutil.Uint64]*rpcargs.InteractionResponse, len(ixs))
+	for id, ixs := range pendingIxs {
+		content.Pending[id] = make(map[hexutil.Uint64]*rpcargs.InteractionResponse, len(ixs))
 
 		for _, ix := range ixs {
 			ixArg := rpcargs.NewInteractionResponse(ix)
-			content.Pending[addr][hexutil.Uint64(ix.SequenceID())] = ixArg
+			content.Pending[id][hexutil.Uint64(ix.SequenceID())] = ixArg
 		}
 	}
 
 	// update queued ixs
-	for addr, ixs := range queuedIxs {
-		content.Queued[addr] = make(map[hexutil.Uint64]*rpcargs.InteractionResponse, len(ixs))
+	for id, ixs := range queuedIxs {
+		content.Queued[id] = make(map[hexutil.Uint64]*rpcargs.InteractionResponse, len(ixs))
 
 		for _, ix := range ixs {
 			ixArg := rpcargs.NewInteractionResponse(ix)
-			content.Queued[addr][hexutil.Uint64(ix.SequenceID())] = ixArg
+			content.Queued[id][hexutil.Uint64(ix.SequenceID())] = ixArg
 		}
 	}
 
@@ -56,15 +56,15 @@ func (p *PublicIXPoolAPI) Content() (*rpcargs.ContentResponse, error) {
 
 // ContentFrom returns the interactions present in the IxPool based on the given address.
 func (p *PublicIXPoolAPI) ContentFrom(args *rpcargs.IxPoolArgs) (*rpcargs.ContentFromResponse, error) {
-	if args.Address.IsNil() {
-		return nil, common.ErrInvalidAddress
+	if args.ID.IsNil() {
+		return nil, common.ErrInvalidIdentifier
 	}
 
 	content := &rpcargs.ContentFromResponse{
 		Pending: make(map[hexutil.Uint64]*rpcargs.InteractionResponse),
 		Queued:  make(map[hexutil.Uint64]*rpcargs.InteractionResponse),
 	}
-	pendingIxs, queuedIxs := p.ixpool.GetIxs(args.Address, true)
+	pendingIxs, queuedIxs := p.ixpool.GetIxs(args.ID, true)
 
 	// update pending ixs
 	for _, ix := range pendingIxs {
@@ -126,26 +126,26 @@ func (p *PublicIXPoolAPI) Inspect() (*rpcargs.InspectResponse, error) {
 	}
 
 	// update pending ixs
-	for addr, ixs := range pendingIxs {
-		content.Pending[addr.Hex()] = make(map[string]string, len(ixs))
+	for id, ixs := range pendingIxs {
+		content.Pending[id.Hex()] = make(map[string]string, len(ixs))
 
 		for _, ix := range ixs {
-			content.Pending[addr.Hex()][fmt.Sprintf("%d", ix.SequenceID())] = format(ix)
+			content.Pending[id.Hex()][fmt.Sprintf("%d", ix.SequenceID())] = format(ix)
 		}
 	}
 
 	// update queued ixs
-	for addr, ixs := range queuedIxs {
-		content.Queued[addr.Hex()] = make(map[string]string, len(ixs))
+	for id, ixs := range queuedIxs {
+		content.Queued[id.Hex()] = make(map[string]string, len(ixs))
 
 		for _, ix := range ixs {
-			content.Queued[addr.Hex()][fmt.Sprintf("%d", ix.SequenceID())] = format(ix)
+			content.Queued[id.Hex()][fmt.Sprintf("%d", ix.SequenceID())] = format(ix)
 		}
 	}
 
 	// update wait time
-	for addr, waitTime := range accountWaitTimes {
-		content.WaitTime[addr.Hex()] = createWaitTime(waitTime)
+	for id, waitTime := range accountWaitTimes {
+		content.WaitTime[id.Hex()] = createWaitTime(waitTime)
 	}
 
 	return content, nil
@@ -153,11 +153,11 @@ func (p *PublicIXPoolAPI) Inspect() (*rpcargs.InspectResponse, error) {
 
 // WaitTime returns the wait time for an account in IxPool, based on the queried address.
 func (p *PublicIXPoolAPI) WaitTime(args *rpcargs.IxPoolArgs) (*rpcargs.WaitTimeResponse, error) {
-	if args.Address.IsNil() {
-		return nil, common.ErrInvalidAddress
+	if args.ID.IsNil() {
+		return nil, common.ErrInvalidIdentifier
 	}
 
-	waitTime, err := p.ixpool.GetAccountWaitTime(args.Address)
+	waitTime, err := p.ixpool.GetAccountWaitTime(args.ID)
 	if err != nil {
 		return nil, err
 	}

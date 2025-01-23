@@ -13,19 +13,24 @@ type StorageDriver struct {
 	env string
 	src db.Database
 
-	addr  identifiers.Address
+	id    identifiers.Identifier
 	logic identifiers.LogicID
 }
 
-func NewStorageDriver(env string, src db.Database, addr identifiers.Address, logic identifiers.LogicID) *StorageDriver {
-	return &StorageDriver{env: env, src: src, addr: addr, logic: logic}
+func NewStorageDriver(
+	env string,
+	src db.Database,
+	id identifiers.Identifier,
+	logic identifiers.LogicID,
+) *StorageDriver {
+	return &StorageDriver{env: env, src: src, id: id, logic: logic}
 }
 
-func (ctx StorageDriver) Address() identifiers.Address { return ctx.addr }
-func (ctx StorageDriver) LogicID() identifiers.LogicID { return ctx.logic }
+func (ctx StorageDriver) Identifier() identifiers.Identifier { return ctx.id }
+func (ctx StorageDriver) LogicID() identifiers.LogicID       { return ctx.logic }
 
 func (ctx StorageDriver) GetStorageEntry(key []byte) ([]byte, error) {
-	key = db.StorageKey(ctx.env, ctx.addr, ctx.logic, key)
+	key = db.StorageKey(ctx.env, ctx.id, ctx.logic, key)
 
 	val, err := ctx.src.Get(key)
 	if err != nil {
@@ -36,7 +41,7 @@ func (ctx StorageDriver) GetStorageEntry(key []byte) ([]byte, error) {
 }
 
 func (ctx StorageDriver) SetStorageEntry(key, val []byte) error {
-	key = db.StorageKey(ctx.env, ctx.addr, ctx.logic, key)
+	key = db.StorageKey(ctx.env, ctx.id, ctx.logic, key)
 
 	if err := ctx.src.Set(key, val); err != nil {
 		return err

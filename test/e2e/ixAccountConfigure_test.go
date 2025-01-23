@@ -15,21 +15,21 @@ import (
 )
 
 func (te *TestEnvironment) configureAccount(
-	senderAddr identifiers.Address,
+	senderID identifiers.Identifier,
 	senderKeyID uint64,
 	accountConfigurePayload *common.AccountConfigurePayload,
 	accKeys []moiclient.AccountKeyWithMnemonic,
 ) (common.Hash, error) {
-	te.logger.Debug("configure account ", "sender", senderAddr)
+	te.logger.Debug("configure account ", "sender", senderID)
 
 	payload, err := accountConfigurePayload.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    senderAddr,
+			ID:         senderID,
 			KeyID:      senderKeyID,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, senderAddr, senderKeyID),
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, senderID, senderKeyID),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -41,7 +41,7 @@ func (te *TestEnvironment) configureAccount(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  senderAddr,
+				ID:       senderID,
 				LockType: common.MutateLock,
 			},
 		},
@@ -53,29 +53,29 @@ func (te *TestEnvironment) configureAccount(
 }
 
 func (te *TestEnvironment) TestIXAccountConfigure() {
-	newAcc := tests.RandomAddress(te.T())
+	newAcc := tests.RandomIdentifier(te.T())
 	acc := te.chooseRandomAccount()
 
 	keysWithMnemonic, err := cmdCommon.GetAccountsWithMnemonic(4)
 	require.NoError(te.T(), err)
 
 	createParticipant(te, acc, &common.ParticipantCreatePayload{
-		Address: newAcc,
+		ID: newAcc,
 		KeysPayload: []common.KeyAddPayload{
 			{
-				PublicKey: keysWithMnemonic[0].Addr.Bytes(),
+				PublicKey: keysWithMnemonic[0].PublicKey,
 				Weight:    1000,
 			},
 			{
-				PublicKey: keysWithMnemonic[1].Addr.Bytes(),
+				PublicKey: keysWithMnemonic[1].PublicKey,
 				Weight:    400,
 			},
 			{
-				PublicKey: keysWithMnemonic[2].Addr.Bytes(),
+				PublicKey: keysWithMnemonic[2].PublicKey,
 				Weight:    400,
 			},
 			{
-				PublicKey: keysWithMnemonic[3].Addr.Bytes(),
+				PublicKey: keysWithMnemonic[3].PublicKey,
 				Weight:    1001,
 			},
 		},
@@ -91,7 +91,7 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 			},
 		}, []moiclient.AccountKeyWithMnemonic{
 			{
-				Addr:     newAcc,
+				ID:       newAcc,
 				KeyID:    0,
 				Mnemonic: keysWithMnemonic[0].Mnemonic,
 			},
@@ -101,32 +101,32 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 
 	testcases := []struct {
 		name                    string
-		senderAddr              identifiers.Address
+		senderID                identifiers.Identifier
 		senderKeyID             uint64
 		accountConfigurePayload *common.AccountConfigurePayload
 		signers                 []moiclient.AccountKeyWithMnemonic
-		notaryAccounts          []identifiers.Address
+		notaryAccounts          []identifiers.Identifier
 		expectedError           error
 	}{
 		{
 			name:        "add account keys",
-			senderAddr:  newAcc,
+			senderID:    newAcc,
 			senderKeyID: 0,
 			accountConfigurePayload: &common.AccountConfigurePayload{
 				Add: []common.KeyAddPayload{
 					{
-						PublicKey: tests.RandomAddress(te.T()).Bytes(),
+						PublicKey: tests.RandomIdentifier(te.T()).Bytes(),
 						Weight:    500,
 					},
 					{
-						PublicKey: tests.RandomAddress(te.T()).Bytes(),
+						PublicKey: tests.RandomIdentifier(te.T()).Bytes(),
 						Weight:    500,
 					},
 				},
 			},
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    0,
 					Mnemonic: keysWithMnemonic[0].Mnemonic,
 				},
@@ -134,7 +134,7 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 		},
 		{
 			name:        "revoke account keys",
-			senderAddr:  newAcc,
+			senderID:    newAcc,
 			senderKeyID: 0,
 			accountConfigurePayload: &common.AccountConfigurePayload{
 				Revoke: []common.KeyRevokePayload{
@@ -148,7 +148,7 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 			},
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    0,
 					Mnemonic: keysWithMnemonic[0].Mnemonic,
 				},
@@ -156,19 +156,19 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 		},
 		{
 			name:        "ixn from revoked sender key failed",
-			senderAddr:  newAcc,
+			senderID:    newAcc,
 			senderKeyID: 3,
 			accountConfigurePayload: &common.AccountConfigurePayload{
 				Add: []common.KeyAddPayload{
 					{
-						PublicKey: tests.RandomAddress(te.T()).Bytes(),
+						PublicKey: tests.RandomIdentifier(te.T()).Bytes(),
 						Weight:    500,
 					},
 				},
 			},
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
-					Addr:     newAcc,
+					ID:       newAcc,
 					KeyID:    3,
 					Mnemonic: keysWithMnemonic[3].Mnemonic,
 				},
@@ -180,7 +180,7 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 	for _, test := range testcases {
 		te.Run(test.name, func() {
 			prevAccKeys, err := te.moiClient.AccountKeys(context.Background(), &args.GetAccountKeysArgs{
-				Address: test.senderAddr,
+				ID: test.senderID,
 				Options: args.TesseractNumberOrHash{
 					TesseractNumber: &args.LatestTesseractHeight,
 				},
@@ -189,7 +189,7 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 
 			fmt.Printf("before %+v\n", prevAccKeys)
 
-			ixHash, err := te.configureAccount(test.senderAddr, test.senderKeyID,
+			ixHash, err := te.configureAccount(test.senderID, test.senderKeyID,
 				test.accountConfigurePayload, test.signers)
 
 			if test.expectedError != nil {
@@ -203,7 +203,7 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 			checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 			accountKeys, err := te.moiClient.AccountKeys(context.Background(), &args.GetAccountKeysArgs{
-				Address: test.senderAddr,
+				ID: test.senderID,
 				Options: args.TesseractNumberOrHash{
 					TesseractNumber: &args.LatestTesseractHeight,
 				},

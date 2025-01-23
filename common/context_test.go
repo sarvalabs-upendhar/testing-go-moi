@@ -12,12 +12,11 @@ import (
 
 func TestCopyContextDelta(t *testing.T) {
 	contextDelta := make(common.ContextDelta)
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 
-	contextDelta[address] = &common.DeltaGroup{
-		BehaviouralNodes: tests.RandomKramaIDs(t, 2),
-		RandomNodes:      tests.RandomKramaIDs(t, 2),
-		ReplacedNodes:    tests.RandomKramaIDs(t, 2),
+	contextDelta[id] = &common.DeltaGroup{
+		ConsensusNodes: tests.RandomKramaIDs(t, 2),
+		ReplacedNodes:  tests.RandomKramaIDs(t, 2),
 	}
 
 	testcases := []struct {
@@ -30,8 +29,8 @@ func TestCopyContextDelta(t *testing.T) {
 		},
 		{
 			name: "empty nodes",
-			contextDelta: map[identifiers.Address]*common.DeltaGroup{
-				address: {},
+			contextDelta: map[identifiers.Identifier]*common.DeltaGroup{
+				id: {},
 			},
 		},
 	}
@@ -44,24 +43,17 @@ func TestCopyContextDelta(t *testing.T) {
 
 			require.Equal(t, expectedCtxDelta, ctxDelta)
 
-			if len(expectedCtxDelta[address].BehaviouralNodes) > 0 {
+			if len(expectedCtxDelta[id].ConsensusNodes) > 0 {
 				require.NotEqual(t,
-					reflect.ValueOf(test.contextDelta[address].BehaviouralNodes).Pointer(),
-					reflect.ValueOf(ctxDelta[address].BehaviouralNodes).Pointer(),
+					reflect.ValueOf(test.contextDelta[id].ConsensusNodes).Pointer(),
+					reflect.ValueOf(ctxDelta[id].ConsensusNodes).Pointer(),
 				)
 			}
 
-			if len(expectedCtxDelta[address].RandomNodes) > 0 {
+			if len(expectedCtxDelta[id].ReplacedNodes) > 0 {
 				require.NotEqual(t,
-					reflect.ValueOf(test.contextDelta[address].RandomNodes).Pointer(),
-					reflect.ValueOf(ctxDelta[address].RandomNodes).Pointer(),
-				)
-			}
-
-			if len(expectedCtxDelta[address].ReplacedNodes) > 0 {
-				require.NotEqual(t,
-					reflect.ValueOf(test.contextDelta[address].ReplacedNodes).Pointer(),
-					reflect.ValueOf(ctxDelta[address].ReplacedNodes).Pointer(),
+					reflect.ValueOf(test.contextDelta[id].ReplacedNodes).Pointer(),
+					reflect.ValueOf(ctxDelta[id].ReplacedNodes).Pointer(),
 				)
 			}
 		})

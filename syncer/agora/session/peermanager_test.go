@@ -14,7 +14,7 @@ import (
 
 func TestPeerDisconnected(t *testing.T) {
 	network := NewMockNetwork()
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 
 	peerID := tests.RandomKramaIDs(t, 1)[0]
 	pm := NewTestPeerManager(sessionID, network)
@@ -35,7 +35,7 @@ func TestPeerDisconnected(t *testing.T) {
 
 func TestUpdateFailedAttempts(t *testing.T) {
 	network := NewMockNetwork()
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 
 	peerID := tests.RandomKramaIDs(t, 2)
 	pm := NewTestPeerManager(sessionID, network)
@@ -96,7 +96,7 @@ func TestUpdateFailedAttempts(t *testing.T) {
 
 func TestUpdatePeerStatus(t *testing.T) {
 	network := NewMockNetwork()
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 
 	peerID := tests.RandomKramaIDs(t, 2)
 	pm := NewTestPeerManager(sessionID, network)
@@ -157,7 +157,7 @@ func TestUpdatePeerStatus(t *testing.T) {
 
 func TestChooseBestPeer_FromConnectedPeers(t *testing.T) {
 	network := NewMockNetwork()
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 
 	ids := tests.RandomKramaIDs(t, 2)
 	tt := []struct {

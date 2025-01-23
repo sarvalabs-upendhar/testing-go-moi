@@ -109,7 +109,7 @@ func (a *accountQueue) promote() (uint64, []*common.Interaction) {
 }
 
 // An account is the core structure for processing
-// Interactions from a specific address and key id. The nextSequenceID
+// Interactions from a specific account id and key id. The nextSequenceID
 // field is what separates the enqueued from promoted:
 //
 //  1. enqueued - Interactions higher than the nextSequenceID
@@ -176,30 +176,30 @@ func (a *account) resetWaitTimeAndCounter() {
 	a.waitTime = time.Now()
 }
 
-type Address struct {
-	addr identifiers.Address
+type ID struct {
+	id identifiers.Identifier
 }
 
-func (a *Address) Less(other llrb.Item) bool {
-	return a.addr.String() < other.(*Address).addr.String() //nolint: forcetypeassert
+func (a *ID) Less(other llrb.Item) bool {
+	return a.id.String() < other.(*ID).id.String() //nolint: forcetypeassert
 }
 
-// Each account (value) is bound to one address (key).
+// Each account (value) is bound to one id (key).
 type accountsManager struct {
-	accounts           map[identifiers.Address]*account
+	accounts           map[identifiers.Identifier]*account
 	sortedParticipants *llrb.LLRB
 }
 
 func newAccountsMap() *accountsManager {
 	return &accountsManager{
-		accounts:           make(map[identifiers.Address]*account),
+		accounts:           make(map[identifiers.Identifier]*account),
 		sortedParticipants: llrb.New(),
 	}
 }
 
 // exists checks if an account exists within the map.
-func (m *accountsManager) exists(addr identifiers.Address) bool {
-	_, ok := m.accounts[addr]
+func (m *accountsManager) exists(id identifiers.Identifier) bool {
+	_, ok := m.accounts[id]
 
 	return ok
 }
@@ -244,9 +244,9 @@ func (m *accountsManager) getCostPrimaries() *pricedQueue {
 	return priceQueue
 }
 
-// get returns the account associated with the given address.
-func (m *accountsManager) getAccount(addr identifiers.Address) *account {
-	acc, ok := m.accounts[addr]
+// get returns the account associated with the given id.
+func (m *accountsManager) getAccount(id identifiers.Identifier) *account {
+	acc, ok := m.accounts[id]
 	if !ok {
 		return nil
 	}
@@ -254,9 +254,9 @@ func (m *accountsManager) getAccount(addr identifiers.Address) *account {
 	return acc
 }
 
-// get returns the account associated with the given address.
-func (m *accountsManager) getAccountQueue(addr identifiers.Address, keyID uint64) *accountQueue {
-	acc := m.getAccount(addr)
+// get returns the account associated with the given id.
+func (m *accountsManager) getAccountQueue(id identifiers.Identifier, keyID uint64) *accountQueue {
+	acc := m.getAccount(id)
 	if acc == nil {
 		return nil
 	}
@@ -264,8 +264,8 @@ func (m *accountsManager) getAccountQueue(addr identifiers.Address, keyID uint64
 	return acc.get(keyID)
 }
 
-func (m *accountsManager) getAccountAndAccountQueue(addr identifiers.Address, keyID uint64) (*account, *accountQueue) {
-	acc := m.getAccount(addr)
+func (m *accountsManager) getAccountAndAccountQueue(id identifiers.Identifier, keyID uint64) (*account, *accountQueue) {
+	acc := m.getAccount(id)
 	if acc == nil {
 		return nil, nil
 	}
@@ -282,11 +282,11 @@ func (a *account) promoted() (total uint64) { //nolint:unused
 	return total
 }
 
-// getIxs returns the promoted and enqueued Interactions of the given address, depending on the flag.
-func (m *accountsManager) getIxs(addr identifiers.Address, includeEnqueued bool) (
+// getIxs returns the promoted and enqueued Interactions of the given id, depending on the flag.
+func (m *accountsManager) getIxs(id identifiers.Identifier, includeEnqueued bool) (
 	promoted, enqueued []*common.Interaction,
 ) {
-	account := m.getAccount(addr)
+	account := m.getAccount(id)
 
 	if account != nil {
 		for _, accQueue := range account.accountQueues {
@@ -307,20 +307,20 @@ func (m *accountsManager) getIxs(addr identifiers.Address, includeEnqueued bool)
 
 // allIxs returns all promoted and all enqueued Interactions, depending on the flag.
 func (m *accountsManager) allIxs(includeEnqueued bool) (
-	allPromoted, allEnqueued map[identifiers.Address][]*common.Interaction,
+	allPromoted, allEnqueued map[identifiers.Identifier][]*common.Interaction,
 ) {
-	allPromoted = make(map[identifiers.Address][]*common.Interaction)
-	allEnqueued = make(map[identifiers.Address][]*common.Interaction)
+	allPromoted = make(map[identifiers.Identifier][]*common.Interaction)
+	allEnqueued = make(map[identifiers.Identifier][]*common.Interaction)
 
-	for addr, acc := range m.accounts {
+	for id, acc := range m.accounts {
 		for _, accQueue := range acc.accountQueues {
 			if accQueue.promoted.length() != 0 {
-				allPromoted[addr] = accQueue.promoted.queue
+				allPromoted[id] = accQueue.promoted.queue
 			}
 
 			if includeEnqueued {
 				if accQueue.enqueued.length() != 0 {
-					allEnqueued[addr] = accQueue.enqueued.queue
+					allEnqueued[id] = accQueue.enqueued.queue
 				}
 			}
 		}
@@ -329,14 +329,14 @@ func (m *accountsManager) allIxs(includeEnqueued bool) (
 	return allPromoted, allEnqueued
 }
 
-func (m *accountsManager) addToSortedAccounts(addr identifiers.Address) {
-	m.sortedParticipants.ReplaceOrInsert(&Address{
-		addr: addr,
+func (m *accountsManager) addToSortedAccounts(id identifiers.Identifier) {
+	m.sortedParticipants.ReplaceOrInsert(&ID{
+		id: id,
 	})
 }
 
-func (m *accountsManager) deleteInSortedAccounts(addr identifiers.Address) {
-	m.sortedParticipants.Delete(&Address{addr: addr})
+func (m *accountsManager) deleteInSortedAccounts(id identifiers.Identifier) {
+	m.sortedParticipants.Delete(&ID{id: id})
 }
 
 // sequenceIDToIXMap stores sequenceID to ix key value pairs

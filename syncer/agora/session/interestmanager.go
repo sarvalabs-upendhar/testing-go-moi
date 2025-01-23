@@ -11,16 +11,16 @@ import (
 
 type InterestManager struct {
 	mutex sync.RWMutex
-	wants map[cid.CID]map[identifiers.Address]bool
+	wants map[cid.CID]map[identifiers.Identifier]bool
 }
 
 func NewInterestManager() *InterestManager {
 	return &InterestManager{
-		wants: make(map[cid.CID]map[identifiers.Address]bool),
+		wants: make(map[cid.CID]map[identifiers.Identifier]bool),
 	}
 }
 
-func (im *InterestManager) RecordSessionInterest(addr identifiers.Address, ids ...cid.CID) {
+func (im *InterestManager) RecordSessionInterest(id identifiers.Identifier, ids ...cid.CID) {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
@@ -28,14 +28,14 @@ func (im *InterestManager) RecordSessionInterest(addr identifiers.Address, ids .
 	for _, c := range ids {
 		// Record that the session wants the blocks
 		if want, ok := im.wants[c]; ok {
-			want[addr] = true
+			want[id] = true
 		} else {
-			im.wants[c] = map[identifiers.Address]bool{addr: true}
+			im.wants[c] = map[identifiers.Identifier]bool{id: true}
 		}
 	}
 }
 
-func (im *InterestManager) RemoveSessionInterest(addr identifiers.Address, ids ...cid.CID) []cid.CID {
+func (im *InterestManager) RemoveSessionInterest(id identifiers.Identifier, ids ...cid.CID) []cid.CID {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
@@ -46,7 +46,7 @@ func (im *InterestManager) RemoveSessionInterest(addr identifiers.Address, ids .
 	for _, c := range ids {
 		// If there is a list of sessions that want the key
 		if _, ok := im.wants[c]; ok {
-			deleteSession(c, im.wants, addr, &deletedKeys)
+			deleteSession(c, im.wants, id, &deletedKeys)
 		}
 	}
 
@@ -55,18 +55,18 @@ func (im *InterestManager) RemoveSessionInterest(addr identifiers.Address, ids .
 
 func (im *InterestManager) InterestedSessions(
 	blocks []block.Block,
-) (map[identifiers.Address][]block.Block, []block.Block) {
+) (map[identifiers.Identifier][]block.Block, []block.Block) {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
-	sessions := make(map[identifiers.Address][]block.Block)
+	sessions := make(map[identifiers.Identifier][]block.Block)
 	orphans := make([]block.Block, 0)
 
 	for _, blk := range blocks {
 		interestedSessions, ok := im.wants[blk.GetCid()]
 		if ok {
-			for addr := range interestedSessions {
-				sessions[addr] = append(sessions[addr], blk)
+			for id := range interestedSessions {
+				sessions[id] = append(sessions[id], blk)
 			}
 		} else {
 			orphans = append(orphans, blk)
@@ -78,12 +78,12 @@ func (im *InterestManager) InterestedSessions(
 
 func deleteSession(
 	c cid.CID,
-	wants map[cid.CID]map[identifiers.Address]bool,
-	addr identifiers.Address,
+	wants map[cid.CID]map[identifiers.Identifier]bool,
+	id identifiers.Identifier,
 	deletedKeys *[]cid.CID,
 ) {
 	// Remove the session from the list of sessions that want the key
-	delete(wants[c], addr)
+	delete(wants[c], id)
 
 	// If there are no more sessions that want the key
 	if len(wants[c]) == 0 {

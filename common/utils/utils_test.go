@@ -71,16 +71,20 @@ func TestValidateHash(t *testing.T) {
 
 // TODO: move this to types package when implementing its tests
 func TestNewAccountAddress(t *testing.T) {
+	randID := tests.RandomIdentifier(t)
 	randKeyID := rand.Uint64()
 	randSequenceID := rand.Uint64()
-	randAddress := tests.RandomAddress(t)
 
 	rawBytes := make([]byte, 48)
 	binary.BigEndian.PutUint64(rawBytes[:8], randSequenceID)
 	binary.BigEndian.PutUint64(rawBytes[8:16], randKeyID)
-	copy(rawBytes[16:], randAddress.Bytes())
+	copy(rawBytes[16:], randID.Bytes())
 
-	generatedAddress := common.NewAccountAddress(randAddress, randKeyID, randSequenceID)
+	generatedAddress := common.NewAccountID(common.Sender{
+		ID:         randID,
+		KeyID:      randKeyID,
+		SequenceID: randSequenceID,
+	})
 
-	require.Equal(t, generatedAddress.Bytes(), common.GetHash(rawBytes).Bytes())
+	require.Equal(t, generatedAddress, common.NewAccounIDFromBytes(common.GetHash(rawBytes).Bytes()))
 }

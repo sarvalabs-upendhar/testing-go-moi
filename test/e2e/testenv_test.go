@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
 
 	"github.com/hashicorp/go-hclog"
@@ -358,16 +357,16 @@ func (te *TestEnvironment) SetupSuite() {
 
 	te.logger.Debug("registering accounts on chain", te.accounts)
 
-	KMOIAssetID := identifiers.AssetID("000000004cd973c4eb83cdb8870c0de209736270491b7acc99873da1eddced5826c3b548")
-	te.logger.Debug("kmoi addr", KMOIAssetID.Address())
+	KMOIAssetID := common.KMOITokenAssetID
+	te.logger.Debug("kmoi id", KMOIAssetID.AsIdentifier())
 
 	for _, account := range te.accounts {
 		te.logger.Debug("sending Fuel token ", "KMOI ", InitialKMOITokens)
 		createParticipant(te, registeredAcc[0], &common.ParticipantCreatePayload{
-			Address: account.Addr,
+			ID: account.ID,
 			KeysPayload: []common.KeyAddPayload{
 				{
-					PublicKey:          account.Addr.Bytes(),
+					PublicKey:          account.PublicKey,
 					Weight:             1000,
 					SignatureAlgorithm: 0,
 				},

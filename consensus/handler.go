@@ -48,8 +48,8 @@ func (k *Engine) handler() {
 
 // deleteLockedTesseractInfo returns true locked ts already exist in db
 func (k *Engine) deleteLockedTesseractInfo(ts *common.Tesseract) bool {
-	for addr, state := range ts.Participants() {
-		dbState, err := k.db.GetAccountMetaInfo(addr)
+	for id, state := range ts.Participants() {
+		dbState, err := k.db.GetAccountMetaInfo(id)
 		if err == nil && dbState.Height >= state.Height {
 			k.logger.Debug("deleting locked tesseract", "cluster-id", ts.ClusterID(), "ts-hash", ts.Hash())
 
@@ -57,9 +57,9 @@ func (k *Engine) deleteLockedTesseractInfo(ts *common.Tesseract) bool {
 				k.logger.Error("failed to delete consensus proposal info", "error", err, "ts-hash", ts.Hash())
 			}
 
-			for addr := range ts.Participants() {
-				if err := k.safety.DeleteSafetyData(addr); err != nil {
-					k.logger.Error("Failed to delete safety data", "err", err, "addr", addr)
+			for id = range ts.Participants() {
+				if err := k.safety.DeleteSafetyData(id); err != nil {
+					k.logger.Error("Failed to delete safety data", "err", err, "id", id)
 				}
 			}
 

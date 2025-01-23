@@ -18,21 +18,21 @@ import (
 )
 
 type sessionInterestManager interface {
-	RecordSessionInterest(addr identifiers.Address, ids ...cid.CID)
-	RemoveSessionInterest(addr identifiers.Address, ids ...cid.CID) []cid.CID
+	RecordSessionInterest(id identifiers.Identifier, ids ...cid.CID)
+	RemoveSessionInterest(id identifiers.Identifier, ids ...cid.CID) []cid.CID
 }
 
 type sessionManager interface {
-	CloseSession(id identifiers.Address)
+	CloseSession(id identifiers.Identifier)
 }
 
 type sessionNetwork interface {
 	SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error
-	ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Address) error
+	ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Identifier) error
 }
 
 type Session struct {
-	id        identifiers.Address
+	id        identifiers.Identifier
 	ctx       context.Context
 	logger    hclog.Logger
 	stateHash cid.CID
@@ -45,7 +45,7 @@ type Session struct {
 
 func NewSession(
 	ctx context.Context,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	logger hclog.Logger,
 	stateHash cid.CID,
 	network sessionNetwork,
@@ -54,15 +54,15 @@ func NewSession(
 	sm sessionManager,
 	contextPeers []kramaid.KramaID,
 ) *Session {
-	taggedLogger := logger.With("addr", addr.Hex()).Named("Session")
+	taggedLogger := logger.With("id", id.Hex()).Named("Session")
 	s := &Session{
 		ctx:       ctx,
-		id:        addr,
+		id:        id,
 		logger:    taggedLogger,
 		stateHash: stateHash,
 		im:        im,
 		wants:     NewWantTracker(),
-		pm:        NewSessionPeerManager(addr, logger, network),
+		pm:        NewSessionPeerManager(id, logger, network),
 		notifier:  notifier,
 		sm:        sm,
 	}
@@ -72,7 +72,7 @@ func NewSession(
 	return s
 }
 
-func (s *Session) ID() identifiers.Address {
+func (s *Session) ID() identifiers.Identifier {
 	return s.id
 }
 

@@ -58,7 +58,7 @@ func (rtype ViewStepType) String() string {
 // ViewState is a struct that represent the state of a consensus view
 type ViewState struct {
 	// Represents the current view heights being worked on
-	Heights map[identifiers.Address]uint64 `json:"heights"`
+	Heights map[identifiers.Identifier]uint64 `json:"heights"`
 
 	// Represents the current view number
 	View uint64 `json:"view"`
@@ -85,10 +85,10 @@ type ViewState struct {
 	ProposalTS *common.Tesseract `json:"proposal_tesseract"`
 
 	//// Represents the last known view with proof of lock for a non-nil valid block
-	// ValidView map[identifiers.Address]uint64 `json:"valid_view"`
+	// ValidView map[identifiers.Identifier]uint64 `json:"valid_view"`
 	//
 	//// Represents the tesseract (block) for the last known view with proof of lock for a non-nil valid block
-	// ValidTS map[identifiers.Address]*common.Tesseract `json:"valid_tesseract"`
+	// ValidTS map[identifiers.Identifier]*common.Tesseract `json:"valid_tesseract"`
 
 	// Represents the last precommit at height-1
 	LastCommit *ktypes.VoteSet `json:"last_commit"`

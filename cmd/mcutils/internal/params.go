@@ -6,9 +6,7 @@ import (
 
 var (
 	premineAmount          uint64
-	accAddresses           []string
-	behaviouralNodesCount  int
-	randomNodesCount       int
+	consensusNodesCount    int
 	directoryIndex         int
 	accountCount           int
 	count                  int

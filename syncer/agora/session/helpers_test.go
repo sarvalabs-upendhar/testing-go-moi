@@ -20,13 +20,13 @@ import (
 	"github.com/sarvalabs/go-moi/syncer/cid"
 )
 
-func NewTestPeerManager(sessionID identifiers.Address, network sessionNetwork) *PeerManager {
+func NewTestPeerManager(sessionID identifiers.Identifier, network sessionNetwork) *PeerManager {
 	return NewSessionPeerManager(sessionID, hclog.NewNullLogger(), network)
 }
 
 func NewTestSession(
 	ctx context.Context,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	stateHash cid.CID,
 	contextPeers ...kramaid.KramaID,
 ) (*Session, *InterestManager, notifications.PubSubNotifier) {
@@ -35,7 +35,7 @@ func NewTestSession(
 
 	return NewSession(
 		ctx,
-		addr,
+		id,
 		hclog.NewNullLogger(),
 		stateHash,
 		NewMockNetwork(),
@@ -82,7 +82,7 @@ func GetDummyBlocks(t *testing.T, count int) (*cid.CIDSet, map[cid.CID]block.Blo
 	return set, blocks
 }
 
-func removeSession(im *InterestManager, addr identifiers.Address) []cid.CID {
+func removeSession(im *InterestManager, id identifiers.Identifier) []cid.CID {
 	im.mutex.Lock()
 	defer im.mutex.Unlock()
 
@@ -91,7 +91,7 @@ func removeSession(im *InterestManager, addr identifiers.Address) []cid.CID {
 
 	// For each known key
 	for c := range im.wants {
-		deleteSession(c, im.wants, addr, &deletedKeys)
+		deleteSession(c, im.wants, id, &deletedKeys)
 	}
 
 	return deletedKeys
@@ -100,7 +100,7 @@ func removeSession(im *InterestManager, addr identifiers.Address) []cid.CID {
 func AreSessionInterestRecorded(
 	ctx context.Context,
 	im *InterestManager,
-	sessionID identifiers.Address,
+	sessionID identifiers.Identifier,
 	keys []cid.CID,
 ) bool {
 	status, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
@@ -132,7 +132,7 @@ func AreSessionInterestRecorded(
 func AreSessionInterestRemoved(
 	ctx context.Context,
 	im *InterestManager,
-	sessionID identifiers.Address,
+	sessionID identifiers.Identifier,
 	keys []cid.CID,
 ) bool {
 	status, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
@@ -200,16 +200,16 @@ func appendBlocks(set1, set2 map[cid.CID]block.Block) []block.Block {
 }
 
 type mockSessionManager struct {
-	sessions map[identifiers.Address]interface{}
+	sessions map[identifiers.Identifier]interface{}
 }
 
 func NewMockSessionManager() *mockSessionManager {
 	return &mockSessionManager{
-		sessions: make(map[identifiers.Address]interface{}),
+		sessions: make(map[identifiers.Identifier]interface{}),
 	}
 }
 
-func (msm *mockSessionManager) CloseSession(id identifiers.Address) {
+func (msm *mockSessionManager) CloseSession(id identifiers.Identifier) {
 	delete(msm.sessions, id)
 }
 
@@ -229,7 +229,7 @@ func (mn *mockNetwork) SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.M
 	return nil
 }
 
-func (mn *mockNetwork) ClosePeerSession(id kramaid.KramaID, sessionID identifiers.Address) error {
+func (mn *mockNetwork) ClosePeerSession(id kramaid.KramaID, sessionID identifiers.Identifier) error {
 	return nil
 }
 

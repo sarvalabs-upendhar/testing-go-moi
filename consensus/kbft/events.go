@@ -7,9 +7,9 @@ import (
 )
 
 type eventDataViewState struct {
-	Height map[identifiers.Address]uint64 `json:"height"`
-	View   uint64                         `json:"view"`
-	Step   string                         `json:"step"`
+	Height map[identifiers.Identifier]uint64 `json:"height"`
+	View   uint64                            `json:"view"`
+	Step   string                            `json:"step"`
 }
 
 type eventProposal struct {

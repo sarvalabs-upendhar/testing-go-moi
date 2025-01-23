@@ -131,13 +131,13 @@ func NewOperatorSelection(
 
 // computeICSSeed calculates the ICS seed using the provided participants' information.
 // If the provided participants include any system account, the seed calculation should consider only
-// the first system account, ordered by their address.
+// the first system account, ordered by their id.
 func (os *OperatorSelection) computeICSSeed(accounts common.Participants) ([32]byte, error) {
 	var icsSeed [32]byte
 
 	knownTSHashes := make(map[common.Hash]struct{})
 
-	for addr, account := range accounts {
+	for id, account := range accounts {
 		if account.IsGenesis || account.ExcludeFromICS {
 			continue
 		}
@@ -148,7 +148,7 @@ func (os *OperatorSelection) computeICSSeed(accounts common.Participants) ([32]b
 
 		knownTSHashes[account.TesseractHash] = struct{}{}
 
-		seed, err := os.state.GetICSSeed(addr)
+		seed, err := os.state.GetICSSeed(id)
 		if err != nil {
 			return [32]byte{}, err
 		}

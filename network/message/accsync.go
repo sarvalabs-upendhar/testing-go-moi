@@ -17,7 +17,7 @@ type AccountsStatusMsg struct {
 type AccountSyncRequest struct {
 	BulkSync bool
 	Bucket   int32
-	Address  identifiers.Address
+	ID       identifiers.Identifier
 }
 
 func (asr *AccountSyncRequest) Bytes() ([]byte, error) {

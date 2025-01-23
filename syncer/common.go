@@ -11,7 +11,7 @@ import (
 )
 
 type Session interface {
-	ID() identifiers.Address
+	ID() identifiers.Identifier
 	GetBlock(ctx context.Context, cID cid.CID) (*block.Block, error)
 	GetBlocks(ctx context.Context, cids []cid.CID) chan *block.Block
 	Close()
@@ -21,7 +21,7 @@ type BlockSync interface {
 	NewSession(
 		ctx context.Context,
 		contextPeers []kramaid.KramaID,
-		address identifiers.Address,
+		id identifiers.Identifier,
 		stateHash cid.CID,
 	) (Session, error)
 	Start()

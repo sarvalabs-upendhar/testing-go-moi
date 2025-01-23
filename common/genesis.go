@@ -22,19 +22,18 @@ type GenesisFile struct {
 }
 
 type AssetAccountSetupArgs struct {
-	AssetInfo          *AssetCreationArgs `json:"asset_info"`
-	BehaviouralContext []kramaid.KramaID  `json:"behaviour_context"`
-	RandomContext      []kramaid.KramaID  `json:"random_context"`
+	AssetInfo      *AssetCreationArgs `json:"asset_info"`
+	ConsensusNodes []kramaid.KramaID  `json:"consensus_nodes"`
 }
 
 type AssetCreationArgs struct {
-	Symbol      string              `json:"symbol"`
-	Dimension   hexutil.Uint8       `json:"dimension"`
-	Standard    hexutil.Uint16      `json:"standard"`
-	IsLogical   bool                `json:"is_logical"`
-	IsStateful  bool                `json:"is_stateful"`
-	Operator    identifiers.Address `json:"operator"`
-	Allocations []Allocation        `json:"allocations"`
+	Symbol      string                 `json:"symbol"`
+	Dimension   hexutil.Uint8          `json:"dimension"`
+	Standard    hexutil.Uint16         `json:"standard"`
+	IsLogical   bool                   `json:"is_logical"`
+	IsStateful  bool                   `json:"is_stateful"`
+	Operator    identifiers.Identifier `json:"operator"`
+	Allocations []Allocation           `json:"allocations"`
 }
 
 func (ac *AssetCreationArgs) AssetDescriptor() *AssetDescriptor {
@@ -56,8 +55,8 @@ func (ac *AssetCreationArgs) AssetDescriptor() *AssetDescriptor {
 }
 
 type Allocation struct {
-	Address identifiers.Address `json:"address"`
-	Amount  *hexutil.Big        `json:"amount"`
+	ID     identifiers.Identifier `json:"id"`
+	Amount *hexutil.Big           `json:"amount"`
 }
 
 func (g *GenesisFile) AddSargaAccount(info AccountSetupArgs) {
@@ -101,8 +100,7 @@ type LogicSetupArgs struct {
 	Calldata hexutil.Bytes `json:"calldata"`
 	Manifest hexutil.Bytes `json:"manifest"`
 
-	BehaviouralContext []kramaid.KramaID `json:"behaviour_context"`
-	RandomContext      []kramaid.KramaID `json:"random_context"`
+	ConsensusNodes []kramaid.KramaID `json:"consensus_nodes"`
 }
 
 type KeyArgs struct {
@@ -112,19 +110,17 @@ type KeyArgs struct {
 }
 
 type AccountSetupArgs struct {
-	Address            identifiers.Address `json:"address"`
-	Keys               []KeyArgs           `json:"keys"`
-	AccType            AccountType         `json:"type"`
-	MoiID              string              `json:"moi-id"`
-	BehaviouralContext []kramaid.KramaID   `json:"behaviour_context"`
-	RandomContext      []kramaid.KramaID   `json:"random_context"`
+	ID             identifiers.Identifier `json:"id"`
+	Keys           []KeyArgs              `json:"keys"`
+	AccType        AccountType            `json:"type"`
+	MoiID          string                 `json:"moi-id"`
+	ConsensusNodes []kramaid.KramaID      `json:"consensus_nodes"`
 }
 
 func (as *AccountSetupArgs) ContextDelta() ContextDelta {
-	return map[identifiers.Address]*DeltaGroup{
-		as.Address: {
-			BehaviouralNodes: as.BehaviouralContext,
-			RandomNodes:      as.RandomContext,
+	return map[identifiers.Identifier]*DeltaGroup{
+		as.ID: {
+			ConsensusNodes: as.ConsensusNodes,
 		},
 	}
 }

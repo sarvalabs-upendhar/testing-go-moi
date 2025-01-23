@@ -86,7 +86,7 @@ func (im *ICSMSG) FromBytes(bytes []byte) error {
 type Prepare struct {
 	View uint64
 	Ixns []common.Hash
-	Ps   []identifiers.Address
+	Ps   []identifiers.Identifier
 }
 
 func (pm *Prepare) Bytes() ([]byte, error) {

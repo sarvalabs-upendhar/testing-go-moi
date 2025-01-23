@@ -889,7 +889,7 @@ func createSignedHelloMsg(t *testing.T) networkmsg.HelloMsg {
 
 	msg := networkmsg.HelloMsg{
 		KramaID:   vault.KramaID(),
-		Address:   []string{tests.RandomAddress(t).String()},
+		Address:   []string{tests.RandomIdentifier(t).String()},
 		Signature: nil,
 	}
 

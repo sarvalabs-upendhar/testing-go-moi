@@ -38,16 +38,17 @@ require (
 	github.com/multiformats/go-multiaddr v0.12.0
 	github.com/munna0908/smt v0.3.1-0.20221216160339-b2e832948125
 	github.com/oasisprotocol/curve25519-voi v0.0.0-20210609091139-0a56a4bca00b
+	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9
 	github.com/peterh/liner v1.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
 	github.com/sarvalabs/battleground v0.3.0
 	github.com/sarvalabs/go-legacy-kramaid v0.1.0
-	github.com/sarvalabs/go-moi-identifiers v0.1.0
-	github.com/sarvalabs/go-pisa v0.3.2
-	github.com/sarvalabs/go-polo v0.4.5
+	github.com/sarvalabs/go-moi-identifiers v0.2.2
+	github.com/sarvalabs/go-pisa v0.3.3-provisional
+	github.com/sarvalabs/go-polo v0.4.9
 	github.com/spf13/cobra v1.7.0
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	github.com/supranational/blst v0.3.12
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/ugorji/go/codec v1.2.11
@@ -157,7 +158,6 @@ require (
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pbnjay/memory v0.0.0-20210728143218-7b4eea64cf58 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
-	github.com/petar/GoLLRB v0.0.0-20210522233825-ae3b015fd3e9 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/polydawn/refmt v0.89.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect

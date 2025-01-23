@@ -5,8 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
@@ -26,7 +24,6 @@ type KramaVault struct {
 	consensusPriv PrivateKey      // Private Key used in consensus for signing etc
 	networkPriv   PrivateKey      // Private key used in p2p communication
 	kramaID       kramaid.KramaID // KramaID of the user or node
-	Address       identifiers.Address
 	mnemonic      poi.Mnemonic
 }
 

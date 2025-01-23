@@ -36,7 +36,7 @@ const (
 )
 
 type AccountKeyWithMnemonic struct {
-	Addr     identifiers.Address
+	ID       identifiers.Identifier
 	KeyID    uint64
 	Mnemonic string
 }
@@ -61,7 +61,7 @@ func getSignatures(
 		require.NoError(t, err)
 
 		signatures[i] = common.Signature{
-			Address:   key.Addr,
+			ID:        key.ID,
 			KeyID:     key.KeyID,
 			Signature: rawSign,
 		}
@@ -87,34 +87,33 @@ func CreateSendIXFromIxData(t *testing.T, ixData *common.IxData, keys []AccountK
 	}
 }
 
-func GetContextNodes(t *testing.T, client *Client, addrs []identifiers.Address) []string {
+func GetContextNodes(t *testing.T, client *Client, ids []identifiers.Identifier) []string {
 	t.Helper()
 
 	contextNodes := make([]string, 0)
 
-	for _, addr := range addrs {
+	for _, id := range ids {
 		resp, err := client.ContextInfo(context.Background(), &rpcargs.ContextInfoArgs{
-			Address: addr,
+			ID: id,
 			Options: rpcargs.TesseractNumberOrHash{
 				TesseractNumber: &rpcargs.LatestTesseractHeight,
 			},
 		})
 		require.NoError(t, err)
 
-		contextNodes = append(contextNodes, resp.BehaviourNodes...)
-		contextNodes = append(contextNodes, resp.RandomNodes...)
+		contextNodes = append(contextNodes, resp.ConsensusNodes...)
 		contextNodes = append(contextNodes, resp.StorageNodes...)
 	}
 
 	return contextNodes
 }
 
-func GetLatestSequenceID(t *testing.T, client *Client, addr identifiers.Address, keyID uint64) uint64 {
+func GetLatestSequenceID(t *testing.T, client *Client, id identifiers.Identifier, keyID uint64) uint64 {
 	t.Helper()
 
 	sequenceID, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
-		Address: addr,
-		KeyID:   keyID,
+		ID:    id,
+		KeyID: keyID,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
@@ -124,11 +123,11 @@ func GetLatestSequenceID(t *testing.T, client *Client, addr identifiers.Address,
 	return sequenceID.ToUint64()
 }
 
-func GetLatestHeight(t *testing.T, client *Client, addr identifiers.Address) uint64 {
+func GetLatestHeight(t *testing.T, client *Client, id identifiers.Identifier) uint64 {
 	t.Helper()
 
 	acc, err := client.AccountMetaInfo(context.Background(), &rpcargs.GetAccountArgs{
-		Address: addr,
+		ID: id,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
@@ -164,12 +163,12 @@ func RetryFetchReceipt(t *testing.T, ctx context.Context, client *Client, ixHash
 	}
 }
 
-// GetTesseract returns tesseract for the given senderAddr and height
-func GetTesseract(t *testing.T, client *Client, addr identifiers.Address, height int64) *rpcargs.RPCTesseract {
+// GetTesseract returns tesseract for the given id and height
+func GetTesseract(t *testing.T, client *Client, id identifiers.Identifier, height int64) *rpcargs.RPCTesseract {
 	t.Helper()
 
 	args := &rpcargs.TesseractArgs{
-		Address:          addr,
+		ID:               id,
 		WithInteractions: true,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &height,
@@ -182,11 +181,11 @@ func GetTesseract(t *testing.T, client *Client, addr identifiers.Address, height
 	return ts
 }
 
-func GetMandates(t *testing.T, client *Client, addr identifiers.Address, height int64) []rpcargs.RPCMandateOrLockup {
+func GetMandates(t *testing.T, client *Client, id identifiers.Identifier, height int64) []rpcargs.RPCMandateOrLockup {
 	t.Helper()
 
 	args := &rpcargs.GetAssetMandateOrLockupArgs{
-		Address: addr,
+		ID: id,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &height,
 		},
@@ -198,11 +197,11 @@ func GetMandates(t *testing.T, client *Client, addr identifiers.Address, height 
 	return mandates
 }
 
-func GetLockups(t *testing.T, client *Client, addr identifiers.Address, height int64) []rpcargs.RPCMandateOrLockup {
+func GetLockups(t *testing.T, client *Client, id identifiers.Identifier, height int64) []rpcargs.RPCMandateOrLockup {
 	t.Helper()
 
 	args := &rpcargs.GetAssetMandateOrLockupArgs{
-		Address: addr,
+		ID: id,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &height,
 		},
@@ -214,11 +213,11 @@ func GetLockups(t *testing.T, client *Client, addr identifiers.Address, height i
 	return lockups
 }
 
-// GetLogicID returns logicID for the given senderAddr and height
-func GetLogicID(t *testing.T, client *Client, txnID int, addr identifiers.Address, height int64) identifiers.LogicID {
+// GetLogicID returns logicID for the given id and height
+func GetLogicID(t *testing.T, client *Client, txnID int, id identifiers.Identifier, height int64) identifiers.LogicID {
 	t.Helper()
 
-	ts := GetTesseract(t, client, addr, height)
+	ts := GetTesseract(t, client, id, height)
 
 	receiptArgs := &rpcargs.ReceiptArgs{
 		Hash: ts.Ixns[0].Hash,
@@ -272,12 +271,12 @@ func GetLogicManifestByEncodingType(
 type TokenLedgerState struct {
 	Symbol   string
 	Supply   *big.Int
-	Balances map[identifiers.Address]*big.Int
+	Balances map[identifiers.Identifier]*big.Int
 }
 
 func GetTokenLedgerState(t *testing.T, moiClient *Client,
 	logicID identifiers.LogicID,
-	addresses []identifiers.Address,
+	idesses []identifiers.Identifier,
 ) TokenLedgerState {
 	t.Helper()
 
@@ -295,7 +294,7 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client,
 	}
 
 	state := TokenLedgerState{
-		Balances: make(map[identifiers.Address]*big.Int),
+		Balances: make(map[identifiers.Identifier]*big.Int),
 	}
 
 	rawSymbol := getLatestStorage([32]byte(pisa.GenerateStorageKey(0)))
@@ -306,8 +305,8 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client,
 	err = polo.Depolorize(&state.Supply, rawSupply)
 	require.NoError(t, err)
 
-	for _, addr := range addresses {
-		encoded, _ := polo.Polorize(addr)
+	for _, id := range idesses {
+		encoded, _ := polo.Polorize(id)
 		hashed := blake2b.Sum256(encoded)
 
 		k := pisa.GenerateStorageKey(2, pisa.MapKey(hashed))
@@ -317,7 +316,7 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client,
 		err = polo.Depolorize(balance, rawBalance)
 		require.NoError(t, err)
 
-		state.Balances[addr] = balance
+		state.Balances[id] = balance
 	}
 
 	return state
@@ -462,17 +461,17 @@ func CheckIfNodesInitialSyncDone(t *testing.T, validatorCount int, jsonRPCUrls [
 type StorageReader struct {
 	client  *Client
 	logicID identifiers.LogicID
-	address identifiers.Address
+	id      identifiers.Identifier
 }
 
-func (c *Client) NewStorageReader(address identifiers.Address, logicID identifiers.LogicID) StorageReader {
-	return StorageReader{client: c, logicID: logicID, address: address}
+func (c *Client) NewStorageReader(id identifiers.Identifier, logicID identifiers.LogicID) StorageReader {
+	return StorageReader{client: c, logicID: logicID, id: id}
 }
 
 func (reader StorageReader) GetStorageEntry(key []byte) ([]byte, error) {
 	content, err := reader.client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 		LogicID:    reader.logicID,
-		Address:    reader.address,
+		ID:         reader.id,
 		StorageKey: key,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,

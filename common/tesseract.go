@@ -32,7 +32,7 @@ func (s *State) Copy() State {
 	return state
 }
 
-type ParticipantsState map[identifiers.Address]State
+type ParticipantsState map[identifiers.Identifier]State
 
 func (p ParticipantsState) Copy() ParticipantsState {
 	if len(p) == 0 {
@@ -48,8 +48,8 @@ func (p ParticipantsState) Copy() ParticipantsState {
 	return participants
 }
 
-func (p ParticipantsState) IsExcluded(addr identifiers.Address) bool {
-	state, ok := p[addr]
+func (p ParticipantsState) IsExcluded(id identifiers.Identifier) bool {
+	state, ok := p[id]
 	if !ok {
 		return true
 	}
@@ -58,15 +58,15 @@ func (p ParticipantsState) IsExcluded(addr identifiers.Address) bool {
 }
 
 type PoXtData struct {
-	Proposer     kramaid.KramaID                  `json:"proposer"`
-	BinaryHash   Hash                             `json:"binary_hash"`
-	IdentityHash Hash                             `json:"identity_hash"`
-	View         uint64                           `json:"view"`
-	LastCommit   map[identifiers.Address]Hash     `json:"last_commit"`
-	EvidenceHash map[identifiers.Address]Hash     `json:"evidence_hash"`
-	AccountLocks map[identifiers.Address]LockType `json:"account_locks"`
-	ICSSeed      [32]byte                         `json:"ics_seed"`
-	ICSProof     []byte                           `json:"ics_proof"`
+	Proposer     kramaid.KramaID                     `json:"proposer"`
+	BinaryHash   Hash                                `json:"binary_hash"`
+	IdentityHash Hash                                `json:"identity_hash"`
+	View         uint64                              `json:"view"`
+	LastCommit   map[identifiers.Identifier]Hash     `json:"last_commit"`
+	EvidenceHash map[identifiers.Identifier]Hash     `json:"evidence_hash"`
+	AccountLocks map[identifiers.Identifier]LockType `json:"account_locks"`
+	ICSSeed      [32]byte                            `json:"ics_seed"`
+	ICSProof     []byte                              `json:"ics_proof"`
 }
 
 type CommitInfo struct {
@@ -205,9 +205,9 @@ func (t *Tesseract) Hash() Hash {
 	return hash
 }
 
-func (t *Tesseract) HasParticipant(target identifiers.Address) bool {
-	for addr := range t.participants {
-		if addr == target {
+func (t *Tesseract) HasParticipant(target identifiers.Identifier) bool {
+	for id := range t.participants {
+		if id == target {
 			return true
 		}
 	}
@@ -215,45 +215,45 @@ func (t *Tesseract) HasParticipant(target identifiers.Address) bool {
 	return false
 }
 
-func (t *Tesseract) ExcludedAccounts() Addresses {
-	addrs := make(Addresses, 0)
+func (t *Tesseract) ExcludedAccounts() IdentifierList {
+	ids := make(IdentifierList, 0)
 
-	for addr, ps := range t.participants {
+	for id, ps := range t.participants {
 		if ps.StateHash == NilHash {
-			addrs = append(addrs, addr)
+			ids = append(ids, id)
 		}
 	}
 
-	return addrs
+	return ids
 }
 
-func (t *Tesseract) Addresses() Addresses {
-	addrs := make(Addresses, 0, t.ParticipantCount())
+func (t *Tesseract) AccountIDs() IdentifierList {
+	ids := make(IdentifierList, 0, t.ParticipantCount())
 
-	for addr := range t.participants {
-		addrs = append(addrs, addr)
+	for id := range t.participants {
+		ids = append(ids, id)
 	}
 
-	sort.Sort(addrs)
+	sort.Sort(ids)
 
-	return addrs
+	return ids
 }
 
-func (t *Tesseract) Heights() map[identifiers.Address]uint64 {
-	heights := make(map[identifiers.Address]uint64)
-	for addr, ps := range t.participants {
-		heights[addr] = ps.Height
+func (t *Tesseract) Heights() map[identifiers.Identifier]uint64 {
+	heights := make(map[identifiers.Identifier]uint64)
+	for id, ps := range t.participants {
+		heights[id] = ps.Height
 	}
 
 	return heights
 }
 
-func (t *Tesseract) AnyAddress() identifiers.Address {
-	for addr := range t.participants {
-		return addr
+func (t *Tesseract) AnyAccountID() identifiers.Identifier {
+	for id := range t.participants {
+		return id
 	}
 
-	return identifiers.NilAddress
+	return identifiers.Nil
 }
 
 func (t *Tesseract) Participants() ParticipantsState {
@@ -264,8 +264,8 @@ func (t *Tesseract) ParticipantCount() int {
 	return len(t.participants)
 }
 
-func (t *Tesseract) State(addr identifiers.Address) (State, bool) {
-	state, ok := t.participants[addr]
+func (t *Tesseract) State(id identifiers.Identifier) (State, bool) {
+	state, ok := t.participants[id]
 	if !ok {
 		return State{}, ok
 	}
@@ -351,8 +351,8 @@ func (t *Tesseract) HasReceipts() bool {
 	return t.receipts != nil
 }
 
-func (t *Tesseract) Height(address identifiers.Address) uint64 {
-	ps, ok := t.participants[address]
+func (t *Tesseract) Height(id identifiers.Identifier) uint64 {
+	ps, ok := t.participants[id]
 	if !ok {
 		return 0
 	}
@@ -360,27 +360,27 @@ func (t *Tesseract) Height(address identifiers.Address) uint64 {
 	return ps.Height
 }
 
-func (t *Tesseract) TransitiveLink(address identifiers.Address) Hash {
-	return t.participants[address].TransitiveLink
+func (t *Tesseract) TransitiveLink(id identifiers.Identifier) Hash {
+	return t.participants[id].TransitiveLink
 }
 
-func (t *Tesseract) StateHash(address identifiers.Address) Hash {
-	return t.participants[address].StateHash
+func (t *Tesseract) StateHash(id identifiers.Identifier) Hash {
+	return t.participants[id].StateHash
 }
 
-func (t *Tesseract) LatestContextHash(address identifiers.Address) Hash {
-	return t.participants[address].LatestContext
+func (t *Tesseract) LatestContextHash(id identifiers.Identifier) Hash {
+	return t.participants[id].LatestContext
 }
 
-func (t *Tesseract) PreviousContextHash(address identifiers.Address) Hash {
-	return t.participants[address].PreviousContext
+func (t *Tesseract) PreviousContextHash(id identifiers.Identifier) Hash {
+	return t.participants[id].PreviousContext
 }
 
-func (t *Tesseract) PreviousContext() map[identifiers.Address]Hash {
-	previousContext := make(map[identifiers.Address]Hash)
+func (t *Tesseract) PreviousContext() map[identifiers.Identifier]Hash {
+	previousContext := make(map[identifiers.Identifier]Hash)
 
-	for addr, p := range t.participants {
-		previousContext[addr] = p.PreviousContext
+	for id, p := range t.participants {
+		previousContext[id] = p.PreviousContext
 	}
 
 	return previousContext
@@ -389,17 +389,17 @@ func (t *Tesseract) PreviousContext() map[identifiers.Address]Hash {
 func (t *Tesseract) ContextDelta() ContextDelta {
 	ctxDelta := make(ContextDelta)
 
-	for addr, participant := range t.participants {
+	for id, participant := range t.participants {
 		if participant.ContextDelta != nil {
-			ctxDelta[addr] = participant.ContextDelta
+			ctxDelta[id] = participant.ContextDelta
 		}
 	}
 
 	return ctxDelta
 }
 
-func (t *Tesseract) GetContextDelta(address identifiers.Address) (*DeltaGroup, bool) {
-	state, ok := t.participants[address]
+func (t *Tesseract) GetContextDelta(id identifiers.Identifier) (*DeltaGroup, bool) {
+	state, ok := t.participants[id]
 	if !ok {
 		return nil, ok
 	}
@@ -427,8 +427,8 @@ func (t *Tesseract) SetCommitQc(qc *Qc) {
 	t.commitInfo.QC = qc
 }
 
-func (t *Tesseract) SetEvidenceHash(addr identifiers.Address, hash Hash) {
-	t.consensusInfo.EvidenceHash[addr] = hash
+func (t *Tesseract) SetEvidenceHash(id identifiers.Identifier, hash Hash) {
+	t.consensusInfo.EvidenceHash[id] = hash
 }
 
 func (t *Tesseract) SetSeal(seal []byte) {
@@ -488,10 +488,12 @@ func (t *Tesseract) SignBytes() ([]byte, error) {
 }
 
 func (t *Tesseract) Depolorize(depolorizer *polo.Depolorizer) (err error) {
-	depolorizer, err = depolorizer.DepolorizePacked()
-	if errors.Is(err, polo.ErrNullPack) {
+	if depolorizer.IsNull() {
 		return nil
-	} else if err != nil {
+	}
+
+	depolorizer, err = depolorizer.Unpacked()
+	if err != nil {
 		return err
 	}
 
@@ -520,15 +522,15 @@ func (t *Tesseract) Depolorize(depolorizer *polo.Depolorizer) (err error) {
 		return err
 	}
 
-	if t.timestamp, err = depolorizer.DepolorizeUint(); err != nil {
+	if t.timestamp, err = depolorizer.DepolorizeUint64(); err != nil {
 		return err
 	}
 
-	if t.fuelUsed, err = depolorizer.DepolorizeUint(); err != nil {
+	if t.fuelUsed, err = depolorizer.DepolorizeUint64(); err != nil {
 		return err
 	}
 
-	if t.fuelLimit, err = depolorizer.DepolorizeUint(); err != nil {
+	if t.fuelLimit, err = depolorizer.DepolorizeUint64(); err != nil {
 		return err
 	}
 

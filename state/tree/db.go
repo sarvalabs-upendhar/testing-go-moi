@@ -13,17 +13,17 @@ import (
 
 // persistentDB defines all methods that need to be implemented by persistent DB to handle tree data
 type persistentDB interface {
-	GetMerkleTreeEntry(address identifiers.Address, prefix db.PrefixTag, key []byte) ([]byte, error)
-	SetMerkleTreeEntry(address identifiers.Address, prefix db.PrefixTag, key, value []byte) error
-	SetMerkleTreeEntries(address identifiers.Address, prefix db.PrefixTag, entries map[string][]byte) error
-	WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error
-	GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error)
+	GetMerkleTreeEntry(id identifiers.Identifier, prefix db.PrefixTag, key []byte) ([]byte, error)
+	SetMerkleTreeEntry(id identifiers.Identifier, prefix db.PrefixTag, key, value []byte) error
+	SetMerkleTreeEntries(id identifiers.Identifier, prefix db.PrefixTag, entries map[string][]byte) error
+	WritePreImages(id identifiers.Identifier, entries map[common.Hash][]byte) error
+	GetPreImage(id identifiers.Identifier, hash common.Hash) ([]byte, error)
 }
 
 // TreeDB implements the DB interface
 // all modified entries of trie will be stored in memory and flushed to persistent storage on calling the commit
 type TreeDB struct {
-	address   identifiers.Address
+	id        identifiers.Identifier
 	dataType  db.PrefixTag
 	mtx       sync.RWMutex
 	db        persistentDB
@@ -32,11 +32,11 @@ type TreeDB struct {
 	metrics   *Metrics
 }
 
-func NewTreeDB(address identifiers.Address, dataType db.PrefixTag,
+func NewTreeDB(id identifiers.Identifier, dataType db.PrefixTag,
 	db persistentDB, treeCache *fastcache.Cache, metrics *Metrics,
 ) *TreeDB {
 	return &TreeDB{
-		address:   address,
+		id:        id,
 		dataType:  dataType,
 		db:        db,
 		dirty:     make(map[string][]byte),
@@ -74,7 +74,7 @@ func (tdb *TreeDB) Get(key []byte) ([]byte, error) {
 		return val, nil
 	}
 
-	val, err := tdb.db.GetMerkleTreeEntry(tdb.address, tdb.dataType, key)
+	val, err := tdb.db.GetMerkleTreeEntry(tdb.id, tdb.dataType, key)
 	if err != nil {
 		return nil, err
 	}
@@ -103,17 +103,17 @@ func (tdb *TreeDB) Flush() error {
 		tdb.dirty = nil
 	}()
 
-	return tdb.db.SetMerkleTreeEntries(tdb.address, tdb.dataType, tdb.dirty)
+	return tdb.db.SetMerkleTreeEntries(tdb.id, tdb.dataType, tdb.dirty)
 }
 
 // WritePreImages writes all pre-images to persistent storage
 func (tdb *TreeDB) WritePreImages(entries map[common.Hash][]byte) error {
-	return tdb.db.WritePreImages(tdb.address, entries)
+	return tdb.db.WritePreImages(tdb.id, entries)
 }
 
 // GetPreImage returns the pre-image of the given hash
 func (tdb *TreeDB) GetPreImage(hash common.Hash) ([]byte, error) {
-	return tdb.db.GetPreImage(tdb.address, hash)
+	return tdb.db.GetPreImage(tdb.id, hash)
 }
 
 // IsDirty returns true if the treeDB has dirty entries/nodes
@@ -130,7 +130,7 @@ func (tdb *TreeDB) Copy() DB {
 	defer tdb.mtx.RUnlock()
 
 	newTreeDB := &TreeDB{
-		address:   tdb.address,
+		id:        tdb.id,
 		dataType:  tdb.dataType,
 		db:        tdb.db,
 		dirty:     make(map[string][]byte, len(tdb.dirty)),

@@ -15,7 +15,7 @@ import (
 func Test_ValidateAssetCreate(t *testing.T) {
 	operator := createTestStateObject(t)
 	assetAcc := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, assetAcc.Address())
+	assetID := tests.GetRandomAssetID(t, assetAcc.Identifier())
 
 	insertTestAssetObject(
 		t, assetID, operator, state.NewAssetObject(big.NewInt(5000), nil),
@@ -25,34 +25,20 @@ func Test_ValidateAssetCreate(t *testing.T) {
 		name          string
 		sender        *state.Object
 		payload       *common.AssetCreatePayload
+		assetID       identifiers.AssetID
 		expectedError error
 	}{
 		{
-			name:   "asset already registered",
-			sender: operator,
-			payload: &common.AssetCreatePayload{
-				Standard:   common.MAS0,
-				Dimension:  1,
-				IsStateFul: true,
-				IsLogical:  false,
-			},
+			name:          "asset already registered",
+			sender:        operator,
+			assetID:       assetID,
 			expectedError: common.ErrAssetAlreadyRegistered,
-		},
-		{
-			name:   "valid asset create operation",
-			sender: operator,
-			payload: &common.AssetCreatePayload{
-				Standard:   common.MAS1,
-				Dimension:  1,
-				IsStateFul: true,
-				IsLogical:  false,
-			},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateAssetCreate(test.sender, assetAcc, test.payload)
+			err := validateAssetCreate(test.sender, test.assetID)
 			if test.expectedError != nil {
 				require.Error(t, err)
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -112,7 +98,7 @@ func Test_CreateAsset(t *testing.T) {
 				Standard: common.MAS0,
 			},
 			preTestFn: func(assetID identifiers.AssetID, creatorAcc *state.Object, payload *common.AssetCreatePayload) {
-				createTestDeedsEntry(t, assetID.Address(), creatorAcc, payload)
+				createTestDeedsEntry(t, assetID.AsIdentifier(), creatorAcc, payload)
 			},
 			expectedError: common.ErrAssetAlreadyRegistered,
 		},
@@ -122,7 +108,7 @@ func Test_CreateAsset(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			assetObject := createTestStateObject(t)
 			creatorObject := createTestStateObject(t)
-			assetID := createTestAssetID(t, assetObject.Address(), test.payload)
+			assetID := createTestAssetID(t, assetObject.Identifier(), test.payload)
 
 			if test.preTestFn != nil {
 				test.preTestFn(assetID, creatorObject, test.payload)
@@ -145,7 +131,7 @@ func Test_CreateAsset(t *testing.T) {
 
 func Test_ValidateAssetTransfer(t *testing.T) {
 	sender := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	sarga := createTestSargaStateObject(t)
 
 	insertTestAssetObject(
@@ -163,7 +149,7 @@ func Test_ValidateAssetTransfer(t *testing.T) {
 			name:   "beneficiary not registered",
 			sender: createTestStateObject(t),
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 			},
 			expectedError: common.ErrBeneficiaryNotRegistered,
 		},
@@ -171,12 +157,12 @@ func Test_ValidateAssetTransfer(t *testing.T) {
 			name:   "asset not found",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
-				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Beneficiary: tests.RandomIdentifier(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:      big.NewInt(1000),
 			},
 			preTestFn: func(target *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -184,12 +170,12 @@ func Test_ValidateAssetTransfer(t *testing.T) {
 			name:   "insufficient balance",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(7000),
 			},
 			preTestFn: func(target *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 			expectedError: common.ErrInsufficientFunds,
 		},
@@ -197,12 +183,12 @@ func Test_ValidateAssetTransfer(t *testing.T) {
 			name:   "valid asset transfer operation",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(4000),
 			},
 			preTestFn: func(target *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 		},
 	}
@@ -248,7 +234,7 @@ func Test_TransferAsset(t *testing.T) {
 			name:   "asset not found",
 			sender: sender1,
 			payload: &common.AssetActionPayload{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:  big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -306,7 +292,7 @@ func Test_TransferAsset(t *testing.T) {
 
 func Test_ValidateMandateConsume(t *testing.T) {
 	sender := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	sarga := createTestSargaStateObject(t)
 
 	testcases := []struct {
@@ -320,7 +306,7 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			name:   "beneficiary not registered",
 			sender: createTestStateObject(t),
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 			},
 			expectedError: common.ErrBeneficiaryNotRegistered,
 		},
@@ -328,12 +314,12 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			name:   "asset not found",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
-				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Beneficiary: tests.RandomIdentifier(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:      big.NewInt(1000),
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -341,8 +327,8 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			name:   "insufficient balance",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(7000),
 			},
@@ -350,7 +336,7 @@ func Test_ValidateMandateConsume(t *testing.T) {
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 			expectedError: common.ErrInsufficientFunds,
 		},
@@ -358,13 +344,13 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			name:   "mandate not found",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(2000),
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
@@ -375,13 +361,13 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			name:   "mandate expired",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(2000),
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
@@ -395,13 +381,13 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			name:   "insufficient mandate funds",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(4000),
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
@@ -415,13 +401,13 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			name:   "valid asset transfer operation",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(4000),
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
@@ -478,7 +464,7 @@ func Test_ConsumeMandate(t *testing.T) {
 			name:   "asset not found",
 			sender: sender0,
 			payload: &common.AssetActionPayload{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:  big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -487,8 +473,8 @@ func Test_ConsumeMandate(t *testing.T) {
 			name:   "initialize asset balance if asset doesn't exist",
 			sender: sender1,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID1,
 				Amount:      big.NewInt(1500),
 			},
@@ -506,8 +492,8 @@ func Test_ConsumeMandate(t *testing.T) {
 			name:   "asset mandate consumed successfully",
 			sender: sender0,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID0,
 				Amount:      big.NewInt(1500),
 			},
@@ -556,7 +542,7 @@ func Test_ConsumeMandate(t *testing.T) {
 func Test_ValidateAssetMint(t *testing.T) {
 	operator := createTestStateObject(t)
 	assetAcc := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 
 	insertTestAssetObject(
 		t, assetID, operator, state.NewAssetObject(big.NewInt(5000), nil),
@@ -573,7 +559,7 @@ func Test_ValidateAssetMint(t *testing.T) {
 			name:   "asset not found",
 			sender: createTestStateObject(t),
 			payload: &common.AssetSupplyPayload{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -624,7 +610,7 @@ func Test_MintAsset(t *testing.T) {
 		{
 			name: "asset not found",
 			payload: &common.AssetSupplyPayload{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:  big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -659,7 +645,7 @@ func Test_MintAsset(t *testing.T) {
 func Test_ValidateAssetBurn(t *testing.T) {
 	operator := createTestStateObject(t)
 	assetAcc := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 
 	insertTestAssetObject(
 		t, assetID, operator, state.NewAssetObject(big.NewInt(5000), nil),
@@ -676,7 +662,7 @@ func Test_ValidateAssetBurn(t *testing.T) {
 			name:   "asset not found",
 			sender: createTestStateObject(t),
 			payload: &common.AssetSupplyPayload{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -693,7 +679,7 @@ func Test_ValidateAssetBurn(t *testing.T) {
 			name:   "asset not found",
 			sender: operator,
 			payload: &common.AssetSupplyPayload{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:  big.NewInt(5000),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -745,7 +731,7 @@ func Test_BurnAsset(t *testing.T) {
 		{
 			name: "asset not found",
 			payload: &common.AssetSupplyPayload{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:  big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -779,7 +765,7 @@ func Test_BurnAsset(t *testing.T) {
 
 func Test_ValidateAssetApprove(t *testing.T) {
 	sender := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 
 	insertTestAssetObject(
 		t, assetID, sender, state.NewAssetObject(big.NewInt(5000), nil),
@@ -795,8 +781,8 @@ func Test_ValidateAssetApprove(t *testing.T) {
 			name:   "asset not found",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
-				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Beneficiary: tests.RandomIdentifier(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:      big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -805,7 +791,7 @@ func Test_ValidateAssetApprove(t *testing.T) {
 			name:   "insufficient balance",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(7000),
 			},
@@ -815,7 +801,7 @@ func Test_ValidateAssetApprove(t *testing.T) {
 			name:   "valid asset approve operation",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(4000),
 			},
@@ -850,8 +836,8 @@ func Test_AssetApprove(t *testing.T) {
 			name:   "asset not found",
 			sender: creator,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
-				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Beneficiary: tests.RandomIdentifier(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:      big.NewInt(5000),
 				Timestamp:   uint64(time.Now().Add(1 * time.Hour).Unix()),
 			},
@@ -861,7 +847,7 @@ func Test_AssetApprove(t *testing.T) {
 			name:   "asset approved successfully",
 			sender: creator,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(5000),
 				Timestamp:   uint64(time.Now().Add(1 * time.Hour).Unix()),
@@ -888,7 +874,7 @@ func Test_AssetApprove(t *testing.T) {
 
 func Test_ValidateAssetRevoke(t *testing.T) {
 	sender := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	sarga := createTestSargaStateObject(t)
 	insertTestAssetObject(
 		t, assetID, sender, state.NewAssetObject(big.NewInt(5000), nil),
@@ -905,11 +891,11 @@ func Test_ValidateAssetRevoke(t *testing.T) {
 			name:   "mandate not found",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 			},
 			preTestFn: func(target *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 			expectedError: common.ErrMandateNotFound,
 		},
@@ -917,11 +903,11 @@ func Test_ValidateAssetRevoke(t *testing.T) {
 			name:   "valid asset revoke operation",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 			},
 			preTestFn: func(target *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 				createTestMandate(t, sender, target, assetID, big.NewInt(2000), uint64(time.Now().Unix()))
 			},
 		},
@@ -965,8 +951,8 @@ func Test_AssetRevoke(t *testing.T) {
 			name:   "asset not found",
 			sender: creator,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
-				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Beneficiary: tests.RandomIdentifier(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:      big.NewInt(5000),
 				Timestamp:   uint64(time.Now().Add(1 * time.Hour).Unix()),
 			},
@@ -984,7 +970,7 @@ func Test_AssetRevoke(t *testing.T) {
 				})
 			},
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 			},
 		},
@@ -1013,7 +999,7 @@ func Test_AssetRevoke(t *testing.T) {
 
 func Test_ValidateAssetLockup(t *testing.T) {
 	sender := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 
 	insertTestAssetObject(
 		t, assetID, sender, state.NewAssetObject(big.NewInt(10000), nil),
@@ -1030,8 +1016,8 @@ func Test_ValidateAssetLockup(t *testing.T) {
 			name:   "asset not found",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
-				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Beneficiary: tests.RandomIdentifier(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:      big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -1040,7 +1026,7 @@ func Test_ValidateAssetLockup(t *testing.T) {
 			name:   "insufficient balance",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(12000),
 			},
@@ -1050,7 +1036,7 @@ func Test_ValidateAssetLockup(t *testing.T) {
 			name:   "lockup already exists",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(4000),
 			},
@@ -1063,7 +1049,7 @@ func Test_ValidateAssetLockup(t *testing.T) {
 			name:   "valid asset lockup operation",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(4000),
 			},
@@ -1107,8 +1093,8 @@ func Test_AssetLockup(t *testing.T) {
 			name:   "asset not found",
 			sender: creator,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
-				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Beneficiary: tests.RandomIdentifier(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:      big.NewInt(5000),
 			},
 			expectedError: common.ErrAssetNotFound,
@@ -1117,7 +1103,7 @@ func Test_AssetLockup(t *testing.T) {
 			name:   "asset locked up successfully",
 			sender: creator,
 			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomAddress(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(5000),
 			},
@@ -1143,7 +1129,7 @@ func Test_AssetLockup(t *testing.T) {
 
 func Test_ValidateAssetRelease(t *testing.T) {
 	sender := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	sarga := createTestSargaStateObject(t)
 
 	testcases := []struct {
@@ -1157,12 +1143,12 @@ func Test_ValidateAssetRelease(t *testing.T) {
 			name:   "lockup not found",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 			expectedError: common.ErrLockupNotFound,
 		},
@@ -1170,13 +1156,13 @@ func Test_ValidateAssetRelease(t *testing.T) {
 			name:   "valid asset release operation",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(1000),
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)
@@ -1216,7 +1202,7 @@ func Test_ValidateAssetRelease(t *testing.T) {
 
 func Test_AssetRelease(t *testing.T) {
 	sender := createTestStateObject(t)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	sarga := createTestSargaStateObject(t)
 
 	testcases := []struct {
@@ -1231,12 +1217,12 @@ func Test_AssetRelease(t *testing.T) {
 			name:   "asset not found",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
-				AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
+				AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -1244,13 +1230,13 @@ func Test_AssetRelease(t *testing.T) {
 			name:   "asset released successfully",
 			sender: sender,
 			payload: &common.AssetActionPayload{
-				Benefactor:  tests.RandomAddress(t),
-				Beneficiary: tests.RandomAddress(t),
+				Benefactor:  tests.RandomIdentifier(t),
+				Beneficiary: tests.RandomIdentifier(t),
 				AssetID:     assetID,
 				Amount:      big.NewInt(1000),
 			},
 			preTestFn: func(target, benefactor *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
 					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
 				)

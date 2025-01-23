@@ -27,7 +27,7 @@ func RunLogicEnlist(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the invoker and logic account state objects
-	invoker := objects.GetObject(op.SenderAddr())
+	invoker := objects.GetObject(op.SenderID())
 	logicacc := objects.GetObject(op.Target())
 
 	// Create an event stream to emit the events on

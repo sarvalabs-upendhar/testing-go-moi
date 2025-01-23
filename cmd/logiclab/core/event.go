@@ -23,11 +23,11 @@ const (
 )
 
 type Event struct {
-	IxHash  common.Hash         `json:"ixhash"`
-	Address identifiers.Address `json:"address"`
-	LogicID identifiers.LogicID `json:"logicID"`
-	Topics  []common.Hash       `json:"topics"`
-	Data    string              `json:"data"`
+	IxHash  common.Hash            `json:"ixhash"`
+	ID      identifiers.Identifier `json:"id"`
+	LogicID identifiers.LogicID    `json:"logic_id"`
+	Topics  []common.Hash          `json:"topics"`
+	Data    string                 `json:"data"`
 }
 
 func (e *Event) Encode() ([]byte, error) {
@@ -53,7 +53,7 @@ func GetEventsFromStream(stream *compute.EventStream, ixhash common.Hash) []Even
 	for log := range stream.Iterate() {
 		event := Event{
 			IxHash:  ixhash,
-			Address: log.Address,
+			ID:      log.ID,
 			LogicID: log.LogicID,
 			Topics:  log.Topics,
 			Data:    "0x" + common.BytesToHex(log.Data),
@@ -222,9 +222,9 @@ func FilterByLogicID(logicID identifiers.LogicID) EventFilter {
 	}
 }
 
-func FilterByAddress(address identifiers.Address) EventFilter {
+func FilterByIdentifier(identifier identifiers.Identifier) EventFilter {
 	return func(event Event) bool {
-		return event.Address == address
+		return event.ID == identifier
 	}
 }
 

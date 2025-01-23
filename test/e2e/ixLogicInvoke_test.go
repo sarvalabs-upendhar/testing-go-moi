@@ -10,7 +10,6 @@ import (
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
@@ -22,7 +21,7 @@ func (te *TestEnvironment) logicInvoke(
 	logicPayload *common.LogicPayload,
 ) (common.Hash, error) {
 	te.logger.Debug("invoke logic ",
-		"sender", acc.Addr,
+		"sender", acc.ID,
 		"logicID", logicPayload.Logic,
 		"callsite", logicPayload.Callsite,
 		"calldata", logicPayload.Calldata,
@@ -33,8 +32,8 @@ func (te *TestEnvironment) logicInvoke(
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    acc.Addr,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.Addr, 0),
+			ID:         acc.ID,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.ID, 0),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -46,11 +45,11 @@ func (te *TestEnvironment) logicInvoke(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  acc.Addr,
+				ID:       acc.ID,
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  logicPayload.Logic.Address(),
+				ID:       logicPayload.Logic.AsIdentifier(),
 				LockType: common.MutateLock,
 			},
 		},
@@ -58,7 +57,7 @@ func (te *TestEnvironment) logicInvoke(
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
-			Addr:     acc.Addr,
+			ID:       acc.ID,
 			KeyID:    0,
 			Mnemonic: acc.Mnemonic,
 		},
@@ -73,15 +72,15 @@ func (te *TestEnvironment) logicInvoke(
 // 4. Ensure the receiver's balance is increased by the transfer amount.
 func validateLogicInvoke(
 	te *TestEnvironment,
-	sender identifiers.Address,
-	receiver identifiers.Address,
+	sender identifiers.Identifier,
+	receiver identifiers.Identifier,
 	payload *common.LogicPayload,
 	ixHash common.Hash,
 ) {
 	// make sure interaction executed successfully
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, payload.Logic, []identifiers.Address{sender, receiver})
+	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, payload.Logic, []identifiers.Identifier{sender, receiver})
 	senderBalance, ok := state.Balances[sender]
 	require.True(te.T(), ok)
 
@@ -95,16 +94,18 @@ func validateLogicInvoke(
 
 func (te *TestEnvironment) TestLogicInvoke() {
 	sender := te.chooseRandomAccount()
-	receiver, _ := identifiers.NewAddressFromHex("0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c")
+	receiver := identifiers.RandomParticipantIDv0().AsIdentifier()
 
-	invokeCalldata := "0x0d6f0665a601a502616d6f756e74030f42407265636569766572060fafe52ec42a85db6" +
-		"44d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
+	invokeCalldata := DocGen(te.T(), map[string]any{
+		"amount":   transferAmount,
+		"receiver": receiver,
+	}).Bytes()
 
 	ixHash, err := te.deployLogic(
 		sender,
 		&common.LogicPayload{
 			Callsite: "Seed",
-			Calldata: common.Hex2Bytes(deployCalldata),
+			Calldata: DeployCallData.Bytes(),
 			Manifest: common.Hex2Bytes(ledgerManifest),
 		},
 	)
@@ -112,7 +113,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	ledgerLogicID := moiclient.GetLogicID(te.T(), te.moiClient, 0, sender.Addr, args.LatestTesseractHeight)
+	ledgerLogicID := moiclient.GetLogicID(te.T(), te.moiClient, 0, sender.ID, args.LatestTesseractHeight)
 
 	testcases := []struct {
 		name         string
@@ -120,8 +121,8 @@ func (te *TestEnvironment) TestLogicInvoke() {
 		logicPayload *common.LogicPayload
 		postTest     func(
 			te *TestEnvironment,
-			sender identifiers.Address,
-			receiver identifiers.Address,
+			sender identifiers.Identifier,
+			receiver identifiers.Identifier,
 			payload *common.LogicPayload,
 			ixHash common.Hash,
 		)
@@ -133,7 +134,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			logicPayload: &common.LogicPayload{
 				Logic:    ledgerLogicID,
 				Callsite: "Transfer",
-				Calldata: hexutil.Bytes(common.Hex2Bytes(invokeCalldata)),
+				Calldata: invokeCalldata,
 			},
 			postTest: validateLogicInvoke,
 		},
@@ -141,9 +142,9 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "empty logic id",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    "",
+				Logic:    identifiers.Nil,
 				Callsite: "Transfer",
-				Calldata: hexutil.Bytes(common.Hex2Bytes(invokeCalldata)),
+				Calldata: invokeCalldata,
 			},
 			expectedError: common.ErrMissingLogicID,
 		},
@@ -163,7 +164,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			logicPayload: &common.LogicPayload{
 				Logic:    ledgerLogicID,
 				Callsite: "",
-				Calldata: common.Hex2Bytes(invokeCalldata),
+				Calldata: invokeCalldata,
 			},
 			expectedError: common.ErrEmptyCallSite,
 		},
@@ -171,16 +172,9 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "logic isn't registered",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic: identifiers.NewLogicIDv0(
-					true,
-					false,
-					false,
-					false,
-					0,
-					tests.RandomAddress(te.T()),
-				),
+				Logic:    identifiers.RandomLogicIDv0(),
 				Callsite: "Transfer",
-				Calldata: common.Hex2Bytes(invokeCalldata),
+				Calldata: invokeCalldata,
 			},
 			expectedError: common.ErrAccountNotFound,
 		},
@@ -221,7 +215,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.Addr, receiver, test.logicPayload, ixHash)
+			test.postTest(te, test.sender.ID, receiver, test.logicPayload, ixHash)
 		})
 	}
 }

@@ -50,7 +50,7 @@ var DefaultMinConnectedPeers = 6
 
 type lattice interface {
 	AddTesseractWithState(
-		addr identifiers.Address,
+		id identifiers.Identifier,
 		dirtyStorage map[common.Hash][]byte,
 		ts *common.Tesseract,
 		transition *state.Transition,
@@ -58,18 +58,18 @@ type lattice interface {
 	) error
 	GetTesseract(hash common.Hash, withInteractions, withCommitInfo bool) (*common.Tesseract, error)
 	GetTesseractByHeight(
-		address identifiers.Address,
+		id identifiers.Identifier,
 		height uint64,
 		withInteractions bool,
 		withCommitInfo bool,
 	) (*common.Tesseract, error)
-	GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error)
+	GetTesseractHeightEntry(id identifiers.Identifier, height uint64) (common.Hash, error)
 }
 
 type stateManager interface {
-	LoadTransitionObjects(ps map[identifiers.Address]common.ParticipantInfo) (*state.Transition, error)
-	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
-	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
+	LoadTransitionObjects(ps map[identifiers.Identifier]common.ParticipantInfo) (*state.Transition, error)
+	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
+	GetLatestStateObject(id identifiers.Identifier) (*state.Object, error)
 	SyncStorageTrees(
 		ctx context.Context,
 		newRoot *common.RootNode,
@@ -85,18 +85,18 @@ type stateManager interface {
 		so *state.Object,
 	) error
 	GetParticipantContextRaw(
-		address identifiers.Address,
+		id identifiers.Identifier,
 		hash common.Hash,
 		rawContext map[string][]byte,
 	) error
-	HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool
-	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
+	HasParticipantStateAt(id identifiers.Identifier, stateHash common.Hash) bool
+	IsInitialTesseract(ts *common.Tesseract, id identifiers.Identifier) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
-	GetContextByHash(
-		address identifiers.Address,
+	GetConsensusNodesByHash(
+		id identifiers.Identifier,
 		hash common.Hash,
-	) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error)
-	RemoveCachedObject(addr identifiers.Address)
+	) ([]kramaid.KramaID, error)
+	RemoveCachedObject(id identifiers.Identifier)
 }
 
 type store interface {
@@ -106,20 +106,20 @@ type store interface {
 	ReadEntry([]byte) ([]byte, error)
 	Contains([]byte) (bool, error)
 	DeleteEntry([]byte) error
-	SetAccount(addr identifiers.Address, stateHash common.Hash, data []byte) error
+	SetAccount(id identifiers.Identifier, stateHash common.Hash, data []byte) error
 	SetInteractions(tsHash common.Hash, data []byte) error
 	SetReceipts(tsHash common.Hash, data []byte) error
 	GetInteractions(tsHash common.Hash) ([]byte, error)
 	GetCommitInfo(tsHash common.Hash) ([]byte, error)
-	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
-	SetAccountSyncStatus(address identifiers.Address, status *common.AccountSyncStatus) error
-	CleanupAccountSyncStatus(address identifiers.Address) error
+	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
+	SetAccountSyncStatus(id identifiers.Identifier, status *common.AccountSyncStatus) error
+	CleanupAccountSyncStatus(id identifiers.Identifier) error
 	StoreAccountSnapShot(snap *common.Snapshot) error
 	GetReceipts(tsHash common.Hash) ([]byte, error)
 	GetAccountsSyncStatus() ([]*common.AccountSyncStatus, error)
 	DropPrefix(prefix []byte) error
-	UpdatePrimarySyncStatus(address identifiers.Address) error
-	IsAccountPrimarySyncDone(address identifiers.Address) bool
+	UpdatePrimarySyncStatus(id identifiers.Identifier) error
+	IsAccountPrimarySyncDone(id identifiers.Identifier) bool
 	HasTesseract(tsHash common.Hash) bool
 	SetTesseract(tsHash common.Hash, data []byte) error
 	UpdatePrincipalSyncStatus() error
@@ -129,18 +129,19 @@ type store interface {
 	IsPrincipalSyncDone() (bool, int64)
 	StreamSnapshot(
 		ctx context.Context,
-		address identifiers.Address,
+		id identifiers.Identifier,
 		sinceTS uint64,
 		respChan chan<- common.SnapResponse,
 	) (uint64, error)
-	SetTesseractHeightEntry(addr identifiers.Address, height uint64, tsHash common.Hash) error
-	HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool
-	GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error)
+	SetTesseractHeightEntry(id identifiers.Identifier, height uint64, tsHash common.Hash) error
+	HasAccMetaInfoAt(id identifiers.Identifier, height uint64) bool
+	GetAccount(id identifiers.Identifier, stateHash common.Hash) ([]byte, error)
 	UpdateAccMetaInfo(
-		id identifiers.Address,
+		id identifiers.Identifier,
 		height uint64,
 		tesseractHash common.Hash,
 		stateHash, contextHash common.Hash,
+		consensusNodesHash common.Hash,
 		commitHash common.Hash,
 		accType common.AccountType,
 		shouldUpdateContextSetPosition bool,
@@ -172,7 +173,12 @@ type p2pServer interface {
 }
 
 type kramaEngine interface {
-	ValidateTesseract(addr identifiers.Address, ts *common.Tesseract, ics *ktypes.ICSCommittee, allParticipants bool) error
+	ValidateTesseract(
+		id identifiers.Identifier,
+		ts *common.Tesseract,
+		ics *ktypes.ICSCommittee,
+		allParticipants bool,
+	) error
 	ExecuteAndValidate(
 		ts *common.Tesseract,
 		transition *state.Transition,
@@ -186,8 +192,8 @@ type kramaEngine interface {
 		rawContext map[string][]byte,
 		info *common.CommitInfo,
 	) (*ktypes.ICSCommittee, error)
-	AddActiveAccount(addr identifiers.Address, lockType common.LockType, id common.ClusterID) bool
-	ClearActiveAccount(addr identifiers.Address, id common.ClusterID)
+	AddActiveAccount(id identifiers.Identifier, lockType common.LockType, clusterID common.ClusterID) bool
+	ClearActiveAccount(id identifiers.Identifier, clusterID common.ClusterID)
 }
 
 type Syncer struct {
@@ -217,7 +223,7 @@ type Syncer struct {
 	consensusSlots      *ktypes.Slots
 	lastActiveTimeStamp uint64
 	accountsLock        sync.RWMutex
-	lockedAccounts      map[identifiers.Address]struct{}
+	lockedAccounts      map[identifiers.Identifier]struct{}
 	metrics             *Metrics
 	initialSyncDone     bool
 	pendingMsgChan      chan *TesseractInfo
@@ -267,7 +273,7 @@ func NewSyncer(
 		tesseractRegistry:   common.NewHashRegistry(60),
 		consensusSlots:      slots,
 		lastActiveTimeStamp: lastActiveTimeStamp,
-		lockedAccounts:      make(map[identifiers.Address]struct{}),
+		lockedAccounts:      make(map[identifiers.Identifier]struct{}),
 		metrics:             syncerMetrics,
 		pendingMsgQueue:     make([]*TesseractInfo, 0),
 		pendingMsgChan:      make(chan *TesseractInfo, 10),
@@ -286,7 +292,7 @@ func (s *Syncer) addSyncPeersToPeerstore() error {
 
 		peerID, err := bestPeer.ID.DecodedPeerID()
 		if err != nil {
-			s.logger.Error("failed to get peer ID from consensus ID", "consensus-id", bestPeer.ID, "err", err)
+			s.logger.Error("failed to get peer ID from consensus ID", "consensus-accountID", bestPeer.ID, "err", err)
 
 			return common.ErrInvalidKramaID
 		}
@@ -303,19 +309,19 @@ func (s *Syncer) addSyncPeersToPeerstore() error {
 }
 
 func (s *Syncer) NewSyncRequest(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	expectedHeight uint64,
 	syncMode common.SyncMode,
 	bestPeers []kramaid.KramaID,
 	snapDownloaded bool,
 	tesseracts ...*TesseractInfo,
 ) (err error) {
-	job, ok := s.jobQueue.getJob(addr)
+	job, ok := s.jobQueue.getJob(id)
 	if job == nil {
 		job = &SyncJob{
 			db:              s.db,
 			logger:          s.logger,
-			address:         addr,
+			id:              id,
 			creationTime:    time.Now(),
 			mode:            syncMode,
 			tesseractQueue:  NewTesseractQueue(),
@@ -327,7 +333,7 @@ func (s *Syncer) NewSyncRequest(
 
 		job.updateBestPeers(bestPeers)
 
-		metaInfo, err := s.db.GetAccountMetaInfo(addr)
+		metaInfo, err := s.db.GetAccountMetaInfo(id)
 		if err == nil {
 			if metaInfo.Height >= expectedHeight {
 				_, err = s.postAdditionHook(job, metaInfo.Height)
@@ -355,7 +361,7 @@ func (s *Syncer) NewSyncRequest(
 		}
 	}
 
-	tsHash, _ := s.lattice.GetTesseractHeightEntry(job.address, job.getCurrentHeight())
+	tsHash, _ := s.lattice.GetTesseractHeightEntry(job.id, job.getCurrentHeight())
 	if job.getCurrentHeight() == job.getExpectedHeight() && tsHash != common.NilHash {
 		s.logger.Debug("ts found, avoiding new sync request")
 
@@ -365,7 +371,7 @@ func (s *Syncer) NewSyncRequest(
 	if !s.hasSyncPeers() && syncMode == common.FullSync {
 		var height uint64
 
-		height, bestPeers, err = s.findLatestHeightAndBestPeers(addr)
+		height, bestPeers, err = s.findLatestHeightAndBestPeers(id)
 		if err != nil {
 			return errors.Wrap(err, "failed to find best peers for sync")
 		}
@@ -500,7 +506,7 @@ func (s *Syncer) setBucketSyncDone(val bool) {
 
 func (s *Syncer) RPCGetLatestAccountInfo(
 	bestPeer kramaid.KramaID,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 ) (*LatestAccountInfo, error) {
 	resp := new(LatestAccountInfo)
 
@@ -509,12 +515,12 @@ func (s *Syncer) RPCGetLatestAccountInfo(
 		bestPeer,
 		"SYNCRPC",
 		"GetLatestAccountInfo",
-		addr,
+		id,
 		resp,
 		5*time.Second,
 	); err != nil {
 		s.logger.Error("failed to fetch account latest status",
-			"RPC-error", err, "consensus-id", bestPeer, "address", addr)
+			"RPC-error", err, "consensus-accountID", bestPeer, "accountID", id)
 
 		return nil, err
 	}
@@ -522,12 +528,12 @@ func (s *Syncer) RPCGetLatestAccountInfo(
 	return resp, nil
 }
 
-func (s *Syncer) chooseBestPeersForInitialSync(addr identifiers.Address) (uint64, []kramaid.KramaID, error) {
+func (s *Syncer) chooseBestPeersForInitialSync(id identifiers.Identifier) (uint64, []kramaid.KramaID, error) {
 	if s.hasSyncPeers() {
 		for i := 0; i < 3; i++ {
 			bestPeer := s.chooseAnySyncPeer()
 
-			resp, err := s.RPCGetLatestAccountInfo(bestPeer.ID, addr)
+			resp, err := s.RPCGetLatestAccountInfo(bestPeer.ID, id)
 			if err != nil {
 				continue
 			}
@@ -538,7 +544,7 @@ func (s *Syncer) chooseBestPeersForInitialSync(addr identifiers.Address) (uint64
 		return 0, nil, errors.New("unable to fetch latest account info from sync peers")
 	}
 
-	bestHeight, bestPeers, err := s.findLatestHeightAndBestPeers(addr)
+	bestHeight, bestPeers, err := s.findLatestHeightAndBestPeers(id)
 	if err != nil {
 		return 0, nil, err
 	}
@@ -570,7 +576,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 	s.logger.Debug(
 		"Processing new job",
-		"addr", job.address,
+		"accountID", job.id,
 		"current-height", job.currentHeight,
 		"expected-height", job.getExpectedHeight(),
 	)
@@ -582,8 +588,8 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 	}()
 
 	// Attempt to lock the account for synchronization also make sure that account is not locked by syncer.
-	if !s.consensus.AddActiveAccount(job.address, common.MutateLock, "syncer") && !job.selfAccLock {
-		s.logger.Debug("Account is active, job state set to sleep", "addr", job.address)
+	if !s.consensus.AddActiveAccount(job.id, common.MutateLock, "syncer") && !job.selfAccLock {
+		s.logger.Debug("Account is active, job state set to sleep", "addr", job.id)
 		job.updateJobState(Sleep)
 
 		return nil
@@ -592,7 +598,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 	// self acc lock indicates if the account is locked by syncer or consensus
 	if !job.selfAccLock {
 		job.selfAccLock = true
-		s.logger.Trace("added to active accounts", "address", job.address,
+		s.logger.Trace("added to active accounts", "id", job.id,
 			"current-height", job.getCurrentHeight(), "expected-height", job.getExpectedHeight())
 	}
 
@@ -609,7 +615,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 
 	tsInfo := job.tesseractQueue.Peek()
 
-	if !job.snapDownloaded && s.isSnapSyncRequired(job.address) && job.mode != common.LatestSync {
+	if !job.snapDownloaded && s.isSnapSyncRequired(job.id) && job.mode != common.LatestSync {
 		if err = s.fetchAndStoreSnap(bestPeer, job); err != nil {
 			job.deleteBestPeer(bestPeer)
 
@@ -665,10 +671,10 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 				}
 			}
 
-			if !s.db.HasAccMetaInfoAt(tsInfo.address(), tsInfo.height()) {
+			if !s.db.HasAccMetaInfoAt(tsInfo.id(), tsInfo.height()) {
 				initial, err := s.state.IsInitialTesseract(
 					tsInfo.tesseract,
-					tsInfo.address(),
+					tsInfo.id(),
 				)
 				if err != nil {
 					jobState = Sleep
@@ -679,7 +685,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 				if !initial && tsInfo.height() != job.getCurrentHeight()+1 {
 					s.logger.Error(
 						"Missing tesseract",
-						"addr", tsInfo.address(),
+						"accountID", tsInfo.id(),
 						"height", tsInfo.height(),
 						"err", err,
 					)
@@ -745,7 +751,7 @@ func (s *Syncer) postAdditionHook(job *SyncJob, newHeight uint64) (bool, error) 
 	}
 
 	if job.mode == common.FullSync {
-		if err := s.db.UpdatePrimarySyncStatus(job.address); err != nil {
+		if err := s.db.UpdatePrimarySyncStatus(job.id); err != nil {
 			return false, errors.Wrap(err, "failed to update account primary sync status")
 		}
 	}
@@ -795,13 +801,13 @@ func (s *Syncer) cleanGridAndReleasePendingJobs(tsInfo *TesseractInfo, job *Sync
 	}
 
 	for _, ts := range grid.ts {
-		if ts.Address() == job.address {
+		if ts.Identifier() == job.accountID {
 			continue
 		}
 
-		pendingJob, ok := s.jobQueue.getJob(ts.Address())
+		pendingJob, ok := s.jobQueue.getJob(ts.Identifier())
 		if !ok {
-			return fmt.Errorf(" %s job not found", ts.Address())
+			return fmt.Errorf(" %s job not found", ts.Identifier())
 		}
 
 		if err := s.releasePendingJob(pendingJob, ts); err != nil {
@@ -853,7 +859,7 @@ func getBestPeers(heightPeersMap map[uint64][]kramaid.KramaID) (uint64, []kramai
 }
 
 // findLatestHeightAndBestPeers returns the height reported from the majority of peers as best height
-func (s *Syncer) findLatestHeightAndBestPeers(addr identifiers.Address) (uint64, []kramaid.KramaID, error) {
+func (s *Syncer) findLatestHeightAndBestPeers(id identifiers.Identifier) (uint64, []kramaid.KramaID, error) {
 	heightPeersMap := make(map[uint64][]kramaid.KramaID)
 
 	// index tracks the no of peers responded
@@ -864,7 +870,7 @@ func (s *Syncer) findLatestHeightAndBestPeers(addr identifiers.Address) (uint64,
 			break
 		}
 
-		resp, err := s.RPCGetLatestAccountInfo(kramaID, addr)
+		resp, err := s.RPCGetLatestAccountInfo(kramaID, id)
 		if err != nil {
 			continue
 		}
@@ -891,7 +897,7 @@ func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (kramaid.KramaID, error) {
 		return job.tesseractQueue.Peek().tesseract.CommitInfo().RandomSet[randNumber], nil
 	}
 
-	_, bestPeers, err := s.findLatestHeightAndBestPeers(job.address)
+	_, bestPeers, err := s.findLatestHeightAndBestPeers(job.id)
 	if err != nil {
 		return "", err
 	}
@@ -908,22 +914,22 @@ func (s *Syncer) chooseAnySyncPeer() config.NodeInfo {
 	return s.cfg.SyncPeers[randNumber]
 }
 
-// syncSystemAccount sends a sync request for the specified address and waits for it to complete within a given time.
+// syncSystemAccount sends a sync request for the specified accountID and waits for it to complete within a given time.
 // If the sync does not complete within the specified time, an error is returned.
-func (s *Syncer) syncSystemAccount(address ...identifiers.Address) ([]kramaid.KramaID, error) {
+func (s *Syncer) syncSystemAccount(id ...identifiers.Identifier) ([]kramaid.KramaID, error) {
 	var (
 		bestPeers  []kramaid.KramaID
 		bestHeight uint64
 		err        error
 	)
 
-	for _, addr := range address {
-		bestHeight, bestPeers, err = s.chooseBestPeersForInitialSync(addr)
+	for _, id := range id {
+		bestHeight, bestPeers, err = s.chooseBestPeersForInitialSync(id)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch best peers and height")
 		}
 
-		if err = s.NewSyncRequest(addr, bestHeight, common.FullSync, bestPeers, false); err != nil {
+		if err = s.NewSyncRequest(id, bestHeight, common.FullSync, bestPeers, false); err != nil {
 			return nil, err
 		}
 
@@ -938,7 +944,7 @@ func (s *Syncer) syncSystemAccount(address ...identifiers.Address) ([]kramaid.Kr
 				case <-time.After(200 * time.Millisecond):
 				}
 
-				metaInfo, err := s.db.GetAccountMetaInfo(addr)
+				metaInfo, err := s.db.GetAccountMetaInfo(id)
 				if err == nil && metaInfo.Height >= bestHeight {
 					return nil
 				}
@@ -967,7 +973,7 @@ func (s *Syncer) initSync() error {
 	}
 
 	// Sync all system accounts
-	bestPeers, err := s.syncSystemAccount(common.GuardianLogicAddr, common.SargaAddress)
+	bestPeers, err := s.syncSystemAccount(common.GuardianAccountID, common.SargaAccountID)
 	if err != nil {
 		s.logger.Error("failed to sync system account", "err", err)
 
@@ -1017,7 +1023,7 @@ func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []kramaid.KramaID, maxAtte
 }
 
 /*
-func (s *Syncer) syncBucketSince(kramaID id.KramaID, sinceTs uint64) error {
+func (s *Syncer) syncBucketSince(kramaID accountID.KramaID, sinceTs uint64) error {
 	var (
 		argsChan = make(chan *BucketSyncRequest, 1)
 		respChan = make(chan *BucketSyncResponse, ChannelBufferSize)
@@ -1066,7 +1072,7 @@ func (s *Syncer) syncBucketSince(kramaID id.KramaID, sinceTs uint64) error {
 						}
 
 						if i != respMsg.BucketID {
-							return errors.New("invalid bucket id")
+							return errors.New("invalid bucket accountID")
 						}
 
 						if respMsg.BucketCount == 0 {
@@ -1112,13 +1118,13 @@ func (s *Syncer) loadSyncJobsFromDB() error {
 
 	for _, v := range accountSyncInfos {
 		if err = s.NewSyncRequest(
-			v.Address,
+			v.ID,
 			v.ExpectedHeight,
 			v.Mode,
 			nil,
 			v.SnapshotDownloaded,
 		); err != nil {
-			s.logger.Error("Failed to create sync request for job", "error", err, "address", v.Address)
+			s.logger.Error("Failed to create sync request for job", "error", err, "accountID", v.ID)
 		}
 	}
 
@@ -1138,6 +1144,8 @@ func (s *Syncer) syncBuckets(bestPeer kramaid.KramaID, attempts int) error {
 		return err
 	}
 
+	s.logger.Info("Sending bucket sync request", "peerID", peerID)
+
 	go func() {
 		if err = s.rpcClient.Stream(
 			context.Background(),
@@ -1146,7 +1154,7 @@ func (s *Syncer) syncBuckets(bestPeer kramaid.KramaID, attempts int) error {
 			"SyncBuckets",
 			argsChan,
 			respChan,
-			connTag(identifiers.NilAddress, "syncBuckets")); err != nil {
+			connTag(identifiers.Nil, "syncBuckets")); err != nil {
 			s.logger.Error("Failed to sync buckets", "err", err)
 		}
 	}()
@@ -1173,7 +1181,7 @@ func (s *Syncer) syncBuckets(bestPeer kramaid.KramaID, attempts int) error {
 					if i != respMsg.BucketID {
 						s.logger.Error("Invalid bucket", "err", err)
 
-						return errors.New("invalid bucket id")
+						return errors.New("invalid bucket accountID")
 					}
 
 					if respMsg.BucketCount == 0 {
@@ -1219,7 +1227,7 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) 
 			return err
 		}
 
-		localMetaInfo, err := s.db.GetAccountMetaInfo(acc.Address)
+		localMetaInfo, err := s.db.GetAccountMetaInfo(acc.ID)
 		if err == nil {
 			if localMetaInfo.Height >= acc.Height {
 				continue
@@ -1230,7 +1238,7 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) 
 		// TODO: Should improve this, jobQueue will consume most of the memory, if job processor is slow
 
 		if err = s.NewSyncRequest(
-			acc.Address,
+			acc.ID,
 			acc.Height,
 			syncMode,
 			nil,
@@ -1238,7 +1246,7 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) 
 		); err != nil {
 			s.logger.Error(
 				"Failed to add new sync request",
-				"addr", acc.Address,
+				"accountID", acc.ID,
 				"height", acc.Height,
 				"err", err,
 			)
@@ -1248,12 +1256,12 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) 
 	return nil
 }
 
-func (s *Syncer) isSnapSyncRequired(address identifiers.Address) bool {
+func (s *Syncer) isSnapSyncRequired(id identifiers.Identifier) bool {
 	if !s.cfg.EnableSnapSync {
 		return false
 	}
 
-	return !s.db.IsAccountPrimarySyncDone(address)
+	return !s.db.IsAccountPrimarySyncDone(id)
 }
 
 func (s *Syncer) fetchAndStoreSnap(bestPeer kramaid.KramaID, job *SyncJob) error {
@@ -1263,16 +1271,16 @@ func (s *Syncer) fetchAndStoreSnap(bestPeer kramaid.KramaID, job *SyncJob) error
 	)
 	defer cancel()
 
-	s.logger.Trace("Initiating snap sync request", "addr", job.address)
+	s.logger.Trace("Initiating snap sync request", "accountID", job.id)
 
 	dropPrefix := func() {
-		err := s.db.DropPrefix(job.address.Bytes())
+		err := s.db.DropPrefix(storage.NewIdentifierKey(job.id).Bytes())
 		if err != nil {
 			panic(err) // This should never happen
 		}
 	}
 
-	isSnapStored, err := s.fetchSnapShot(ctx, bestPeer, job.address, job.expectedHeight)
+	isSnapStored, err := s.fetchSnapShot(ctx, bestPeer, job.id, job.expectedHeight)
 	if err != nil {
 		if isSnapStored {
 			dropPrefix()
@@ -1281,7 +1289,7 @@ func (s *Syncer) fetchAndStoreSnap(bestPeer kramaid.KramaID, job *SyncJob) error
 		return errors.Wrap(err, "failed to fetch snapshot")
 	}
 
-	s.logger.Trace("Snap fetch successful", "addr", job.address)
+	s.logger.Trace("Snap fetch successful", "accountID", job.id)
 
 	if err = job.updateSnap(true); err != nil {
 		dropPrefix()
@@ -1305,7 +1313,7 @@ func (s *Syncer) fetchAndStoreSnap(bestPeer kramaid.KramaID, job *SyncJob) error
 func (s *Syncer) fetchSnapShot(
 	ctx context.Context,
 	peer kramaid.KramaID,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	expectedHeight uint64,
 ) (bool, error) {
 	peerID, err := peer.DecodedPeerID()
@@ -1321,13 +1329,13 @@ func (s *Syncer) fetchSnapShot(
 	)
 
 	currentSnap := &common.Snapshot{
-		Prefix:  address.Bytes(),
+		Prefix:  id.Bytes(),
 		Entries: make([]byte, 0),
 	}
 
 	reqChan <- &SnapRequest{
-		Address: address,
-		Height:  expectedHeight,
+		AccountID: id,
+		Height:    expectedHeight,
 	}
 	close(reqChan)
 
@@ -1340,7 +1348,7 @@ func (s *Syncer) fetchSnapShot(
 			"SyncSnap",
 			reqChan,
 			respChan,
-			connTag(address, "syncSnap"),
+			connTag(id, "syncSnap"),
 		); err != nil {
 			s.logger.Error("failed to fetch snapshot ", "err", err)
 
@@ -1408,9 +1416,9 @@ func (s *Syncer) registerRPCService() error {
 	return s.network.RegisterNewRPCService(config.SyncProtocolRPC, "SYNCRPC", NewSyncRPCService(s))
 }
 
-func (s *Syncer) fromGenesis(addr identifiers.Address, currentHeight uint64) bool {
+func (s *Syncer) fromGenesis(id identifiers.Identifier, currentHeight uint64) bool {
 	if currentHeight == 0 {
-		_, err := s.db.GetAccountMetaInfo(addr)
+		_, err := s.db.GetAccountMetaInfo(id)
 		if errors.Is(err, common.ErrAccountNotFound) {
 			return true
 		}
@@ -1434,7 +1442,7 @@ func (s *Syncer) syncLattice(
 
 	if nextTS != nil {
 		// check if we have tesseract for start height, if not sync from the start height
-		if s.db.HasAccMetaInfoAt(job.address, startHeight) || nextTS.height() == startHeight {
+		if s.db.HasAccMetaInfoAt(job.id, startHeight) || nextTS.height() == startHeight {
 			if int64(nextTS.height()-(startHeight+1)) <= 0 {
 				return nil
 			}
@@ -1448,9 +1456,9 @@ func (s *Syncer) syncLattice(
 		return errors.Wrap(err, "failed to decode peerID")
 	}
 
-	s.logger.Debug("Sending lattice sync request", "addr", job.address)
+	s.logger.Debug("Sending lattice sync request", "accountID", job.id)
 
-	fromGenesis := s.fromGenesis(job.address, job.getCurrentHeight())
+	fromGenesis := s.fromGenesis(job.id, job.getCurrentHeight())
 	if !fromGenesis {
 		startHeight++
 	}
@@ -1458,7 +1466,7 @@ func (s *Syncer) syncLattice(
 	requiredTesseractCount := endHeight - startHeight + 1
 
 	reqChan <- &LatticeRequest{
-		Address:     job.address,
+		AccountID:   job.id,
 		StartHeight: startHeight,
 		EndHeight:   endHeight,
 	}
@@ -1476,7 +1484,7 @@ func (s *Syncer) syncLattice(
 		s.logger.Debug(
 			"Fetching tesseract",
 			"from", peerID,
-			"for", job.address,
+			"for", job.id,
 			"start-height", startHeight,
 			"end-height", endHeight,
 		)
@@ -1488,7 +1496,7 @@ func (s *Syncer) syncLattice(
 			"SyncLattice",
 			reqChan,
 			respChan,
-			connTag(job.address, "syncLattice"),
+			connTag(job.id, "syncLattice"),
 		); err != nil {
 			s.logger.Error("Lattice fetch failed", "err", err)
 
@@ -1509,7 +1517,7 @@ func (s *Syncer) syncLattice(
 					return errors.New("response channel closed")
 				}
 
-				tsInfo, err := s.tesseractInfoFromTesseractMsg(job.address, msg)
+				tsInfo, err := s.tesseractInfoFromTesseractMsg(job.id, msg)
 				if err != nil {
 					s.logger.Error("Failed to parse tesseract info from message", "err", err)
 
@@ -1526,7 +1534,7 @@ func (s *Syncer) syncLattice(
 
 				s.logger.Debug(
 					"Adding tesseract to queue",
-					"addr", tsInfo.address(),
+					"accountID", tsInfo.id(),
 					"height", tsInfo.height(),
 				)
 
@@ -1554,13 +1562,13 @@ func (s *Syncer) syncLattice(
 }
 
 func (s *Syncer) tesseractInfoFromTesseractMsg(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	msg *networkmsg.TesseractSyncMsg,
 ) (*TesseractInfo, error) {
 	var err error
 
 	info := &TesseractInfo{
-		addr:          addr,
+		accountID:     id,
 		delta:         msg.Delta,
 		shouldExecute: false,
 	}
@@ -1584,21 +1592,21 @@ func extractDirtyEntries(delta map[string][]byte) map[common.Hash][]byte {
 }
 
 func (s *Syncer) isAnyOtherParticipantStored(msg *TesseractInfo) bool {
-	if s.db.HasAccMetaInfoAt(msg.address(), msg.height()) {
+	if s.db.HasAccMetaInfoAt(msg.id(), msg.height()) {
 		return false
 	}
 
-	for addr, participant := range msg.tesseract.Participants() {
+	for id, participant := range msg.tesseract.Participants() {
 		if participant.StateHash == common.NilHash {
 			continue
 		}
 
-		lockInfo, ok := msg.tesseract.ConsensusInfo().AccountLocks[addr]
+		lockInfo, ok := msg.tesseract.ConsensusInfo().AccountLocks[id]
 		if ok && lockInfo > common.MutateLock {
 			continue
 		}
 
-		if s.db.HasAccMetaInfoAt(addr, participant.Height) {
+		if s.db.HasAccMetaInfoAt(id, participant.Height) {
 			return true
 		}
 	}
@@ -1620,21 +1628,21 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 	}
 
 	syncTSThroughAgora := func() (bool, error) {
-		err = s.consensus.ValidateTesseract(msg.address(), msg.tesseract, msg.committee, false)
+		err = s.consensus.ValidateTesseract(msg.id(), msg.tesseract, msg.committee, false)
 		if err != nil {
 			return false, errors.Wrap(err, "failed to validate tesseract")
 		}
 
-		ps := make(map[identifiers.Address]common.ParticipantInfo)
+		ps := make(map[identifiers.Identifier]common.ParticipantInfo)
 
-		accountType, err := msg.tesseract.Interactions().AccountType(msg.address())
+		accountType, err := msg.tesseract.Interactions().AccountType(msg.id())
 		if err != nil {
 			return false, err
 		}
 
-		ps[msg.address()] = common.ParticipantInfo{
+		ps[msg.id()] = common.ParticipantInfo{
 			AccType:   accountType,
-			IsGenesis: msg.tesseract.TransitiveLink(msg.address()).IsNil(),
+			IsGenesis: msg.tesseract.TransitiveLink(msg.id()).IsNil(),
 		}
 
 		transition, err := s.state.LoadTransitionObjects(ps)
@@ -1646,19 +1654,19 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 		// If participant state exists, it indicates that all data related to the participant has been fetched,
 		// allowing us to skip syncing for that participant.
 		if s.isInitialSyncDone() ||
-			!s.state.HasParticipantStateAt(msg.address(), msg.tesseract.StateHash(msg.address())) {
+			!s.state.HasParticipantStateAt(msg.id(), msg.tesseract.StateHash(msg.id())) {
 			if err = s.fetchTesseractState(
-				msg.address(),
+				msg.id(),
 				msg.tesseract,
 				msg.committee.GetNodes(false),
-				transition.GetObject(msg.address()),
+				transition.GetObject(msg.id()),
 			); err != nil {
 				return false, errors.Wrap(err, "failed to fetch tesseract state")
 			}
 		}
 
 		if err = s.lattice.AddTesseractWithState(
-			msg.address(),
+			msg.id(),
 			extractDirtyEntries(msg.delta),
 			msg.tesseract,
 			transition,
@@ -1667,12 +1675,12 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			return false, errors.Wrap(err, "failed to add synced tesseract")
 		}
 
-		if err = s.publishEventTesseractSync(msg.address(), msg.height()); err != nil {
+		if err = s.publishEventTesseractSync(msg.id(), msg.height()); err != nil {
 			s.logger.Error("Failed to publish event lattice sync", "err", err)
 		}
 
 		// Clear the cache because the account state has changed
-		s.state.RemoveCachedObject(msg.address())
+		s.state.RemoveCachedObject(msg.id())
 
 		return true, nil
 	}
@@ -1709,9 +1717,9 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 
 	// TODO is it okay to just check height for genesis identification ?
 	// send job to sleep state, if any one of the transitive link is absent
-	for address, participantState := range msg.tesseract.Participants() {
+	for id, participantState := range msg.tesseract.Participants() {
 		if !s.db.HasTesseract(participantState.TransitiveLink) && participantState.Height != 0 {
-			s.logger.Trace("Missing transitive links", "addr", address)
+			s.logger.Trace("Missing transitive links", "accountID", id)
 
 			return false, nil
 		}
@@ -1719,12 +1727,12 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 
 	// In case if another job already executed, added tesseracts, then remove this tesseract from job and
 	// update job's current height
-	if s.db.HasAccMetaInfoAt(msg.address(), msg.height()) {
+	if s.db.HasAccMetaInfoAt(msg.id(), msg.height()) {
 		return true, nil
 	}
 
 	err = s.consensus.ValidateTesseract(
-		msg.address(),
+		msg.id(),
 		msg.tesseract,
 		msg.committee,
 		msg.tesseract.ValidateAllParticipantsState(),
@@ -1735,26 +1743,26 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 
 	s.accountsLock.Lock()
 
-	addresses := msg.tesseract.Addresses()
+	ids := msg.tesseract.AccountIDs()
 
-	for _, addr := range addresses {
-		if _, ok := s.lockedAccounts[addr]; ok {
+	for _, id := range ids {
+		if _, ok := s.lockedAccounts[id]; ok {
 			s.accountsLock.Unlock()
 
 			return false, nil
 		}
 	}
 
-	for _, addr := range addresses {
-		s.lockedAccounts[addr] = struct{}{}
+	for _, id := range ids {
+		s.lockedAccounts[id] = struct{}{}
 	}
 
 	s.accountsLock.Unlock()
 
 	defer func() {
 		s.accountsLock.Lock()
-		for _, addr := range addresses {
-			delete(s.lockedAccounts, addr)
+		for _, id := range ids {
+			delete(s.lockedAccounts, id)
 		}
 		s.accountsLock.Unlock()
 	}()
@@ -1776,17 +1784,17 @@ func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesserac
 		return err
 	}
 
-	if err = s.lattice.AddTesseractWithState(identifiers.NilAddress, dirty, ts, transition, true); err != nil {
+	if err = s.lattice.AddTesseractWithState(identifiers.Nil, dirty, ts, transition, true); err != nil {
 		return err
 	}
 
-	for addr, participantState := range ts.Participants() {
-		if err := s.publishEventTesseractSync(addr, participantState.Height); err != nil {
+	for id, participantState := range ts.Participants() {
+		if err := s.publishEventTesseractSync(id, participantState.Height); err != nil {
 			s.logger.Error("Failed to publish event lattice sync", "err", err)
 		}
 
 		// Clear the cache because the account state has changed
-		s.state.RemoveCachedObject(addr)
+		s.state.RemoveCachedObject(id)
 	}
 
 	return nil
@@ -1794,7 +1802,7 @@ func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesserac
 
 // fetchTesseractState fetches the complete state(balance,context,approvals) of the given tesseract using agora
 func (s *Syncer) fetchTesseractState(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	tesseract *common.Tesseract,
 	fetchContext []kramaid.KramaID,
 	object *state.Object,
@@ -1802,13 +1810,13 @@ func (s *Syncer) fetchTesseractState(
 	ctx, cancel := context.WithTimeout(context.Background(), TesseractFetchTimeOut) // TODO:Optimise timeout duration
 	defer cancel()
 
-	newSession, err := s.agora.NewSession(ctx, fetchContext, addr, cid.AccountCID(tesseract.StateHash(addr)))
+	newSession, err := s.agora.NewSession(ctx, fetchContext, id, cid.AccountCID(tesseract.StateHash(id)))
 	if err != nil {
 		return err
 	}
 	defer newSession.Close()
 
-	islocal, acc, blk, err := s.fetchAccount(ctx, newSession, tesseract.StateHash(addr))
+	islocal, acc, blk, err := s.fetchAccount(ctx, newSession, tesseract.StateHash(id))
 	if err != nil {
 		s.logger.Error("Error fetching account data", "err", err)
 
@@ -1826,7 +1834,7 @@ func (s *Syncer) fetchTesseractState(
 		return err
 	}
 
-	if err = s.syncContextData(ctx, newSession, cid.ContextCID(acc.ContextHash)); err != nil {
+	if err = s.syncContextData(ctx, newSession, cid.ContextCID(acc.ContextHash), object); err != nil {
 		s.logger.Error("Error fetching context data", "err", err)
 
 		return err
@@ -1845,7 +1853,7 @@ func (s *Syncer) fetchTesseractState(
 	}
 
 	if !islocal {
-		if err = s.db.SetAccount(addr, tesseract.StateHash(addr), blk.GetData()); err != nil {
+		if err = s.db.SetAccount(id, tesseract.StateHash(id), blk.GetData()); err != nil {
 			return err
 		}
 	}
@@ -2033,8 +2041,8 @@ func (s *Syncer) fetchAndStoreData(ctx context.Context, session syncer.Session, 
 	return errors.New("failed to fetch all keys")
 }
 
-// syncContextData fetches the behavioural context and random context associated with the given hash using agora
-func (s *Syncer) syncContextData(ctx context.Context, session syncer.Session, cID cid.CID) error {
+// syncContextData fetches the meta context object
+func (s *Syncer) syncContextData(ctx context.Context, session syncer.Session, cID cid.CID, object *state.Object) error {
 	islocal, blk, err := s.getBlock(ctx, session, cID)
 	if err != nil {
 		return err
@@ -2045,20 +2053,13 @@ func (s *Syncer) syncContextData(ctx context.Context, session syncer.Session, cI
 		return err
 	}
 
-	if err = s.fetchAndStoreData(
-		ctx,
-		session,
-		cid.ContextCID(metaContextObject.RandomContext),
-		cid.ContextCID(metaContextObject.BehaviouralContext),
-	); err != nil {
-		return err
-	}
-
 	if !islocal {
 		if err = s.db.CreateEntry(dbKeyFromCID(session.ID(), cID), blk.GetData()); err != nil {
 			return err
 		}
 	}
+
+	object.SetMetaContextObject(metaContextObject)
 
 	return nil
 }
@@ -2110,7 +2111,7 @@ func (s *Syncer) syncStorageTree(
 		return s.state.SyncStorageTrees(ctx, metaStorageRoot, storageTreeRoots, object)
 	}
 
-	s.logger.Debug("Syncing storage tree", "address", session.ID())
+	s.logger.Debug("Syncing storage tree", "accountID", session.ID())
 
 	blks, err := s.getBlocks(ctx, session, storageCIDs...)
 	if err != nil {
@@ -2138,7 +2139,7 @@ func (s *Syncer) syncStorageTree(
 	}
 
 	if err = s.state.SyncStorageTrees(ctx, metaStorageRoot, storageTreeRoots, object); err != nil {
-		s.logger.Error("Failed to sync storage tree", "addr", session.ID())
+		s.logger.Error("Failed to sync storage tree", "accountID", session.ID())
 
 		return err
 	}
@@ -2171,7 +2172,7 @@ func (s *Syncer) syncLogicManifests(ctx context.Context, as syncer.Session, root
 
 	for _, cID := range cids {
 		if stored, err := s.db.Contains(dbKeyFromCID(as.ID(), cID)); err != nil || !stored {
-			s.logger.Error("Failed to fetch logic manifest", "addr", as.ID(), "manifest-hash", cID.String())
+			s.logger.Error("Failed to fetch logic manifest", "accountID", as.ID(), "manifest-hash", cID.String())
 
 			return errors.New("failed to fetch logic manifest")
 		}
@@ -2269,7 +2270,7 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 		ixns, err = s.ixpool.GetIxns(tsInfo.ixnsHashes)
 		if err != nil {
 			s.logger.Trace("Ixns not found in ixpool",
-				"ixns-hashes", tsInfo.ixnsHashes, "addr", tsInfo.address())
+				"ixns-hashes", tsInfo.ixnsHashes, "accountID", tsInfo.id())
 			s.metrics.AddIxMissCount(1)
 
 			err = func() error {
@@ -2279,8 +2280,8 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 				newSession, err := s.agora.NewSession(
 					ctx,
 					tsInfo.tesseract.CommitInfo().RandomSet,
-					tsInfo.address(),
-					cid.AccountCID(ts.StateHash(tsInfo.address())),
+					tsInfo.id(),
+					cid.AccountCID(ts.StateHash(tsInfo.id())),
 				)
 				if err != nil {
 					return errors.Wrap(err, "unable to create session")
@@ -2293,7 +2294,7 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 				}
 
 				s.logger.Trace("fetched Ixns through agora",
-					"ixns-hashes", tsInfo.ixnsHashes, "addr", tsInfo.address())
+					"ixns-hashes", tsInfo.ixnsHashes, "accountID", tsInfo.id())
 
 				return nil
 			}()
@@ -2314,8 +2315,8 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 			newSession, err := s.agora.NewSession(
 				ctx,
 				tsInfo.tesseract.CommitInfo().RandomSet,
-				tsInfo.address(),
-				cid.AccountCID(ts.StateHash(tsInfo.address())),
+				tsInfo.id(),
+				cid.AccountCID(ts.StateHash(tsInfo.id())),
 			)
 			if err != nil {
 				return errors.Wrap(err, "unable to create session")
@@ -2361,22 +2362,22 @@ func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 			return nil
 		}
 
-		for addr, ps := range tsInfo.tesseract.Participants() {
+		for id, ps := range tsInfo.tesseract.Participants() {
 			if ps.StateHash == common.NilHash {
 				continue
 			}
 
-			lockType, ok := tsInfo.tesseract.ConsensusInfo().AccountLocks[addr]
+			lockType, ok := tsInfo.tesseract.ConsensusInfo().AccountLocks[id]
 			if ok && (lockType > common.MutateLock) {
 				continue
 			}
 
-			info := tsInfo.CreateTSInfoWithAddr(addr)
+			info := tsInfo.CreateTSInfoWithAddr(id)
 
-			s.logger.Debug("need to sync ", "address", info.address(), "height", info.height())
+			s.logger.Debug("need to sync ", "id", info.id(), "height", info.height())
 
 			if err := s.NewSyncRequest(
-				info.address(),
+				info.id(),
 				info.height(),
 				common.LatestSync,
 				info.tesseract.CommitInfo().RandomSet,
@@ -2396,11 +2397,11 @@ func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 }
 
 func (s *Syncer) getTesseractWithRawIxnsAndReceipts(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	height uint64,
 	withInteractions, withReceipts bool,
 ) (ts *common.Tesseract, ixns, receipts []byte, err error) {
-	ts, err = s.lattice.GetTesseractByHeight(address, height, false, false)
+	ts, err = s.lattice.GetTesseractByHeight(id, height, false, false)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -2579,7 +2580,7 @@ func (s *Syncer) startSyncEventHandler() {
 			}
 
 			if err := s.NewSyncRequest(
-				req.Address,
+				req.ID,
 				req.Height,
 				common.LatestSync,
 				[]kramaid.KramaID{req.BestPeer},
@@ -2592,12 +2593,12 @@ func (s *Syncer) startSyncEventHandler() {
 }
 
 // GetAccountSyncStatus returns the sync status of an account
-func (s *Syncer) GetAccountSyncStatus(addr identifiers.Address) (*args.AccSyncStatus, error) {
+func (s *Syncer) GetAccountSyncStatus(id identifiers.Identifier) (*args.AccSyncStatus, error) {
 	var currentHeight, expectedHeight uint64
 
-	job, ok := s.jobQueue.getJob(addr)
+	job, ok := s.jobQueue.getJob(id)
 	if !ok {
-		accountInfo, err := s.db.GetAccountMetaInfo(addr)
+		accountInfo, err := s.db.GetAccountMetaInfo(id)
 		if err != nil {
 			return nil, err
 		}
@@ -2609,7 +2610,7 @@ func (s *Syncer) GetAccountSyncStatus(addr identifiers.Address) (*args.AccSyncSt
 		expectedHeight = job.expectedHeight
 	}
 
-	isPrimarySyncDone := s.db.IsAccountPrimarySyncDone(addr)
+	isPrimarySyncDone := s.db.IsAccountPrimarySyncDone(id)
 
 	return &args.AccSyncStatus{
 		CurrentHeight:     hexutil.Uint64(currentHeight),
@@ -2618,13 +2619,13 @@ func (s *Syncer) GetAccountSyncStatus(addr identifiers.Address) (*args.AccSyncSt
 	}, nil
 }
 
-// GetSyncJobInfo returns the sync job meta info for given address
-func (s *Syncer) GetSyncJobInfo(addr identifiers.Address) (*args.SyncJobInfo, error) {
-	if addr.IsNil() {
-		return nil, common.ErrInvalidAddress
+// GetSyncJobInfo returns the sync job meta info for given accountID
+func (s *Syncer) GetSyncJobInfo(id identifiers.Identifier) (*args.SyncJobInfo, error) {
+	if id.IsNil() {
+		return nil, common.ErrInvalidIdentifier
 	}
 
-	job, ok := s.jobQueue.getJob(addr)
+	job, ok := s.jobQueue.getJob(id)
 	if !ok {
 		return nil, common.ErrSyncJobNotFound
 	}
@@ -2685,10 +2686,10 @@ func (s *Syncer) queueHandler() {
 		case msg, ok := <-s.pendingMsgChan:
 			if !ok {
 				for _, tsInfo := range s.pendingMsgQueue {
-					for addr := range tsInfo.tesseract.Participants() {
-						info := tsInfo.CreateTSInfoWithAddr(addr)
+					for id := range tsInfo.tesseract.Participants() {
+						info := tsInfo.CreateTSInfoWithAddr(id)
 						if err := s.NewSyncRequest(
-							info.address(),
+							info.id(),
 							info.height(),
 							common.LatestSync,
 							info.tesseract.CommitInfo().RandomSet,
@@ -2709,7 +2710,7 @@ func (s *Syncer) queueHandler() {
 	}
 }
 
-func (s *Syncer) fetchContextForAgora(addr identifiers.Address, ts common.Tesseract) ([]kramaid.KramaID, error) {
+func (s *Syncer) fetchContextForAgora(id identifiers.Identifier, ts common.Tesseract) ([]kramaid.KramaID, error) {
 	peers := make([]kramaid.KramaID, 0)
 
 	for {
@@ -2718,24 +2719,22 @@ func (s *Syncer) fetchContextForAgora(addr identifiers.Address, ts common.Tesser
 		}
 
 		// fetch the context delta
-		deltaGroup, _ := ts.GetContextDelta(addr)
+		deltaGroup, _ := ts.GetContextDelta(id)
 		// add the delta peers to the list
-		peers = append(peers, deltaGroup.BehaviouralNodes...)
-		peers = append(peers, deltaGroup.RandomNodes...)
+		peers = append(peers, deltaGroup.ConsensusNodes...)
 
-		_, behaviour, random, err := s.state.GetContextByHash(addr, ts.PreviousContextHash(addr))
+		consensusNodes, err := s.state.GetConsensusNodesByHash(id, ts.PreviousContextHash(id))
 		if err == nil {
-			peers = append(peers, behaviour...)
-			peers = append(peers, random...)
+			peers = append(peers, consensusNodes...)
 
 			break
 		}
 
-		if ts.TransitiveLink(addr).IsNil() {
+		if ts.TransitiveLink(id).IsNil() {
 			break
 		}
 
-		t, err := s.lattice.GetTesseract(ts.TransitiveLink(addr), false, false)
+		t, err := s.lattice.GetTesseract(ts.TransitiveLink(id), false, false)
 		if err != nil {
 			return nil, errors.Wrap(err, "error fetching tesseract")
 		}
@@ -2770,21 +2769,21 @@ func (s *Syncer) publishEventLatticeSync(state eventDataJobState) error {
 	return s.post(eventLatticeSync{state})
 }
 
-func (s *Syncer) publishEventTesseractSync(addr identifiers.Address, height uint64) error {
+func (s *Syncer) publishEventTesseractSync(id identifiers.Identifier, height uint64) error {
 	return s.post(
 		eventTesseractSync{
 			eventDataJobState{
-				address: addr,
-				height:  height,
+				id:     id,
+				height: height,
 			},
 		},
 	)
 }
 
-func dbKeyFromCID(address identifiers.Address, cid cid.CID) []byte {
-	return storage.DBKey(address, storage.PrefixTag(cid.ContentType()), cid.Key())
+func dbKeyFromCID(id identifiers.Identifier, cid cid.CID) []byte {
+	return storage.DBKey(id, storage.PrefixTag(cid.ContentType()), cid.Key())
 }
 
-func connTag(address identifiers.Address, service string) string {
-	return fmt.Sprintf("%s:%s", service, address.Hex())
+func connTag(id identifiers.Identifier, service string) string {
+	return fmt.Sprintf("%s:%s", service, id.Hex())
 }

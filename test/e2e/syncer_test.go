@@ -72,21 +72,21 @@ func checkIfAccountsSyncedOnAllNodes(
 	t *testing.T,
 	nodeToCheck *moiclient.Client,
 	syncNodeSet []*moiclient.Client,
-	addresses ...identifiers.Address,
+	ids ...identifiers.Identifier,
 ) {
 	t.Helper()
 
-	t.Log("total addresses ", len(addresses))
+	t.Log("total ids ", len(ids))
 	t.Log("total nodes in network", len(syncNodeSet))
 
 	// compare all account sync status among all other nodes with this node
-	for _, address := range addresses {
+	for _, id := range ids {
 		ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTime)
 
 		expectedAccMetaInfo, err := nodeToCheck.AccountMetaInfo(ctx, &args.GetAccountArgs{
-			Address: address,
+			ID: id,
 		})
-		require.NoError(t, err, nodeToCheck.URL(), address, time.Now())
+		require.NoError(t, err, nodeToCheck.URL(), id, time.Now())
 
 		cancel()
 
@@ -96,7 +96,7 @@ func checkIfAccountsSyncedOnAllNodes(
 
 		// compare account sync status among all other nodes with this node
 		for _, syncNode := range syncNodeSet {
-			errMsg := fmt.Sprintln(address, nodeToCheck.URL(), syncNode.URL())
+			errMsg := fmt.Sprintln(id, nodeToCheck.URL(), syncNode.URL())
 
 			syncNode := syncNode
 
@@ -109,7 +109,7 @@ func checkIfAccountsSyncedOnAllNodes(
 				ctx, cancel := context.WithTimeout(context.Background(), DefaultQueryTime)
 
 				actualAccMetaInfo, err := syncNode.AccountMetaInfo(ctx, &args.GetAccountArgs{
-					Address: address,
+					ID: id,
 				})
 				require.NoErrorf(t, err, errMsg)
 
@@ -123,8 +123,8 @@ func checkIfAccountsSyncedOnAllNodes(
 	}
 }
 
-func (te *TestEnvironment) chooseNonContextNodeURL(addrs []identifiers.Address) string {
-	contextNodes := moiclient.GetContextNodes(te.T(), te.moiClient, addrs)
+func (te *TestEnvironment) chooseNonContextNodeURL(ids []identifiers.Identifier) string {
+	contextNodes := moiclient.GetContextNodes(te.T(), te.moiClient, ids)
 
 	hasNode := func(node string) bool {
 		for _, n := range contextNodes {
@@ -167,7 +167,7 @@ func (te *TestEnvironment) TestZFullSyncForOneNode() {
 		// choose node that need to be stopped, it should be neither operator nor context node of ixn participants
 		chosenNode, err = getMoiClient(
 			te.T(),
-			te.chooseNonContextNodeURL([]identifiers.Address{sender.Addr, common.SargaAddress}),
+			te.chooseNonContextNodeURL([]identifiers.Identifier{sender.ID, common.SargaAccountID}),
 		)
 		require.NoError(te.T(), err)
 	}
@@ -238,10 +238,10 @@ func (te *TestEnvironment) TestZFullSyncForOneNode() {
 			ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
 			defer cancel()
 
-			addrs, err := te.moiClient.Accounts(ctx)
+			ids, err := te.moiClient.Accounts(ctx)
 			require.NoError(te.T(), err)
 
-			checkIfAccountsSyncedOnAllNodes(te.T(), te.moiClient, te.moiClients, addrs...)
+			checkIfAccountsSyncedOnAllNodes(te.T(), te.moiClient, te.moiClients, ids...)
 
 			time.Sleep(2 * time.Second)
 		})

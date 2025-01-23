@@ -10,29 +10,39 @@ import (
 const KMOITokenSymbol = "KMOI"
 
 var (
-	GenesisIxHash       = GetHash([]byte("Genesis Interaction"))
-	StakingContractAddr = CreateAddressFromString("staking-contract")
-	GenesisLogicAddrs   = []identifiers.Address{StakingContractAddr, GuardianLogicAddr}
+	GenesisIxHash   = GetHash([]byte("Genesis Interaction"))
+	GenesisLogicIDs = []identifiers.Identifier{GuardianAccountID}
 )
 
 var (
-	SargaAddress = CreateAddressFromString("sargaAccount")
-	SargaLogicID = identifiers.NewLogicIDv0(true, false, false, false, 0, SargaAddress)
+	SargaLogicID   = CreateLogicIDFromString("sargaAccount", 0, identifiers.Systemic)
+	SargaAccountID = SargaLogicID.AsIdentifier()
 )
 
 var (
-	GuardianLogicAddr = CreateAddressFromString("guardian-registry")
-	GuardianLogicID   = identifiers.NewLogicIDv0(true, false, false, false, 0, GuardianLogicAddr)
+	GuardianLogicID = CreateLogicIDFromString(
+		"guardian-registry",
+		0,
+		identifiers.Systemic,
+		identifiers.LogicIntrinsic,
+		identifiers.LogicExtrinsic,
+	)
+	GuardianAccountID = GuardianLogicID.AsIdentifier()
 )
 
 var (
-	KMOITokenAddress = CreateAddressFromString(KMOITokenSymbol)
-	KMOITokenAssetID = identifiers.NewAssetIDv0(false, false, 0, 0, KMOITokenAddress)
+	KMOITokenAssetID = CreateAssetIDFromString(
+		KMOITokenSymbol,
+		0,
+		uint16(MAS0),
+		identifiers.Systemic,
+	)
+	KMOITokenAccountID = KMOITokenAssetID.AsIdentifier()
 )
 
-func ContainsAddress(addresses []identifiers.Address, target identifiers.Address) bool {
-	for _, addr := range addresses {
-		if addr == target {
+func ContainsID(ids []identifiers.Identifier, target identifiers.Identifier) bool {
+	for _, id := range ids {
+		if id == target {
 			return true
 		}
 	}
@@ -40,43 +50,91 @@ func ContainsAddress(addresses []identifiers.Address, target identifiers.Address
 	return false
 }
 
-func CreateAddressFromString(name string) identifiers.Address {
-	hash := GetHash([]byte(name)).Bytes()
+func CreateParticipantIDFromString(name string, variant uint32, flags ...identifiers.Flag) identifiers.Identifier {
+	hash := GetHash([]byte(name)).Bytes()[:24]
 
-	return identifiers.NewAddressFromBytes(hash)
+	var AccountID [24]byte
+
+	copy(AccountID[:], hash[:24])
+
+	participantID, _ := identifiers.GenerateParticipantIDv0(AccountID, variant, flags...)
+
+	return participantID.AsIdentifier()
 }
 
-func NewAccountAddress(addr identifiers.Address, keyID uint64, sequenceID uint64) identifiers.Address {
+func CreateLogicIDFromString(name string, variant uint32, flags ...identifiers.Flag) identifiers.LogicID {
+	hash := GetHash([]byte(name)).Bytes()[:24]
+
+	var AccountID [24]byte
+
+	copy(AccountID[:], hash[:24])
+
+	logicID, _ := identifiers.GenerateLogicIDv0(AccountID, variant, flags...)
+
+	return logicID
+}
+
+func CreateAssetIDFromString(
+	name string,
+	variant uint32,
+	standard uint16,
+	flags ...identifiers.Flag,
+) identifiers.AssetID {
+	hash := GetHash([]byte(name)).Bytes()[:24]
+
+	var AccountID [24]byte
+
+	copy(AccountID[:], hash[:24])
+
+	assetID, _ := identifiers.GenerateAssetIDv0(AccountID, variant, standard, flags...)
+
+	return assetID
+}
+
+func NewAccounIDFromBytes(b []byte) [24]byte {
+	var uniqueID [24]byte
+
+	copy(uniqueID[:], b[:24])
+
+	return uniqueID
+}
+
+func NewAccountID(sender Sender) [24]byte {
 	rawBytes := make([]byte, 48)
-	binary.BigEndian.PutUint64(rawBytes[:8], sequenceID)
-	binary.BigEndian.PutUint64(rawBytes[8:16], keyID)
-	copy(rawBytes[16:], addr.Bytes())
+	binary.BigEndian.PutUint64(rawBytes[:8], sender.SequenceID)
+	binary.BigEndian.PutUint64(rawBytes[8:16], sender.KeyID)
+
+	copy(rawBytes[16:], sender.ID.Bytes())
 
 	hash := GetHash(rawBytes).Bytes()
 
-	return identifiers.NewAddressFromBytes(hash)
+	var hashArray [24]byte
+
+	copy(hashArray[:], hash[:24])
+
+	return hashArray
 }
 
-type Addresses []identifiers.Address
+type IdentifierList []identifiers.Identifier
 
-func (addrs Addresses) Len() int {
-	return len(addrs)
+func (iList IdentifierList) Len() int {
+	return len(iList)
 }
 
-func (addrs Addresses) Less(i, j int) bool {
-	if polarity := bytes.Compare(addrs[i].Bytes(), addrs[j].Bytes()); polarity < 0 {
+func (iList IdentifierList) Less(i, j int) bool {
+	if polarity := bytes.Compare(iList[i].Bytes(), iList[j].Bytes()); polarity < 0 {
 		return true
 	}
 
 	return false
 }
 
-func (addrs Addresses) Swap(i, j int) {
-	addrs[i], addrs[j] = addrs[j], addrs[i]
+func (iList IdentifierList) Swap(i, j int) {
+	iList[i], iList[j] = iList[j], iList[i]
 }
 
-func IsSystemAccount(addr identifiers.Address) bool {
-	if addr == SargaAddress || addr == GuardianLogicAddr {
+func IsSystemAccount(id identifiers.Identifier) bool {
+	if id == SargaAccountID || id == GuardianAccountID {
 		return true
 	}
 

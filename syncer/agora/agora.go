@@ -81,10 +81,10 @@ func NewAgora(
 func (ag *Agora) NewSession(
 	ctx context.Context,
 	contextPeers []kramaid.KramaID,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	stateHash cid.CID,
 ) (syncer.Session, error) {
-	return ag.sm.NewSession(ctx, address, stateHash, ag.network, contextPeers)
+	return ag.sm.NewSession(ctx, id, stateHash, ag.network, contextPeers)
 }
 
 func (ag *Agora) Start() {

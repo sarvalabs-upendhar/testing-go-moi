@@ -9,85 +9,95 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-func DBKey(address identifiers.Address, tag PrefixTag, key []byte) []byte {
-	return dbKey(address, tag, key)
+type IdentifierKey [32]byte
+
+func NewIdentifierKey(id identifiers.Identifier) IdentifierKey {
+	return IdentifierKey(id.Bytes())
 }
 
-func dbKey(address identifiers.Address, tag PrefixTag, key []byte) []byte {
+func (ik IdentifierKey) Bytes() []byte {
+	return ik[:]
+}
+
+func DBKey(id identifiers.Identifier, tag PrefixTag, key []byte) []byte {
+	return dbKey(id, tag, key)
+}
+
+func dbKey(id identifiers.Identifier, tag PrefixTag, key []byte) []byte {
 	if !tag.IsAccountBasedKey() {
 		return append([]byte(NonAccountPrefix), append([]byte{tag.Byte()}, key...)...)
 	}
 
-	return append(address.Bytes(), append([]byte{tag.Byte()}, key...)...)
+	return append(NewIdentifierKey(id).Bytes(), append([]byte{tag.Byte()}, key...)...)
 }
 
 func SenatusDBKey(peerID peer.ID) []byte {
-	return dbKey(identifiers.NilAddress, Senatus, []byte(peerID))
+	return dbKey(identifiers.Nil, Senatus, []byte(peerID))
 }
 
 func SenatusCacheKey(peerID peer.ID) string {
 	return common.BytesToHex([]byte{Senatus.Byte()}) + string(peerID)
 }
 
-func AccSyncStatusKey(addrs identifiers.Address) []byte {
-	return dbKey(identifiers.NilAddress, AccountSyncStatus, addrs.Bytes())
+func AccSyncStatusKey(ids identifiers.Identifier) []byte {
+	return dbKey(identifiers.Nil, AccountSyncStatus, ids.Bytes())
 }
 
-func ContextObjectKey(address identifiers.Address, contextHash common.Hash) []byte {
-	return dbKey(address, Context, contextHash.Bytes())
+func ContextObjectKey(id identifiers.Identifier, contextHash common.Hash) []byte {
+	return dbKey(id, Context, contextHash.Bytes())
 }
 
-func DeedsKey(address identifiers.Address, registryHash common.Hash) []byte {
-	return dbKey(address, Deeds, registryHash.Bytes())
+func DeedsKey(id identifiers.Identifier, registryHash common.Hash) []byte {
+	return dbKey(id, Deeds, registryHash.Bytes())
 }
 
-func LogicManifestKey(address identifiers.Address, manifestHash common.Hash) []byte {
-	return dbKey(address, LogicManifest, manifestHash.Bytes())
+func LogicManifestKey(id identifiers.Identifier, manifestHash common.Hash) []byte {
+	return dbKey(id, LogicManifest, manifestHash.Bytes())
 }
 
-func AccountKey(address identifiers.Address, stateHash common.Hash) []byte {
-	return dbKey(address, Account, stateHash.Bytes())
+func AccountKey(id identifiers.Identifier, stateHash common.Hash) []byte {
+	return dbKey(id, Account, stateHash.Bytes())
 }
 
-func KeyObjectKey(address identifiers.Address, accountKeysHash common.Hash) []byte {
-	return dbKey(address, AccountKeys, accountKeysHash.Bytes())
+func KeyObjectKey(id identifiers.Identifier, accountKeysHash common.Hash) []byte {
+	return dbKey(id, AccountKeys, accountKeysHash.Bytes())
 }
 
-func PreImageKey(address identifiers.Address, hash common.Hash) []byte {
-	return dbKey(address, PreImage, hash.Bytes())
+func PreImageKey(id identifiers.Identifier, hash common.Hash) []byte {
+	return dbKey(id, PreImage, hash.Bytes())
 }
 
-func AccountSafetyInfoKey(address identifiers.Address) []byte {
-	return dbKey(identifiers.NilAddress, ConsensusSafetyInfo, address.Bytes())
+func AccountSafetyInfoKey(id identifiers.Identifier) []byte {
+	return dbKey(identifiers.Nil, ConsensusSafetyInfo, id.Bytes())
 }
 
 func InteractionsKey(tsHash common.Hash) []byte {
-	return dbKey(identifiers.NilAddress, Interaction, tsHash.Bytes())
+	return dbKey(identifiers.Nil, Interaction, tsHash.Bytes())
 }
 
 func ReceiptsKey(tsHash common.Hash) []byte {
-	return dbKey(identifiers.NilAddress, Receipt, tsHash.Bytes())
+	return dbKey(identifiers.Nil, Receipt, tsHash.Bytes())
 }
 
 func TesseractKey(tsHash common.Hash) []byte {
-	return dbKey(identifiers.NilAddress, Tesseract, tsHash.Bytes())
+	return dbKey(identifiers.Nil, Tesseract, tsHash.Bytes())
 }
 
 func TesseractCommitInfoKey(tsHash common.Hash) []byte {
-	return dbKey(identifiers.NilAddress, TesseractCommitInfo, tsHash.Bytes())
+	return dbKey(identifiers.Nil, TesseractCommitInfo, tsHash.Bytes())
 }
 
 func ConsensusProposalKey(tsHash common.Hash) []byte {
-	return dbKey(identifiers.NilAddress, ConsensusProposals, tsHash.Bytes())
+	return dbKey(identifiers.Nil, ConsensusProposals, tsHash.Bytes())
 }
 
-func tesseractHeightKey(addr identifiers.Address, height uint64) []byte {
+func tesseractHeightKey(id identifiers.Identifier, height uint64) []byte {
 	heightBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(heightBytes, height)
 
-	return dbKey(addr, TesseractHeight, heightBytes)
+	return dbKey(id, TesseractHeight, heightBytes)
 }
 
 func principalSyncStatusKey() []byte {
-	return dbKey(identifiers.NilAddress, PrincipalSyncStatus, nil)
+	return dbKey(identifiers.Nil, PrincipalSyncStatus, nil)
 }

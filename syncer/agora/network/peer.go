@@ -23,14 +23,14 @@ type AgoraPeer struct {
 	stream         p2pnet.Stream
 	connected      bool
 	lastActiveTime time.Time
-	activeSessions map[identifiers.Address]struct{}
+	activeSessions map[identifiers.Identifier]struct{}
 }
 
-func (a *AgoraPeer) getActiveSessions() []identifiers.Address {
+func (a *AgoraPeer) getActiveSessions() []identifiers.Identifier {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	sessions := make([]identifiers.Address, 0, len(a.activeSessions))
+	sessions := make([]identifiers.Identifier, 0, len(a.activeSessions))
 
 	for sessionID := range a.activeSessions {
 		sessions = append(sessions, sessionID)
@@ -39,14 +39,14 @@ func (a *AgoraPeer) getActiveSessions() []identifiers.Address {
 	return sessions
 }
 
-func (a *AgoraPeer) addActiveSession(sessionID identifiers.Address) {
+func (a *AgoraPeer) addActiveSession(sessionID identifiers.Identifier) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
 	a.activeSessions[sessionID] = struct{}{}
 }
 
-func (a *AgoraPeer) removeActiveSession(sessionID identifiers.Address) {
+func (a *AgoraPeer) removeActiveSession(sessionID identifiers.Identifier) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 

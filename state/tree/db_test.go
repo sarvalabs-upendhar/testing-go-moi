@@ -11,16 +11,16 @@ import (
 )
 
 func TestTreeDB_Get_CommittedEntry(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	mockDB := NewMockDB()
 
 	testKey := []byte("test-key")
 	testValue := []byte("test-value")
 
-	treeDB := NewTreeDB(address, db.Storage, mockDB, tests.NewTestTreeCache(), NilMetrics())
+	treeDB := NewTreeDB(id, db.Storage, mockDB, tests.NewTestTreeCache(), NilMetrics())
 
 	// entry is only written to persistence db
-	err := mockDB.SetMerkleTreeEntry(address, db.Storage, testKey, testValue)
+	err := mockDB.SetMerkleTreeEntry(id, db.Storage, testKey, testValue)
 	require.NoError(t, err, "failed  to add entry to mock")
 
 	fetchedValue, err := treeDB.Get(testKey)
@@ -29,13 +29,13 @@ func TestTreeDB_Get_CommittedEntry(t *testing.T) {
 }
 
 func TestTreeDB_Get_UncommittedEntry(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	mockDB := NewMockDB()
 
 	testKey := []byte("test-key")
 	testValue := []byte("test-value")
 
-	treeDB := NewTreeDB(address, db.Storage, mockDB, tests.NewTestTreeCache(), NilMetrics())
+	treeDB := NewTreeDB(id, db.Storage, mockDB, tests.NewTestTreeCache(), NilMetrics())
 
 	// entry is written to dirty storage
 	treeDB.dirty[string(testKey)] = testValue
@@ -46,7 +46,7 @@ func TestTreeDB_Get_UncommittedEntry(t *testing.T) {
 }
 
 func TestTreeDB_Copy(t *testing.T) {
-	treeDB := NewTreeDB(tests.RandomAddress(t), db.Storage, NewMockDB(), tests.NewTestTreeCache(), NilMetrics())
+	treeDB := NewTreeDB(tests.RandomIdentifier(t), db.Storage, NewMockDB(), tests.NewTestTreeCache(), NilMetrics())
 	treeDB.dirty["hello"] = []byte{1, 2}
 
 	copiedDB := treeDB.Copy()

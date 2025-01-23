@@ -30,7 +30,7 @@ const (
 )
 
 type Log struct {
-	Address identifiers.Address
+	ID      identifiers.Identifier
 	LogicID identifiers.LogicID
 	Topics  []Hash
 	Data    []byte
@@ -38,7 +38,7 @@ type Log struct {
 
 func (log Log) Copy() Log {
 	clone := Log{
-		Address: log.Address,
+		ID:      log.ID,
 		LogicID: log.LogicID,
 	}
 
@@ -60,12 +60,12 @@ type StateAndContextHash struct {
 	ContextHash Hash `json:"context_hash"`
 }
 
-type AccStateHashes map[identifiers.Address]*StateAndContextHash
+type AccStateHashes map[identifiers.Identifier]*StateAndContextHash
 
-func (h AccStateHashes) SetContextHash(addr identifiers.Address, contextHash Hash) {
-	hashes, ok := h[addr]
+func (h AccStateHashes) SetContextHash(id identifiers.Identifier, contextHash Hash) {
+	hashes, ok := h[id]
 	if !ok {
-		h[addr] = &StateAndContextHash{ContextHash: contextHash}
+		h[id] = &StateAndContextHash{ContextHash: contextHash}
 
 		return
 	}
@@ -73,11 +73,11 @@ func (h AccStateHashes) SetContextHash(addr identifiers.Address, contextHash Has
 	hashes.ContextHash = contextHash
 }
 
-func (h AccStateHashes) SetStateHash(addr identifiers.Address, stateHash Hash) {
-	hashes, ok := h[addr]
+func (h AccStateHashes) SetStateHash(id identifiers.Identifier, stateHash Hash) {
+	hashes, ok := h[id]
 
 	if !ok {
-		h[addr] = &StateAndContextHash{StateHash: stateHash}
+		h[id] = &StateAndContextHash{StateHash: stateHash}
 
 		return
 	}
@@ -85,8 +85,8 @@ func (h AccStateHashes) SetStateHash(addr identifiers.Address, stateHash Hash) {
 	hashes.StateHash = stateHash
 }
 
-func (h AccStateHashes) ContextHash(addr identifiers.Address) Hash {
-	hashes, ok := h[addr]
+func (h AccStateHashes) ContextHash(id identifiers.Identifier) Hash {
+	hashes, ok := h[id]
 	if !ok {
 		return NilHash
 	}
@@ -94,8 +94,8 @@ func (h AccStateHashes) ContextHash(addr identifiers.Address) Hash {
 	return hashes.ContextHash
 }
 
-func (h AccStateHashes) StateHash(addr identifiers.Address) Hash {
-	hashes, ok := h[addr]
+func (h AccStateHashes) StateHash(id identifiers.Identifier) Hash {
+	hashes, ok := h[id]
 	if !ok {
 		return NilHash
 	}
@@ -120,19 +120,19 @@ func (h AccStateHashes) Copy() AccStateHashes {
 	return hashmap
 }
 
-func (h AccStateHashes) ExcludedAccounts() Addresses {
-	addrs := make(Addresses, 0, len(h))
+func (h AccStateHashes) ExcludedAccounts() IdentifierList {
+	ids := make(IdentifierList, 0, len(h))
 
-	for addr, hashes := range h {
+	for id, hashes := range h {
 		// Account is excluded if state hash is excluded
 		if hashes.StateHash == NilHash {
-			addrs = append(addrs, addr)
+			ids = append(ids, id)
 		}
 	}
 
-	sort.Sort(addrs)
+	sort.Sort(ids)
 
-	return addrs
+	return ids
 }
 
 // IxOpResult represents the outcome of a ixn execution.
@@ -328,8 +328,7 @@ type OperationResultPayload interface {
 
 // AssetCreationResult holds the result of asset creation operation.
 type AssetCreationResult struct {
-	AssetID      identifiers.AssetID `json:"asset_id"`
-	AssetAccount identifiers.Address `json:"address"`
+	AssetID identifiers.AssetID `json:"asset_id"`
 }
 
 // AssetSupplyResult holds the result of asset mint or burn operation.

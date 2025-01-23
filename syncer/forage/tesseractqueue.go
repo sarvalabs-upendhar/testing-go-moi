@@ -11,7 +11,7 @@ import (
 )
 
 type TesseractInfo struct {
-	addr          identifiers.Address
+	accountID     identifiers.Identifier
 	tesseract     *common.Tesseract
 	shouldExecute bool
 	committee     *types.ICSCommittee
@@ -19,9 +19,9 @@ type TesseractInfo struct {
 	delta         map[string][]byte
 }
 
-func (ti *TesseractInfo) CreateTSInfoWithAddr(addr identifiers.Address) *TesseractInfo {
+func (ti *TesseractInfo) CreateTSInfoWithAddr(id identifiers.Identifier) *TesseractInfo {
 	return &TesseractInfo{
-		addr:          addr,
+		accountID:     id,
 		tesseract:     ti.tesseract,
 		shouldExecute: ti.shouldExecute,
 		committee:     ti.committee,
@@ -30,12 +30,12 @@ func (ti *TesseractInfo) CreateTSInfoWithAddr(addr identifiers.Address) *Tessera
 	}
 }
 
-func (ti *TesseractInfo) address() identifiers.Address {
-	return ti.addr
+func (ti *TesseractInfo) id() identifiers.Identifier {
+	return ti.accountID
 }
 
 func (ti *TesseractInfo) height() uint64 {
-	return ti.tesseract.Participants()[ti.addr].Height
+	return ti.tesseract.Participants()[ti.accountID].Height
 }
 
 func (ti *TesseractInfo) extractICSNodeset(s *Syncer) bool {

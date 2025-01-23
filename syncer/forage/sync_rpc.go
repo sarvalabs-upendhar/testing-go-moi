@@ -18,7 +18,7 @@ const (
 )
 
 type LatestAccountInfo struct {
-	Address         identifiers.Address
+	ID              identifiers.Identifier
 	Height          uint64
 	Hash            common.Hash
 	IsSnapAvailable bool
@@ -76,9 +76,9 @@ func (service *SYNCRPCService) SyncSnap(
 		}
 	}
 
-	sentSnapSize, err := service.syncer.db.StreamSnapshot(ctx, snapReq.Address, 0, resp)
+	sentSnapSize, err := service.syncer.db.StreamSnapshot(ctx, snapReq.AccountID, 0, resp)
 	if err != nil {
-		service.syncer.logger.Error("failed to fetch account snap shot", "addr", snapReq.Address,
+		service.syncer.logger.Error("failed to fetch account snap shot", "accountID", snapReq.AccountID,
 			"error", err)
 
 		return err
@@ -173,14 +173,14 @@ func (service *SYNCRPCService) SyncBucketsSince(
 
 func (service *SYNCRPCService) GetLatestAccountInfo(
 	ctx context.Context,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	accountStatus *LatestAccountInfo,
 ) error {
-	metaInfo, err := service.syncer.db.GetAccountMetaInfo(addr)
+	metaInfo, err := service.syncer.db.GetAccountMetaInfo(id)
 	if err != nil {
 		service.syncer.logger.Error(
 			"failed to fetch account meta information",
-			"addr", addr,
+			"accountID", id,
 			"err", err,
 		)
 
@@ -188,7 +188,7 @@ func (service *SYNCRPCService) GetLatestAccountInfo(
 	}
 
 	accountStatus.Height = metaInfo.Height
-	accountStatus.Address = metaInfo.Address
+	accountStatus.ID = metaInfo.ID
 	accountStatus.Hash = metaInfo.TesseractHash
 	accountStatus.IsSnapAvailable = true // TODO: Improve this, all nodes maynot support snapshot
 
@@ -238,13 +238,13 @@ func (service *SYNCRPCService) SyncLattice(
 
 	for height := req.StartHeight; height <= req.EndHeight; height++ {
 		ts, ixns, receipts, err := service.syncer.getTesseractWithRawIxnsAndReceipts(
-			req.Address,
+			req.AccountID,
 			height,
 			true,
 			true,
 		)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("failed to fetch tesseract for %v %d", req.Address, height))
+			return errors.Wrap(err, fmt.Sprintf("failed to fetch tesseract for %v %d", req.AccountID, height))
 		}
 
 		var commitInfo []byte
@@ -270,13 +270,13 @@ func (service *SYNCRPCService) SyncLattice(
 			return err
 		}
 
-		for addr, contextHash := range ts.PreviousContext() {
+		for id, contextHash := range ts.PreviousContext() {
 			if contextHash.IsNil() {
 				continue
 			}
 
-			if err = service.syncer.state.GetParticipantContextRaw(addr, contextHash, msg.Delta); err != nil {
-				return errors.Wrap(err, fmt.Sprintf("failed to fetch participant context for %v", addr))
+			if err = service.syncer.state.GetParticipantContextRaw(id, contextHash, msg.Delta); err != nil {
+				return errors.Wrap(err, fmt.Sprintf("failed to fetch participant context for %v", id))
 			}
 		}
 
@@ -345,10 +345,15 @@ func (service *SYNCRPCService) SyncBuckets(
 		}
 		pendingCount := count
 
+		service.syncer.logger.Trace("Streaming account meta information from DB",
+			"Bucket", req.BucketID,
+			"Count", count,
+		)
+
 		for rawData := range dbResponse {
 			resp.AccountMetaInfos = append(resp.AccountMetaInfos, rawData)
 
-			if len(resp.AccountMetaInfos) == maxAccMetaInfoEntriesPerMsg || uint64(len(resp.AccountMetaInfos)) == count {
+			if len(resp.AccountMetaInfos) == maxAccMetaInfoEntriesPerMsg || uint64(len(resp.AccountMetaInfos)) == pendingCount {
 				respChan <- resp
 
 				pendingCount -= uint64(len(resp.AccountMetaInfos))

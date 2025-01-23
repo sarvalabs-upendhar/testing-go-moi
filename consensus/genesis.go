@@ -24,7 +24,7 @@ func (k *Engine) SetupGenesis() error {
 		return errors.Wrap(err, "failed to parse genesis file")
 	}
 
-	if _, err = k.state.GetAccountMetaInfo(sargaAccount.Address); err == nil {
+	if _, err = k.state.GetAccountMetaInfo(sargaAccount.ID); err == nil {
 		return nil
 	}
 
@@ -33,10 +33,10 @@ func (k *Engine) SetupGenesis() error {
 		return errors.Wrap(err, "failed to setup sarga account")
 	}
 
-	transition[sargaObject.Address()] = sargaObject
+	transition[sargaObject.Identifier()] = sargaObject
 
 	for _, v := range genesisAccounts {
-		if transition[v.Address], err = k.setupNewAccount(v); err != nil {
+		if transition[v.ID], err = k.setupNewAccount(v); err != nil {
 			return errors.Wrap(err, "failed to setup genesis account")
 		}
 
@@ -53,7 +53,7 @@ func (k *Engine) SetupGenesis() error {
 			}
 		}
 
-		transition[v.Address].UpdateKeys(accountKeys)
+		transition[v.ID].UpdateKeys(accountKeys)
 	}
 
 	if _, err = k.setupGenesisLogics(transition, logics); err != nil {
@@ -65,7 +65,7 @@ func (k *Engine) SetupGenesis() error {
 	}
 
 	count := len(transition)
-	addresses := make([]identifiers.Address, 0, count)
+	ids := make([]identifiers.Identifier, 0, count)
 	stateHashes := make([]common.Hash, 0, count)
 	contextHashes := make([]common.Hash, 0, count)
 
@@ -75,12 +75,12 @@ func (k *Engine) SetupGenesis() error {
 			return err
 		}
 
-		addresses = append(addresses, stateObject.Address())
+		ids = append(ids, stateObject.Identifier())
 		stateHashes = append(stateHashes, stateHash)
 		contextHashes = append(contextHashes, stateObject.ContextHash())
 	}
 
-	if err = k.addGenesisTesseract(addresses, stateHashes, contextHashes, transition); err != nil {
+	if err = k.addGenesisTesseract(ids, stateHashes, contextHashes, transition); err != nil {
 		return err
 	}
 
@@ -88,7 +88,7 @@ func (k *Engine) SetupGenesis() error {
 }
 
 func createGenesisTesseract(
-	addresses []identifiers.Address,
+	ids []identifiers.Identifier,
 	stateHashes, contextHashes []common.Hash,
 	timestamp uint64, icsSeed, icsProof string,
 	transition state.ObjectMap,
@@ -98,15 +98,15 @@ func createGenesisTesseract(
 		participants = make(common.ParticipantsState)
 	)
 
-	for i, addr := range addresses {
-		participants[addr] = common.State{
+	for i, id := range ids {
+		participants[id] = common.State{
 			Height:          0,
 			TransitiveLink:  common.NilHash,
 			PreviousContext: common.NilHash,
 			LatestContext:   contextHashes[i],
 			StateHash:       stateHashes[i],
 			ContextDelta: &common.DeltaGroup{
-				BehaviouralNodes: transition.GetObject(addr).BehaviourContextObj().Ids,
+				ConsensusNodes: transition.GetObject(id).ConsensusNodes(),
 			},
 		}
 	}
@@ -154,12 +154,12 @@ func createGenesisTesseract(
 }
 
 func (k *Engine) addGenesisTesseract(
-	addresses []identifiers.Address,
+	ids []identifiers.Identifier,
 	stateHashes, contextHashes []common.Hash,
 	transition state.ObjectMap,
 ) error {
 	tesseract := createGenesisTesseract(
-		addresses,
+		ids,
 		stateHashes,
 		contextHashes,
 		k.cfg.GenesisTimestamp,
@@ -170,7 +170,7 @@ func (k *Engine) addGenesisTesseract(
 
 	if err := k.lattice.AddTesseract(
 		true,
-		identifiers.NilAddress,
+		identifiers.Nil,
 		tesseract,
 		state.NewTransition(transition, nil),
 		true,
@@ -187,9 +187,9 @@ func (k *Engine) setupSargaAccount(
 	assets []common.AssetAccountSetupArgs,
 	logics []common.LogicSetupArgs,
 ) (*state.Object, error) {
-	stateObject := k.state.CreateStateObject(common.SargaAddress, common.SargaAccount, true)
+	stateObject := k.state.CreateStateObject(common.SargaAccountID, common.SargaAccount, true)
 
-	if _, err := stateObject.CreateContext(sarga.BehaviouralContext, sarga.RandomContext); err != nil {
+	if err := stateObject.CreateContext(sarga.ConsensusNodes); err != nil {
 		return nil, errors.Wrap(err, "context initiation failed in genesis")
 	}
 
@@ -197,13 +197,13 @@ func (k *Engine) setupSargaAccount(
 		return nil, errors.Wrap(err, "failed to create storage tree")
 	}
 
-	if err := stateObject.AddAccountGenesisInfo(common.SargaAddress, common.GenesisIxHash); err != nil {
+	if err := stateObject.AddAccountGenesisInfo(common.SargaAccountID, common.GenesisIxHash); err != nil {
 		return nil, err
 	}
 
 	for _, account := range accounts {
 		// Add account to sarga storage tree
-		if err := stateObject.AddAccountGenesisInfo(account.Address, common.GenesisIxHash); err != nil {
+		if err := stateObject.AddAccountGenesisInfo(account.ID, common.GenesisIxHash); err != nil {
 			return nil, err
 		}
 	}
@@ -211,7 +211,9 @@ func (k *Engine) setupSargaAccount(
 	for _, logic := range logics {
 		// Add logic account to sarga
 		if err := stateObject.AddAccountGenesisInfo(
-			common.CreateAddressFromString(logic.Name),
+			common.CreateLogicIDFromString(logic.Name, 0,
+				identifiers.LogicIntrinsic,
+				identifiers.LogicExtrinsic, identifiers.Systemic).AsIdentifier(),
 			common.GenesisIxHash,
 		); err != nil {
 			return nil, err
@@ -220,7 +222,12 @@ func (k *Engine) setupSargaAccount(
 
 	for _, assetAcc := range assets {
 		if err := stateObject.AddAccountGenesisInfo(
-			common.CreateAddressFromString(assetAcc.AssetInfo.Symbol),
+			common.CreateAssetIDFromString(
+				assetAcc.AssetInfo.Symbol,
+				0,
+				uint16(assetAcc.AssetInfo.Standard),
+				assetAcc.AssetInfo.AssetDescriptor().Flags()...,
+			).AsIdentifier(),
 			common.GenesisIxHash,
 		); err != nil {
 			return nil, err
@@ -231,9 +238,9 @@ func (k *Engine) setupSargaAccount(
 }
 
 func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, error) {
-	stateObject := k.state.CreateStateObject(info.Address, info.AccType, true)
+	stateObject := k.state.CreateStateObject(info.ID, info.AccType, true)
 
-	if _, err := stateObject.CreateContext(info.BehaviouralContext, info.RandomContext); err != nil {
+	if err := stateObject.CreateContext(info.ConsensusNodes); err != nil {
 		return nil, errors.Wrap(err, "context initiation failed in genesis")
 	}
 
@@ -242,7 +249,7 @@ func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, e
 	for i, key := range info.Keys {
 		accountKeys[i] = &common.AccountKey{
 			ID:                 uint64(i),
-			PublicKey:          key.PublicKey,
+			PublicKey:          key.PublicKey.Bytes(),
 			Weight:             key.Weight.ToUint64(),
 			SignatureAlgorithm: key.SignatureAlgorithm.ToUint64(),
 			Revoked:            false,
@@ -256,32 +263,35 @@ func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, e
 }
 
 func (k *Engine) setupGenesisLogics(
-	transition map[identifiers.Address]*state.Object,
+	transition map[identifiers.Identifier]*state.Object,
 	logics []common.LogicSetupArgs,
 ) ([]common.Hash, error) {
 	hashes := make([]common.Hash, len(logics))
 
 	for _, logic := range logics {
-		logicAddr := common.CreateAddressFromString(logic.Name)
+		logicID := common.CreateLogicIDFromString(logic.Name, 0,
+			identifiers.Systemic,
+			identifiers.LogicIntrinsic,
+			identifiers.LogicExtrinsic,
+		).AsIdentifier()
 
-		if !common.ContainsAddress(common.GenesisLogicAddrs, logicAddr) {
-			k.logger.Error("Mismatch of contract address", "logic-name", logic.Name)
+		if !common.ContainsID(common.GenesisLogicIDs, logicID) {
+			k.logger.Error("Mismatch of logic id", "logic-name", logic.Name, logicID)
 
-			return nil, errors.New("generated address does not exist in predefined contract address")
+			return nil, errors.New("generated id does not exist in predefined logic ids")
 		}
 
 		// Create state object for the logic
-		logicState := k.state.CreateStateObject(logicAddr, common.LogicAccount, true)
+		logicState := k.state.CreateStateObject(logicID, common.LogicAccount, true)
 
 		// Create a dummy state object for the deployer
-		// NOTE: This is a dummy object we create at genesis deployment with the 0x00..00 address
+		// NOTE: This is a dummy object we create at genesis deployment with the 0x00..00 id
 		// to act as a placeholder account for the execution environment's sender state driver.
-		deployerState := k.state.CreateStateObject(identifiers.NilAddress, common.RegularAccount, true)
+		deployerState := k.state.CreateStateObject(identifiers.Nil, common.RegularAccount, true)
 
-		behaviouralCtx := logic.BehaviouralContext
-		randomCtx := logic.RandomContext
+		consensusNodes := logic.ConsensusNodes
 
-		_, err := logicState.CreateContext(behaviouralCtx, randomCtx)
+		err := logicState.CreateContext(consensusNodes)
 		if err != nil {
 			return nil, errors.Wrap(err, "context initiation failed in genesis")
 		}
@@ -297,11 +307,11 @@ func (k *Engine) setupGenesisLogics(
 		ix, err := common.NewInteraction(common.IxData{
 			Participants: []common.IxParticipant{
 				{
-					Address: common.SargaAddress,
+					ID: common.SargaAccountID,
 				},
 			},
 			Sender: common.Sender{
-				Address: common.SargaAddress,
+				ID: common.SargaAccountID,
 			},
 			IxOps: []common.IxOpRaw{
 				{
@@ -328,7 +338,7 @@ func (k *Engine) setupGenesisLogics(
 		// Deploy the genesis logic and check for errors
 		_, receipt, err := compute.DeployLogic(
 			ctx, ix.GetIxOp(0), logicState,
-			deployerState, compute.NewEventStream(""),
+			deployerState, compute.NewEventStream(identifiers.Nil),
 		)
 		if err != nil {
 			k.logger.Error("Unable to deploy logic for", "logic-name", logic.Name)
@@ -341,13 +351,13 @@ func (k *Engine) setupGenesisLogics(
 		}
 
 		// Update the dirty objects map with the logic state object
-		transition[logicState.Address()] = logicState
+		transition[logicState.Identifier()] = logicState
 
 		// Obtain the logic ID from the call receipt
-		logicID := receipt.LogicID
+
 		k.logger.Info("Deployed genesis contract",
 			"logic-name", logic.Name,
-			"logic-ID", logicID.String(),
+			"logic-ID", receipt.LogicID.String(),
 		)
 	}
 
@@ -355,42 +365,47 @@ func (k *Engine) setupGenesisLogics(
 }
 
 func (k *Engine) setupAssetAccounts(
-	transition map[identifiers.Address]*state.Object,
+	transition map[identifiers.Identifier]*state.Object,
 	assetAccs []common.AssetAccountSetupArgs,
 ) error {
 	for _, assetAccount := range assetAccs {
-		accAddress := common.CreateAddressFromString(assetAccount.AssetInfo.Symbol)
+		assetInfo := assetAccount.AssetInfo.AssetDescriptor()
+		accID := common.CreateAssetIDFromString(
+			assetInfo.Symbol,
+			0,
+			uint16(assetInfo.Standard),
+			assetInfo.Flags()...).AsIdentifier()
 
-		transition[accAddress] = k.state.CreateStateObject(accAddress, common.AssetAccount, true)
+		transition[accID] = k.state.CreateStateObject(accID, common.AssetAccount, true)
 
-		_, err := transition[accAddress].CreateContext(assetAccount.BehaviouralContext, assetAccount.RandomContext)
+		err := transition[accID].CreateContext(assetAccount.ConsensusNodes)
 		if err != nil {
 			return err
 		}
 
-		assetID, err := transition[accAddress].CreateAsset(accAddress, assetAccount.AssetInfo.AssetDescriptor())
+		assetID, err := transition[accID].CreateAsset(accID, assetAccount.AssetInfo.AssetDescriptor())
 		if err != nil {
 			return err
 		}
 
-		if assetAccount.AssetInfo.Operator != identifiers.NilAddress {
+		if assetAccount.AssetInfo.Operator != identifiers.Nil {
 			if _, ok := transition[assetAccount.AssetInfo.Operator]; !ok {
 				return errors.New("operator account not found")
 			}
 
-			if err = transition[assetAccount.AssetInfo.Operator].CreateDeedsEntry(string(assetID)); err != nil {
+			if err = transition[assetAccount.AssetInfo.Operator].CreateDeedsEntry(assetID.AsIdentifier()); err != nil {
 				return err
 			}
 		}
 
 		for _, allocation := range assetAccount.AssetInfo.Allocations {
-			if _, ok := transition[allocation.Address]; !ok {
+			if _, ok := transition[allocation.ID]; !ok {
 				return errors.New("allocation address not found in state objects")
 			}
 
 			assetObject := state.NewAssetObject(allocation.Amount.ToInt(), nil)
 
-			if err = transition[allocation.Address].InsertNewAssetObject(assetID, assetObject); err != nil {
+			if err = transition[allocation.ID].InsertNewAssetObject(assetID, assetObject); err != nil {
 				return err
 			}
 		}
@@ -419,18 +434,18 @@ func (k *Engine) validateAccountKeys(keys []common.KeyArgs) error {
 
 func (k *Engine) validateAccountCreationInfo(accs ...common.AccountSetupArgs) error {
 	for _, acc := range accs {
-		if acc.Address == common.SargaAddress {
-			return common.ErrInvalidAddress
+		if acc.ID == common.SargaAccountID {
+			return common.ErrInvalidIdentifier
 		}
 
 		// check for address validity
 		err := utils.ValidateAccountType(acc.AccType)
 		if err != nil {
-			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
+			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.ID))
 		}
 
 		if err := k.validateAccountKeys(acc.Keys); err != nil {
-			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.Address))
+			return errors.Wrap(err, fmt.Sprintf("invalid genesis account creation info %s", acc.ID))
 		}
 	}
 
@@ -438,8 +453,8 @@ func (k *Engine) validateAccountCreationInfo(accs ...common.AccountSetupArgs) er
 }
 
 func (k *Engine) validateSargaAccountCreationInfo(acc common.AccountSetupArgs) error {
-	if acc.Address != common.SargaAddress {
-		return common.ErrInvalidAddress
+	if acc.ID != common.SargaAccountID {
+		return common.ErrInvalidIdentifier
 	}
 
 	return nil

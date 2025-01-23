@@ -61,9 +61,9 @@ func GetSupply(storage engineio.StorageReader) (*big.Int, error) {
 	return supply, nil
 }
 
-func GetBalance(storage engineio.StorageReader, addr identifiers.Address) (*big.Int, error) {
+func GetBalance(storage engineio.StorageReader, id identifiers.Identifier) (*big.Int, error) {
 	// Generate a storage access key for Balance
-	key := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(addr))
+	key := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(id))
 
 	// Retrieve the value for the storage key
 	val, err := storage.GetStorageEntry(key)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -99,7 +100,7 @@ func httpTesseract(t *testing.T, url string, args ...interface{}) *rpcargs.RPCTe
 	return &tess
 }
 
-func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address,
+func createAssetWithNonce(t *testing.T, client *Client, id identifiers.Identifier,
 	nonce uint64, key tests.AccountWithMnemonic,
 ) {
 	t.Helper()
@@ -116,7 +117,7 @@ func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    addr,
+			ID:         id,
 			SequenceID: nonce,
 		},
 		FuelPrice: big.NewInt(1),
@@ -129,7 +130,7 @@ func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  addr,
+				ID:       id,
 				LockType: common.MutateLock,
 			},
 		},
@@ -137,7 +138,7 @@ func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address
 
 	sendIX := CreateSendIXFromIxData(t, ixData, []AccountKeyWithMnemonic{
 		{
-			Addr:     addr,
+			ID:       id,
 			Mnemonic: key.Mnemonic,
 		},
 	})
@@ -147,8 +148,8 @@ func createAssetWithNonce(t *testing.T, client *Client, addr identifiers.Address
 }
 
 // createAsset creates asset named "MOI"
-func createAsset(t *testing.T, client *Client, addr identifiers.Address, key tests.AccountWithMnemonic) (
-	common.Hash, identifiers.Address,
+func createAsset(t *testing.T, client *Client, id identifiers.Identifier, key tests.AccountWithMnemonic) (
+	common.Hash, identifiers.Identifier,
 ) {
 	t.Helper()
 
@@ -164,8 +165,8 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, key tes
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    addr,
-			SequenceID: GetLatestSequenceID(t, client, addr, 0),
+			ID:         id,
+			SequenceID: GetLatestSequenceID(t, client, id, 0),
 		},
 		FuelPrice: big.NewInt(1),
 		FuelLimit: 200,
@@ -177,7 +178,7 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, key tes
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  addr,
+				ID:       id,
 				LockType: common.MutateLock,
 			},
 		},
@@ -185,7 +186,7 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, key tes
 
 	sendIX := CreateSendIXFromIxData(t, ixData, []AccountKeyWithMnemonic{
 		{
-			Addr:     key.Addr,
+			ID:       key.ID,
 			Mnemonic: key.Mnemonic,
 		},
 	})
@@ -203,7 +204,7 @@ func createAsset(t *testing.T, client *Client, addr identifiers.Address, key tes
 	err = json.Unmarshal(receipt.IxOps[0].Data, &assetReceipt)
 	require.NoError(t, err)
 
-	return ixHash, assetReceipt.AssetAccount
+	return ixHash, assetReceipt.AssetID.AsIdentifier()
 }
 
 func checkForCallReceipt(
@@ -214,6 +215,7 @@ func checkForCallReceipt(
 	t.Helper()
 
 	require.Equal(t, expectedReceipt.FuelUsed, actualReceipt.FuelUsed)
+	fmt.Println("111", expectedReceipt.IxOps[0].Data, actualReceipt.IxOps[0].Data)
 	require.Equal(t, expectedReceipt.IxOps[0].Data, actualReceipt.IxOps[0].Data)
 	require.Equal(t, expectedReceipt.IxOps[0].TxType, actualReceipt.IxOps[0].TxType)
 	require.Equal(t, expectedReceipt.From, actualReceipt.From)
@@ -232,12 +234,12 @@ func createTesseractsByAccountFilter(
 	t *testing.T,
 	ctx context.Context,
 	moiClient *Client,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 ) *rpcargs.FilterResponse {
 	t.Helper()
 
 	tsByAccFilter, err := moiClient.NewTesseractsByAccountFilter(ctx, &rpcargs.TesseractByAccountFilterArgs{
-		Addr: addr,
+		ID: id,
 	})
 	require.NoError(t, err)
 
@@ -257,12 +259,12 @@ func createLogFilter(
 	t *testing.T,
 	ctx context.Context,
 	moiClient *Client,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 ) *rpcargs.FilterResponse {
 	t.Helper()
 
 	logFilter, err := moiClient.NewLogFilter(ctx, &jsonrpc.LogQuery{
-		Address: addr,
+		ID: id,
 	})
 	require.NoError(t, err)
 

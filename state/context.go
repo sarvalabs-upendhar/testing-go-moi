@@ -8,62 +8,9 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-type Context interface {
-	Bytes() ([]byte, error)
-	FromBytes(bytes []byte) error
-}
-
-type ContextObject struct {
-	Ids []kramaid.KramaID
-}
-
-func (c *ContextObject) AddNodes(nodes []kramaid.KramaID, maxSize int) {
-	c.Ids = append(c.Ids, nodes...)
-	if diff := len(c.Ids) - maxSize; diff > 0 {
-		c.Ids = c.Ids[diff:]
-	}
-}
-
-func (c *ContextObject) Copy() *ContextObject {
-	newSlice := make([]kramaid.KramaID, len(c.Ids))
-
-	copy(newSlice, c.Ids)
-
-	newObject := new(ContextObject)
-	newObject.Ids = newSlice
-
-	return newObject
-}
-
-func (c *ContextObject) Hash() (common.Hash, error) {
-	hash, err := common.PoloHash(c)
-	if err != nil {
-		return common.NilHash, errors.Wrap(err, "failed to polorize context object")
-	}
-
-	return hash, nil
-}
-
-func (c *ContextObject) Bytes() ([]byte, error) {
-	rawData, err := polo.Polorize(c)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize context object")
-	}
-
-	return rawData, nil
-}
-
-func (c *ContextObject) FromBytes(bytes []byte) error {
-	if err := polo.Depolorize(c, bytes); err != nil {
-		return errors.Wrap(err, "failed to depolorize context object")
-	}
-
-	return nil
-}
-
 type MetaContextObject struct {
-	BehaviouralContext common.Hash
-	RandomContext      common.Hash
+	ConsensusNodes     []kramaid.KramaID
+	ConsensusNodesHash common.Hash
 	StorageContext     common.Hash
 	ComputeContext     common.Hash
 	DefaultMTQ         int32
@@ -72,8 +19,6 @@ type MetaContextObject struct {
 
 func (m *MetaContextObject) Copy() *MetaContextObject {
 	newObject := new(MetaContextObject)
-	newObject.BehaviouralContext = m.BehaviouralContext
-	newObject.RandomContext = m.RandomContext
 	newObject.ComputeContext = m.ComputeContext
 	newObject.DefaultMTQ = m.DefaultMTQ
 

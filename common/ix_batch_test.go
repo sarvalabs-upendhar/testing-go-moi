@@ -9,17 +9,17 @@ import (
 )
 
 func TestIxBatch_Add(t *testing.T) {
-	addresses := tests.GetAddresses(t, 2)
+	ids := tests.GetIdentifiers(t, 2)
 
 	ixns := tests.CreateIxns(t, 4, map[int]*tests.CreateIxParams{
 		2: {
 			IxDataCallback: func(ix *common.IxData) {
 				ix.Participants = append(ix.Participants, []common.IxParticipant{
 					{
-						Address: addresses[0],
+						ID: ids[0],
 					},
 					{
-						Address: addresses[1],
+						ID: ids[1],
 					},
 				}...)
 			},

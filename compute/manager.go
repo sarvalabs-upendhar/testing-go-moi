@@ -87,7 +87,7 @@ func (manager *Manager) runInteraction(
 		tank = NewFuelTank(ix.FuelLimit())
 
 		// Check that the sender has sufficient balance
-		if ok, _ := transition.HasSufficientFuel(ix.SenderAddr(), ix.Cost()); !ok {
+		if ok, _ := transition.HasSufficientFuel(ix.SenderID(), ix.Cost()); !ok {
 			receipt.Status = common.ReceiptInsufficientFuel
 
 			return receipt, nil
@@ -136,13 +136,13 @@ func (manager *Manager) runInteraction(
 func addNewAccountsToSargaAccount(
 	transition *state.Transition,
 	ixHash common.Hash,
-	addrs ...identifiers.Address,
+	ids ...identifiers.Identifier,
 ) error {
 	// get sarga object
-	sargaObject := transition.GetObject(common.SargaAddress)
+	sargaObject := transition.GetObject(common.SargaAccountID)
 
-	for _, addr := range addrs {
-		if !transition.IsGenesis(addr) {
+	for _, id := range ids {
+		if !transition.IsGenesis(id) {
 			continue
 		}
 
@@ -150,7 +150,7 @@ func addNewAccountsToSargaAccount(
 			return errors.New("sarga object not found")
 		}
 
-		registered, err := sargaObject.IsAccountRegistered(addr)
+		registered, err := sargaObject.IsAccountRegistered(id)
 		if err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func addNewAccountsToSargaAccount(
 		}
 
 		// Add the genesis account information of the new account
-		err = sargaObject.AddAccountGenesisInfo(addr, ixHash)
+		err = sargaObject.AddAccountGenesisInfo(id, ixHash)
 		if err != nil {
 			return err
 		}

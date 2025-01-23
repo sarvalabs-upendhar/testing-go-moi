@@ -21,10 +21,6 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
-const (
-	DefaultRandomCount = 0
-)
-
 func Err(err error) {
 	if err != nil {
 		fmt.Println("MOIPod failed Error occurred:", err)
@@ -102,10 +98,16 @@ func GetAccountsWithMnemonic(accountCount int) ([]tests.AccountWithMnemonic, err
 			return nil, err
 		}
 
+		participantID, err := identifiers.GenerateParticipantIDv0(common.NewAccounIDFromBytes(publicKey), 0)
+		if err != nil {
+			return nil, err
+		}
+
 		accounts = append(accounts,
 			tests.AccountWithMnemonic{
-				Addr:     identifiers.NewAddressFromBytes(publicKey),
-				Mnemonic: mnemonic,
+				ID:        participantID.AsIdentifier(),
+				Mnemonic:  mnemonic,
+				PublicKey: publicKey,
 			})
 	}
 

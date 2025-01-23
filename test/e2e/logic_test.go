@@ -47,8 +47,8 @@ func (te *TestEnvironment) TestEphemeralLogic() {
 	}))
 
 	// Create a storage reader
-	logicID := te.GetLogicID(sender.Addr)
-	reader := te.moiClient.NewStorageReader(sender.Addr, logicID)
+	logicID := te.GetLogicID(sender.ID)
+	reader := te.moiClient.NewStorageReader(sender.ID, logicID)
 
 	// Enlist the sender with the Toggler Logic
 	te.CallAndCheckReceipt(te.enlistLogic(sender, &common.LogicPayload{
@@ -64,7 +64,7 @@ func (te *TestEnvironment) TestEphemeralLogic() {
 		}(),
 	}))
 
-	// Check State for SenderAddr [must be false]
+	// Check State for SenderID [must be false]
 	value, err := toggler.GetValue(reader)
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), false, value)
@@ -74,7 +74,7 @@ func (te *TestEnvironment) TestEphemeralLogic() {
 		Logic: logicID, Callsite: "Toggle", Calldata: nil,
 	}))
 
-	// Check State for SenderAddr
+	// Check State for SenderID
 	value, err = toggler.GetValue(reader)
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), true, value)
@@ -119,8 +119,8 @@ func (te *TestEnvironment) TestHybridStateLogic() {
 		}(),
 	}))
 
-	logicID := te.GetLogicID(sender.Addr)
-	persistent := te.moiClient.NewStorageReader(logicID.Address(), logicID)
+	logicID := te.GetLogicID(sender.ID)
+	persistent := te.moiClient.NewStorageReader(logicID.AsIdentifier(), logicID)
 
 	// Check supply [1000000000]
 	supply, err := lockledger.GetPersistentSupply(persistent)
@@ -134,7 +134,7 @@ func (te *TestEnvironment) TestHybridStateLogic() {
 
 	te.T().Run("lockup", func(t *testing.T) {
 		// Create ephemeral state reader for sender
-		senderState := te.moiClient.NewStorageReader(sender.Addr, logicID)
+		senderState := te.moiClient.NewStorageReader(sender.ID, logicID)
 
 		// Check spendable balance for sender
 		spendable, err := lockledger.GetEphemeralSpendable(senderState)
@@ -168,7 +168,7 @@ func (te *TestEnvironment) TestHybridStateLogic() {
 
 	te.T().Run("enlist", func(t *testing.T) {
 		// Create ephemeral state reader for another account
-		anotherState := te.moiClient.NewStorageReader(another.Addr, logicID)
+		anotherState := te.moiClient.NewStorageReader(another.ID, logicID)
 
 		// Enlist another account with the LockLedger Logic
 		te.CallAndCheckReceipt(te.enlistLogic(another, &common.LogicPayload{
@@ -227,8 +227,8 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 	}))
 
 	// Create a storage reader (persistent)
-	logicID := te.GetLogicID(sender.Addr)
-	reader := te.moiClient.NewStorageReader(logicID.Address(), logicID)
+	logicID := te.GetLogicID(sender.ID)
+	reader := te.moiClient.NewStorageReader(logicID.AsIdentifier(), logicID)
 
 	// Check supply
 	supply, err := tokenledger.GetSupply(reader)
@@ -241,7 +241,7 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 	require.Equal(te.T(), "MOI", symbol)
 
 	// Check balance for sender
-	balanceSender, err := tokenledger.GetBalance(reader, sender.Addr)
+	balanceSender, err := tokenledger.GetBalance(reader, sender.ID)
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), big.NewInt(1000000000), balanceSender)
 
@@ -249,7 +249,7 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 	te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
 		Logic: logicID, Callsite: "Transfer", Calldata: func() []byte {
 			inputs := tokenledger.InputTransfer{
-				Receiver: another.Addr,
+				Receiver: another.ID,
 				Amount:   10000,
 			}
 
@@ -263,12 +263,12 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 	}))
 
 	// Check balance for sender
-	balanceSender, err = tokenledger.GetBalance(reader, sender.Addr)
+	balanceSender, err = tokenledger.GetBalance(reader, sender.ID)
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), big.NewInt(1000000000-10000), balanceSender)
 
 	// Check balance for another
-	balanceAnother, err := tokenledger.GetBalance(reader, another.Addr)
+	balanceAnother, err := tokenledger.GetBalance(reader, another.ID)
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), big.NewInt(10000), balanceAnother)
 
@@ -276,24 +276,24 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 	logs, err := te.moiClient.GetLogs(context.Background(), &args.FilterQueryArgs{
 		StartHeight: moiclient.NumPointer(-1),
 		EndHeight:   moiclient.NumPointer(-1),
-		Address:     sender.Addr,
+		ID:          sender.ID,
 	})
 	require.NoError(te.T(), err)
 	require.Len(te.T(), logs, 1) // Expect 1 log in the latest tesseract
 
 	log := logs[0]
 	require.Equal(te.T(), logicID, log.LogicID)
-	require.Equal(te.T(), logicID.Address(), log.Address)
+	require.Equal(te.T(), logicID.AsIdentifier(), log.ID)
 	require.Equal(te.T(), []common.Hash{
 		blake2b.Sum256(must(polo.Polorize("Transfer"))),
-		blake2b.Sum256(must(polo.Polorize(sender.Addr))),
-		blake2b.Sum256(must(polo.Polorize(another.Addr))),
+		blake2b.Sum256(must(polo.Polorize(sender.ID))),
+		blake2b.Sum256(must(polo.Polorize(another.ID))),
 	}, log.Topics)
 	require.Equal(te.T(), func() hexutil.Bytes {
 		doc := make(polo.Document)
 
-		_ = doc.Set("sender", sender.Addr)
-		_ = doc.Set("receiver", another.Addr)
+		_ = doc.Set("sender", sender.ID)
+		_ = doc.Set("receiver", another.ID)
 		_ = doc.Set("amount", 10000)
 
 		return doc.Bytes()
@@ -305,10 +305,10 @@ func (te *TestEnvironment) CallAndCheckReceipt(ixhash common.Hash, err error) {
 	checkForReceiptSuccess(te.T(), te.moiClient, ixhash)
 }
 
-func (te *TestEnvironment) GetLogicID(addr identifiers.Address) identifiers.LogicID {
-	height := moiclient.GetLatestHeight(te.T(), te.moiClient, addr)
+func (te *TestEnvironment) GetLogicID(id identifiers.Identifier) identifiers.LogicID {
+	height := moiclient.GetLatestHeight(te.T(), te.moiClient, id)
 
-	return moiclient.GetLogicID(te.T(), te.moiClient, 0, addr, int64(height))
+	return moiclient.GetLogicID(te.T(), te.moiClient, 0, id, int64(height))
 }
 
 //nolint:dupl
@@ -317,7 +317,7 @@ func (te *TestEnvironment) enlistLogic(
 	logicPayload *common.LogicPayload,
 ) (common.Hash, error) {
 	te.logger.Debug("enlist logic ",
-		"sender", acc.Addr,
+		"sender", acc.ID,
 		"logicID", logicPayload.Logic,
 		"callsite", logicPayload.Callsite,
 		"calldata", logicPayload.Calldata,
@@ -328,8 +328,8 @@ func (te *TestEnvironment) enlistLogic(
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    acc.Addr,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.Addr, 0),
+			ID:         acc.ID,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.ID, 0),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -341,11 +341,11 @@ func (te *TestEnvironment) enlistLogic(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  acc.Addr,
+				ID:       acc.ID,
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  logicPayload.Logic.Address(),
+				ID:       logicPayload.Logic.AsIdentifier(),
 				LockType: common.MutateLock,
 			},
 		},
@@ -353,7 +353,7 @@ func (te *TestEnvironment) enlistLogic(
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
-			Addr:     acc.Addr,
+			ID:       acc.ID,
 			KeyID:    0,
 			Mnemonic: acc.Mnemonic,
 		},

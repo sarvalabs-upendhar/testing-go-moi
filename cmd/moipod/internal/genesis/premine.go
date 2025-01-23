@@ -47,14 +47,8 @@ func parsePremineFlags(cmd *cobra.Command) {
 		"Balance allocation of addresses. Format: <address:balance,address:balance...>",
 	)
 	cmd.Flags().StringSliceVar(
-		&behaviourNodes,
-		"behaviour-nodes",
-		[]string{},
-		"List of krama ids. Format: <kramaID1,kramaID2,...>",
-	)
-	cmd.Flags().StringSliceVar(
-		&randomNodes,
-		"random-nodes",
+		&consensusNodes,
+		"consensus-nodes",
 		[]string{},
 		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
@@ -79,18 +73,16 @@ func addAsset() {
 		cmdcommon.Err(err)
 	}
 
-	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
-		behaviourNodes, randomNodes = getContextNodes(
+	if len(consensusNodes) == 0 {
+		consensusNodes = getContextNodes(
 			instancesFilePath,
-			common.BehaviouralContextSize,
-			cmdcommon.DefaultRandomCount,
+			common.ConsensusNodesSize,
 		)
 	}
 
 	genesis.AddAssetInfo(common.AssetAccountSetupArgs{
-		AssetInfo:          info,
-		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
-		RandomContext:      utils.KramaIDFromString(randomNodes),
+		AssetInfo:      info,
+		ConsensusNodes: utils.KramaIDFromString(consensusNodes),
 	})
 
 	if err = cmdcommon.WriteToGenesisFile(genesisFilePath, genesis); err != nil {
@@ -135,7 +127,7 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 		return nil, common.ErrInvalidAssetInfoParams
 	}
 
-	opaddr, _ := identifiers.NewAddressFromHex(operator)
+	operatorID, _ := identifiers.NewParticipantIDFromHex(operator)
 
 	info := &common.AssetCreationArgs{
 		Symbol:      symbol,
@@ -143,7 +135,7 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 		Standard:    hexutil.Uint16(standard),
 		IsLogical:   isLogical,
 		IsStateful:  isStateFul,
-		Operator:    opaddr,
+		Operator:    operatorID.AsIdentifier(),
 		Allocations: make([]common.Allocation, 0),
 	}
 
@@ -157,7 +149,7 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 // parseAllocation decodes allocation string into allocation struct using delimiter `:`
 func parseAllocation(allocation string) *common.Allocation {
 	if delimiterIdx := strings.Index(allocation, ":"); delimiterIdx != -1 {
-		// <address>:<balance>
+		// <participantID>:<balance>
 		valueRaw := allocation[delimiterIdx+1:]
 
 		balance, err := parseUint256orHex(&valueRaw)
@@ -165,11 +157,11 @@ func parseAllocation(allocation string) *common.Allocation {
 			cmdcommon.Err(errors.Wrapf(err, "failed to parse amount"))
 		}
 
-		addr, _ := identifiers.NewAddressFromHex(allocation[:delimiterIdx])
+		id, _ := identifiers.NewParticipantIDFromHex(allocation[:delimiterIdx])
 
 		return &common.Allocation{
-			Address: addr,
-			Amount:  (*hexutil.Big)(balance),
+			ID:     id.AsIdentifier(),
+			Amount: (*hexutil.Big)(balance),
 		}
 	}
 

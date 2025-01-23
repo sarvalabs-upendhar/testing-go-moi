@@ -31,25 +31,25 @@ type FilterUninstallResponse struct {
 type TesseractFilterArgs struct{}
 
 type TesseractByAccountFilterArgs struct {
-	Addr identifiers.Address `json:"address"`
+	ID identifiers.Identifier `json:"id"`
 }
 
 type PendingIxnsFilterArgs struct{}
 
 type FilterQueryArgs struct {
-	StartHeight *int64              `json:"start_height"`
-	EndHeight   *int64              `json:"end_height"`
-	Address     identifiers.Address `json:"address"`
-	Topics      [][]common.Hash     `json:"topics"`
+	StartHeight *int64                 `json:"start_height"`
+	EndHeight   *int64                 `json:"end_height"`
+	ID          identifiers.Identifier `json:"id"`
+	Topics      [][]common.Hash        `json:"topics"`
 }
 
 // UnmarshalJSON decodes a Filter Query json object
 func (q *FilterQueryArgs) UnmarshalJSON(data []byte) error {
 	var obj struct {
-		StartHeight *int64              `json:"start_height"`
-		EndHeight   *int64              `json:"end_height"`
-		Address     identifiers.Address `json:"address"`
-		Topics      []interface{}       `json:"topics"`
+		StartHeight *int64                 `json:"start_height"`
+		EndHeight   *int64                 `json:"end_height"`
+		ID          identifiers.Identifier `json:"id"`
+		Topics      []interface{}          `json:"topics"`
 	}
 
 	err := json.Unmarshal(data, &obj)
@@ -69,11 +69,11 @@ func (q *FilterQueryArgs) UnmarshalJSON(data []byte) error {
 		q.EndHeight = obj.EndHeight
 	}
 
-	if obj.Address == identifiers.NilAddress {
-		return common.ErrInvalidAddress
+	if obj.ID == identifiers.Nil {
+		return common.ErrInvalidIdentifier
 	}
 
-	q.Address = obj.Address
+	q.ID = obj.ID
 
 	if obj.Topics != nil {
 		topics, err := UnmarshalTopic(obj.Topics)

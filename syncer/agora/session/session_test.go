@@ -15,7 +15,7 @@ import (
 )
 
 func TestHandleMessage_UpdatePeerStatus(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	peerID := tests.RandomKramaIDs(t, 1)[0]
 
@@ -57,7 +57,7 @@ func TestHandleMessage_UpdatePeerStatus(t *testing.T) {
 }
 
 func TestHandleMessage_UpdatePeerSet(t *testing.T) {
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	peerID := tests.RandomKramaIDs(t, 1)[0]
 
@@ -105,7 +105,7 @@ func TestHandleMessage_UpdatePeerSet(t *testing.T) {
 func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 	t.Parallel()
 
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	peerID := tests.RandomKramaIDs(t, 1)[0]
 
@@ -158,7 +158,7 @@ func TestGetBlocks_RecordSessionInterest(t *testing.T) {
 func TestGetBlock(t *testing.T) {
 	t.Parallel()
 
-	sessionID := tests.RandomAddress(t)
+	sessionID := tests.RandomIdentifier(t)
 	stateHash := randomCID(t, storage.Account.Byte())
 	peerID := tests.RandomKramaIDs(t, 1)[0]
 

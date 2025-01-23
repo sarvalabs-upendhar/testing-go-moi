@@ -8,8 +8,8 @@ import (
 const NodeNotFound = -1
 
 const (
-	BehaviouralContextSize = 5
-	StochasticSetSize      = 5
+	ConsensusNodesSize = 5
+	StochasticSetSize  = 5
 )
 
 type NodeList []kramaid.KramaID
@@ -28,7 +28,7 @@ func (nl NodeList) Len() int {
 	return len(nl)
 }
 
-type ContextDelta map[identifiers.Address]*DeltaGroup
+type ContextDelta map[identifiers.Identifier]*DeltaGroup
 
 func (delta ContextDelta) Copy() ContextDelta {
 	if len(delta) == 0 {
@@ -45,22 +45,16 @@ func (delta ContextDelta) Copy() ContextDelta {
 }
 
 type DeltaGroup struct {
-	BehaviouralNodes []kramaid.KramaID `json:"behavioural_nodes"`
-	RandomNodes      []kramaid.KramaID `json:"random_nodes"`
-	ReplacedNodes    []kramaid.KramaID `json:"replaced_nodes"`
+	ConsensusNodes []kramaid.KramaID `json:"consensus_nodes"`
+	ReplacedNodes  []kramaid.KramaID `json:"replaced_nodes"`
 }
 
 func (d DeltaGroup) Copy() *DeltaGroup {
 	deltaGroup := &DeltaGroup{}
 
-	if len(d.BehaviouralNodes) > 0 {
-		deltaGroup.BehaviouralNodes = make([]kramaid.KramaID, len(d.BehaviouralNodes))
-		copy(deltaGroup.BehaviouralNodes, d.BehaviouralNodes)
-	}
-
-	if len(d.RandomNodes) > 0 {
-		deltaGroup.RandomNodes = make([]kramaid.KramaID, len(d.RandomNodes))
-		copy(deltaGroup.RandomNodes, d.RandomNodes)
+	if len(d.ConsensusNodes) > 0 {
+		deltaGroup.ConsensusNodes = make([]kramaid.KramaID, len(d.ConsensusNodes))
+		copy(deltaGroup.ConsensusNodes, d.ConsensusNodes)
 	}
 
 	if len(d.ReplacedNodes) > 0 {
@@ -74,7 +68,7 @@ func (d DeltaGroup) Copy() *DeltaGroup {
 func (d DeltaGroup) NodeIndex(id kramaid.KramaID) int {
 	idx := 0
 
-	for _, node := range d.BehaviouralNodes {
+	for _, node := range d.ConsensusNodes {
 		if node == id {
 			return idx
 		}

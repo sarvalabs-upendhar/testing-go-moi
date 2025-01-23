@@ -19,7 +19,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 ) *common.IxData {
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address: sender.Addr,
+			ID: sender.ID,
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -27,7 +27,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 		IxOps:     make([]common.IxOpRaw, 0),
 		Participants: []common.IxParticipant{
 			{
-				Address:  sender.Addr,
+				ID:       sender.ID,
 				LockType: common.MutateLock,
 			},
 		},
@@ -44,12 +44,12 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 			rawPayload, err = []byte{}, nil
 
 		case common.IxParticipantCreate:
-			addr := tests.RandomAddress(te.T())
+			id := tests.RandomIdentifier(te.T())
 			participantRegisterPayload := &common.ParticipantCreatePayload{
-				Address: addr,
+				ID: id,
 				KeysPayload: []common.KeyAddPayload{
 					{
-						PublicKey:          addr.Bytes(),
+						PublicKey:          id.Bytes(),
 						Weight:             1000,
 						SignatureAlgorithm: 0,
 					},
@@ -60,7 +60,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 			rawPayload, err = participantRegisterPayload.Bytes()
 
 			ixData.Participants = append(ixData.Participants, common.IxParticipant{
-				Address:  participantRegisterPayload.Address,
+				ID:       participantRegisterPayload.ID,
 				LockType: common.MutateLock,
 			})
 
@@ -71,13 +71,13 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 				Standard: common.MAS0,
 			})
 
-			addr := tests.RandomAddress(te.T())
+			id := tests.RandomIdentifier(te.T())
 
 			createParticipant(te, sender, &common.ParticipantCreatePayload{
-				Address: addr,
+				ID: id,
 				KeysPayload: []common.KeyAddPayload{
 					{
-						PublicKey:          addr.Bytes(),
+						PublicKey:          id.Bytes(),
 						Weight:             1000,
 						SignatureAlgorithm: 0,
 					},
@@ -86,7 +86,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 			})
 
 			assetActionPayload := &common.AssetActionPayload{
-				Beneficiary: addr,
+				Beneficiary: id,
 				AssetID:     assetID,
 				Amount:      big.NewInt(1000),
 			}
@@ -99,7 +99,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 			})
 
 			ixData.Participants = append(ixData.Participants, common.IxParticipant{
-				Address:  assetActionPayload.Beneficiary,
+				ID:       assetActionPayload.Beneficiary,
 				LockType: common.MutateLock,
 			})
 
@@ -132,16 +132,16 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 			})
 
 			ixData.Participants = append(ixData.Participants, common.IxParticipant{
-				Address:  assetID.Address(),
+				ID:       assetID.AsIdentifier(),
 				LockType: common.MutateLock,
 			})
 
 		case common.IxLogicDeploy:
 			logicDeployPayload := &common.LogicPayload{
 				Manifest: common.Hex2Bytes(ledgerManifest),
-				Logic:    "",
+				Logic:    identifiers.Nil,
 				Callsite: "Seed",
-				Calldata: common.Hex2Bytes(deployCalldata),
+				Calldata: DeployCallData.Bytes(),
 			}
 
 			rawPayload, err = logicDeployPayload.Bytes()
@@ -150,23 +150,25 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 			logicID := deployLogic(te, sender, &common.LogicPayload{
 				Manifest: common.Hex2Bytes(ledgerManifest),
 				Callsite: "Seed",
-				Calldata: common.Hex2Bytes(deployCalldata),
+				Calldata: DeployCallData.Bytes(),
 			})
 
-			invokeCalldata := "0x0d6f0665a601a502616d6f756e74030f42407265636569766572060fafe52ec42a85db6" +
-				"44d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c"
+			invokeCalldata := DocGen(te.T(), map[string]any{
+				"amount":   transferAmount,
+				"receiver": DefaultBeneficiary,
+			}).Bytes()
 
 			logicInvokePayload := &common.LogicPayload{
 				Manifest: []byte{},
 				Logic:    logicID,
 				Callsite: "Transfer",
-				Calldata: common.Hex2Bytes(invokeCalldata),
+				Calldata: invokeCalldata,
 			}
 
 			rawPayload, err = logicInvokePayload.Bytes()
 
 			ixData.Participants = append(ixData.Participants, common.IxParticipant{
-				Address:  logicID.Address(),
+				ID:       logicID.AsIdentifier(),
 				LockType: common.MutateLock,
 			})
 		default:
@@ -181,13 +183,13 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 		})
 	}
 
-	ixData.Sender.SequenceID = moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.Addr, 0)
+	ixData.Sender.SequenceID = moiclient.GetLatestSequenceID(te.T(), te.moiClient, sender.ID, 0)
 
 	return ixData
 }
 
 func validateOperations(
-	te *TestEnvironment, sender identifiers.Address,
+	te *TestEnvironment, sender identifiers.Identifier,
 	ixHash common.Hash, txs []common.IxOpRaw,
 ) {
 	te.T()
@@ -244,12 +246,11 @@ func validateOperations(
 
 		case common.IxLogicInvoke:
 			payload := new(common.LogicPayload)
-			receiver, _ := identifiers.NewAddressFromHex("0x0fafe52ec42a85db644d5cceba2bb89cf5b0166cc9158211f44ed1e60b06032c")
 
 			err := payload.FromBytes(op.Payload)
 			require.NoError(te.T(), err)
 
-			validateLogicInvoke(te, sender, receiver, payload, ixHash)
+			validateLogicInvoke(te, sender, DefaultBeneficiary, payload, ixHash)
 
 		default:
 			continue
@@ -339,7 +340,7 @@ func (te *TestEnvironment) TestOperations() {
 		te.Run(test.name, func() {
 			sendIX := moiclient.CreateSendIXFromIxData(te.T(), test.ixData, []moiclient.AccountKeyWithMnemonic{
 				{
-					Addr:     test.account.Addr,
+					ID:       test.account.ID,
 					KeyID:    0,
 					Mnemonic: test.account.Mnemonic,
 				},
@@ -354,7 +355,7 @@ func (te *TestEnvironment) TestOperations() {
 
 			require.NoError(te.T(), err)
 
-			validateOperations(te, test.ixData.Sender.Address, ixHash, test.ixData.IxOps)
+			validateOperations(te, test.ixData.Sender.ID, ixHash, test.ixData.IxOps)
 		})
 	}
 }

@@ -22,7 +22,7 @@ import (
 
 func TestBalanceOf(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	balance := big.NewInt(123)
 
 	setAssetBalance(t, sObj, assetID, balance)
@@ -34,7 +34,7 @@ func TestBalanceOf(t *testing.T) {
 	}{
 		{
 			name:          "should return error if asset not found",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
@@ -59,7 +59,7 @@ func TestBalanceOf(t *testing.T) {
 
 func TestAddBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	setAssetBalance(t, sObj, assetID, big.NewInt(123))
 
 	testcases := []struct {
@@ -77,7 +77,7 @@ func TestAddBalance(t *testing.T) {
 		},
 		{
 			name:            "should return error if asset doesn't exist",
-			assetID:         tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			assetID:         tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			amount:          big.NewInt(50),
 			expectedBalance: big.NewInt(0), // no balance set
 			expectError:     common.ErrAssetNotFound,
@@ -102,7 +102,7 @@ func TestAddBalance(t *testing.T) {
 
 func TestSubBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	setAssetBalance(t, sObj, assetID, big.NewInt(124))
 
 	testcases := []struct {
@@ -121,7 +121,7 @@ func TestSubBalance(t *testing.T) {
 		},
 		{
 			name:            "should return error if asset doesn't exist",
-			assetID:         tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			assetID:         tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			amount:          big.NewInt(50),
 			expectedBalance: big.NewInt(0), // no balance set
 			expectError:     common.ErrAssetNotFound,
@@ -146,11 +146,11 @@ func TestSubBalance(t *testing.T) {
 }
 
 func TestIsAccountRegistered(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := mockDB()
 	logicTree, _ := createTestKramaHashTree(t,
 		db,
-		common.SargaAddress,
+		common.SargaAccountID,
 		storage.Storage,
 		nil,
 		nil,
@@ -164,16 +164,16 @@ func TestIsAccountRegistered(t *testing.T) {
 	))
 
 	// Test case: Account not registered
-	isRegistered, err := sObj.IsAccountRegistered(address)
+	isRegistered, err := sObj.IsAccountRegistered(id)
 	require.NoError(t, err)
 	require.False(t, isRegistered)
 
 	// Register the account
-	err = sObj.AddAccountGenesisInfo(address, common.NilHash)
+	err = sObj.AddAccountGenesisInfo(id, common.NilHash)
 	require.NoError(t, err)
 
 	// Test case: Account registered
-	isRegistered, err = sObj.IsAccountRegistered(address)
+	isRegistered, err = sObj.IsAccountRegistered(id)
 	require.NoError(t, err)
 	require.True(t, isRegistered)
 }
@@ -184,15 +184,15 @@ func TestCreateLockup(t *testing.T) {
 
 	setAssetLockups(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(50000), big.NewInt(500)},
-		[]identifiers.Address{}, []*big.Int{},
+		[]identifiers.Identifier{}, []*big.Int{},
 	)
 
 	testcases := []struct {
 		name                 string
 		assetID              identifiers.AssetID
-		address              identifiers.Address
+		id                   identifiers.Identifier
 		amount               *big.Int
-		preTestFn            func(address identifiers.Address)
+		preTestFn            func(id identifiers.Identifier)
 		expectedBalance      *big.Int
 		expectedLockupAmount *big.Int
 		expectedError        error
@@ -200,15 +200,15 @@ func TestCreateLockup(t *testing.T) {
 		{
 			name:                 "creates a new lockup and updates balance",
 			assetID:              assetIDs[0],
-			address:              tests.RandomAddress(t),
+			id:                   tests.RandomIdentifier(t),
 			amount:               big.NewInt(5000),
 			expectedBalance:      big.NewInt(45000),
 			expectedLockupAmount: big.NewInt(5000),
 		},
 		{
 			name:          "should return error if asset not found",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			address:       tests.RandomAddress(t),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			id:            tests.RandomIdentifier(t),
 			amount:        big.NewInt(5000),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -217,10 +217,10 @@ func TestCreateLockup(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.preTestFn != nil {
-				test.preTestFn(test.address)
+				test.preTestFn(test.id)
 			}
 
-			err := sObj.CreateLockup(test.assetID, test.address, test.amount)
+			err := sObj.CreateLockup(test.assetID, test.id, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -234,7 +234,7 @@ func TestCreateLockup(t *testing.T) {
 			// Verify if the balance is debited
 			checkForBalances(t, sObj, test.expectedBalance, test.assetID)
 			// Verify the updated lockup amount
-			checkForLockups(t, sObj, test.assetID, test.address, test.expectedLockupAmount)
+			checkForLockups(t, sObj, test.assetID, test.id, test.expectedLockupAmount)
 		})
 	}
 }
@@ -243,16 +243,16 @@ func TestReleaseLockup(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetIDs, _ := tests.CreateTestAssets(t, 2)
 
-	addresses := tests.GetRandomAddressList(t, 2)
+	ids := tests.GetIdentifiers(t, 2)
 	setAssetLockups(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(1000)},
-		addresses, []*big.Int{big.NewInt(5000), big.NewInt(1000)},
+		ids, []*big.Int{big.NewInt(5000), big.NewInt(1000)},
 	)
 
 	testcases := []struct {
 		name                 string
 		assetID              identifiers.AssetID
-		address              identifiers.Address
+		id                   identifiers.Identifier
 		amount               *big.Int
 		expectedLockupAmount *big.Int
 		expectedError        error
@@ -260,28 +260,28 @@ func TestReleaseLockup(t *testing.T) {
 		{
 			name:                 "successfully releases lockup",
 			assetID:              assetIDs[0],
-			address:              addresses[0],
+			id:                   ids[0],
 			amount:               big.NewInt(2000),
 			expectedLockupAmount: big.NewInt(3000), // 5000 - 2000
 		},
 		{
 			name:                 "remove lockup when balance reaches zero",
 			assetID:              assetIDs[1],
-			address:              addresses[1],
+			id:                   ids[1],
 			amount:               big.NewInt(1000),
 			expectedLockupAmount: big.NewInt(0),
 		},
 		{
 			name:          "should return error if asset not found",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			address:       addresses[0],
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			id:            ids[0],
 			amount:        big.NewInt(2000),
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
 			name:          "should return error if lockup not found",
 			assetID:       assetIDs[1],
-			address:       tests.RandomAddress(t),
+			id:            tests.RandomIdentifier(t),
 			amount:        big.NewInt(500),
 			expectedError: common.ErrLockupNotFound,
 		},
@@ -289,7 +289,7 @@ func TestReleaseLockup(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.ReleaseLockup(test.assetID, test.address, test.amount)
+			err := sObj.ReleaseLockup(test.assetID, test.id, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -301,51 +301,51 @@ func TestReleaseLockup(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify the updated lockup amount
-			checkForLockups(t, sObj, test.assetID, test.address, test.expectedLockupAmount)
+			checkForLockups(t, sObj, test.assetID, test.id, test.expectedLockupAmount)
 		})
 	}
 }
 
 func TestGetLockup(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	addresses := tests.GetRandomAddressList(t, 1)
+	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 1)
 
 	setAssetLockups(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(50000)},
-		addresses, []*big.Int{big.NewInt(500)},
+		ids, []*big.Int{big.NewInt(500)},
 	)
 
 	testcases := []struct {
 		name           string
 		assetID        identifiers.AssetID
-		address        identifiers.Address
+		id             identifiers.Identifier
 		expectedAmount *big.Int
 		expectedError  error
 	}{
 		{
 			name:           "retrieves existing lockup amount",
 			assetID:        assetIDs[0],
-			address:        addresses[0],
+			id:             ids[0],
 			expectedAmount: big.NewInt(500),
 		},
 		{
 			name:          "should return error if asset doesn't exist",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			address:       tests.RandomAddress(t),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
 			name:          "should return error if lockup doesn't exist",
 			assetID:       assetIDs[0],
-			address:       tests.RandomAddress(t),
+			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrLockupNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			amount, err := sObj.GetLockup(test.assetID, test.address)
+			amount, err := sObj.GetLockup(test.assetID, test.id)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -366,36 +366,36 @@ func TestCreateMandate(t *testing.T) {
 
 	setAssetMandates(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(50000)},
-		[]identifiers.Address{}, []*big.Int{},
+		[]identifiers.Identifier{}, []*big.Int{},
 	)
 
 	testcases := []struct {
 		name           string
 		assetID        identifiers.AssetID
-		address        identifiers.Address
+		id             identifiers.Identifier
 		amount         *big.Int
-		preTestFn      func(address identifiers.Address)
+		preTestFn      func(id identifiers.Identifier)
 		expectedAmount *big.Int
 		expectedError  error
 	}{
 		{
 			name:           "creates a new mandate successfully",
 			assetID:        assetIDs[0],
-			address:        tests.RandomAddress(t),
+			id:             tests.RandomIdentifier(t),
 			amount:         big.NewInt(5000),
 			expectedAmount: big.NewInt(5000),
 		},
 		{
 			name:    "increments existing mandate amount",
 			assetID: assetIDs[1],
-			address: tests.RandomAddress(t),
+			id:      tests.RandomIdentifier(t),
 			amount:  big.NewInt(3000),
-			preTestFn: func(address identifiers.Address) {
+			preTestFn: func(id identifiers.Identifier) {
 				assert.NoError(
 					t,
 					sObj.CreateMandate(
 						assetIDs[1],
-						address,
+						id,
 						big.NewInt(1000),
 						uint64(time.Now().Add(1*time.Hour).Unix()),
 					),
@@ -405,8 +405,8 @@ func TestCreateMandate(t *testing.T) {
 		},
 		{
 			name:          "should return error if asset does not exist",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			address:       tests.RandomAddress(t),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			id:            tests.RandomIdentifier(t),
 			amount:        big.NewInt(3000),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -415,10 +415,10 @@ func TestCreateMandate(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.preTestFn != nil {
-				test.preTestFn(test.address)
+				test.preTestFn(test.id)
 			}
 
-			err := sObj.CreateMandate(test.assetID, test.address, test.amount, uint64(time.Now().Unix()))
+			err := sObj.CreateMandate(test.assetID, test.id, test.amount, uint64(time.Now().Unix()))
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -428,25 +428,25 @@ func TestCreateMandate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForMandates(t, sObj, test.assetID, test.address, test.expectedAmount)
+			checkForMandates(t, sObj, test.assetID, test.id, test.expectedAmount)
 		})
 	}
 }
 
 func TestSubMandateAmount(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	addresses := tests.GetRandomAddressList(t, 2)
+	ids := tests.GetIdentifiers(t, 2)
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
 
 	setAssetMandates(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(1000)},
-		addresses, []*big.Int{big.NewInt(500), big.NewInt(1000)},
+		ids, []*big.Int{big.NewInt(500), big.NewInt(1000)},
 	)
 
 	testcases := []struct {
 		name           string
 		assetID        identifiers.AssetID
-		address        identifiers.Address
+		id             identifiers.Identifier
 		amount         *big.Int
 		expectedAmount *big.Int
 		expectedError  error
@@ -454,28 +454,28 @@ func TestSubMandateAmount(t *testing.T) {
 		{
 			name:           "deducts mandate amount successfully",
 			assetID:        assetIDs[0],
-			address:        addresses[0],
+			id:             ids[0],
 			amount:         big.NewInt(200),
 			expectedAmount: big.NewInt(300),
 		},
 		{
 			name:           "remove mandate when balance reaches zero",
 			assetID:        assetIDs[1],
-			address:        addresses[1],
+			id:             ids[1],
 			amount:         big.NewInt(1000),
 			expectedAmount: big.NewInt(0),
 		},
 		{
 			name:          "fails to deduct from nonexistent mandate",
 			assetID:       assetIDs[0],
-			address:       tests.RandomAddress(t),
+			id:            tests.RandomIdentifier(t),
 			amount:        big.NewInt(100),
 			expectedError: common.ErrMandateNotFound,
 		},
 		{
 			name:          "fails to deduct from nonexistent asset",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			address:       addresses[0],
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			id:            ids[0],
 			amount:        big.NewInt(100),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -483,7 +483,7 @@ func TestSubMandateAmount(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.SubMandateBalance(test.assetID, test.address, test.amount)
+			err := sObj.SubMandateBalance(test.assetID, test.id, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -493,25 +493,25 @@ func TestSubMandateAmount(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForMandates(t, sObj, test.assetID, test.address, test.expectedAmount)
+			checkForMandates(t, sObj, test.assetID, test.id, test.expectedAmount)
 		})
 	}
 }
 
 func TestConsumeMandate(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	addresses := tests.GetRandomAddressList(t, 2)
+	ids := tests.GetIdentifiers(t, 2)
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
 
 	setAssetMandates(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(2000), big.NewInt(1000)},
-		addresses, []*big.Int{big.NewInt(500), big.NewInt(1000)},
+		ids, []*big.Int{big.NewInt(500), big.NewInt(1000)},
 	)
 
 	testcases := []struct {
 		name            string
 		assetID         identifiers.AssetID
-		address         identifiers.Address
+		id              identifiers.Identifier
 		amount          *big.Int
 		expectedMandate *big.Int
 		expectedBalance *big.Int
@@ -520,7 +520,7 @@ func TestConsumeMandate(t *testing.T) {
 		{
 			name:            "consumes mandate and balance successfully",
 			assetID:         assetIDs[0],
-			address:         addresses[0],
+			id:              ids[0],
 			amount:          big.NewInt(200),
 			expectedMandate: big.NewInt(300),
 			expectedBalance: big.NewInt(1800),
@@ -528,14 +528,14 @@ func TestConsumeMandate(t *testing.T) {
 		{
 			name:          "fails to deduct mandate balance",
 			assetID:       assetIDs[0],
-			address:       tests.RandomAddress(t),
+			id:            tests.RandomIdentifier(t),
 			amount:        big.NewInt(100),
 			expectedError: common.ErrMandateNotFound,
 		},
 		{
 			name:          "fails to deduct asset balance",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			address:       addresses[0],
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			id:            ids[0],
 			amount:        big.NewInt(100),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -543,7 +543,7 @@ func TestConsumeMandate(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.ConsumeMandate(test.assetID, test.address, test.amount)
+			err := sObj.ConsumeMandate(test.assetID, test.id, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -553,7 +553,7 @@ func TestConsumeMandate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForMandates(t, sObj, test.assetID, test.address, test.expectedMandate)
+			checkForMandates(t, sObj, test.assetID, test.id, test.expectedMandate)
 			checkForBalances(t, sObj, test.expectedBalance, test.assetID)
 		})
 	}
@@ -561,36 +561,36 @@ func TestConsumeMandate(t *testing.T) {
 
 func TestDeleteMandate(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	addresses := tests.GetRandomAddressList(t, 1)
+	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 1)
 
 	setAssetMandates(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(50000)},
-		addresses, []*big.Int{big.NewInt(500)},
+		ids, []*big.Int{big.NewInt(500)},
 	)
 
 	testcases := []struct {
 		name          string
 		assetID       identifiers.AssetID
-		address       identifiers.Address
+		id            identifiers.Identifier
 		expectedError error
 	}{
 		{
 			name:    "deletes existing mandate successfully",
 			assetID: assetIDs[0],
-			address: addresses[0],
+			id:      ids[0],
 		},
 		{
 			name:          "fails to delete mandate for nonexistent asset",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			address:       tests.RandomAddress(t),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrAssetNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.DeleteMandate(test.assetID, test.address)
+			err := sObj.DeleteMandate(test.assetID, test.id)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -600,51 +600,51 @@ func TestDeleteMandate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForMandates(t, sObj, test.assetID, test.address, big.NewInt(0))
+			checkForMandates(t, sObj, test.assetID, test.id, big.NewInt(0))
 		})
 	}
 }
 
 func TestGetMandate(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	addresses := tests.GetRandomAddressList(t, 1)
+	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 1)
 
 	setAssetMandates(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(50000)},
-		addresses, []*big.Int{big.NewInt(500)},
+		ids, []*big.Int{big.NewInt(500)},
 	)
 
 	testcases := []struct {
 		name           string
 		assetID        identifiers.AssetID
-		address        identifiers.Address
+		id             identifiers.Identifier
 		expectedAmount *big.Int
 		expectedError  error
 	}{
 		{
 			name:           "valid mandate returns correct amount",
 			assetID:        assetIDs[0],
-			address:        addresses[0],
+			id:             ids[0],
 			expectedAmount: big.NewInt(500),
 		},
 		{
 			name:          "should return error if asset not found",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
-			address:       tests.RandomAddress(t),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
 			name:          "should return error if mandate not found",
 			assetID:       assetIDs[0],
-			address:       tests.RandomAddress(t),
+			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrMandateNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			mandate, err := sObj.GetMandate(test.assetID, test.address)
+			mandate, err := sObj.GetMandate(test.assetID, test.id)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -662,13 +662,13 @@ func TestGetMandate(t *testing.T) {
 //nolint:dupl
 func TestMandates(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	addresses := tests.GetRandomAddressList(t, 1)
+	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
 
-	// Set mandates for the test assets and addresses
+	// Set mandates for the test assets and ids
 	setAssetMandates(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(10000), big.NewInt(20000)},
-		addresses, []*big.Int{big.NewInt(1000)},
+		ids, []*big.Int{big.NewInt(1000)},
 	)
 
 	testcases := []struct {
@@ -684,12 +684,12 @@ func TestMandates(t *testing.T) {
 			expectedResult: []common.AssetMandateOrLockup{
 				{
 					AssetID: assetIDs[0],
-					Address: addresses[0],
+					ID:      ids[0],
 					Amount:  big.NewInt(1000),
 				},
 				{
 					AssetID: assetIDs[1],
-					Address: addresses[0],
+					ID:      ids[0],
 					Amount:  big.NewInt(1000),
 				},
 			},
@@ -721,13 +721,13 @@ func TestMandates(t *testing.T) {
 //nolint:dupl
 func TestLockups(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	addresses := tests.GetRandomAddressList(t, 1)
+	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
 
-	// Set lockups for the test assets and addresses
+	// Set lockups for the test assets and ids
 	setAssetLockups(
 		t, sObj, assetIDs, []*big.Int{big.NewInt(14000), big.NewInt(22000)},
-		addresses, []*big.Int{big.NewInt(1500)},
+		ids, []*big.Int{big.NewInt(1500)},
 	)
 
 	testcases := []struct {
@@ -743,12 +743,12 @@ func TestLockups(t *testing.T) {
 			expectedResult: []common.AssetMandateOrLockup{
 				{
 					AssetID: assetIDs[0],
-					Address: addresses[0],
+					ID:      ids[0],
 					Amount:  big.NewInt(1500),
 				},
 				{
 					AssetID: assetIDs[1],
-					Address: addresses[0],
+					ID:      ids[0],
 					Amount:  big.NewInt(1500),
 				},
 			},
@@ -804,7 +804,7 @@ func TestCopy(t *testing.T) {
 func TestCommitDeeds(t *testing.T) {
 	deeds, _ := getTestDeeds(
 		t,
-		map[string]struct{}{tests.RandomHash(t).String(): {}},
+		map[identifiers.Identifier]struct{}{tests.RandomIdentifier(t): {}},
 	)
 	sObj := createTestStateObject(t, stateObjectParamsWithDeeds(t, common.NilHash, deeds))
 
@@ -831,12 +831,14 @@ func TestCommitAccount(t *testing.T) {
 
 func TestCommitContext(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	ctxObject, _ := getContextObjects(t, tests.RandomKramaIDs(t, 2), 2, 1)
+	obj, _ := getMetaContextObject(t)
 
-	actualCtxHash, err := sObj.commitContextObject(ctxObject[0])
+	sObj.metaContext = obj
+
+	_, err := sObj.commitContextObject()
 	require.NoError(t, err)
 
-	checkForContextObject(t, sObj, *ctxObject[0], actualCtxHash)
+	checkForContextObject(t, sObj, obj)
 }
 
 func TestCommitActiveStorageTrees(t *testing.T) {
@@ -985,7 +987,7 @@ func TestCommitMetaStorageTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithMST(t, identifiers.NilAddress, nil, test.mst, test.storageRoot),
+				stateObjectParamsWithMST(t, identifiers.Nil, nil, test.mst, test.storageRoot),
 			)
 
 			generatedStorageRoot, err := sObj.commitMetaStorageTree()
@@ -1099,7 +1101,7 @@ func TestCommitStorage(t *testing.T) {
 }
 
 func TestCommitAssets(t *testing.T) {
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	assetObject := createAssetObject(t)
 	assetTree := getMerkleTreeWithEntries(t, nil, nil)
 	inputAssetTree := assetTree.Copy()
@@ -1155,7 +1157,7 @@ func TestCommitAssets(t *testing.T) {
 				t,
 				stateObjectParamsWithAssetTree(
 					t,
-					identifiers.NilAddress,
+					identifiers.Nil,
 					nil,
 					test.assetTree,
 					test.assetRoot,
@@ -1183,7 +1185,7 @@ func TestCommitAssets(t *testing.T) {
 }
 
 func TestCommitLogics(t *testing.T) {
-	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	logicTree := getMerkleTreeWithEntries(t, nil, nil)
 	inputLogicTree := logicTree.Copy()
@@ -1239,7 +1241,7 @@ func TestCommitLogics(t *testing.T) {
 				t,
 				stateObjectParamsWithLogicTree(
 					t,
-					identifiers.NilAddress,
+					identifiers.Nil,
 					nil,
 					test.logicTree,
 					test.logicRoot,
@@ -1270,6 +1272,8 @@ func TestCommit(t *testing.T) {
 	logicIds := tests.GetLogicIDs(t, 1)
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicIds[0]))
 
+	mObj, mHash := getMetaContextObjects(t, 1)
+
 	keys, values := getEntries(t, 1)
 
 	astWithDirtyEntries := getStorageTreesWithDefaultEntries(t, 2, 1)
@@ -1289,7 +1293,7 @@ func TestCommit(t *testing.T) {
 			name: "should return error if failed to commit logic tree",
 			soParams: stateObjectParamsWithLogicTree(
 				t,
-				identifiers.NilAddress,
+				identifiers.Nil,
 				nil,
 				getMerkleTreeWithCommitHook(
 					t,
@@ -1325,6 +1329,8 @@ func TestCommit(t *testing.T) {
 			name: "committed successfully",
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
+					// we set this to check if the context object is committed
+					so.metaContext = mObj[0]
 					so.storageTrees = astWithDirtyEntries
 					so.logicTree = logicTree
 					so.assetTree = assetTree
@@ -1346,7 +1352,7 @@ func TestCommit(t *testing.T) {
 
 			require.NoError(t, err)
 
-			inputAcc := getAccount(t, nil, mstWithDirtyEntries, assetTree, logicTree)
+			inputAcc := getAccount(t, nil, mHash[0], mstWithDirtyEntries, assetTree, logicTree)
 
 			checkForAccount(t, sObj, inputAcc, actualAccHash, 2)
 		})
@@ -1356,6 +1362,7 @@ func TestCommit(t *testing.T) {
 func getAccount(
 	t *testing.T,
 	reg *Deeds,
+	metaContextHash common.Hash,
 	metaStorage, assetTree, logicTree tree.MerkleTree,
 ) *common.Account {
 	t.Helper()
@@ -1380,6 +1387,7 @@ func getAccount(
 	acc.AssetRoot = assetRoot
 	acc.LogicRoot = logicRoot
 	acc.StorageRoot = storageRoot
+	acc.ContextHash = metaContextHash
 
 	return acc
 }
@@ -1403,7 +1411,7 @@ func TestFlushAssetTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithAssetTree(t, identifiers.NilAddress, nil, test.assetTree, common.NilHash, nil),
+				stateObjectParamsWithAssetTree(t, identifiers.Nil, nil, test.assetTree, common.NilHash, nil),
 			)
 
 			err := sObj.flushAssetTree()
@@ -1437,7 +1445,7 @@ func TestFlushLogicTree(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(
 				t,
-				stateObjectParamsWithLogicTree(t, identifiers.NilAddress, nil, test.logicTree, common.NilHash, nil),
+				stateObjectParamsWithLogicTree(t, identifiers.Nil, nil, test.logicTree, common.NilHash, nil),
 			)
 
 			err := sObj.flushLogicTree()
@@ -1544,7 +1552,7 @@ func TestStateManager_FlushDirtyObject(t *testing.T) {
 
 func TestUpdateAssetTree(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	assetObject := NewAssetObject(big.NewInt(500), nil)
 
 	setAssetObject(t, sObj, assetID, assetObject)
@@ -1563,7 +1571,7 @@ func TestUpdateAssetTree(t *testing.T) {
 		},
 		{
 			name:          "insert with non-existent asset ID",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			assetObject:   assetObject,
 			expectedValue: assetObject,
 		},
@@ -1582,8 +1590,8 @@ func TestUpdateAssetTree(t *testing.T) {
 
 func TestUpdateLogicTree(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
-	logicObject := NewLogicObject(tests.RandomAddress(t), engineio.LogicDescriptor{Engine: engineio.PISA})
+	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
+	logicObject := NewLogicObject(logicID.AsIdentifier(), engineio.LogicDescriptor{Engine: engineio.PISA})
 
 	setLogicObject(t, sObj, logicID, logicObject)
 
@@ -1601,7 +1609,7 @@ func TestUpdateLogicTree(t *testing.T) {
 		},
 		{
 			name:          "insert with non-existent logic ID",
-			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
+			logicID:       tests.GetLogicID(t, tests.RandomIdentifier(t)),
 			logicObject:   logicObject,
 			expectedValue: logicObject,
 		},
@@ -1680,33 +1688,27 @@ func TestStorageTrees(t *testing.T) {
 }
 
 func TestCreateAsset(t *testing.T) {
-	assetAddress1 := tests.RandomAddress(t)
-	assetAddress2 := tests.RandomAddress(t)
+	assetAddress1 := tests.RandomIdentifier(t)
+	assetAddress2 := tests.RandomIdentifier(t)
 
 	sObj := createTestStateObject(t, nil)
 
-	assetDescriptor := getTestAssetDescriptor(t, sObj.address, "btc")
+	assetDescriptor := getTestAssetDescriptor(t, sObj.id, "btc")
 
-	assetID := identifiers.NewAssetIDv0(
-		assetDescriptor.IsLogical,
-		assetDescriptor.IsStateFul,
-		assetDescriptor.Dimension,
-		uint16(assetDescriptor.Standard),
-		assetAddress2,
-	)
+	assetID := tests.GetTestAssetIDFromAssetDescriptor(t, assetAddress2, assetDescriptor)
 
 	setAssetState(t, sObj, assetID, assetDescriptor)
 
 	testcases := []struct {
 		name            string
-		assetAddress    identifiers.Address
+		assetAddress    identifiers.Identifier
 		assetDescriptor *common.AssetDescriptor
 		expectedError   error
 	}{
 		{
 			name:            "asset created successfully",
 			assetAddress:    assetAddress1,
-			assetDescriptor: getTestAssetDescriptor(t, sObj.address, "moi"),
+			assetDescriptor: getTestAssetDescriptor(t, sObj.id, "moi"),
 		},
 		{
 			name:            "should return error if asset already exists",
@@ -1728,7 +1730,7 @@ func TestCreateAsset(t *testing.T) {
 
 			require.NoError(t, err)
 
-			expectedAssetID := getTestAssetID(test.assetAddress, test.assetDescriptor)
+			expectedAssetID := tests.GetTestAssetIDFromAssetDescriptor(t, test.assetAddress, test.assetDescriptor)
 
 			require.NoError(t, err)
 			require.Equal(t, expectedAssetID, actualAssetID)
@@ -1742,15 +1744,13 @@ func TestCreateAsset(t *testing.T) {
 func TestMintAsset(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 
-	assetDescriptor := getTestAssetDescriptor(t, sObj.address, "btc")
+	assetDescriptor := getTestAssetDescriptor(t, sObj.id, "btc")
 
-	assetID := identifiers.NewAssetIDv0(
-		assetDescriptor.IsLogical,
-		assetDescriptor.IsStateFul,
-		assetDescriptor.Dimension,
+	assetID := common.CreateAssetIDFromString(
+		assetDescriptor.Symbol,
+		0,
 		uint16(assetDescriptor.Standard),
-		tests.RandomAddress(t),
-	)
+		assetDescriptor.Flags()...)
 
 	setAssetState(t, sObj, assetID, assetDescriptor)
 
@@ -1769,7 +1769,7 @@ func TestMintAsset(t *testing.T) {
 		},
 		{
 			name:          "should return error if asset doesn't exists",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			amount:        big.NewInt(2000),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -1795,16 +1795,13 @@ func TestMintAsset(t *testing.T) {
 func TestBurnAsset(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 
-	assetDescriptor := getTestAssetDescriptor(t, sObj.address, "eth")
+	assetDescriptor := getTestAssetDescriptor(t, sObj.id, "eth")
 
-	assetID := identifiers.NewAssetIDv0(
-		assetDescriptor.IsLogical,
-		assetDescriptor.IsStateFul,
-		assetDescriptor.Dimension,
+	assetID := common.CreateAssetIDFromString(
+		assetDescriptor.Symbol,
+		0,
 		uint16(assetDescriptor.Standard),
-		tests.RandomAddress(t),
-	)
-
+		assetDescriptor.Flags()...)
 	setAssetState(t, sObj, assetID, assetDescriptor)
 
 	testcases := []struct {
@@ -1822,7 +1819,7 @@ func TestBurnAsset(t *testing.T) {
 		},
 		{
 			name:          "should return error if asset doesn't exists",
-			assetID:       tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			amount:        big.NewInt(2000),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -1845,8 +1842,7 @@ func TestBurnAsset(t *testing.T) {
 }
 
 func TestGetMetaContextObjectCopy(t *testing.T) {
-	hashes := tests.GetHashes(t, 4)
-	mObj, mHash := getMetaContextObjects(t, hashes)
+	mObj, mHash := getMetaContextObjects(t, 2)
 
 	testcases := []struct {
 		name           string
@@ -1882,53 +1878,8 @@ func TestGetMetaContextObjectCopy(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedObject, actualObj)
-		})
-	}
-}
-
-func TestGetContextObjectCopy(t *testing.T) {
-	kramaIDs := tests.RandomKramaIDs(t, 4)
-	cObj, cHash := getContextObjects(t, kramaIDs, 2, 2)
-
-	testcases := []struct {
-		name           string
-		hash           common.Hash
-		soParams       *createStateObjectParams
-		expectedObject *ContextObject
-		expectedError  error
-	}{
-		{
-			name:           "context object exists in cache",
-			hash:           cHash[0],
-			soParams:       stateObjectParamsWithContextObject(t, cObj[0], cHash[0], false),
-			expectedObject: cObj[0],
-		},
-		{
-			name:           "context object exists in db",
-			hash:           cHash[1],
-			soParams:       stateObjectParamsWithContextObject(t, cObj[1], cHash[1], true),
-			expectedObject: cObj[1],
-		},
-		{
-			name:          "should return error if context object doesn't exist",
-			expectedError: errors.New("failed to fetch context object"),
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			sObj := createTestStateObject(t, test.soParams)
-
-			actualObj, err := sObj.getContextObjectCopy(test.hash)
-			if test.expectedError != nil {
-				require.ErrorContains(t, err, test.expectedError.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, test.expectedObject, actualObj)
+			require.Equal(t, test.expectedObject.ComputeContext, actualObj.ComputeContext)
+			require.Equal(t, test.expectedObject.DefaultMTQ, actualObj.DefaultMTQ)
 		})
 	}
 }
@@ -1937,28 +1888,25 @@ func TestCreateContext(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 
 	testcases := []struct {
-		name             string
-		behaviouralNodes []kramaid.KramaID
-		randomNodes      []kramaid.KramaID
-		expectedError    error
+		name           string
+		consensusNodes []kramaid.KramaID
+		expectedError  error
 	}{
 		{
-			name:             "created context successfully",
-			behaviouralNodes: tests.RandomKramaIDs(t, 2),
-			randomNodes:      tests.RandomKramaIDs(t, 2),
-			expectedError:    nil,
+			name:           "created context successfully",
+			consensusNodes: tests.RandomKramaIDs(t, 2),
+			expectedError:  nil,
 		},
 		{
-			name:             "should return error if failed to create context",
-			behaviouralNodes: tests.RandomKramaIDs(t, 0),
-			randomNodes:      tests.RandomKramaIDs(t, 0),
-			expectedError:    errors.New("liveliness size not met"),
+			name:           "should return error if failed to create context",
+			consensusNodes: tests.RandomKramaIDs(t, 0),
+			expectedError:  errors.New("liveliness size not met"),
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			mHash, err := sObj.CreateContext(test.behaviouralNodes, test.randomNodes)
+			err := sObj.CreateContext(test.consensusNodes)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1966,72 +1914,36 @@ func TestCreateContext(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, sObj.ContextHash(), mHash)
 
-			metaContext := getMetaContextObjFromCache(t, sObj, mHash)
-			behaviouralContext := getContextObjFromCache(t, sObj, metaContext.BehaviouralContext)
-			randomContext := getContextObjFromCache(t, sObj, metaContext.RandomContext)
-
-			// check if context objects has input nodes
-			require.Equal(t, test.behaviouralNodes, behaviouralContext.Ids)
-			require.Equal(t, test.randomNodes, randomContext.Ids)
-
-			checkForContextObject(t, sObj, *behaviouralContext, metaContext.BehaviouralContext)
-			checkForContextObject(t, sObj, *randomContext, metaContext.RandomContext)
-			checkForMetaContextObject(t, sObj, *metaContext, mHash)
+			checkForConsensusNodesUpdate(t, sObj, nil, test.consensusNodes)
 		})
 	}
 }
 
 func TestUpdateContext(t *testing.T) {
-	kramaIDs := tests.RandomKramaIDs(t, 4)
-	cObj, cHash := getContextObjects(t, kramaIDs, 2, 2)
-	mObj, mHash := getMetaContextObjects(t, cHash)
-
-	behaviouralNodes := tests.RandomKramaIDs(t, 2)
-	randomNodes := tests.RandomKramaIDs(t, 2)
+	mObj, mHash := getMetaContextObjects(t, 1)
+	consensusNodes := tests.RandomKramaIDs(t, 2)
 
 	testcases := []struct {
-		name             string
-		behaviouralNodes []kramaid.KramaID
-		randomNodes      []kramaid.KramaID
-		metaHash         common.Hash
-		soParams         *createStateObjectParams
-		mCtx             *MetaContextObject
-		expectedError    error
+		name           string
+		consensusNodes []kramaid.KramaID
+		metaHash       common.Hash
+		soParams       *createStateObjectParams
+		mCtx           *MetaContextObject
+		expectedError  error
 	}{
 		{
-			name:             "should return error if meta context object doesn't exist",
-			behaviouralNodes: behaviouralNodes,
-			randomNodes:      randomNodes,
-			metaHash:         tests.RandomHash(t),
-			expectedError:    errors.New("failed to fetch meta context object"),
+			name:           "should return error if meta context object doesn't exist",
+			consensusNodes: consensusNodes,
+			metaHash:       tests.RandomHash(t),
+			expectedError:  errors.New("failed to fetch meta context object"),
 		},
 		{
-			name:             "should return error if behaviour context object doesn't exist",
-			behaviouralNodes: behaviouralNodes,
-			randomNodes:      randomNodes,
-			metaHash:         mHash[0],
-			soParams:         stateObjectParamsWithMetaContextObject(t, mObj[0], mHash[0], false),
-			expectedError:    errors.New("failed to fetch context object"),
-		},
-		{
-			name:             "should return error if random ctx object doesn't exist",
-			behaviouralNodes: behaviouralNodes[0:0],
-			randomNodes:      randomNodes,
-			metaHash:         mHash[0],
-			soParams:         stateObjectParamsWithMetaContextObject(t, mObj[0], mHash[0], false),
-			expectedError:    errors.New("failed to fetch context object"),
-		},
-		{
-			name:             "context updated successfully",
-			behaviouralNodes: behaviouralNodes,
-			randomNodes:      randomNodes,
-			metaHash:         mHash[0],
+			name:           "context updated successfully",
+			consensusNodes: consensusNodes,
+			metaHash:       mHash[0],
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
-					insertContextsInDB(t, so.db, cObj...)
-					insertContextsInDB(t, so.db, cObj...)
 					insertMetaContextsInDB(t, so.db, mObj...)
 					insertContextHash(so, mHash[0])
 				},
@@ -2039,9 +1951,8 @@ func TestUpdateContext(t *testing.T) {
 			mCtx: mObj[0],
 		},
 		{
-			name:             "empty behavioural and random nodes",
-			behaviouralNodes: behaviouralNodes[0:0],
-			randomNodes:      randomNodes[0:0],
+			name:           "empty consensus nodes",
+			consensusNodes: consensusNodes[0:0],
 		},
 	}
 
@@ -2051,7 +1962,7 @@ func TestUpdateContext(t *testing.T) {
 
 			insertContextHash(sObj, test.metaHash)
 
-			metaHash, err := sObj.UpdateContext(test.behaviouralNodes, test.randomNodes)
+			err := sObj.UpdateContext(test.consensusNodes)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2059,18 +1970,15 @@ func TestUpdateContext(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, sObj.ContextHash(), metaHash)
 
-			if len(test.behaviouralNodes) == 0 && len(test.randomNodes) == 0 {
+			if len(test.consensusNodes) == 0 {
 				return
 			}
 
-			checkForContextUpdate(t,
+			checkForConsensusNodesUpdate(t,
 				sObj,
-				cObj,
-				metaHash,
-				test.behaviouralNodes,
-				test.randomNodes,
+				mObj[0],
+				test.consensusNodes,
 			)
 		})
 	}
@@ -2176,9 +2084,9 @@ func TestRevokeAccountKeys(t *testing.T) {
 }
 
 func TestLoadDeedsObject(t *testing.T) {
-	deeds, deedsHash := getTestDeeds(t, map[string]struct{}{
-		"MOI": {},
-		"BTR": {},
+	deeds, deedsHash := getTestDeeds(t, map[identifiers.Identifier]struct{}{
+		tests.RandomIdentifier(t): {},
+		tests.RandomIdentifier(t): {},
 	})
 
 	testcases := []struct {
@@ -2209,7 +2117,7 @@ func TestLoadDeedsObject(t *testing.T) {
 		{
 			name: "should return empty deeds object for nil deeds hash",
 			expectedDeeds: &Deeds{
-				Entries: make(map[string]struct{}),
+				Entries: make(map[identifiers.Identifier]struct{}),
 			},
 		},
 	}
@@ -2291,10 +2199,10 @@ func TestGetMetaStorageTree(t *testing.T) {
 	keys, values := getEntries(t, 2)
 
 	db := mockDB()
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	storageTree, storageRoot := createTestKramaHashTree(t,
 		db,
-		address,
+		id,
 		storage.Storage,
 		keys,
 		values,
@@ -2307,15 +2215,15 @@ func TestGetMetaStorageTree(t *testing.T) {
 	}{
 		{
 			name:     "fetch meta storage tree from db",
-			soParams: stateObjectParamsWithMST(t, address, db, nil, storageRoot),
+			soParams: stateObjectParamsWithMST(t, id, db, nil, storageRoot),
 		},
 		{
 			name:     "fetch meta storage tree from cache",
-			soParams: stateObjectParamsWithMST(t, address, db, storageTree, common.NilHash),
+			soParams: stateObjectParamsWithMST(t, id, db, storageTree, common.NilHash),
 		},
 		{
 			name:          "should return error if failed to initiate storage tree",
-			soParams:      stateObjectParamsWithMST(t, address, db, nil, tests.RandomHash(t)),
+			soParams:      stateObjectParamsWithMST(t, id, db, nil, tests.RandomHash(t)),
 			expectedError: errors.New("failed to initiate storage tree"),
 		},
 	}
@@ -2341,7 +2249,7 @@ func TestGetMetaStorageTree(t *testing.T) {
 }
 
 func TestGetStorageTree(t *testing.T) {
-	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 	keys, values := getEntries(t, 2)
 
 	testcases := []struct {
@@ -2358,12 +2266,12 @@ func TestGetStorageTree(t *testing.T) {
 		{
 			name:          "should return error if failed to get meta storage tree",
 			soParams:      stateObjectParamsWithInvalidMST(t),
-			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
+			logicID:       tests.GetLogicID(t, tests.RandomIdentifier(t)),
 			expectedError: errors.New("failed to initiate storage tree"),
 		},
 		{
 			name:          "should return error if logic storage tree not found",
-			logicID:       tests.GetLogicID(t, tests.RandomAddress(t)),
+			logicID:       tests.GetLogicID(t, tests.RandomIdentifier(t)),
 			expectedError: common.ErrLogicStorageTreeNotFound,
 		},
 		{
@@ -2373,7 +2281,7 @@ func TestGetStorageTree(t *testing.T) {
 					so.metaStorageTree, _ = createMetaStorageTree(
 						t,
 						so.db,
-						so.address,
+						so.id,
 						common.SargaLogicID,
 						keys,
 						values,
@@ -2389,7 +2297,7 @@ func TestGetStorageTree(t *testing.T) {
 					so.metaStorageTree, _ = createTestKramaHashTree(
 						t,
 						so.db,
-						so.address,
+						so.id,
 						storage.Storage,
 						[][]byte{common.SargaLogicID.Bytes()},
 						[][]byte{tests.RandomHash(t).Bytes()},
@@ -2471,15 +2379,15 @@ func TestAddAccountGenesisInfo(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       identifiers.Address
+		id            identifiers.Identifier
 		ixHash        common.Hash
 		soParams      *createStateObjectParams
 		expectedError error
 	}{
 		{
-			name:    "should succeed if account genesis info added",
-			address: tests.RandomAddress(t),
-			ixHash:  tests.RandomHash(t),
+			name:   "should succeed if account genesis info added",
+			id:     tests.RandomIdentifier(t),
+			ixHash: tests.RandomHash(t),
 			soParams: stateObjectParamsWithStorageTree(t, getStorageTrees(
 				t, []identifiers.LogicID{common.SargaLogicID}, keys, values,
 			)),
@@ -2490,7 +2398,7 @@ func TestAddAccountGenesisInfo(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
 
-			err := sObj.AddAccountGenesisInfo(test.address, test.ixHash)
+			err := sObj.AddAccountGenesisInfo(test.id, test.ixHash)
 			require.NoError(t, err)
 
 			accInfo := common.AccountGenesisInfo{
@@ -2500,7 +2408,7 @@ func TestAddAccountGenesisInfo(t *testing.T) {
 			expectedValue, err := accInfo.Bytes()
 			require.NoError(t, err)
 
-			actualValue, err := sObj.GetStorageEntry(common.SargaLogicID, test.address.Bytes())
+			actualValue, err := sObj.GetStorageEntry(common.SargaLogicID, test.id.Bytes())
 			require.NoError(t, err)
 
 			require.Equal(t, expectedValue, actualValue)
@@ -2548,10 +2456,10 @@ func TestGetStorageEntry(t *testing.T) {
 func TestGetMetaLogicTree(t *testing.T) {
 	keys, values := getEntries(t, 2)
 	db := mockDB()
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	logicTree, logicRoot := createTestKramaHashTree(t,
 		db,
-		address,
+		id,
 		storage.Storage,
 		keys,
 		values,
@@ -2564,15 +2472,15 @@ func TestGetMetaLogicTree(t *testing.T) {
 	}{
 		{
 			name:     "fetch logic tree from db",
-			soParams: stateObjectParamsWithLogicTree(t, address, db, nil, logicRoot, nil),
+			soParams: stateObjectParamsWithLogicTree(t, id, db, nil, logicRoot, nil),
 		},
 		{
 			name:     "fetch logic tree from cache",
-			soParams: stateObjectParamsWithLogicTree(t, address, db, logicTree, common.NilHash, nil),
+			soParams: stateObjectParamsWithLogicTree(t, id, db, logicTree, common.NilHash, nil),
 		},
 		{
 			name:          "should return error if failed to initiate logic tree",
-			soParams:      stateObjectParamsWithLogicTree(t, address, db, nil, tests.RandomHash(t), nil),
+			soParams:      stateObjectParamsWithLogicTree(t, id, db, nil, tests.RandomHash(t), nil),
 			expectedError: errors.New("failed to initiate logic tree"),
 		},
 	}
@@ -2598,7 +2506,7 @@ func TestGetMetaLogicTree(t *testing.T) {
 }
 
 func TestGetAssetObject(t *testing.T) {
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	assetObject := createAssetObject(t)
 	rawData, err := assetObject.Bytes()
 	require.NoError(t, err)
@@ -2612,7 +2520,7 @@ func TestGetAssetObject(t *testing.T) {
 			name: "should return error if asset tree not found",
 			soParams: stateObjectParamsWithAssetTree(
 				t,
-				identifiers.NilAddress,
+				identifiers.Nil,
 				nil,
 				nil,
 				tests.RandomHash(t),
@@ -2624,7 +2532,7 @@ func TestGetAssetObject(t *testing.T) {
 			name: "should return error if asset object not found",
 			soParams: stateObjectParamsWithAssetTree(
 				t,
-				identifiers.NilAddress,
+				identifiers.Nil,
 				nil,
 				nil,
 				common.NilHash,
@@ -2640,7 +2548,7 @@ func TestGetAssetObject(t *testing.T) {
 
 					_, so.data.AssetRoot = createTestKramaHashTree(t,
 						so.db,
-						so.address,
+						so.id,
 						storage.Storage,
 						[][]byte{assetID.Bytes()},
 						[][]byte{rawData},
@@ -2668,7 +2576,7 @@ func TestGetAssetObject(t *testing.T) {
 }
 
 func TestGetLogicObject(t *testing.T) {
-	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
 	require.NoError(t, err)
@@ -2685,7 +2593,7 @@ func TestGetLogicObject(t *testing.T) {
 			name: "should return error if logic tree not found",
 			soParams: stateObjectParamsWithLogicTree(
 				t,
-				identifiers.NilAddress,
+				identifiers.Nil,
 				nil,
 				nil,
 				tests.RandomHash(t),
@@ -2697,7 +2605,7 @@ func TestGetLogicObject(t *testing.T) {
 			name: "should return error if logic object not found",
 			soParams: stateObjectParamsWithLogicTree(
 				t,
-				identifiers.NilAddress,
+				identifiers.Nil,
 				nil,
 				nil,
 				common.NilHash,
@@ -2713,7 +2621,7 @@ func TestGetLogicObject(t *testing.T) {
 
 					_, so.data.LogicRoot = createTestKramaHashTree(t,
 						so.db,
-						so.address,
+						so.id,
 						storage.Storage,
 						[][]byte{logicID.Bytes()},
 						[][]byte{rawData},
@@ -2741,7 +2649,7 @@ func TestGetLogicObject(t *testing.T) {
 }
 
 func TestIsAssetRegistered(t *testing.T) {
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	assetObject := createAssetObject(t)
 	rawData, err := assetObject.Bytes()
 	require.NoError(t, err)
@@ -2768,7 +2676,7 @@ func TestIsAssetRegistered(t *testing.T) {
 				t,
 				stateObjectParamsWithAssetTree(
 					t,
-					identifiers.NilAddress,
+					identifiers.Nil,
 					nil,
 					test.assetTree,
 					common.NilHash,
@@ -2792,7 +2700,7 @@ func TestIsLogicRegistered(t *testing.T) {
 	// seed the engine runtimes
 	engineio.RegisterEngine(pisa.NewEngine())
 
-	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
 	require.NoError(t, err)
@@ -2819,7 +2727,7 @@ func TestIsLogicRegistered(t *testing.T) {
 				t,
 				stateObjectParamsWithLogicTree(
 					t,
-					identifiers.NilAddress,
+					identifiers.Nil,
 					nil,
 					test.logicTree,
 					common.NilHash,
@@ -2840,7 +2748,7 @@ func TestIsLogicRegistered(t *testing.T) {
 }
 
 func TestInsertNewAssetObject(t *testing.T) {
-	assetID := tests.GetRandomAssetID(t, tests.RandomAddress(t))
+	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	assetObject := createAssetObject(t)
 	rawData, err := assetObject.Bytes()
 	require.NoError(t, err)
@@ -2861,7 +2769,7 @@ func TestInsertNewAssetObject(t *testing.T) {
 		{
 			name:      "asset object inserted successfully",
 			assetTree: getMerkleTreeWithEntries(t, [][]byte{assetID.Bytes()}, [][]byte{rawData}),
-			assetID:   tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+			assetID:   tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 		},
 	}
 
@@ -2871,7 +2779,7 @@ func TestInsertNewAssetObject(t *testing.T) {
 				t,
 				stateObjectParamsWithAssetTree(
 					t,
-					identifiers.NilAddress,
+					identifiers.Nil,
 					nil,
 					test.assetTree,
 					test.assetRoot,
@@ -2899,7 +2807,7 @@ func TestInsertNewAssetObject(t *testing.T) {
 func TestInsertNewLogicObject(t *testing.T) {
 	engineio.RegisterEngine(pisa.NewEngine())
 
-	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	rawData, err := logicObject.Bytes()
 	require.NoError(t, err)
@@ -2920,7 +2828,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 		{
 			name:      "logic object inserted successfully",
 			logicTree: getMerkleTreeWithEntries(t, [][]byte{logicID.Bytes()}, [][]byte{rawData}),
-			logicID:   tests.GetLogicID(t, tests.RandomAddress(t)),
+			logicID:   tests.GetLogicID(t, tests.RandomIdentifier(t)),
 		},
 	}
 
@@ -2930,7 +2838,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 				t,
 				stateObjectParamsWithLogicTree(
 					t,
-					identifiers.NilAddress,
+					identifiers.Nil,
 					nil,
 					test.logicTree,
 					test.logicRoot,
@@ -2955,7 +2863,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 }
 
 func TestCreateStorageTreeForLogic(t *testing.T) {
-	logicID := tests.GetLogicID(t, tests.RandomAddress(t))
+	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 
 	testcases := []struct {
 		name          string

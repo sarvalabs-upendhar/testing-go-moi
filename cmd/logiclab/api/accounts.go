@@ -33,18 +33,18 @@ func (api *API) getAccount(c *gin.Context) {
 		return
 	}
 
-	// Extract the address
-	addr := c.Param("addr")
+	// Extract the id
+	id := c.Param("id")
 
-	// Generate identifiers.Address from addr
-	address, err := identifiers.NewAddressFromHex(addr)
+	// Generate participantID
+	participantID, err := identifiers.NewParticipantIDFromHex(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
 	}
 
 	// Retrieve the account kind and name
-	kind, name := env.LookupAccount(address)
+	kind, name := env.LookupAccount(participantID.AsIdentifier())
 
 	c.JSON(http.StatusOK, Success().WithData(AccountLookupResponse{
 		Kind: kind.String(),
@@ -66,17 +66,17 @@ func (api *API) getAccountStorage(c *gin.Context) {
 		return
 	}
 
-	// Extract the address
-	addr := c.Param("addr")
+	// Extract the id
+	id := c.Param("id")
 
-	// Generate identifiers.Address from addr
-	address, err := identifiers.NewAddressFromHex(addr)
+	// Generate identifiers.Identifier from id
+	participantID, err := identifiers.NewParticipantIDFromHex(id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, Error(err))
 		return
 	}
 
-	if !env.AddrExists(address) {
+	if !env.IdentifierExists(participantID.AsIdentifier()) {
 		c.JSON(http.StatusNotFound, Error(core.ErrAddrNotFound))
 		return
 	}
@@ -85,7 +85,7 @@ func (api *API) getAccountStorage(c *gin.Context) {
 	logic := c.Param("logicID")
 
 	// Convert to logicID type
-	logicID, err := identifiers.NewLogicID(logic)
+	logicID, err := identifiers.NewLogicIDFromHex(logic)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, Error(err))
 		return
@@ -94,7 +94,7 @@ func (api *API) getAccountStorage(c *gin.Context) {
 	// Extract the storage key
 	storekey := c.Param("storekey")
 	// Generate the db key for the storage key
-	dbkey := db.StorageKey(env.ID, address, logicID, common.Hex2Bytes(storekey))
+	dbkey := db.StorageKey(env.ID, participantID.AsIdentifier(), logicID, common.Hex2Bytes(storekey))
 
 	// Get the logic state for the given name
 	storeval, err := api.lab.Database.Get(dbkey)

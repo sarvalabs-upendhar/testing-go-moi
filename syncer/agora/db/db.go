@@ -75,7 +75,7 @@ func (ds *DataStore) worker() {
 
 func (ds *DataStore) GetData(
 	ctx context.Context,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	keys []cid.CID,
 ) (map[cid.CID][]byte, error) {
 	res := make(map[cid.CID][]byte, len(keys))
@@ -93,9 +93,9 @@ func (ds *DataStore) GetData(
 		)
 
 		if db.PrefixTag(c.ContentType()).IsAccountBasedKey() {
-			blk, err = ds.db.ReadEntry(db.DBKey(address, db.PrefixTag(c.ContentType()), c.Key()))
+			blk, err = ds.db.ReadEntry(db.DBKey(id, db.PrefixTag(c.ContentType()), c.Key()))
 		} else {
-			blk, err = ds.db.ReadEntry(db.DBKey(identifiers.NilAddress, db.PrefixTag(c.ContentType()), c.Key()))
+			blk, err = ds.db.ReadEntry(db.DBKey(identifiers.Nil, db.PrefixTag(c.ContentType()), c.Key()))
 		}
 
 		if err != nil {
@@ -110,8 +110,8 @@ func (ds *DataStore) GetData(
 	})
 }
 
-func (ds *DataStore) DoesStateExists(address identifiers.Address, stateHash cid.CID) bool {
-	keyExists, err := ds.db.Contains(db.AccountKey(address, common.BytesToHash(stateHash.Key())))
+func (ds *DataStore) DoesStateExists(id identifiers.Identifier, stateHash cid.CID) bool {
+	keyExists, err := ds.db.Contains(db.AccountKey(id, common.BytesToHash(stateHash.Key())))
 	if err != nil {
 		ds.logger.Error("Error fetching state info from DB", "err", err)
 	}

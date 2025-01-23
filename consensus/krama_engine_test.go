@@ -43,11 +43,11 @@ package consensus
 //
 //	testcases := []struct {
 //		name                 string
-//		sender               identifiers.Address
-//		receiver             identifiers.Address
+//		sender               identifiers.Identifier
+//		receiver             identifiers.Identifier
 //		slot                 *ktypes.Slot
 //		enableDebugMode      bool
-//		expectedContextDelta map[identifiers.Address]*common.DeltaGroup
+//		expectedContextDelta map[identifiers.Identifier]*common.DeltaGroup
 //		expectedError        error
 //	}{
 //		{
@@ -62,13 +62,13 @@ package consensus
 //				kramaIDs[1],
 //				nodeset,
 //				nil,
-//				map[identifiers.Address]*common.Participant{
+//				map[identifiers.Identifier]*common.Participant{
 //					addrs[0]: {
 //						LockType: common.ReadLock,
 //					},
 //				},
 //			),
-//			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
+//			expectedContextDelta: map[identifiers.Identifier]*common.DeltaGroup{
 //				addrs[0]: nil,
 //			},
 //		},
@@ -79,7 +79,7 @@ package consensus
 //				kramaIDs[1],
 //				nodeset,
 //				nil,
-//				map[identifiers.Address]*common.Participant{
+//				map[identifiers.Identifier]*common.Participant{
 //					addrs[0]: {
 //						LockType: common.MutateLock,
 //						IsSigner: false, // this should be non signer participant
@@ -87,7 +87,7 @@ package consensus
 //					},
 //				},
 //			),
-//			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
+//			expectedContextDelta: map[identifiers.Identifier]*common.DeltaGroup{
 //				addrs[0]: nil,
 //			},
 //		},
@@ -98,14 +98,14 @@ package consensus
 //				kramaIDs[1],
 //				nodeset,
 //				nil,
-//				map[identifiers.Address]*common.Participant{
+//				map[identifiers.Identifier]*common.Participant{
 //					addrs[0]: {
 //						LockType:  common.MutateLock,
 //						IsGenesis: false,
 //					},
 //				},
 //			),
-//			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
+//			expectedContextDelta: map[identifiers.Identifier]*common.DeltaGroup{
 //				addrs[0]: nil,
 //			},
 //			enableDebugMode: true,
@@ -117,7 +117,7 @@ package consensus
 //				kramaIDs[1],
 //				nodeset,
 //				nil,
-//				map[identifiers.Address]*common.Participant{
+//				map[identifiers.Identifier]*common.Participant{
 //					addrs[0]: {
 //						AccType:   common.RegularAccount,
 //						LockType:  common.MutateLock,
@@ -134,7 +134,7 @@ package consensus
 //				kramaIDs[1],
 //				nodeset,
 //				nil,
-//				map[identifiers.Address]*common.Participant{
+//				map[identifiers.Identifier]*common.Participant{
 //					addrs[0]: {
 //						LockType:        common.MutateLock,
 //						IsGenesis:       false,
@@ -143,7 +143,7 @@ package consensus
 //				},
 //			),
 //			enableDebugMode: false,
-//			expectedContextDelta: map[identifiers.Address]*common.DeltaGroup{
+//			expectedContextDelta: map[identifiers.Identifier]*common.DeltaGroup{
 //				addrs[0]: {
 //					BehaviouralNodes: []kramaid.KramaID{operator},
 //					RandomNodes:      []kramaid.KramaID{nodeset.RandomSet().Infos[0]},
@@ -172,8 +172,8 @@ package consensus
 //
 //			require.NoError(t, err)
 //
-//			for addr, ps := range test.slot.ClusterState().Participants {
-//				checkContextDelta(t, ps.IsGenesis, test.expectedContextDelta[addr], ps.ContextDelta)
+//			for id, ps := range test.slot.ClusterState().Participants {
+//				checkContextDelta(t, ps.IsGenesis, test.expectedContextDelta[id], ps.ContextDelta)
 //			}
 //		})
 //	}
@@ -231,7 +231,7 @@ package consensus
 //		{
 //			name: "should return error if state hash validation fails",
 //			tsParams: &tests.CreateTesseractParams{
-//				Addresses: []identifiers.Address{address},
+//				AccountIDs: []identifiers.Identifier{address},
 //				Participants: common.ParticipantsState{
 //					address: {
 //						StateHash: tests.RandomHash(t),
@@ -321,7 +321,7 @@ package consensus
 //		{
 //			name: "valid state hashes",
 //			params: &tests.CreateTesseractParams{
-//				Addresses: []identifiers.Address{addresses[0], addresses[1]},
+//				AccountIDs: []identifiers.Identifier{addresses[0], addresses[1]},
 //				Participants: common.ParticipantsState{
 //					addresses[0]: {
 //						StateHash: stateHashes[0],
@@ -426,7 +426,7 @@ package consensus
 //}
 //
 // func TestParseGenesisFile(t *testing.T) {
-//	addr := tests.RandomAddress(t)
+//	id := tests.RandomAddress(t)
 //	nodes := tests.RandomKramaIDs(t, 4)
 //	dir, err := os.MkdirTemp(os.TempDir(), " ")
 //	require.NoError(t, err)
@@ -492,18 +492,18 @@ package consensus
 //			},
 //			genesisAssetAccounts: []common.AssetAccountSetupArgs{
 //				// using nilAddress for allocations
-//				getAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, identifiers.NilAddress), nodes[:2], nodes[2:]),
+//				getAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, identifiers.Nil), nodes[:2], nodes[2:]),
 //			},
 //		},
 //		{
 //			name:         "should succeed for valid genesis asset account with valid allocations",
 //			sargaAccount: getTestAccountWithAccType(t, common.SargaAccount),
 //			genesisAccounts: []common.AccountSetupArgs{
-//				getTestAccountWithAddress(t, addr),
+//				getTestAccountWithAddress(t, id),
 //				getTestAccountWithAccType(t, common.LogicAccount),
 //			},
 //			genesisAssetAccounts: []common.AssetAccountSetupArgs{
-//				getAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, addr), nodes[:2], nodes[2:]),
+//				getAssetAccountSetupArgs(t, getTestAssetCreationArgs(t, id), nodes[:2], nodes[2:]),
 //			},
 //		},
 //	}
@@ -600,10 +600,10 @@ package consensus
 //			assets: []common.AssetAccountSetupArgs{
 //				getAssetAccountSetupArgs(
 //					t,
-//					getTestAssetCreationArgs(t, identifiers.NilAddress), nil, nil),
+//					getTestAssetCreationArgs(t, identifiers.Nil), nil, nil),
 //				getAssetAccountSetupArgs(
 //					t,
-//					getTestAssetCreationArgs(t, identifiers.NilAddress), nil, nil),
+//					getTestAssetCreationArgs(t, identifiers.Nil), nil, nil),
 //			},
 //			logics: []common.LogicSetupArgs{
 //				{
@@ -690,7 +690,7 @@ package consensus
 //			validateContextInitialization(
 //				t,
 //				stateObject,
-//				test.newAcc.Address,
+//				test.newAcc.Identifier,
 //				stateObject.ContextHash(),
 //			)
 //		})
@@ -700,7 +700,7 @@ package consensus
 // func TestExecuteGenesisContracts(t *testing.T) {
 //	ids := tests.RandomKramaIDs(t, 1)
 //
-//	objectsMap := make(map[identifiers.Address]*state.Object)
+//	objectsMap := make(map[identifiers.Identifier]*state.Object)
 //
 //	testcases := []struct {
 //		name          string
@@ -778,7 +778,7 @@ package consensus
 //	testcases := []struct {
 //		name          string
 //		assetAccs     []common.AssetAccountSetupArgs
-//		smCallback    func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object)
+//		smCallback    func(sm *MockStateManager, stateObjects map[identifiers.Identifier]*state.Object)
 //		expectedError error
 //	}{
 //		{
@@ -797,7 +797,7 @@ package consensus
 //					nodes[6:8],
 //				),
 //			},
-//			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object) {
+//			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Identifier]*state.Object) {
 //				stateObjects[owner] = sm.CreateStateObject(owner, common.RegularAccount, true)
 //
 //				for i := 0; i < len(address); i++ {
@@ -824,7 +824,7 @@ package consensus
 //			assetAccs: []common.AssetAccountSetupArgs{
 //				MOIAssetSetupArgs,
 //			},
-//			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object) {
+//			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Identifier]*state.Object) {
 //				stateObjects[owner] = sm.CreateStateObject(owner, common.RegularAccount, true)
 //				accAddress := common.CreateAddressFromString(MOIAssetInfo.Symbol)
 //				_, err := stateObjects[MOIAssetInfo.Operator].CreateAsset(accAddress, MOIAssetInfo.AssetDescriptor())
@@ -837,7 +837,7 @@ package consensus
 //			assetAccs: []common.AssetAccountSetupArgs{
 //				MOIAssetSetupArgs,
 //			},
-//			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Address]*state.Object) {
+//			smCallback: func(sm *MockStateManager, stateObjects map[identifiers.Identifier]*state.Object) {
 //				stateObjects[owner] = sm.CreateStateObject(owner, common.RegularAccount, true)
 //			},
 //			expectedError: errors.New("allocation address not found in state objects"),
@@ -846,7 +846,7 @@ package consensus
 //
 //	for _, test := range testcases {
 //		t.Run(test.name, func(t *testing.T) {
-//			stateObjects := make(map[identifiers.Address]*state.Object)
+//			stateObjects := make(map[identifiers.Identifier]*state.Object)
 //			sm := NewMockStateManager()
 //
 //			if test.smCallback != nil {
@@ -966,8 +966,8 @@ package consensus
 //			{
 //				AssetInfo: getAssetCreationArgs(
 //					"MOI",
-//					genesisAccounts[0].Address,
-//					[]identifiers.Address{genesisAccounts[1].Address},
+//					genesisAccounts[0].Identifier,
+//					[]identifiers.Identifier{genesisAccounts[1].Identifier},
 //					[]*big.Int{big.NewInt(12)},
 //				),
 //				BehaviouralContext: tests.RandomKramaIDs(t, 1),
@@ -1088,7 +1088,7 @@ package consensus
 //						getAssetAccountSetupArgs(t, *getAssetCreationArgs(
 //							"MOI",
 //							tests.RandomAddress(t),
-//							[]identifiers.Address{tests.RandomAddress(t)},
+//							[]identifiers.Identifier{tests.RandomAddress(t)},
 //							[]*big.Int{big.NewInt(12)},
 //						), nil, nil),
 //					}, nil),
@@ -1127,15 +1127,15 @@ package consensus
 //
 //			require.NoError(t, err)
 //
-//			checkForTS := func(addr identifiers.Address) {
-//				_, ok := cm.tesseractByAddress[addr]
+//			checkForTS := func(id identifiers.Identifier) {
+//				_, ok := cm.tesseractByAddress[id]
 //				require.True(t, ok)
 //			}
 //
 //			checkForTS(common.SargaAddress)
 //
 //			for _, genesisAccount := range genesisAccounts {
-//				checkForTS(genesisAccount.Address)
+//				checkForTS(genesisAccount.Identifier)
 //			}
 //
 //			checkForTS(assetAccAddr)
@@ -1149,7 +1149,7 @@ package consensus
 //
 //	getTesseractParams := func(clusterID string, height uint64) *createTesseractParams {
 //		return &createTesseractParams{
-//			Addresses: []identifiers.Address{address},
+//			AccountIDs: []identifiers.Identifier{address},
 //			Participants: common.ParticipantsState{
 //				address: {
 //					Height: height,
@@ -1163,7 +1163,7 @@ package consensus
 //
 //	getTesseractParamsWithTimeStamp := func(height uint64, timestamp uint64) *createTesseractParams {
 //		return &createTesseractParams{
-//			Addresses: []identifiers.Address{address},
+//			AccountIDs: []identifiers.Identifier{address},
 //			Participants: common.ParticipantsState{
 //				address: {
 //					Height: height,
@@ -1253,7 +1253,7 @@ package consensus
 //
 //			engine := createTestKramaEngine(t, engineParams)
 //
-//			err := engine.verifyTransitions(ts[len(ts)-1].AnyAddress(), ts[len(ts)-1], false)
+//			err := engine.verifyTransitions(ts[len(ts)-1].AnyAccountID(), ts[len(ts)-1], false)
 //			if test.expectedError != nil {
 //				require.ErrorContains(t, err, test.expectedError.Error())
 //
@@ -1346,7 +1346,7 @@ package consensus
 //			name: "should return error if tesseract already exits",
 //			ts:   ts[2],
 //			dbCallback: func(db *MockDB) {
-//				db.setAccMetaInfoAt(ts[2].AnyAddress())
+//				db.setAccMetaInfoAt(ts[2].AnyAccountID())
 //			},
 //			expectedError: common.ErrAlreadyKnown,
 //		},
@@ -1371,7 +1371,7 @@ package consensus
 //
 //			engine := createTestKramaEngine(t, engineParams)
 //
-//			err := engine.ValidateTesseract(test.ts.AnyAddress(), test.ts, nodes, false)
+//			err := engine.ValidateTesseract(test.ts.AnyAccountID(), test.ts, nodes, false)
 //			if test.expectedError != nil {
 //				require.ErrorContains(t, err, test.expectedError.Error())
 //
@@ -1433,30 +1433,30 @@ package consensus
 //	ms.addAccMetaInfo(t, addrsWithOutContext, tests.GetRandomAccMetaInfo(t, rand.Uint64()))
 //
 //	// add nodeSets and accountMetaInfo to state manager
-//	for addr, p := range ixnPs {
+//	for id, p := range ixnPs {
 //		// avoid storing meta info for genesis accounts
 //		if !p.IsGenesis {
-//			ms.addAccMetaInfo(t, addr, tests.GetRandomAccMetaInfo(t, rand.Uint64()))
+//			ms.addAccMetaInfo(t, id, tests.GetRandomAccMetaInfo(t, rand.Uint64()))
 //		}
 //
-//		ms.addNodeSet(t, addr, tests.RandomHash(t), createTestNodeSet(t, 3), createTestNodeSet(t, 3))
+//		ms.addNodeSet(t, id, tests.RandomHash(t), createTestNodeSet(t, 3), createTestNodeSet(t, 3))
 //	}
 //
 //	testcases := []struct {
 //		name            string
-//		ixnParticipants map[identifiers.Address]common.ParticipantInfo
+//		ixnParticipants map[identifiers.Identifier]common.ParticipantInfo
 //		expectedError   error
 //	}{
 //		{
 //			name: "should return error if failed to fetch accMetaInfo",
-//			ixnParticipants: map[identifiers.Address]common.ParticipantInfo{
+//			ixnParticipants: map[identifiers.Identifier]common.ParticipantInfo{
 //				tests.RandomAddress(t): {IsGenesis: false},
 //			},
 //			expectedError: common.ErrFetchingAccMetaInfo,
 //		},
 //		{
 //			name: "should return error if failed to fetch context info",
-//			ixnParticipants: map[identifiers.Address]common.ParticipantInfo{
+//			ixnParticipants: map[identifiers.Identifier]common.ParticipantInfo{
 //				addrsWithOutContext: {IsGenesis: false, LockType: 1},
 //			},
 //			expectedError: common.ErrContextStateNotFound,

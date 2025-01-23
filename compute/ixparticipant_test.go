@@ -29,8 +29,8 @@ func Test_ValidateParticipantCreate(t *testing.T) {
 			name:   "asset not found",
 			sender: createTestStateObject(t),
 			payload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(t),
-				Amount:  big.NewInt(1000),
+				ID:     tests.RandomIdentifier(t),
+				Amount: big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -38,11 +38,11 @@ func Test_ValidateParticipantCreate(t *testing.T) {
 			name:   "participant already registered",
 			sender: sender,
 			payload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(t),
-				Amount:  big.NewInt(1000),
+				ID:     tests.RandomIdentifier(t),
+				Amount: big.NewInt(1000),
 			},
 			preTestFn: func(target *state.Object) {
-				registerParticipant(t, sarga, target.Address())
+				registerParticipant(t, sarga, target.Identifier())
 			},
 			expectedError: common.ErrAlreadyRegistered,
 		},
@@ -50,8 +50,8 @@ func Test_ValidateParticipantCreate(t *testing.T) {
 			name:   "insufficient funds",
 			sender: sender,
 			payload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(t),
-				Amount:  big.NewInt(7000),
+				ID:     tests.RandomIdentifier(t),
+				Amount: big.NewInt(7000),
 			},
 			expectedError: common.ErrInsufficientFunds,
 		},
@@ -59,8 +59,8 @@ func Test_ValidateParticipantCreate(t *testing.T) {
 			name:   "valid participant create operation",
 			sender: sender,
 			payload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(t),
-				Amount:  big.NewInt(2000),
+				ID:     tests.RandomIdentifier(t),
+				Amount: big.NewInt(2000),
 			},
 		},
 	}
@@ -68,7 +68,7 @@ func Test_ValidateParticipantCreate(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			target := state.NewStateObject(
-				test.payload.Address, nil, tests.NewTestTreeCache(),
+				test.payload.ID, nil, tests.NewTestTreeCache(),
 				nil, common.Account{}, state.NilMetrics(), false,
 			)
 
@@ -113,8 +113,8 @@ func Test_ParticipantCreate(t *testing.T) {
 			name:   "asset not found",
 			sender: createTestStateObject(t),
 			payload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(t),
-				Amount:  big.NewInt(1000),
+				ID:     tests.RandomIdentifier(t),
+				Amount: big.NewInt(1000),
 			},
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -122,8 +122,8 @@ func Test_ParticipantCreate(t *testing.T) {
 			name:   "asset already registered",
 			sender: sender0,
 			payload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(t),
-				Amount:  big.NewInt(1000),
+				ID:     tests.RandomIdentifier(t),
+				Amount: big.NewInt(1000),
 			},
 			preTestFn: func(target *state.Object) {
 				insertTestAssetObject(
@@ -136,8 +136,8 @@ func Test_ParticipantCreate(t *testing.T) {
 			name:   "participant created successfully",
 			sender: sender1,
 			payload: &common.ParticipantCreatePayload{
-				Address: tests.RandomAddress(t),
-				Amount:  big.NewInt(2000),
+				ID:     tests.RandomIdentifier(t),
+				Amount: big.NewInt(2000),
 			},
 			expectedSenderBalance: big.NewInt(3000),
 			expectedTargetBalance: big.NewInt(2000),
@@ -147,7 +147,7 @@ func Test_ParticipantCreate(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			target := state.NewStateObject(
-				test.payload.Address, nil, tests.NewTestTreeCache(),
+				test.payload.ID, nil, tests.NewTestTreeCache(),
 				nil, common.Account{}, state.NilMetrics(), false,
 			)
 

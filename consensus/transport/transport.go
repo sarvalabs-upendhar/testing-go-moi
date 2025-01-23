@@ -647,13 +647,13 @@ func (kt *KramaTransport) sendICSGraft(clusterID common.ClusterID, peer *icsPeer
 
 // handleICSGraft processes an incoming ICSGRAFT message.
 func (kt *KramaTransport) handleICSGraft(kPeer *icsPeer, msg *types.ICSMSG) {
-	if msg.SenderAddr != "" && kPeer.kramaID == "" {
-		kPeer.kramaID = msg.SenderAddr
+	if msg.SenderID != "" && kPeer.kramaID == "" {
+		kPeer.kramaID = msg.SenderID
 	}
 
 	cr := kt.contextRouters.get(msg.ClusterID)
 	if cr == nil {
-		kt.transitPeers.add(msg.ClusterID, msg.SenderAddr)
+		kt.transitPeers.add(msg.ClusterID, msg.SenderID)
 
 		return
 	}

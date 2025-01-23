@@ -10,17 +10,17 @@ import (
 )
 
 func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
-	addresses := tests.GetAddresses(t, 2)
+	ids := tests.GetIdentifiers(t, 2)
 
 	ixns := tests.CreateIxns(t, 3, map[int]*tests.CreateIxParams{
 		1: {
 			IxDataCallback: func(ix *common.IxData) {
 				ix.Participants = append(ix.Participants, []common.IxParticipant{
 					{
-						Address: addresses[0],
+						ID: ids[0],
 					},
 					{
-						Address: addresses[1],
+						ID: ids[1],
 					},
 				}...)
 			},
@@ -98,8 +98,8 @@ func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
 				psBatchLookup := batchRegistry.ParticipantBatchLookup
 				ps := testcase.ix.Participants()
 
-				for addr, p := range ps {
-					id, found := psBatchLookup[addr]
+				for id, p := range ps {
+					id, found := psBatchLookup[id]
 					if p.IsGenesis {
 						require.False(t, found)
 					} else {
@@ -128,7 +128,7 @@ func TestIxBatchRegistry_findBatchID(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		ps              map[identifiers.Address]*common.ParticipantInfo
+		ps              map[identifiers.Identifier]*common.ParticipantInfo
 		preTestFn       func(batch *IxBatchRegistry)
 		expectedBatchID int
 	}{
@@ -145,10 +145,10 @@ func TestIxBatchRegistry_findBatchID(t *testing.T) {
 		},
 		{
 			name: "conflicting batch id's among participants",
-			ps: map[identifiers.Address]*common.ParticipantInfo{
-				ixns[0].SenderAddr(): {Address: ixns[0].SenderAddr()},
+			ps: map[identifiers.Identifier]*common.ParticipantInfo{
+				ixns[0].SenderID(): {ID: ixns[0].SenderID()},
 
-				ixns[1].SenderAddr(): {Address: ixns[1].SenderAddr()},
+				ixns[1].SenderID(): {ID: ixns[1].SenderID()},
 			},
 			preTestFn: func(batch *IxBatchRegistry) {
 				batch.appendEmptyBatch()
@@ -184,7 +184,7 @@ func TestIxBatchRegistry_findBatchID(t *testing.T) {
 }
 
 func TestIxBatchRegistry_addIx(t *testing.T) {
-	addresses := tests.GetAddresses(t, 2)
+	ids := tests.GetIdentifiers(t, 2)
 
 	ixns := tests.CreateIxns(t, 3, map[int]*tests.CreateIxParams{
 		0: {
@@ -192,12 +192,12 @@ func TestIxBatchRegistry_addIx(t *testing.T) {
 				ix.IxOps = []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomAddress(t)),
+						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
 					},
 				}
 				ix.Participants = append(ix.Participants, []common.IxParticipant{
 					{
-						Address: addresses[0],
+						ID: ids[0],
 					},
 				}...)
 			},
@@ -212,7 +212,7 @@ func TestIxBatchRegistry_addIx(t *testing.T) {
 				}
 				ix.Participants = append(ix.Participants, []common.IxParticipant{
 					{
-						Address: addresses[1],
+						ID: ids[1],
 					},
 				}...)
 			},
@@ -227,10 +227,10 @@ func TestIxBatchRegistry_addIx(t *testing.T) {
 				}
 				ix.Participants = append(ix.Participants, []common.IxParticipant{
 					{
-						Address: addresses[0],
+						ID: ids[0],
 					},
 					{
-						Address: addresses[1],
+						ID: ids[1],
 					},
 				}...)
 			},

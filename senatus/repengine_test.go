@@ -891,7 +891,7 @@ func TestReputationEngine_FlushDirtyEntries(t *testing.T) {
 			mockState.setAccountMetaInfo(
 				t,
 				&common.AccountMetaInfo{
-					Address:       common.GuardianLogicID.Address(),
+					ID:            common.GuardianLogicID.AsIdentifier(),
 					TesseractHash: testTesseract.Hash(),
 				},
 			)
@@ -1108,7 +1108,7 @@ func TestReputationEngine_IsGuardianRegistered(t *testing.T) {
 			name:           "failed to fetch logic storage tree",
 			setAccMetaInfo: true,
 			guardianTSHash: testTesseract.Hash(),
-			logicID:        tests.GetLogicID(t, tests.RandomAddress(t)),
+			logicID:        tests.GetLogicID(t, tests.RandomIdentifier(t)),
 		},
 		{
 			name:           "Invalid storage key",
@@ -1141,7 +1141,7 @@ func TestReputationEngine_IsGuardianRegistered(t *testing.T) {
 				mockState.setAccountMetaInfo(
 					t,
 					&common.AccountMetaInfo{
-						Address:       common.GuardianLogicID.Address(),
+						ID:            common.GuardianLogicID.AsIdentifier(),
 						TesseractHash: testTesseract.Hash(),
 					},
 				)

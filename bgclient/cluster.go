@@ -184,13 +184,9 @@ func (c *Cluster) generateArtifact() error {
 		pubKeys = append(pubKeys, must(hex.DecodeString(instance.ConsensusKey)))
 	}
 
-	masterAddress, err := identifiers.NewAddressFromHex("0x39ff5c082ef1bd55" +
-		"782fd44939f3c7011af10592a423cbc00df3bf01e306b6dc")
-	if err != nil {
-		return err
-	}
+	masterID := identifiers.RandomParticipantIDv0()
 
-	masterMoiID := strings.TrimPrefix(masterAddress.Hex(), "0x")
+	masterMoiID := strings.TrimPrefix(masterID.Hex(), "0x")
 
 	inputs := struct {
 		Master      guardianregistry.Master `polo:"master"`
@@ -203,16 +199,15 @@ func (c *Cluster) generateArtifact() error {
 		LimitKYB    uint64                  `polo:"limitKYB"`
 	}{
 		Master: guardianregistry.Master{
-			PubKey: masterAddress.Bytes(),
+			PubKey: masterID.Bytes(),
 			MOIID:  masterMoiID,
-			Wallet: masterAddress,
+			Wallet: masterID,
 		},
 		Guardians:  guardians,
 		PubKeys:    pubKeys,
 		Incentives: incentives,
 		Admins: [][32]byte{
-			must(identifiers.NewAddressFromHex("0x53e9ec9f78f0397cd611bf0a0793c07673cbbf51cb172ae7d6ccf0efa5803f94")),
-			must(identifiers.NewAddressFromHex("0x898ca25ac7a51a36894b9c9f55ec6212500dd8e0c01f6591f0eb9f5b0bc84655")),
+			identifiers.RandomParticipantIDv0(),
 		},
 		PreApproved: []string{
 			"a5JLBNzoxVHvxFRUUhoFpC8YwZHUAb5krfnQWokcA8MdibmZ9H.16Uiu2HAmVNTp43B3axQfZYwU2hTVXuHMBJzGcvghHST9BzDvwpnn",
@@ -410,16 +405,16 @@ func (c *Cluster) updateGenesisWithAssets() error {
 			return errors.Wrap(err, "failed to generate random upper case string")
 		}
 
-		accounts, err := tests.GetAddressFromAccountsFile(c.Config.Dir(accountsFile))
+		accounts, err := tests.GetAccountsFromFile(c.Config.Dir(accountsFile))
 		if err != nil {
 			return errors.Wrap(err, "failed to read accounts file")
 		}
 
 		err = c.updateGenesisWithAsset(
-			asset+":0:0:false:false:"+accounts[0],
-			accounts[0]+":"+strconv.Itoa(c.Config.PremineAmount)+
+			asset+":0:0:false:false:"+accounts[0].ID.String(),
+			accounts[0].ID.String()+":"+strconv.Itoa(c.Config.PremineAmount)+
 				","+
-				accounts[1]+":"+strconv.Itoa(c.Config.PremineAmount),
+				accounts[1].ID.String()+":"+strconv.Itoa(c.Config.PremineAmount),
 		)
 		if err != nil {
 			return errors.Wrap(err, "failed to update genesis with asset info")

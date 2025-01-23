@@ -18,7 +18,7 @@ type VoteSet struct {
 	logger hclog.Logger
 
 	// Represent the height for which the vote-set applies
-	heights map[identifiers.Address]uint64
+	heights map[identifiers.Identifier]uint64
 
 	// Represents the view for which the vote-set applies
 	view uint64
@@ -59,7 +59,7 @@ type VoteSet struct {
 // NewVoteSet is a constructor function that generates and returns a new VoteSet.
 // Accepts a slice of heights, the vote view, the type of votes in the set and a set of validators for the VoteSet.
 func NewVoteSet(
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	view uint64,
 	voteType common.ConsensusMsgType,
 	validatorSet *ClusterState,
@@ -463,8 +463,8 @@ func (rvs ViewVoteSet) VoteBitSet() *VoteBitSet {
 // Accepts two sets of heights and compares them. Returns a bool.
 // if heights of respective addresses matches then true is returned.
 func AreVoteHeightsEqual(
-	voteHeights map[identifiers.Address]uint64,
-	systemHeights map[identifiers.Address]uint64,
+	voteHeights map[identifiers.Identifier]uint64,
+	systemHeights map[identifiers.Identifier]uint64,
 ) bool {
 	if len(voteHeights) != len(systemHeights) {
 		return false

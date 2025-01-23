@@ -17,8 +17,8 @@ import (
 
 func TestIxPool_GetNonce(t *testing.T) {
 	sm := NewMockStateManager(t)
-	addr1 := tests.RandomAddress(t)
-	addr2 := tests.RandomAddress(t)
+	addr1 := tests.RandomIdentifier(t)
+	addr2 := tests.RandomIdentifier(t)
 
 	sm.setTestMOIBalance(t, addr1, addr2)
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
@@ -28,23 +28,23 @@ func TestIxPool_GetNonce(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		address       identifiers.Address
-		testFn        func(addr identifiers.Address)
+		id            identifiers.Identifier
+		testFn        func(id identifiers.Identifier)
 		expectedNonce uint64
 	}{
 		{
-			name:    "IxPool accounts without interaction sender state",
-			address: tests.RandomAddress(t),
-			testFn: func(addr identifiers.Address) {
-				sm.setLatestSequenceID(t, addr, 0, 4)
+			name: "IxPool accounts without interaction sender state",
+			id:   tests.RandomIdentifier(t),
+			testFn: func(id identifiers.Identifier) {
+				sm.setLatestSequenceID(t, id, 0, 4)
 			},
 			expectedNonce: 4,
 		},
 		{
-			name:    "IxPool accounts with interaction sender state",
-			address: tests.RandomAddress(t),
-			testFn: func(addr identifiers.Address) {
-				ixPool.getOrCreateAccountQueue(addr, 0, 5)
+			name: "IxPool accounts with interaction sender state",
+			id:   tests.RandomIdentifier(t),
+			testFn: func(id identifiers.Identifier) {
+				ixPool.getOrCreateAccountQueue(id, 0, 5)
 			},
 			expectedNonce: 5,
 		},
@@ -53,11 +53,11 @@ func TestIxPool_GetNonce(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			if testcase.testFn != nil {
-				testcase.testFn(testcase.address)
+				testcase.testFn(testcase.id)
 			}
 
 			// Should return the sequenceID either from ixpool account if it exists or from the latest state object
-			nonce, err := ixPool.GetSequenceID(testcase.address, 0)
+			nonce, err := ixPool.GetSequenceID(testcase.id, 0)
 			require.NoError(t, err)
 			require.Equal(t, testcase.expectedNonce, nonce)
 		})
@@ -70,23 +70,23 @@ type expectedIxQueue struct {
 }
 
 func TestIxPool_GetIxs(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 
 	testcases := []struct {
 		name            string
-		address         identifiers.Address
+		id              identifiers.Identifier
 		ixs             []*common.Interaction
 		inclQueued      bool
 		expectedIxQueue expectedIxQueue
 	}{
 		{
-			name:    "Without queued interactions",
-			address: address,
+			name: "Without queued interactions",
+			id:   id,
 			ixs: append(
 				// promoted
-				createTestIxs(t, 6, 8, address),
+				createTestIxs(t, 6, 8, id),
 				// enqueued
-				createTestIxs(t, 10, 13, address)...,
+				createTestIxs(t, 10, 13, id)...,
 			),
 			inclQueued: false,
 			expectedIxQueue: expectedIxQueue{
@@ -95,13 +95,13 @@ func TestIxPool_GetIxs(t *testing.T) {
 			},
 		},
 		{
-			name:    "With queued interactions",
-			address: address,
+			name: "With queued interactions",
+			id:   id,
 			ixs: append(
 				// promoted
-				createTestIxs(t, 6, 8, address),
+				createTestIxs(t, 6, 8, id),
 				// enqueued
-				createTestIxs(t, 10, 13, address)...,
+				createTestIxs(t, 10, 13, id)...,
 			),
 			inclQueued: true,
 			expectedIxQueue: expectedIxQueue{
@@ -120,11 +120,11 @@ func TestIxPool_GetIxs(t *testing.T) {
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
 			}, true, sm, nil, newMockNetwork(""))
 
-			sm.setAccountKeysAndPublicKeys(t, address)
+			sm.setAccountKeysAndPublicKeys(t, []identifiers.Identifier{id}, tests.GetTestPublicKeys(t, 1))
 
 			addAndProcessIxs(t, sm, ixPool, testcase.ixs...)
 
-			pendingIxs, queuedIxs := ixPool.GetIxs(testcase.address, testcase.inclQueued)
+			pendingIxs, queuedIxs := ixPool.GetIxs(testcase.id, testcase.inclQueued)
 
 			require.Equal(t, testcase.expectedIxQueue.pending, len(pendingIxs))
 			require.Equal(t, testcase.expectedIxQueue.queued, len(queuedIxs))
@@ -133,37 +133,37 @@ func TestIxPool_GetIxs(t *testing.T) {
 }
 
 func TestIxPool_GetAllIxs(t *testing.T) {
-	addresses := tests.GetRandomAddressList(t, 2)
+	ids := tests.GetRandomIDs(t, 2)
 
 	testcases := []struct {
 		name            string
-		accounts        map[identifiers.Address][]*common.Interaction
+		accounts        map[identifiers.Identifier][]*common.Interaction
 		inclQueued      bool
-		expectedIxQueue map[identifiers.Address]expectedIxQueue
+		expectedIxQueue map[identifiers.Identifier]expectedIxQueue
 	}{
 		{
 			name: "Without queued interactions",
-			accounts: map[identifiers.Address][]*common.Interaction{
-				addresses[0]: append(
+			accounts: map[identifiers.Identifier][]*common.Interaction{
+				ids[0]: append(
 					// promoted
-					createTestIxs(t, 1, 3, addresses[0]),
+					createTestIxs(t, 1, 3, ids[0]),
 					// enqueued
-					createTestIxs(t, 7, 10, addresses[0])...,
+					createTestIxs(t, 7, 10, ids[0])...,
 				),
-				addresses[1]: append(
+				ids[1]: append(
 					// promoted
-					createTestIxs(t, 6, 8, addresses[1]),
+					createTestIxs(t, 6, 8, ids[1]),
 					// enqueued
-					createTestIxs(t, 10, 13, addresses[1])...,
+					createTestIxs(t, 10, 13, ids[1])...,
 				),
 			},
 			inclQueued: false,
-			expectedIxQueue: map[identifiers.Address]expectedIxQueue{
-				addresses[0]: {
+			expectedIxQueue: map[identifiers.Identifier]expectedIxQueue{
+				ids[0]: {
 					pending: 2,
 					queued:  0,
 				},
-				addresses[1]: {
+				ids[1]: {
 					pending: 2,
 					queued:  0,
 				},
@@ -171,27 +171,27 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 		},
 		{
 			name: "With queued interactions",
-			accounts: map[identifiers.Address][]*common.Interaction{
-				addresses[0]: append(
+			accounts: map[identifiers.Identifier][]*common.Interaction{
+				ids[0]: append(
 					// promoted
-					createTestIxs(t, 1, 3, addresses[0]),
+					createTestIxs(t, 1, 3, ids[0]),
 					// enqueued
-					createTestIxs(t, 7, 10, addresses[0])...,
+					createTestIxs(t, 7, 10, ids[0])...,
 				),
-				addresses[1]: append(
+				ids[1]: append(
 					// promoted
-					createTestIxs(t, 6, 8, addresses[1]),
+					createTestIxs(t, 6, 8, ids[1]),
 					// enqueued
-					createTestIxs(t, 10, 13, addresses[1])...,
+					createTestIxs(t, 10, 13, ids[1])...,
 				),
 			},
 			inclQueued: true,
-			expectedIxQueue: map[identifiers.Address]expectedIxQueue{
-				addresses[0]: {
+			expectedIxQueue: map[identifiers.Identifier]expectedIxQueue{
+				ids[0]: {
 					pending: 2,
 					queued:  3,
 				},
-				addresses[1]: {
+				ids[1]: {
 					pending: 2,
 					queued:  3,
 				},
@@ -208,7 +208,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
 			}, true, sm, nil, newMockNetwork(""))
 
-			sm.setAccountKeysAndPublicKeys(t, addresses...)
+			sm.setAccountKeysAndPublicKeys(t, ids, tests.GetTestPublicKeys(t, len(ids)))
 
 			for _, ixs := range testcase.accounts {
 				addAndProcessIxs(t, sm, ixPool, ixs...)
@@ -216,9 +216,9 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 
 			pendingIxs, queuedIxs := ixPool.GetAllIxs(testcase.inclQueued)
 
-			for addr, ixQueue := range testcase.expectedIxQueue {
-				require.Equal(t, ixQueue.pending, len(pendingIxs[addr]))
-				require.Equal(t, ixQueue.queued, len(queuedIxs[addr]))
+			for id, ixQueue := range testcase.expectedIxQueue {
+				require.Equal(t, ixQueue.pending, len(pendingIxs[id]))
+				require.Equal(t, ixQueue.queued, len(queuedIxs[id]))
 			}
 		})
 	}
@@ -233,21 +233,21 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 
 	testcases := []struct {
 		name        string
-		address     identifiers.Address
-		testFn      func(addr identifiers.Address, waitTime time.Duration)
+		id          identifiers.Identifier
+		testFn      func(id identifiers.Identifier, waitTime time.Duration)
 		expectedErr error
 	}{
 		{
 			name:        "Account without state",
-			address:     tests.RandomAddress(t),
+			id:          tests.RandomIdentifier(t),
 			expectedErr: common.ErrAccountNotFound,
 		},
 		{
-			name:    "Account with state",
-			address: tests.RandomAddress(t),
-			testFn: func(addr identifiers.Address, baseTime time.Duration) {
-				ixPool.getOrCreateAccountQueue(addr, 0, 0)
-				err := ixPool.IncrementWaitTime(addr, baseTime)
+			name: "Account with state",
+			id:   tests.RandomIdentifier(t),
+			testFn: func(id identifiers.Identifier, baseTime time.Duration) {
+				ixPool.getOrCreateAccountQueue(id, 0, 0)
+				err := ixPool.IncrementWaitTime(id, baseTime)
 				require.NoError(t, err)
 			},
 			expectedErr: nil,
@@ -259,10 +259,10 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 			baseTime := 2000 * time.Millisecond
 
 			if testcase.testFn != nil {
-				testcase.testFn(testcase.address, baseTime)
+				testcase.testFn(testcase.id, baseTime)
 			}
 
-			waitTime, err := ixPool.GetAccountWaitTime(testcase.address)
+			waitTime, err := ixPool.GetAccountWaitTime(testcase.id)
 
 			if testcase.expectedErr != nil {
 				require.Error(t, err)
@@ -282,7 +282,7 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 }
 
 func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
-	addressList := tests.GetRandomAddressList(t, 4)
+	addressList := tests.GetRandomIDs(t, 4)
 	sm := NewMockStateManager(t)
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
@@ -291,11 +291,11 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 
 	testcases := []struct {
 		name     string
-		accounts map[identifiers.Address]int
+		accounts map[identifiers.Identifier]int
 	}{
 		{
 			name: "Accounts with different delay count",
-			accounts: map[identifiers.Address]int{
+			accounts: map[identifiers.Identifier]int{
 				addressList[0]: 1,
 				addressList[1]: 5,
 				addressList[2]: 4,
@@ -308,19 +308,19 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			baseTime := 1500 * time.Millisecond
 
-			for addr, delta := range testcase.accounts {
-				ixPool.getOrCreateAccountQueue(addr, 0, 0)
+			for id, delta := range testcase.accounts {
+				ixPool.getOrCreateAccountQueue(id, 0, 0)
 
 				for i := 0; i < delta; i++ {
-					require.NoError(t, ixPool.IncrementWaitTime(addr, baseTime))
+					require.NoError(t, ixPool.IncrementWaitTime(id, baseTime))
 				}
 			}
 
 			accountWaitTime := ixPool.GetAllAccountsWaitTime()
 
-			for addr, delta := range testcase.accounts {
-				acc := ixPool.accounts.getAccount(addr)
-				waitTime := accountWaitTime[addr]
+			for id, delta := range testcase.accounts {
+				acc := ixPool.accounts.getAccount(id)
+				waitTime := accountWaitTime[id]
 
 				require.NotNil(t, waitTime)
 

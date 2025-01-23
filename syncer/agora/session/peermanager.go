@@ -18,7 +18,7 @@ import (
 )
 
 type PeerManager struct {
-	sessionID      identifiers.Address
+	sessionID      identifiers.Identifier
 	logger         hclog.Logger
 	mtx            sync.Mutex
 	peers          map[kramaid.KramaID]*PeerInfo
@@ -32,9 +32,9 @@ type PeerInfo struct {
 	resp           chan bool
 }
 
-func NewSessionPeerManager(addr identifiers.Address, logger hclog.Logger, network sessionNetwork) *PeerManager {
+func NewSessionPeerManager(id identifiers.Identifier, logger hclog.Logger, network sessionNetwork) *PeerManager {
 	return &PeerManager{
-		sessionID:      addr,
+		sessionID:      id,
 		logger:         logger.Named("Peer-Manager"),
 		peers:          make(map[kramaid.KramaID]*PeerInfo),
 		connectedPeers: make(map[kramaid.KramaID]interface{}),

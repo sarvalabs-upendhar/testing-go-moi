@@ -12,7 +12,7 @@ import (
 
 // LogicObject is a generic container for representing an executable logic. It contains fields
 // for representing the kind and metadata of the logic along with references to callable endpoints
-// and all its logic elements. Implements the Logic interface defined in jug/types.
+// and all its logic elements. Implement the Logic interface defined in jug/types.
 // Its fields are exported for to make it serializable.
 type LogicObject struct {
 	// Represents the Logic ID
@@ -40,17 +40,9 @@ type LogicObject struct {
 }
 
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
-func NewLogicObject(address identifiers.Address, descriptor engineio.LogicDescriptor) *LogicObject {
-	// Generate the LogicID from the payload
-	logicID := identifiers.NewLogicIDv0(
-		descriptor.Persistent != nil,
-		descriptor.Ephemeral != nil,
-		descriptor.Interactable, false,
-		0, address,
-	)
-
+func NewLogicObject(id identifiers.Identifier, descriptor engineio.LogicDescriptor) *LogicObject {
 	return &LogicObject{
-		ID:         logicID,
+		ID:         identifiers.MustLogicID(id),
 		EngineKind: descriptor.Engine,
 		Manifest:   descriptor.ManifestHash,
 
@@ -74,12 +66,8 @@ func (logic LogicObject) ManifestHash() [32]byte       { return logic.Manifest }
 func (logic LogicObject) IsSealed() bool               { return logic.Sealed }
 
 func (logic LogicObject) IsInteractable() bool {
-	logicIdentifier, err := logic.ID.Identifier()
-	if err != nil {
-		panic("failed to fetch logic identifier")
-	}
-
-	return logicIdentifier.HasInteractableSites()
+	// TODO: this is just a place holder
+	return true
 }
 
 func (logic LogicObject) PersistentState() (engineio.ElementPtr, bool) {
@@ -149,11 +137,13 @@ func GetManifestHashFromRawLogicObject(raw []byte) (common.Hash, error) {
 		return common.NilHash, err
 	}
 
-	depolorizer, err = depolorizer.DepolorizePacked()
-	if errors.Is(err, polo.ErrNullPack) {
-		return common.NilHash, nil
-	} else if err != nil {
+	depolorizer, err = depolorizer.Unpacked()
+	if err != nil {
 		return common.NilHash, err
+	}
+
+	if depolorizer.IsNull() {
+		return common.NilHash, nil
 	}
 
 	// Skip the first field
@@ -183,8 +173,8 @@ func NewLogicStorageObject(logic identifiers.LogicID, state *Object) *LogicStora
 	return &LogicStorageObject{state: state, logic: logic}
 }
 
-func (ctx LogicStorageObject) Address() identifiers.Address {
-	return ctx.state.Address()
+func (ctx LogicStorageObject) Identifier() identifiers.Identifier {
+	return ctx.state.Identifier()
 }
 
 func (ctx LogicStorageObject) LogicID() identifiers.LogicID {

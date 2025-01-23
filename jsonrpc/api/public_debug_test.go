@@ -159,16 +159,16 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 }
 
 func TestPublicDebugAPI_GetAccounts(t *testing.T) {
-	addressList := tests.GetAddresses(t, 5)
+	addressList := tests.GetIdentifiers(t, 5)
 
 	testcases := []struct {
 		name         string
 		setAddressFn func(db *MockDatabase)
-		expectedList []identifiers.Address
+		expectedList []identifiers.Identifier
 	}{
 		{
 			name:         "Should return an empty list if no accounts are present",
-			expectedList: make([]identifiers.Address, 0),
+			expectedList: make([]identifiers.Identifier, 0),
 		},
 		{
 			name: "Returns a list of address of the accounts",
@@ -242,9 +242,9 @@ func TestPublicDebugAPI_GetSyncJob(t *testing.T) {
 	syncer := NewMockSyncer(t)
 	debugAPI := NewPublicDebugAPI(nil, nil, syncer)
 
-	addresses := tests.GetAddresses(t, 2)
+	ids := tests.GetIdentifiers(t, 2)
 	syncJob := &rpcargs.SyncJobInfo{}
-	syncer.setSyncJobInfo(addresses[0], syncJob)
+	syncer.setSyncJobInfo(ids[0], syncJob)
 
 	testcases := []struct {
 		name          string
@@ -254,13 +254,13 @@ func TestPublicDebugAPI_GetSyncJob(t *testing.T) {
 		{
 			name: "get sync job for given address",
 			args: &rpcargs.SyncJobRequest{
-				Address: addresses[0],
+				ID: ids[0],
 			},
 		},
 		{
 			name: "sync job does not exist for given address",
 			args: &rpcargs.SyncJobRequest{
-				Address: addresses[1],
+				ID: ids[1],
 			},
 			expectedError: common.ErrSyncJobNotFound,
 		},

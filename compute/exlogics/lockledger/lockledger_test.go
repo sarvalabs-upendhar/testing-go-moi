@@ -22,8 +22,8 @@ type LockLedgerTestSuite struct {
 }
 
 var (
-	SeederAddress   = identifiers.NewRandomAddress()
-	ReceiverAddress = identifiers.NewRandomAddress()
+	SeederID   = identifiers.RandomParticipantIDv0().AsIdentifier()
+	ReceiverID = identifiers.RandomParticipantIDv0().AsIdentifier()
 
 	InitialSeed uint64 = 100000000
 )
@@ -34,7 +34,7 @@ func (suite *LockLedgerTestSuite) SetupSuite() {
 	suite.Require().NoErrorf(err, "could not read manifest file")
 
 	// Initialise the test suite
-	_, err = suite.Initialise(engineio.PISA, manifest, SeederAddress)
+	_, err = suite.Initialise(engineio.PISA, manifest, SeederID)
 	suite.Require().NoErrorf(err, "could not read initialise test")
 
 	inputs := InputSeed{
@@ -51,7 +51,7 @@ func (suite *LockLedgerTestSuite) SetupSuite() {
 
 	// Check the balance of the seeder
 	keySeederSpendable := pisa.GenerateStorageKey(EphemeralSlotSpendable)
-	suite.CheckEphemeralStorage(SeederAddress, keySeederSpendable, InitialSeed)
+	suite.CheckEphemeralStorage(SeederID, keySeederSpendable, InitialSeed)
 }
 
 func (suite *LockLedgerTestSuite) TestLockup() {
@@ -68,11 +68,11 @@ func (suite *LockLedgerTestSuite) TestLockup() {
 
 	// Check the spendable balance of the seeder
 	keySeederSpendable := pisa.GenerateStorageKey(EphemeralSlotSpendable)
-	suite.CheckEphemeralStorage(SeederAddress, keySeederSpendable, InitialSeed-LockupAmount)
+	suite.CheckEphemeralStorage(SeederID, keySeederSpendable, InitialSeed-LockupAmount)
 
 	// Check the lockedup balance of the seeder
 	keySeederLockedup := pisa.GenerateStorageKey(EphemeralSlotLockedup)
-	suite.CheckEphemeralStorage(SeederAddress, keySeederLockedup, LockupAmount)
+	suite.CheckEphemeralStorage(SeederID, keySeederLockedup, LockupAmount)
 }
 
 func (suite *LockLedgerTestSuite) TestMint() {
@@ -93,7 +93,7 @@ func (suite *LockLedgerTestSuite) TestMint() {
 
 	// Check the spendable balance of the seeder
 	keySeederSpendable := pisa.GenerateStorageKey(EphemeralSlotSpendable)
-	suite.CheckEphemeralStorage(SeederAddress, keySeederSpendable, InitialSeed+MintAmount)
+	suite.CheckEphemeralStorage(SeederID, keySeederSpendable, InitialSeed+MintAmount)
 }
 
 func must[T any](t T, err error) T {

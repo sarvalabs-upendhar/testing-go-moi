@@ -26,10 +26,11 @@ type store interface {
 	Contains(key []byte) (bool, error)
 	CreateEntry(key []byte, value []byte) error
 	UpdateAccMetaInfo(
-		id identifiers.Address,
+		id identifiers.Identifier,
 		height uint64,
 		tesseractHash common.Hash,
 		stateHash, contextHash common.Hash,
+		consensusNodesHash common.Hash,
 		commitHash common.Hash,
 		accType common.AccountType,
 		shouldUpdateContextSetPosition bool,
@@ -38,15 +39,15 @@ type store interface {
 	GetRawTesseract(tsHash common.Hash) ([]byte, error)
 	SetTesseract(tsHash common.Hash, data []byte) error
 	HasTesseract(tsHash common.Hash) bool
-	GetTesseractHeightEntry(addr identifiers.Address, height uint64) ([]byte, error)
-	SetTesseractHeightEntry(addr identifiers.Address, height uint64, tsHash common.Hash) error
+	GetTesseractHeightEntry(id identifiers.Identifier, height uint64) ([]byte, error)
+	SetTesseractHeightEntry(id identifiers.Identifier, height uint64, tsHash common.Hash) error
 	SetReceipts(tsHash common.Hash, data []byte) error
 	GetReceipts(tsHash common.Hash) ([]byte, error)
 	SetInteractions(tsHash common.Hash, data []byte) error
 	GetInteractions(tsHash common.Hash) ([]byte, error)
 	GetIXLookup(ixHash common.Hash) ([]byte, error)
-	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
-	HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool
+	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
+	HasAccMetaInfoAt(id identifiers.Identifier, height uint64) bool
 	SetIXLookup(ixHash common.Hash, tsHash common.Hash) error
 	GetTesseract(
 		hash common.Hash,
@@ -66,7 +67,7 @@ type server interface {
 
 type ixpool interface {
 	ResetWithHeaders(ts *common.Tesseract)
-	RemoveCachedObject(addr identifiers.Address)
+	RemoveCachedObject(id identifiers.Identifier)
 }
 
 type ChainManager struct {
@@ -109,13 +110,7 @@ func (c *ChainManager) hasTesseract(tsHash common.Hash) bool {
 }
 
 func (c *ChainManager) UpdateNodeInclusivity(delta *common.DeltaGroup) error {
-	for _, kramaID := range delta.BehaviouralNodes {
-		if err := c.senatus.UpdateWalletCount(kramaID, 1); err != nil {
-			return err
-		}
-	}
-
-	for _, kramaID := range delta.RandomNodes {
+	for _, kramaID := range delta.ConsensusNodes {
 		if err := c.senatus.UpdateWalletCount(kramaID, 1); err != nil {
 			return err
 		}
@@ -167,12 +162,12 @@ func (c *ChainManager) GetTesseract(
 }
 
 func (c *ChainManager) GetTesseractByHeight(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	height uint64,
 	withInteractions bool,
 	withCommitInfo bool,
 ) (*common.Tesseract, error) {
-	tesseractHash, err := c.db.GetTesseractHeightEntry(address, height)
+	tesseractHash, err := c.db.GetTesseractHeightEntry(id, height)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch tesseract height entry")
 	}
@@ -180,8 +175,8 @@ func (c *ChainManager) GetTesseractByHeight(
 	return c.GetTesseract(common.BytesToHash(tesseractHash), withInteractions, withCommitInfo)
 }
 
-func (c *ChainManager) GetTesseractHeightEntry(address identifiers.Address, height uint64) (common.Hash, error) {
-	tesseractHash, err := c.db.GetTesseractHeightEntry(address, height)
+func (c *ChainManager) GetTesseractHeightEntry(id identifiers.Identifier, height uint64) (common.Hash, error) {
+	tesseractHash, err := c.db.GetTesseractHeightEntry(id, height)
 	if err != nil {
 		return common.NilHash, errors.Wrap(err, "failed to fetch tesseract height entry")
 	}
@@ -281,23 +276,23 @@ func (c *ChainManager) storeInteractions(bw db.BatchWriter, ts *common.Tesseract
 	return nil
 }
 
-func (c *ChainManager) addParticipant(addr identifiers.Address, tsHash common.Hash, commitHash common.Hash,
+func (c *ChainManager) addParticipant(id identifiers.Identifier, tsHash common.Hash, commitHash common.Hash,
 	participantState common.State, transition *state.Transition,
 ) error {
-	if err := transition.Flush(addr); err != nil {
+	if err := transition.Flush(id); err != nil {
 		return err
 	}
 
 	c.logger.Info(
-		"Participant added", "addr", addr, "height ",
+		"Participant added", "id", id, "height ",
 		participantState.Height, "ts-hash", tsHash, "state-hash", participantState.StateHash)
 
-	if err := c.db.SetTesseractHeightEntry(addr, participantState.Height, tsHash); err != nil {
+	if err := c.db.SetTesseractHeightEntry(id, participantState.Height, tsHash); err != nil {
 		return errors.Wrap(err, "failed to write tesseract height entry")
 	}
 
 	var (
-		accType              = transition.GetAccTypeUsingStateObject(addr)
+		accType              = transition.GetAccTypeUsingStateObject(id)
 		positionInContextSet int
 	)
 
@@ -306,11 +301,12 @@ func (c *ChainManager) addParticipant(addr identifiers.Address, tsHash common.Ha
 	}
 
 	if _, _, err := c.db.UpdateAccMetaInfo(
-		addr,
+		id,
 		participantState.Height,
 		tsHash,
 		participantState.StateHash,
 		participantState.LatestContext,
+		transition.ConsensusNodesHash(id),
 		commitHash,
 		accType,
 		participantState.ContextDelta != nil,
@@ -319,19 +315,19 @@ func (c *ChainManager) addParticipant(addr identifiers.Address, tsHash common.Ha
 		return errors.Wrap(err, "account meta info update failed")
 	}
 
-	c.ixpool.RemoveCachedObject(addr)
+	c.ixpool.RemoveCachedObject(id)
 
 	return nil
 }
 
 func (c *ChainManager) addParticipantsData(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	ts *common.Tesseract,
 	transition *state.Transition,
 	allParticipants bool,
 ) error {
-	if !allParticipants && addr.IsNil() { // address is mandatory if specific participant needs to be added
-		return errors.New("address is not specified")
+	if !allParticipants && id.IsNil() { // id is mandatory if specific participant needs to be added
+		return errors.New("id is not specified")
 	}
 
 	participants := make(common.ParticipantsState)
@@ -339,36 +335,36 @@ func (c *ChainManager) addParticipantsData(
 	if allParticipants {
 		participants = ts.Participants()
 	} else {
-		s, ok := ts.State(addr)
+		s, ok := ts.State(id)
 		if !ok {
 			panic(ok)
 		}
 
-		participants[addr] = s
+		participants[id] = s
 	}
 
-	for address, pState := range participants {
-		lockType, ok := ts.ConsensusInfo().AccountLocks[address]
+	for id, pState := range participants {
+		lockType, ok := ts.ConsensusInfo().AccountLocks[id]
 		if ok && lockType > common.MutateLock {
 			continue
 		}
 
-		if pState.StateHash != common.NilHash && c.db.HasAccMetaInfoAt(address, ts.Height(address)) {
+		if pState.StateHash != common.NilHash && c.db.HasAccMetaInfoAt(id, ts.Height(id)) {
 			return nil
 		}
 	}
 
-	for addr, participantState := range participants {
+	for id, participantState := range participants {
 		if participantState.StateHash == common.NilHash {
 			continue
 		}
 
-		lockType, ok := ts.ConsensusInfo().AccountLocks[addr]
+		lockType, ok := ts.ConsensusInfo().AccountLocks[id]
 		if ok && lockType > common.MutateLock {
 			continue
 		}
 
-		if err := c.addParticipant(addr, ts.Hash(), ts.CommitHash(), participantState, transition); err != nil {
+		if err := c.addParticipant(id, ts.Hash(), ts.CommitHash(), participantState, transition); err != nil {
 			return err
 		}
 	}
@@ -406,12 +402,12 @@ func (c *ChainManager) addTesseractData(
 
 func (c *ChainManager) AddTesseract(
 	cache bool,
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	t *common.Tesseract,
 	transition *state.Transition,
 	allParticipants bool,
 ) error {
-	if err := c.addParticipantsData(addr, t, transition, allParticipants); err != nil {
+	if err := c.addParticipantsData(id, t, transition, allParticipants); err != nil {
 		return err
 	}
 
@@ -454,8 +450,8 @@ func (c *ChainManager) AddTesseract(
 		return nil
 	}
 
-	for addr, p := range t.Participants() {
-		if !c.db.HasAccMetaInfoAt(addr, p.Height) {
+	for id, p := range t.Participants() {
+		if !c.db.HasAccMetaInfoAt(id, p.Height) {
 			return nil
 		}
 	}
@@ -466,7 +462,7 @@ func (c *ChainManager) AddTesseract(
 }
 
 func (c *ChainManager) AddTesseractWithState(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	dirtyStorage map[common.Hash][]byte,
 	ts *common.Tesseract,
 	transition *state.Transition,
@@ -486,7 +482,7 @@ func (c *ChainManager) AddTesseractWithState(
 		return common.ErrCommitInfoNotFound
 	}
 
-	if err := c.AddTesseract(true, addr, ts, transition, allParticipants); err != nil {
+	if err := c.AddTesseract(true, id, ts, transition, allParticipants); err != nil {
 		return err
 	}
 

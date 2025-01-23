@@ -20,15 +20,15 @@ func (te *TestEnvironment) createAsset(
 	assetCreatePayload *common.AssetCreatePayload,
 ) (common.Hash, error) {
 	te.logger.Debug("create asset ",
-		"sender", acc.Addr, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.Supply)
+		"sender", acc.ID, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.Supply)
 
 	payload, err := assetCreatePayload.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    acc.Addr,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.Addr, 0),
+			ID:         acc.ID,
+			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.ID, 0),
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
@@ -40,7 +40,7 @@ func (te *TestEnvironment) createAsset(
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  acc.Addr,
+				ID:       acc.ID,
 				LockType: common.MutateLock,
 			},
 		},
@@ -48,7 +48,7 @@ func (te *TestEnvironment) createAsset(
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
-			Addr:     acc.Addr,
+			ID:       acc.ID,
 			KeyID:    0,
 			Mnemonic: acc.Mnemonic,
 		},
@@ -63,7 +63,7 @@ func (te *TestEnvironment) createAsset(
 // 4. check if senders balance updated
 func validateAssetCreation(
 	te *TestEnvironment,
-	sender identifiers.Address,
+	sender identifiers.Identifier,
 	ixHash common.Hash,
 	txnID int,
 	assetCreatePayload *common.AssetCreatePayload,
@@ -92,18 +92,18 @@ func validateAssetCreation(
 	// TODO compare logic payload
 
 	ts, err := te.moiClient.Tesseract(context.Background(), &args.TesseractArgs{
-		Address: assetReceipt.AssetID.Address(),
+		ID: assetReceipt.AssetID.AsIdentifier(),
 		Options: args.TesseractNumberOrHash{
 			TesseractNumber: &args.LatestTesseractHeight,
 		},
 	})
 	te.Suite.NoError(err)
 
-	require.True(te.T(), ts.HasParticipant(assetReceipt.AssetID.Address()))
-	require.Equal(te.T(), uint64(0), ts.Height(assetReceipt.AssetID.Address()))
+	require.True(te.T(), ts.HasParticipant(assetReceipt.AssetID.AsIdentifier()))
+	require.Equal(te.T(), uint64(0), ts.Height(assetReceipt.AssetID.AsIdentifier()))
 
 	bal, err := te.moiClient.Balance(context.Background(), &args.BalArgs{
-		Address: sender,
+		ID:      sender,
 		AssetID: assetReceipt.AssetID,
 		Options: args.TesseractNumberOrHash{
 			TesseractNumber: &args.LatestTesseractHeight,
@@ -122,7 +122,7 @@ func (te *TestEnvironment) TestAssetCreate() {
 		assetCreatePayload *common.AssetCreatePayload
 		postTest           func(
 			te *TestEnvironment,
-			acc identifiers.Address,
+			acc identifiers.Identifier,
 			ixHash common.Hash,
 			txnID int,
 			assetCreatePayload *common.AssetCreatePayload,
@@ -187,7 +187,7 @@ func (te *TestEnvironment) TestAssetCreate() {
 			}
 
 			require.NoError(te.T(), err)
-			test.postTest(te, acc.Addr, ixHash, 0, test.assetCreatePayload)
+			test.postTest(te, acc.ID, ixHash, 0, test.assetCreatePayload)
 		})
 	}
 }

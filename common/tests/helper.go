@@ -26,7 +26,6 @@ import (
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/crypto"
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
@@ -39,6 +38,9 @@ type HashInterface interface {
 	Hash() (common.Hash, error)
 }
 
+// DefaultTestBeneficiaryID is the default beneficiary ID used in tests.
+var DefaultTestBeneficiaryID identifiers.Identifier = identifiers.RandomParticipantIDv0().AsIdentifier()
+
 // GetHash is used to return the hash of any type which implements HashInterface
 func GetHash[T HashInterface](t *testing.T, in T) common.Hash {
 	t.Helper()
@@ -49,29 +51,16 @@ func GetHash[T HashInterface](t *testing.T, in T) common.Hash {
 	return hash
 }
 
-func RandomAddress(t *testing.T) identifiers.Address {
+func RandomIdentifier(t *testing.T) identifiers.Identifier {
 	t.Helper()
 
-	address := make([]byte, 32)
-
-	if _, err := rand.Read(address); err != nil {
-		t.Fatal(err)
-	}
-
-	return identifiers.NewAddressFromBytes(address)
+	return identifiers.RandomParticipantIDv0().AsIdentifier()
 }
 
-func RandomAddressWithMnemonic(t *testing.T) (identifiers.Address, string) {
+func RandomIDWithMnemonic(t *testing.T) (identifiers.Identifier, string) {
 	t.Helper()
 
-	mnemonic := poi.GenerateRandMnemonic().String()
-
-	_, publicKey, err := poi.GetPrivateKeyAtPath(mnemonic, config.DefaultMoiWalletPath)
-	if err != nil {
-		require.NoError(t, err)
-	}
-
-	return identifiers.NewAddressFromBytes(publicKey), mnemonic
+	return identifiers.RandomParticipantIDv0().AsIdentifier(), poi.GenerateRandMnemonic().String()
 }
 
 func RandomHash(t *testing.T) common.Hash {
@@ -216,7 +205,7 @@ func GetPrivKeysForTest(t *testing.T, seed []byte) ([]byte, []byte, error) {
 	}
 	// Now tempKey points to extended private key at path: m/44'/6174'
 
-	// Deriving MOI Id at m/44'/6174'/0'/0/0
+	// Deriving MOI ID at m/44'/6174'/0'/0/0
 	moiIDPrivKey := tempKey
 
 	moiIDPath := new([3]uint32)
@@ -328,39 +317,40 @@ func GetRandomStrings(t *testing.T, count int) []string {
 	return randomStrings
 }
 
-func GetRandomAssetInfo(t *testing.T, addr identifiers.Address) *common.AssetDescriptor {
+func GetRandomAssetInfo(t *testing.T, id identifiers.Identifier) *common.AssetDescriptor {
 	t.Helper()
 
 	symbol := GetRandomUpperCaseString(t, 5)
 
-	if addr.IsNil() {
-		addr = RandomAddress(t)
+	if id.IsNil() {
+		id = RandomIdentifier(t)
 	}
 
 	asset := &common.AssetDescriptor{
-		Operator:   addr,
+		Operator:   id,
 		Dimension:  1,
 		Supply:     big.NewInt(1000),
 		Symbol:     symbol,
 		IsStateFul: true,
 		IsLogical:  false,
-		LogicID:    identifiers.LogicID(RandomHash(t).String()),
+		LogicID:    identifiers.RandomLogicIDv0().AsIdentifier(),
 	}
 
 	return asset
 }
 
-func CreateTestAsset(t *testing.T, address identifiers.Address) (identifiers.AssetID, *common.AssetDescriptor) {
+func CreateTestAsset(t *testing.T, id identifiers.Identifier) (identifiers.AssetID, *common.AssetDescriptor) {
 	t.Helper()
 
-	asset := GetRandomAssetInfo(t, address)
-	assetID := identifiers.NewAssetIDv0(
-		asset.IsLogical,
-		asset.IsStateFul,
-		asset.Dimension,
+	asset := GetRandomAssetInfo(t, id)
+	assetID, err := identifiers.GenerateAssetIDv0(
+		id.Fingerprint(),
+		id.Variant(),
 		uint16(asset.Standard),
-		address,
+		asset.Flags()...,
 	)
+
+	require.NoError(t, err)
 
 	return assetID, asset
 }
@@ -372,7 +362,7 @@ func CreateTestAssets(t *testing.T, count int) ([]identifiers.AssetID, []*common
 	assetDescriptors := make([]*common.AssetDescriptor, 0, count)
 
 	for i := 0; i < count; i++ {
-		assetID, assetDescriptor := CreateTestAsset(t, RandomAddress(t))
+		assetID, assetDescriptor := CreateTestAsset(t, RandomIdentifier(t))
 
 		assetIDs = append(assetIDs, assetID)
 		assetDescriptors = append(assetDescriptors, assetDescriptor)
@@ -396,10 +386,10 @@ func GetRandomNumbers(t *testing.T, ceil int, count int) []*big.Int {
 	return numbers
 }
 
-func GetRandomAssetID(t *testing.T, address identifiers.Address) identifiers.AssetID {
+func GetRandomAssetID(t *testing.T, id identifiers.Identifier) identifiers.AssetID {
 	t.Helper()
 
-	assetID, _ := CreateTestAsset(t, address)
+	assetID, _ := CreateTestAsset(t, id)
 
 	return assetID
 }
@@ -452,7 +442,7 @@ func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 	t.Helper()
 
 	return &common.AccountMetaInfo{
-		Address:              RandomAddress(t),
+		ID:                   RandomIdentifier(t),
 		Type:                 common.AccountType(1),
 		Height:               height,
 		TesseractHash:        RandomHash(t),
@@ -466,7 +456,7 @@ func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 func GetTestPublicKey(t *testing.T) []byte {
 	t.Helper()
 
-	return RandomAddress(t).Bytes()
+	return RandomIdentifier(t).Bytes()
 }
 
 func GetTestPublicKeys(t *testing.T, count int) [][]byte {
@@ -475,8 +465,8 @@ func GetTestPublicKeys(t *testing.T, count int) [][]byte {
 	p := make([][]byte, 0)
 
 	for i := 0; i < count; i++ {
-		addr := GetTestPublicKey(t)
-		p = append(p, addr)
+		pubKeys := GetTestPublicKey(t)
+		p = append(p, pubKeys)
 	}
 
 	return p
@@ -488,20 +478,20 @@ func GetTestKramaIdsWithPublicKeys(t *testing.T, count int) ([]kramaid.KramaID, 
 	return RandomKramaIDs(t, count), GetTestPublicKeys(t, count)
 }
 
-func GetRandomAddressList(t *testing.T, count int) []identifiers.Address {
+func GetRandomIDs(t *testing.T, count int) []identifiers.Identifier {
 	t.Helper()
 
-	address := make([]identifiers.Address, count)
+	id := make([]identifiers.Identifier, count)
 
 	for i := 0; i < count; i++ {
-		address[i] = RandomAddress(t)
+		id[i] = RandomIdentifier(t)
 	}
 
-	return address
+	return id
 }
 
 type CreateTesseractParams struct {
-	Addresses            []identifiers.Address
+	IDs                  []identifiers.Identifier
 	Heights              []uint64
 	Participants         common.ParticipantsState
 	TSDataCallback       func(ts *TesseractData)
@@ -565,18 +555,18 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 	}
 
 	// A tesseract should have at least one participant
-	if len(params.Addresses) == 0 {
-		addr := RandomAddress(t)
-		params.Addresses = []identifiers.Address{addr}
+	if len(params.IDs) == 0 {
+		id := RandomIdentifier(t)
+		params.IDs = []identifiers.Identifier{id}
 	}
 
-	// if participants are not provided then create them based on addresses provided with an empty state
+	// if participants are not provided then create them based on ids provided with an empty state
 	if len(params.Participants) == 0 {
-		for i, addr := range params.Addresses {
-			params.Participants[addr] = common.State{}
+		for i, id := range params.IDs {
+			params.Participants[id] = common.State{}
 
 			if len(params.Heights) != 0 {
-				params.Participants[addr] = common.State{
+				params.Participants[id] = common.State{
 					Height: params.Heights[i],
 				}
 			}
@@ -643,15 +633,15 @@ func GetTesseractHash(t *testing.T, ts *common.Tesseract) common.Hash {
 	return ts.Hash()
 }
 
-func GetAddresses(t *testing.T, count int) []identifiers.Address {
+func GetIdentifiers(t *testing.T, count int) []identifiers.Identifier {
 	t.Helper()
 
-	addresses := make([]identifiers.Address, count)
+	ids := make([]identifiers.Identifier, count)
 	for i := 0; i < count; i++ {
-		addresses[i] = RandomAddress(t)
+		ids[i] = RandomIdentifier(t)
 	}
 
-	return addresses
+	return ids
 }
 
 func GetHashes(t *testing.T, count int) []common.Hash {
@@ -690,9 +680,9 @@ type CreateIxParams struct {
 	SignaturesCallback func(ixData *common.IxData, sig *common.Signatures)
 }
 
-func IsPresent(participants []common.IxParticipant, addr identifiers.Address) bool {
+func IsPresent(participants []common.IxParticipant, id identifiers.Identifier) bool {
 	for _, p := range participants {
-		if p.Address == addr {
+		if p.ID == id {
 			return true
 		}
 	}
@@ -708,15 +698,15 @@ func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
 	if !data.Payer.IsNil() {
 		if !IsPresent(data.Participants, data.Payer) {
 			data.Participants = append(data.Participants, common.IxParticipant{
-				Address:  data.Payer,
+				ID:       data.Payer,
 				LockType: common.MutateLock,
 			})
 		}
 	}
 
-	if !IsPresent(data.Participants, data.Sender.Address) {
+	if !IsPresent(data.Participants, data.Sender.ID) {
 		data.Participants = append(data.Participants, common.IxParticipant{
-			Address:  data.Sender.Address,
+			ID:       data.Sender.ID,
 			LockType: common.MutateLock,
 		})
 	}
@@ -728,9 +718,9 @@ func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
 			err = participantCreatePayload.FromBytes(op.Payload)
 			require.NoError(t, err)
 
-			if !IsPresent(data.Participants, participantCreatePayload.Address) {
+			if !IsPresent(data.Participants, participantCreatePayload.ID) {
 				data.Participants = append(data.Participants, common.IxParticipant{
-					Address:  participantCreatePayload.Address,
+					ID:       participantCreatePayload.ID,
 					LockType: common.MutateLock,
 				})
 			}
@@ -743,7 +733,7 @@ func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
 
 			if !IsPresent(data.Participants, assetActionPayload.Beneficiary) {
 				data.Participants = append(data.Participants, common.IxParticipant{
-					Address:  assetActionPayload.Beneficiary,
+					ID:       assetActionPayload.Beneficiary,
 					LockType: common.MutateLock,
 				})
 			}
@@ -753,9 +743,9 @@ func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
 			err = assetSupplyPayload.FromBytes(op.Payload)
 			require.NoError(t, err)
 
-			if !IsPresent(data.Participants, assetSupplyPayload.AssetID.Address()) {
+			if !IsPresent(data.Participants, assetSupplyPayload.AssetID.AsIdentifier()) {
 				data.Participants = append(data.Participants, common.IxParticipant{
-					Address:  assetSupplyPayload.AssetID.Address(),
+					ID:       assetSupplyPayload.AssetID.AsIdentifier(),
 					LockType: common.MutateLock,
 				})
 			}
@@ -767,17 +757,17 @@ func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
 			require.NoError(t, err)
 
 			if common.IxLogicDeploy != op.Type {
-				if !IsPresent(data.Participants, logicPayload.Logic.Address()) {
+				if !IsPresent(data.Participants, logicPayload.Logic.AsIdentifier()) {
 					data.Participants = append(data.Participants, common.IxParticipant{
-						Address:  logicPayload.Logic.Address(),
+						ID:       logicPayload.Logic.AsIdentifier(),
 						LockType: common.MutateLock,
 					})
 				}
 
 				for _, logic := range logicPayload.Interfaces {
-					if !IsPresent(data.Participants, logic.Address()) {
+					if !IsPresent(data.Participants, logic.AsIdentifier()) {
 						data.Participants = append(data.Participants, common.IxParticipant{
-							Address:  logic.Address(),
+							ID:       logic.AsIdentifier(),
 							LockType: common.MutateLock,
 						})
 					}
@@ -799,15 +789,11 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		params = &CreateIxParams{}
 	}
 
-	addr, err := identifiers.NewAddressFromHex(
-		"0xff919c3bd4523d638b1878a59c62e1c9a0a628127317d63359da30e18ee67593")
-	require.NoError(t, err)
-
 	data := &common.IxData{
 		IxOps: []common.IxOpRaw{
 			{
 				Type:    common.IxAssetTransfer,
-				Payload: CreateRawAssetActionPayload(t, addr),
+				Payload: CreateRawAssetActionPayload(t, DefaultTestBeneficiaryID),
 			},
 		},
 		Participants: []common.IxParticipant{},
@@ -817,8 +803,8 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		params.IxDataCallback(data)
 	}
 
-	if data.Sender.Address == identifiers.NilAddress {
-		data.Sender.Address = RandomAddress(t)
+	if data.Sender.ID == identifiers.Nil {
+		data.Sender.ID = RandomIdentifier(t)
 	}
 
 	AppendParticipantsInIxData(t, data)
@@ -829,7 +815,7 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 
 	signatures := common.Signatures{
 		{
-			Address:   data.Sender.Address,
+			ID:        data.Sender.ID,
 			KeyID:     data.Sender.KeyID,
 			Signature: params.SenderSign,
 		},
@@ -843,6 +829,30 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 	require.NoError(t, err)
 
 	return ix
+}
+
+func Min24Byte(t *testing.T) [24]byte {
+	t.Helper()
+
+	var minValue [24]byte
+
+	for i := range minValue {
+		minValue[i] = 0x00
+	}
+
+	return minValue
+}
+
+func Max24Byte(t *testing.T) [24]byte {
+	t.Helper()
+
+	var maxValue [24]byte
+
+	for i := range maxValue {
+		maxValue[i] = 0xFF
+	}
+
+	return maxValue
 }
 
 func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) []*common.Interaction {
@@ -861,12 +871,12 @@ func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) []*c
 	return ixns
 }
 
-func GetIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifiers.Address) *CreateIxParams {
+func GetIxParamsWithID(t *testing.T, from identifiers.Identifier, to identifiers.Identifier) *CreateIxParams {
 	t.Helper()
 
 	return &CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
-			ix.Sender.Address = from
+			ix.Sender.ID = from
 			ix.IxOps = []common.IxOpRaw{
 				{
 					Type:    common.IxAssetTransfer,
@@ -875,11 +885,11 @@ func GetIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifie
 			}
 			ix.Participants = []common.IxParticipant{
 				{
-					Address:  from,
+					ID:       from,
 					LockType: common.MutateLock,
 				},
 				{
-					Address:  to,
+					ID:       to,
 					LockType: common.MutateLock,
 				},
 			}
@@ -888,10 +898,10 @@ func GetIxParamsWithAddress(t *testing.T, from identifiers.Address, to identifie
 	}
 }
 
-func GetIxParamsMapWithAddresses(
+func GetIxParamsMapWithIDs(
 	t *testing.T,
-	from []identifiers.Address,
-	to []identifiers.Address,
+	from []identifiers.Identifier,
+	to []identifiers.Identifier,
 ) map[int]*CreateIxParams {
 	t.Helper()
 
@@ -899,7 +909,7 @@ func GetIxParamsMapWithAddresses(
 	ixParams := make(map[int]*CreateIxParams, count)
 
 	for i := 0; i < count; i++ {
-		ixParams[i] = GetIxParamsWithAddress(t, from[i], to[i])
+		ixParams[i] = GetIxParamsWithID(t, from[i], to[i])
 	}
 
 	return ixParams
@@ -911,12 +921,12 @@ func GetTesseractParamsMapWithIxnsAndReceipts(t *testing.T, tsCount, ixnCount in
 	t.Helper()
 
 	tesseractParams := make(map[int]*CreateTesseractParams, tsCount)
-	addresses := GetAddresses(t, 2*(tsCount-1)*ixnCount) // for each interaction, sender and receiver addresses needed
+	ids := GetIdentifiers(t, 2*(tsCount-1)*ixnCount) // for each interaction, sender and receiver ids needed
 	receipts := CreateReceiptsWithTestData(t, RandomHash(t))
 	ixns := CreateIxns(
 		t,
 		(tsCount-1)*ixnCount,
-		GetIxParamsMapWithAddresses(t, addresses[:2*(tsCount-1)], addresses[2*(tsCount-1):]),
+		GetIxParamsMapWithIDs(t, ids[:2*(tsCount-1)], ids[2*(tsCount-1):]),
 	)
 
 	// allocate interactions to each tesseract, excluding the first tesseract (which is the genesis tesseract)
@@ -1020,17 +1030,17 @@ func CreateIXDataWithTestData(t *testing.T, callback func(ixData *common.IxData)
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
-			Address:    RandomAddress(t),
+			ID:         RandomIdentifier(t),
 			SequenceID: 2,
 		},
-		Payer: RandomAddress(t),
+		Payer: RandomIdentifier(t),
 
 		FuelLimit: 1043,
 		FuelPrice: new(big.Int).SetUint64(1),
 
 		Funds: []common.IxFund{
 			{
-				AssetID: GetRandomAssetID(t, RandomAddress(t)),
+				AssetID: GetRandomAssetID(t, RandomIdentifier(t)),
 				Amount:  big.NewInt(10),
 			},
 		},
@@ -1044,7 +1054,7 @@ func CreateIXDataWithTestData(t *testing.T, callback func(ixData *common.IxData)
 
 		Participants: []common.IxParticipant{
 			{
-				Address:  RandomAddress(t),
+				ID:       RandomIdentifier(t),
 				LockType: common.MutateLock,
 			},
 		},
@@ -1062,10 +1072,10 @@ func CreateIXDataWithTestData(t *testing.T, callback func(ixData *common.IxData)
 
 	ixData.Participants = append(ixData.Participants, []common.IxParticipant{
 		{
-			Address: ixData.Sender.Address,
+			ID: ixData.Sender.ID,
 		},
 		{
-			Address: ixData.Payer,
+			ID: ixData.Payer,
 		},
 	}...)
 
@@ -1081,8 +1091,8 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 
 	// create dummy logs
 	log := common.Log{
-		Address: RandomAddress(t),
-		LogicID: GetLogicID(t, RandomAddress(t)),
+		ID:      RandomIdentifier(t),
+		LogicID: GetLogicID(t, RandomIdentifier(t)),
 		Topics:  GetHashes(t, 1),
 		Data:    []byte{1},
 	}
@@ -1114,9 +1124,8 @@ func CreateStateWithTestData(t *testing.T) common.State {
 		LatestContext:   RandomHash(t),
 		StateHash:       RandomHash(t),
 		ContextDelta: &common.DeltaGroup{
-			BehaviouralNodes: RandomKramaIDs(t, 2),
-			RandomNodes:      RandomKramaIDs(t, 2),
-			ReplacedNodes:    RandomKramaIDs(t, 2),
+			ConsensusNodes: RandomKramaIDs(t, 2),
+			ReplacedNodes:  RandomKramaIDs(t, 2),
 		},
 	}
 
@@ -1141,7 +1150,7 @@ func CreateCommitInfoWithTestData(t *testing.T) common.CommitInfo {
 
 	return common.CommitInfo{
 		QC: &common.Qc{
-			Address: RandomAddress(t),
+			ID: RandomIdentifier(t),
 		},
 		Operator:                  RandomKramaID(t, 1),
 		ClusterID:                 "cluster-1",
@@ -1157,7 +1166,7 @@ func CreateParticipantWithTestData(t *testing.T, count int) common.ParticipantsS
 	p := make(common.ParticipantsState)
 
 	for i := 0; i < count; i++ {
-		p[RandomAddress(t)] = CreateStateWithTestData(t)
+		p[RandomIdentifier(t)] = CreateStateWithTestData(t)
 	}
 
 	return p
@@ -1202,10 +1211,14 @@ func GetIXSignature(t *testing.T, ixData *common.IxData, mnemonic string) []byte
 	return rawSign
 }
 
-func GetLogicID(t *testing.T, address identifiers.Address) identifiers.LogicID {
+func GetLogicID(t *testing.T, id identifiers.Identifier) identifiers.LogicID {
 	t.Helper()
 
-	return identifiers.NewLogicIDv0(true, false, false, false, 0, address)
+	logicID, err := identifiers.GenerateLogicIDv0(id.Fingerprint(), 0)
+
+	require.NoError(t, err)
+
+	return logicID
 }
 
 func GetLogicIDs(t *testing.T, count int) []identifiers.LogicID {
@@ -1214,7 +1227,7 @@ func GetLogicIDs(t *testing.T, count int) []identifiers.LogicID {
 	logicIDs := make([]identifiers.LogicID, count)
 
 	for i := 0; i < count; i++ {
-		logicIDs[i] = GetLogicID(t, RandomAddress(t))
+		logicIDs[i] = GetLogicID(t, RandomIdentifier(t))
 	}
 
 	return logicIDs
@@ -1303,20 +1316,20 @@ func NewTestTreeCache() *fastcache.Cache {
 	return fastcache.New(200)
 }
 
-// CreateTestIxParticipants creates a list of address and a map of IxParticipants with default values
+// CreateTestIxParticipants creates a list of id and a map of IxParticipants with default values
 func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
-	[]identifiers.Address,
-	map[identifiers.Address]common.ParticipantInfo,
+	[]identifiers.Identifier,
+	map[identifiers.Identifier]common.ParticipantInfo,
 ) {
 	t.Helper()
 
-	addrs := make([]identifiers.Address, count)
+	ids := make([]identifiers.Identifier, count)
 
-	ps := make(map[identifiers.Address]common.ParticipantInfo, 0)
+	ps := make(map[identifiers.Identifier]common.ParticipantInfo, 0)
 
 	for i := 0; i < count; i++ {
-		addrs[i] = RandomAddress(t)
-		ps[addrs[i]] = common.ParticipantInfo{
+		ids[i] = RandomIdentifier(t)
+		ps[ids[i]] = common.ParticipantInfo{
 			AccType:   common.RegularAccount,
 			IsSigner:  true,
 			LockType:  common.MutateLock,
@@ -1325,8 +1338,8 @@ func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
 	}
 
 	for i := 0; i < genesisAccCount; i++ {
-		addrs[i] = RandomAddress(t)
-		ps[addrs[i]] = common.ParticipantInfo{
+		ids[i] = RandomIdentifier(t)
+		ps[ids[i]] = common.ParticipantInfo{
 			AccType:   common.RegularAccount,
 			IsSigner:  true,
 			LockType:  common.MutateLock,
@@ -1334,7 +1347,7 @@ func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
 		}
 	}
 
-	return addrs, ps
+	return ids, ps
 }
 
 func GetStorageMap(keys []string, values []string) map[string]string {
@@ -1359,7 +1372,7 @@ func GetHexEntries(t *testing.T, count int) []string {
 	return entries
 }
 
-func CreateTxPayload(t *testing.T, ixType common.IxOpType, beneficiary identifiers.Address) []byte {
+func CreateTxPayload(t *testing.T, ixType common.IxOpType, beneficiary identifiers.Identifier) []byte {
 	t.Helper()
 
 	switch ixType {
@@ -1372,21 +1385,21 @@ func CreateTxPayload(t *testing.T, ixType common.IxOpType, beneficiary identifie
 	case common.IxAssetMint, common.IxAssetBurn:
 		return CreateRawAssetSupplyPayload(t, beneficiary)
 	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
-		return CreateRawLogicPayload(t, RandomAddress(t))
+		return CreateRawLogicPayload(t, identifiers.RandomLogicIDv0())
 	default:
 		return []byte{}
 	}
 }
 
-func CreateParticipantCreatePayload(t *testing.T, address identifiers.Address) common.ParticipantCreatePayload {
+func CreateParticipantCreatePayload(t *testing.T, id identifiers.Identifier) common.ParticipantCreatePayload {
 	t.Helper()
 
-	if address.IsNil() {
-		address = RandomAddress(t)
+	if id.IsNil() {
+		id = RandomIdentifier(t)
 	}
 
 	return common.ParticipantCreatePayload{
-		Address: address,
+		ID: id,
 		KeysPayload: []common.KeyAddPayload{
 			{
 				Weight: 1000,
@@ -1406,39 +1419,39 @@ func CreateAssetCreatePayload(t *testing.T) common.AssetCreatePayload {
 	}
 }
 
-func CreateAssetActionPayload(t *testing.T, address identifiers.Address) common.AssetActionPayload {
+func CreateAssetActionPayload(t *testing.T, id identifiers.Identifier) common.AssetActionPayload {
 	t.Helper()
 
-	if address.IsNil() {
-		address = RandomAddress(t)
+	if id.IsNil() {
+		id = RandomIdentifier(t)
 	}
 
 	return common.AssetActionPayload{
-		Beneficiary: address,
+		Beneficiary: id,
 		AssetID:     common.KMOITokenAssetID,
 		Amount:      big.NewInt(1),
 	}
 }
 
-func CreateAssetSupplyPayload(t *testing.T, address identifiers.Address) common.AssetSupplyPayload {
+func CreateAssetSupplyPayload(t *testing.T, id identifiers.Identifier) common.AssetSupplyPayload {
 	t.Helper()
 
-	if address.IsNil() {
-		address = RandomAddress(t)
+	if id.IsNil() {
+		id = RandomIdentifier(t)
 	}
 
 	return common.AssetSupplyPayload{
-		AssetID: GetRandomAssetID(t, address),
+		AssetID: GetRandomAssetID(t, id),
 		Amount:  big.NewInt(1),
 	}
 }
 
-func CreateLogicPayload(t *testing.T, address identifiers.Address) common.LogicPayload {
+func CreateLogicPayload(t *testing.T, id identifiers.LogicID) common.LogicPayload {
 	t.Helper()
 
 	return common.LogicPayload{
 		Manifest: []byte{1, 2, 3},
-		Logic:    GetLogicID(t, address),
+		Logic:    id,
 		Callsite: "hello",
 	}
 }
@@ -1454,10 +1467,10 @@ func CreateRawAssetCreatePayload(t *testing.T) []byte {
 	return rawPayload
 }
 
-func CreateRawParticipantCreatePayload(t *testing.T, address identifiers.Address) []byte {
+func CreateRawParticipantCreatePayload(t *testing.T, id identifiers.Identifier) []byte {
 	t.Helper()
 
-	payload := CreateParticipantCreatePayload(t, address)
+	payload := CreateParticipantCreatePayload(t, id)
 
 	rawPayload, err := payload.Bytes()
 	require.NoError(t, err)
@@ -1465,10 +1478,10 @@ func CreateRawParticipantCreatePayload(t *testing.T, address identifiers.Address
 	return rawPayload
 }
 
-func CreateRawAssetActionPayload(t *testing.T, address identifiers.Address) []byte {
+func CreateRawAssetActionPayload(t *testing.T, id identifiers.Identifier) []byte {
 	t.Helper()
 
-	payload := CreateAssetActionPayload(t, address)
+	payload := CreateAssetActionPayload(t, id)
 
 	rawPayload, err := payload.Bytes()
 	require.NoError(t, err)
@@ -1476,10 +1489,10 @@ func CreateRawAssetActionPayload(t *testing.T, address identifiers.Address) []by
 	return rawPayload
 }
 
-func CreateRawAssetSupplyPayload(t *testing.T, address identifiers.Address) []byte {
+func CreateRawAssetSupplyPayload(t *testing.T, id identifiers.Identifier) []byte {
 	t.Helper()
 
-	payload := CreateAssetSupplyPayload(t, address)
+	payload := CreateAssetSupplyPayload(t, id)
 
 	rawPayload, err := payload.Bytes()
 	require.NoError(t, err)
@@ -1487,13 +1500,30 @@ func CreateRawAssetSupplyPayload(t *testing.T, address identifiers.Address) []by
 	return rawPayload
 }
 
-func CreateRawLogicPayload(t *testing.T, address identifiers.Address) []byte {
+func CreateRawLogicPayload(t *testing.T, id identifiers.LogicID) []byte {
 	t.Helper()
 
-	payload := CreateLogicPayload(t, address)
+	payload := CreateLogicPayload(t, id)
 
 	rawPayload, err := payload.Bytes()
 	require.NoError(t, err)
 
 	return rawPayload
+}
+
+func GetTestAssetIDFromAssetDescriptor(
+	t *testing.T,
+	id identifiers.Identifier,
+	asset *common.AssetDescriptor,
+) identifiers.AssetID {
+	t.Helper()
+
+	assetID, err := identifiers.GenerateAssetIDv0(
+		id.Fingerprint(),
+		id.Variant(),
+		uint16(asset.Standard),
+		asset.Flags()...)
+	require.NoError(t, err)
+
+	return assetID
 }

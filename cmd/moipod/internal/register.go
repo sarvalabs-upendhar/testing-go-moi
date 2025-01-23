@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	senderAddress            string
+	senderID                 string
 	senderKeyID              int32
 	networkRPC               string
 	nodeDataDir              string
@@ -51,10 +51,10 @@ func GetRegisterCommand() *cobra.Command {
 
 func parseRegisterFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(
-		&senderAddress,
-		"address",
+		&senderID,
+		"sender-id",
 		"",
-		"address",
+		"sender id",
 	)
 	cmd.PersistentFlags().Int32Var(
 		&senderKeyID,
@@ -106,7 +106,7 @@ func parseRegisterFlags(cmd *cobra.Command) {
 		"Passcode to encrypt the node keystore.",
 	)
 
-	_ = cmd.MarkPersistentFlagRequired("sender-address")
+	_ = cmd.MarkPersistentFlagRequired("sender-id")
 	_ = cmd.MarkPersistentFlagRequired("sender-key-id")
 	_ = cmd.MarkPersistentFlagRequired("sender-public-key")
 	_ = cmd.MarkPersistentFlagRequired("data-dir")
@@ -124,8 +124,8 @@ func validateFlags() error {
 		return errors.New("invalid incentive wallet address")
 	}
 
-	if senderAddress == "" {
-		return errors.New("invalid sender address")
+	if senderID == "" {
+		return errors.New("invalid sender id")
 	}
 
 	if senderKeyID < 0 {
@@ -202,7 +202,10 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(errors.Wrap(err, "failed to create moi-client"))
 	}
 
-	sender, _ := identifiers.NewAddressFromHex(senderAddress)
+	sender, err := identifiers.NewParticipantIDFromHex(senderID)
+	if err != nil {
+		panic(err)
+	}
 
 	// Check if the guardian is already registered
 	isRegistered, err := cmdCommon.IsGuardianRegistered(client, vault.KramaID())
@@ -223,8 +226,8 @@ func registerGuardian(vault *crypto.KramaVault) {
 	fmt.Printf("Krama-ID %s \n", vault.KramaID())
 
 	sequenceID, err := client.InteractionCount(context.Background(), &rpcargs.InteractionCountArgs{
-		Address: sender,
-		KeyID:   uint64(senderKeyID),
+		ID:    sender.AsIdentifier(),
+		KeyID: uint64(senderKeyID),
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},
@@ -237,15 +240,13 @@ func registerGuardian(vault *crypto.KramaVault) {
 		Logic:    common.GuardianLogicID,
 		Callsite: "RegisterGuardian",
 		Calldata: func() polo.Document {
-			// Generate a wallet address from the given hex value in the cli flags
-			wallet, _ := identifiers.NewAddressFromHex(walletAddress)
 			// Create a guardian object to register
 			guardian := guardianregistry.Guardian{
 				OperatorID: moiID,
 				KramaID:    string(vault.KramaID()),
 				PublicKey:  vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 				Incentive: guardianregistry.Incentive{
-					Wallet: wallet,
+					Wallet: sender.AsIdentifier(),
 				},
 			}
 
@@ -266,7 +267,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 
 	ixArgs := common.IxData{
 		Sender: common.Sender{
-			Address:    sender,
+			ID:         sender.AsIdentifier(),
 			SequenceID: sequenceID.ToUint64(),
 			KeyID:      uint64(senderKeyID),
 		},
@@ -280,11 +281,11 @@ func registerGuardian(vault *crypto.KramaVault) {
 		},
 		Participants: []common.IxParticipant{
 			{
-				Address:  sender,
+				ID:       sender.AsIdentifier(),
 				LockType: common.MutateLock,
 			},
 			{
-				Address:  common.GuardianLogicAddr,
+				ID:       common.GuardianAccountID,
 				LockType: common.MutateLock,
 			},
 		},

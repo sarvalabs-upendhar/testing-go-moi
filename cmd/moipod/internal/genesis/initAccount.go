@@ -9,10 +9,7 @@ import (
 	"github.com/sarvalabs/go-moi/common/utils"
 )
 
-var (
-	behaviourNodes []string
-	randomNodes    []string
-)
+var consensusNodes []string
 
 func GetInitAccountCommand() *cobra.Command {
 	initAccountCmd := &cobra.Command{
@@ -30,10 +27,10 @@ func GetInitAccountCommand() *cobra.Command {
 
 func parseInitAccountFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(
-		&address,
-		"address",
+		&participantID,
+		"participant-id",
 		"",
-		"Address of the account.",
+		"Identifier of the account.",
 	)
 	cmd.Flags().IntVar(
 		&accountType,
@@ -48,19 +45,13 @@ func parseInitAccountFlags(cmd *cobra.Command) {
 		"Moi-id of the participant.",
 	)
 	cmd.Flags().StringSliceVar(
-		&behaviourNodes,
-		"behaviour-nodes",
-		[]string{},
-		"List of krama ids. Format: <kramaID1,kramaID2,...>",
-	)
-	cmd.Flags().StringSliceVar(
-		&randomNodes,
-		"random-nodes",
+		&consensusNodes,
+		"consensus-nodes",
 		[]string{},
 		"List of krama ids. Format: <kramaID1,kramaID2,...>",
 	)
 
-	if err := cobra.MarkFlagRequired(cmd.Flags(), "address"); err != nil {
+	if err := cobra.MarkFlagRequired(cmd.Flags(), "participant-id"); err != nil {
 		cmdcommon.Err(err)
 	}
 }
@@ -71,22 +62,23 @@ func initAccount() {
 		cmdcommon.Err(err)
 	}
 
-	if len(behaviourNodes) == 0 && len(randomNodes) == 0 {
-		behaviourNodes, randomNodes = getContextNodes(
+	if len(consensusNodes) == 0 {
+		consensusNodes = getContextNodes(
 			instancesFilePath,
-			common.BehaviouralContextSize,
-			cmdcommon.DefaultRandomCount,
+			common.ConsensusNodesSize,
 		)
 	}
 
-	decodedAddr, _ := identifiers.NewAddressFromHex(address)
+	decodedParticipantID, err := identifiers.NewParticipantIDFromHex(participantID)
+	if err != nil {
+		panic(err)
+	}
 
 	genesis.AddAccount(common.AccountSetupArgs{
-		Address:            decodedAddr,
-		AccType:            common.AccountType(accountType),
-		MoiID:              moiID,
-		BehaviouralContext: utils.KramaIDFromString(behaviourNodes),
-		RandomContext:      utils.KramaIDFromString(randomNodes),
+		ID:             decodedParticipantID.AsIdentifier(),
+		AccType:        common.AccountType(accountType),
+		MoiID:          moiID,
+		ConsensusNodes: utils.KramaIDFromString(consensusNodes),
 	})
 
 	if err = cmdcommon.WriteToGenesisFile(genesisFilePath, genesis); err != nil {

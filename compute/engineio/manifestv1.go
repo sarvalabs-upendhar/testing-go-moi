@@ -118,15 +118,17 @@ func (manifest manifestV1) Polorize() (*polo.Polorizer, error) {
 }
 
 func (manifest *manifestV1) Depolorize(depolorizer *polo.Depolorizer) (err error) {
-	depolorizer, err = depolorizer.DepolorizePacked()
-	if errors.Is(err, polo.ErrNullPack) {
+	if depolorizer.IsNull() {
 		return nil
-	} else if err != nil {
+	}
+
+	depolorizer, err = depolorizer.Unpacked()
+	if err != nil {
 		return err
 	}
 
 	// Decode syntax edition from the buffer
-	manifest.header.Syntax, err = depolorizer.DepolorizeUint() // [0] syntax
+	manifest.header.Syntax, err = depolorizer.DepolorizeUint64() // [0] syntax
 	if err != nil {
 		return err
 	}
@@ -174,7 +176,7 @@ func (manifest *manifestV1) Depolorize(depolorizer *polo.Depolorizer) (err error
 			return err
 		}
 
-		elementPtr, err := element.DepolorizeUint() // [2][0] ptr
+		elementPtr, err := element.DepolorizeUint64() // [2][0] ptr
 		if err != nil {
 			return err
 		}

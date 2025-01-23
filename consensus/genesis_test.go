@@ -19,7 +19,7 @@ package consensus
 //
 //	testcases := []struct {
 //		name          string
-//		addresses     []identifiers.Address
+//		addresses     []identifiers.Identifier
 //		stateHashes   []common.Hash
 //		contextHashes []common.Hash
 //	}{

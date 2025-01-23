@@ -23,13 +23,13 @@ const (
 )
 
 type ledger interface {
-	GetAssociatedPeers(addr identifiers.Address, stateHash cid.CID) ([]kramaid.KramaID, error)
-	UpdateAssociatedPeers(addr identifiers.Address, stateHash cid.CID, peers kramaid.KramaID) error
+	GetAssociatedPeers(id identifiers.Identifier, stateHash cid.CID) ([]kramaid.KramaID, error)
+	UpdateAssociatedPeers(id identifiers.Identifier, stateHash cid.CID, peers kramaid.KramaID) error
 }
 
 type store interface {
-	GetData(ctx context.Context, address identifiers.Address, keys []cid.CID) (map[cid.CID][]byte, error)
-	DoesStateExists(address identifiers.Address, stateHash cid.CID) bool
+	GetData(ctx context.Context, id identifiers.Identifier, keys []cid.CID) (map[cid.CID][]byte, error)
+	DoesStateExists(id identifiers.Identifier, stateHash cid.CID) bool
 	GetBatchWriter() db.BatchWriter
 }
 
@@ -182,10 +182,10 @@ func (e *Engine) worker() {
 func (e *Engine) HandleRequest(req *Request) {
 	if req != nil {
 		stateHash := req.StateHash
-		address := req.SessionID
+		id := req.SessionID
 
 		if !e.db.DoesStateExists(req.SessionID, stateHash) {
-			e.sendResponse(req.PeerID, address, stateHash, false, nil)
+			e.sendResponse(req.PeerID, id, stateHash, false, nil)
 			e.metrics.captureRejectedRequests(1)
 
 			return
@@ -205,14 +205,14 @@ func (e *Engine) HandleRequest(req *Request) {
 			e.logger.Error("Error fetching associated peers", "err", err)
 		}
 
-		e.sendResponse(req.PeerID, address, stateHash, false, peerSet)
+		e.sendResponse(req.PeerID, id, stateHash, false, peerSet)
 		e.metrics.captureRejectedRequests(1)
 	}
 }
 
 func (e *Engine) sendResponse(
 	id kramaid.KramaID,
-	sessionID identifiers.Address,
+	sessionID identifiers.Identifier,
 	stateHash cid.CID,
 	responseStatus bool,
 	peerList []kramaid.KramaID,

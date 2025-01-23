@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/compute/exlogics/tokenledger"
 	"github.com/sarvalabs/go-moi/jsonrpc"
 
 	"github.com/hashicorp/go-hclog"
@@ -72,7 +73,7 @@ func (tn *TestSingleNode) SetupSuite() {
 	tn.initLogger()
 
 	d := bgclient.DefaultClusterConfig()
-	d.WithLogs = false
+	d.WithLogs = true
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 21000
@@ -114,18 +115,18 @@ func (tn *TestSingleNode) SetupSuite() {
 	//      enqueued - ix4
 	// a1 - enqueued - ix0
 
-	addr0 := tn.accounts[0].Addr
-	addr1 := tn.accounts[1].Addr
+	id0 := tn.accounts[0].ID
+	id1 := tn.accounts[1].ID
 
 	for i := 0; i < 3; i++ {
 		// promoted queue
-		createAssetWithNonce(tn.T(), tn.moiClient, addr0, uint64(i), tn.accounts[0])
+		createAssetWithNonce(tn.T(), tn.moiClient, id0, uint64(i), tn.accounts[0])
 	}
 
 	// enqueued queue
-	createAssetWithNonce(tn.T(), tn.moiClient, addr0, uint64(4), tn.accounts[0])
+	createAssetWithNonce(tn.T(), tn.moiClient, id0, uint64(4), tn.accounts[0])
 	// different account
-	createAssetWithNonce(tn.T(), tn.moiClient, addr1, uint64(4), tn.accounts[1])
+	createAssetWithNonce(tn.T(), tn.moiClient, id1, uint64(4), tn.accounts[1])
 
 	tn.suiteSetupDone = true
 }
@@ -150,7 +151,7 @@ func (tn *TestSingleNode) TestTesseract() {
 		{
 			name: "should fetch genesis tesseract",
 			tesseractArgs: &rpcargs.TesseractArgs{
-				Address:          common.SargaAddress,
+				ID:               common.SargaAccountID,
 				WithInteractions: false,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &genesisHeight,
@@ -158,9 +159,9 @@ func (tn *TestSingleNode) TestTesseract() {
 			},
 		},
 		{
-			name: "should return error as invalid address",
+			name: "should return error as invalid id",
 			tesseractArgs: &rpcargs.TesseractArgs{
-				Address:          tests.RandomAddress(tn.T()),
+				ID:               tests.RandomIdentifier(tn.T()),
 				WithInteractions: false,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -184,7 +185,7 @@ func (tn *TestSingleNode) TestTesseract() {
 			require.Equal(tn.T(), httpTS, ts)
 
 			require.NoError(tn.T(), err)
-			require.True(tn.T(), ts.HasParticipant(test.tesseractArgs.Address))
+			require.True(tn.T(), ts.HasParticipant(test.tesseractArgs.ID))
 			require.Equal(tn.T(), 0, len(ts.Ixns))
 		})
 	}
@@ -192,7 +193,7 @@ func (tn *TestSingleNode) TestTesseract() {
 
 func (tn *TestSingleNode) TestDBGet() {
 	// key and value belongs to genesis tesseract account meta info
-	key, _ := storage.BucketKeyAndID(common.SargaAddress)
+	key, _ := storage.BucketKeyAndID(storage.NewIdentifierKey(common.SargaAccountID))
 	ctx := context.Background()
 	testcases := []struct {
 		name          string
@@ -228,7 +229,7 @@ func (tn *TestSingleNode) TestDBGet() {
 
 			accMetaInfo := new(common.AccountMetaInfo)
 			require.NoError(tn.T(), accMetaInfo.FromBytes(common.Hex2Bytes(value)))
-			require.Equal(tn.T(), common.SargaAddress, accMetaInfo.Address)
+			require.Equal(tn.T(), common.SargaAccountID, accMetaInfo.ID)
 			require.Equal(tn.T(), common.SargaAccount, accMetaInfo.Type)
 		})
 	}
@@ -244,7 +245,7 @@ func (tn *TestSingleNode) TestSyncing() {
 		{
 			name: "should return error if failed to fetch account sync status",
 			StatusArgs: &rpcargs.SyncStatusRequest{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 			},
 			expectedError: common.ErrAccSyncStatusNotFound,
 		},
@@ -277,18 +278,12 @@ func (tn *TestSingleNode) TestGetAssetInfoByAssetID() {
 		expectedError error
 	}{
 		{
-			name: "fetch asset info for existing assetID",
-			assetID: identifiers.NewAssetIDv0(
-				a.IsLogical,
-				a.IsStateful,
-				a.Dimension.ToInt(),
-				a.Standard.ToInt(),
-				common.CreateAddressFromString(a.Symbol),
-			),
+			name:    "fetch asset info for existing assetID",
+			assetID: common.CreateAssetIDFromString(a.Symbol, 0, uint16(a.Standard), a.AssetDescriptor().Flags()...),
 		},
 		{
 			name:          "fetch asset info for non-existing assetID",
-			assetID:       tests.GetRandomAssetID(tn.T(), tests.RandomAddress(tn.T())),
+			assetID:       tests.GetRandomAssetID(tn.T(), tests.RandomIdentifier(tn.T())),
 			expectedError: common.ErrAccountNotFound,
 		},
 	}
@@ -335,14 +330,8 @@ func (tn *TestSingleNode) TestGetBalance() {
 		{
 			name: "fetch moi token balance at latest height",
 			balanceArgs: &rpcargs.BalArgs{
-				Address: a.Allocations[0].Address,
-				AssetID: identifiers.NewAssetIDv0(
-					a.IsLogical,
-					a.IsStateful,
-					a.Dimension.ToInt(),
-					a.Standard.ToInt(),
-					common.CreateAddressFromString(a.Symbol),
-				),
+				ID:      a.Allocations[0].ID,
+				AssetID: common.KMOITokenAssetID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -352,8 +341,8 @@ func (tn *TestSingleNode) TestGetBalance() {
 		{
 			name: "get balance returns error for unknown asset ID",
 			balanceArgs: &rpcargs.BalArgs{
-				Address: a.Allocations[0].Address,
-				AssetID: tests.GetRandomAssetID(tn.T(), tests.RandomAddress(tn.T())),
+				ID:      a.Allocations[0].ID,
+				AssetID: tests.GetRandomAssetID(tn.T(), tests.RandomIdentifier(tn.T())),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -387,18 +376,18 @@ func (tn *TestSingleNode) TestTDU() {
 		expectedError error
 	}{
 		{
-			name: "fetch TDU for existing address",
+			name: "fetch TDU for existing id",
 			queryArgs: &rpcargs.QueryArgs{
-				Address: a.Allocations[0].Address,
+				ID: a.Allocations[0].ID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
-			name: "fetch TDU for non-existing address",
+			name: "fetch TDU for non-existing id",
 			queryArgs: &rpcargs.QueryArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -426,31 +415,26 @@ func (tn *TestSingleNode) TestTDU() {
 func (tn *TestSingleNode) TestDeeds() {
 	a := tn.genesis.AssetAccounts[1].AssetInfo
 
-	assetID := identifiers.NewAssetIDv0(
-		a.IsLogical,
-		a.IsStateful,
-		a.Dimension.ToInt(),
-		a.Standard.ToInt(),
-		common.CreateAddressFromString(a.Symbol),
-	)
+	assetID := common.CreateAssetIDFromString(a.Symbol, 0, uint16(a.Standard), a.AssetDescriptor().Flags()...)
+
 	testcases := []struct {
 		name          string
 		queryArgs     *rpcargs.QueryArgs
 		expectedError error
 	}{
 		{
-			name: "fetch registry for existing address",
+			name: "fetch registry for existing id",
 			queryArgs: &rpcargs.QueryArgs{
-				Address: a.Allocations[0].Address,
+				ID: a.Allocations[0].ID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
-			name: "fetch registry for non-existing address",
+			name: "fetch registry for non-existing id",
 			queryArgs: &rpcargs.QueryArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -483,18 +467,18 @@ func (tn *TestSingleNode) TestGetContextInfo() {
 		expectedError   error
 	}{
 		{
-			name: "fetch context info for existing address",
+			name: "fetch context info for existing id",
 			contextInfoArgs: &rpcargs.ContextInfoArgs{
-				Address: common.SargaAddress,
+				ID: common.SargaAccountID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
-			name: "fetch context info for non-existing address",
+			name: "fetch context info for non-existing id",
 			contextInfoArgs: &rpcargs.ContextInfoArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -515,13 +499,9 @@ func (tn *TestSingleNode) TestGetContextInfo() {
 
 			require.NoError(tn.T(), err)
 
-			for i := 0; i < len(tn.genesis.SargaAccount.BehaviouralContext); i++ {
-				require.Equal(tn.T(), string(tn.genesis.SargaAccount.BehaviouralContext[i]),
-					contextInfo.BehaviourNodes[i])
-			}
-
-			for i := 0; i < len(tn.genesis.SargaAccount.RandomContext); i++ {
-				require.Equal(tn.T(), string(tn.genesis.SargaAccount.RandomContext[i]), contextInfo.RandomNodes[i])
+			for i := 0; i < len(tn.genesis.SargaAccount.ConsensusNodes); i++ {
+				require.Equal(tn.T(), string(tn.genesis.SargaAccount.ConsensusNodes[i]),
+					contextInfo.ConsensusNodes[i])
 			}
 		})
 	}
@@ -534,18 +514,18 @@ func (tn *TestSingleNode) TestInteractionCount() {
 		expectedError        error
 	}{
 		{
-			name: "fetch interaction count for existing address",
+			name: "fetch interaction count for existing id",
 			interactionCountArgs: &rpcargs.InteractionCountArgs{
-				Address: tn.accounts[0].Addr,
+				ID: tn.accounts[0].ID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
-			name: "fetch interaction count for non-existing address",
+			name: "fetch interaction count for non-existing id",
 			interactionCountArgs: &rpcargs.InteractionCountArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -578,16 +558,16 @@ func (tn *TestSingleNode) TestPendingInteractionCount() {
 		expectedError        error
 	}{
 		{
-			name: "fetch pending interaction count for non-existing address",
+			name: "fetch pending interaction count for non-existing id",
 			interactionCountArgs: &rpcargs.InteractionCountArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 			},
 			expectedError: common.ErrAccountNotFound,
 		},
 		{
-			name: "fetch pending interaction count for existing address",
+			name: "fetch pending interaction count for existing id",
 			interactionCountArgs: &rpcargs.InteractionCountArgs{
-				Address: tn.accounts[0].Addr,
+				ID: tn.accounts[0].ID,
 			},
 			expectedSequenceID: 3,
 		},
@@ -616,18 +596,18 @@ func (tn *TestSingleNode) TestAccountState() {
 		expectedError error
 	}{
 		{
-			name: "fetch account state for existing address",
+			name: "fetch account state for existing id",
 			accountArgs: &rpcargs.GetAccountArgs{
-				Address: common.SargaAddress,
+				ID: common.SargaAccountID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
-			name: "fetch account state for non-existing address",
+			name: "fetch account state for non-existing id",
 			accountArgs: &rpcargs.GetAccountArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -660,18 +640,18 @@ func (tn *TestSingleNode) TestAccountKeys() {
 		expectedError error
 	}{
 		{
-			name: "fetch account state for existing address",
+			name: "fetch account state for existing id",
 			accKeysArgs: &rpcargs.GetAccountKeysArgs{
-				Address: tn.accounts[0].Addr,
+				ID: tn.accounts[0].ID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
-			name: "fetch account state for non-existing address",
+			name: "fetch account state for non-existing id",
 			accKeysArgs: &rpcargs.GetAccountKeysArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -717,13 +697,13 @@ func (tn *TestSingleNode) TestLogicStorage() {
 		{
 			name: "fetch storage value for non-existing logic ID",
 			logicStorageArgs: &rpcargs.GetLogicStorageArgs{
-				LogicID:    "",
+				LogicID:    identifiers.RandomLogicIDv0(),
 				StorageKey: common.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedError: errors.New("Invalid Params"),
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
@@ -750,18 +730,18 @@ func (tn *TestSingleNode) TestLogics() {
 		expectedError error
 	}{
 		{
-			name: "fetch logicIDs for existing address",
+			name: "fetch logicIDs for existing id",
 			LogicIDArgs: &rpcargs.GetLogicIDArgs{
-				Address: common.GuardianLogicAddr,
+				ID: common.GuardianAccountID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
 		},
 		{
-			name: "fetch logicIDs for non-existing address",
+			name: "fetch logicIDs for non-existing id",
 			LogicIDArgs: &rpcargs.GetLogicIDArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -805,7 +785,7 @@ func (tn *TestSingleNode) TestLogicManifest() {
 		{
 			name: "fetch logic manifest for non-existing logicID",
 			logicManifestArgs: &rpcargs.LogicManifestArgs{
-				LogicID:  "0200000070c34ed6ec4384c75d469894052647a078b33ac0f08db0d3751c1fce29a49f",
+				LogicID:  identifiers.RandomLogicIDv0(),
 				Encoding: "JSON",
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -860,9 +840,9 @@ func (tn *TestSingleNode) TestContent() {
 			}
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), 3, len(contentResponse.Pending[tn.accounts[0].Addr]))
-			require.Equal(tn.T(), 1, len(contentResponse.Queued[tn.accounts[0].Addr]))
-			require.Equal(tn.T(), 1, len(contentResponse.Queued[tn.accounts[1].Addr]))
+			require.Equal(tn.T(), 3, len(contentResponse.Pending[tn.accounts[0].ID]))
+			require.Equal(tn.T(), 1, len(contentResponse.Queued[tn.accounts[0].ID]))
+			require.Equal(tn.T(), 1, len(contentResponse.Queued[tn.accounts[1].ID]))
 		})
 	}
 }
@@ -876,17 +856,17 @@ func (tn *TestSingleNode) TestContentFrom() {
 		expectedQueuedCount  int
 	}{
 		{
-			name: "fetch content from for existing address",
+			name: "fetch content from for existing id",
 			ixPoolArgs: &rpcargs.IxPoolArgs{
-				Address: tn.accounts[0].Addr,
+				ID: tn.accounts[0].ID,
 			},
 			expectedPendingCount: 3,
 			expectedQueuedCount:  1,
 		},
 		{
-			name: "fetch  content from for non-existing address",
+			name: "fetch  content from for non-existing id",
 			ixPoolArgs: &rpcargs.IxPoolArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 			},
 		},
 	}
@@ -949,9 +929,9 @@ func (tn *TestSingleNode) TestInspect() {
 			}
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), 3, len(inspectResponse.Pending[tn.accounts[0].Addr.String()]))
-			require.Equal(tn.T(), 1, len(inspectResponse.Queued[tn.accounts[0].Addr.String()]))
-			require.Equal(tn.T(), 1, len(inspectResponse.Queued[tn.accounts[1].Addr.String()]))
+			require.Equal(tn.T(), 3, len(inspectResponse.Pending[tn.accounts[0].ID.String()]))
+			require.Equal(tn.T(), 1, len(inspectResponse.Queued[tn.accounts[0].ID.String()]))
+			require.Equal(tn.T(), 1, len(inspectResponse.Queued[tn.accounts[1].ID.String()]))
 			require.Equal(tn.T(), 2, len(inspectResponse.WaitTime))
 		})
 	}
@@ -964,15 +944,15 @@ func (tn *TestSingleNode) TestWaitTime() {
 		expectedError error
 	}{
 		{
-			name: "fetch wait time for existing address",
+			name: "fetch wait time for existing id",
 			ixPoolArgs: &rpcargs.IxPoolArgs{
-				Address: tn.accounts[0].Addr,
+				ID: tn.accounts[0].ID,
 			},
 		},
 		{
-			name: "fetch wait time for non-existing address",
+			name: "fetch wait time for non-existing id",
 			ixPoolArgs: &rpcargs.IxPoolArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 			},
 			expectedError: common.ErrAccountNotFound,
 		},
@@ -1060,14 +1040,14 @@ func (tn *TestSingleNode) TestSendInteraction() {
 			name: "invalid account",
 			ixPoolArgs: &common.IxData{
 				Sender: common.Sender{
-					Address: tests.RandomAddress(tn.T()),
+					ID: tests.RandomIdentifier(tn.T()),
 				},
 				FuelPrice: big.NewInt(1),
 				FuelLimit: 200,
 				IxOps: []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(tn.T(), identifiers.NilAddress),
+						Payload: tests.CreateRawAssetActionPayload(tn.T(), identifiers.Nil),
 					},
 				},
 			},
@@ -1115,15 +1095,15 @@ func (tn *TestSingleNode) TestAccounts() {
 			for _, expectedAccount := range tn.genesis.Accounts {
 				found := 0
 
-				for _, address := range accountsResponse {
-					if expectedAccount.Address == address {
+				for _, id := range accountsResponse {
+					if expectedAccount.ID == id {
 						found = 1
 
 						break
 					}
 				}
 
-				require.Equal(tn.T(), found, 1, "address not found")
+				require.Equal(tn.T(), found, 1, "id not found")
 			}
 		})
 	}
@@ -1136,15 +1116,15 @@ func (tn *TestSingleNode) TestAccountMetaInfo() {
 		expectedError error
 	}{
 		{
-			name: "fetch account meta info for sarga address",
+			name: "fetch account meta info for sarga id",
 			accArgs: &rpcargs.GetAccountArgs{
-				Address: common.SargaAddress,
+				ID: common.SargaAccountID,
 			},
 		},
 		{
-			name: "fetch account meta info for random address",
+			name: "fetch account meta info for random id",
 			accArgs: &rpcargs.GetAccountArgs{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 			},
 			expectedError: common.ErrAccountNotFound,
 		},
@@ -1162,7 +1142,7 @@ func (tn *TestSingleNode) TestAccountMetaInfo() {
 
 			require.NoError(tn.T(), err)
 
-			require.Equal(tn.T(), common.SargaAddress, accountMetaInfoResponse.Address)
+			require.Equal(tn.T(), common.SargaAccountID, accountMetaInfoResponse.ID)
 			require.Equal(tn.T(), common.SargaAccount, accountMetaInfoResponse.Type)
 		})
 	}
@@ -1194,7 +1174,7 @@ func (tn *TestSingleNode) TestNewTesseractsByAccountFilter() {
 	}{
 		{
 			name: "add tesseract by account filter successfully",
-			args: &rpcargs.TesseractByAccountFilterArgs{Addr: tests.RandomAddress(tn.T())},
+			args: &rpcargs.TesseractByAccountFilterArgs{ID: tests.RandomIdentifier(tn.T())},
 		},
 	}
 
@@ -1216,7 +1196,7 @@ func (tn *TestSingleNode) TestNewLogFilter() {
 		{
 			name: "add log filter successfully",
 			filterQueryArgs: &jsonrpc.LogQuery{
-				Address: tests.RandomAddress(tn.T()),
+				ID: tests.RandomIdentifier(tn.T()),
 			},
 		},
 		{
@@ -1285,7 +1265,7 @@ func (tn *TestSingleNode) TestRemoveFilter() {
 }
 
 func (tn *TestSingleNode) TestFuelEstimate() {
-	addr := tn.accounts[0].Addr
+	id := tn.accounts[0].ID
 
 	assetCreationPayload := &common.AssetCreatePayload{
 		Symbol: "BTC",
@@ -1306,7 +1286,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 
 	ixArgsWithFuelParams := &rpcargs.IxArgs{
 		Sender: common.Sender{
-			Address: addr,
+			ID: id,
 		},
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
@@ -1317,14 +1297,14 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 			},
 		},
 		Participants: []rpcargs.IxParticipant{{
-			Address:  addr,
+			ID:       id,
 			LockType: common.MutateLock,
 		}},
 	}
 
 	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
 		Sender: common.Sender{
-			Address: addr,
+			ID: id,
 		},
 		IxOps: []rpcargs.IxOp{
 			{
@@ -1333,7 +1313,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 			},
 		},
 		Participants: []rpcargs.IxParticipant{{
-			Address:  addr,
+			ID:       id,
 			LockType: common.MutateLock,
 		}},
 	}
@@ -1348,8 +1328,8 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 			name: "retrieved fuel used in asset create ixn when fuel limit and price are given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgsWithFuelParams,
-				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
-					addr: {
+				Options: map[identifiers.Identifier]*rpcargs.TesseractNumberOrHash{
+					id: {
 						TesseractNumber: &LatestTesseractNumber,
 					},
 				},
@@ -1360,8 +1340,8 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 			name: "retrieved fuel used in asset create ixn when fuel limit and price are not given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgsWithoutFuelParams,
-				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
-					addr: {
+				Options: map[identifiers.Identifier]*rpcargs.TesseractNumberOrHash{
+					id: {
 						TesseractNumber: &LatestTesseractNumber,
 					},
 				},
@@ -1372,8 +1352,8 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 			name: "failed to fetch fuel estimate as options are empty",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgsWithFuelParams,
-				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
-					addr: {
+				Options: map[identifiers.Identifier]*rpcargs.TesseractNumberOrHash{
+					id: {
 						TesseractNumber: nil,
 					},
 				},
@@ -1398,7 +1378,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 }
 
 func (tn *TestSingleNode) TestCall() {
-	addr := tn.accounts[0].Addr
+	id := tn.accounts[0].ID
 	invalidHeight := int64(-2)
 
 	assetCreationPayload := &common.AssetCreatePayload{
@@ -1409,18 +1389,47 @@ func (tn *TestSingleNode) TestCall() {
 	rawAssetPayload, err := assetCreationPayload.Bytes()
 	require.NoError(tn.T(), err)
 
+	inputs := tokenledger.InputSeed{
+		Symbol: "MOI",
+		Supply: 100000000,
+	}
+
+	DeployCallData, _ := polo.PolorizeDocument(inputs, polo.DocStructs())
+
 	logicPayload := common.LogicPayload{
 		Manifest: common.Hex2Bytes(manifest),
 		Callsite: "Seed",
-		Calldata: common.Hex2Bytes("0x0d6f0665b6019502737570706c790305f5e10073796d626f6c064d4f49"),
+		Calldata: DeployCallData.Bytes(),
 	}
+
+	assetID, _ := identifiers.GenerateAssetIDv0(
+		common.NewAccountID(common.Sender{
+			ID:         id,
+			KeyID:      0,
+			SequenceID: 0,
+		},
+		),
+		0,
+		uint16(assetCreationPayload.Standard),
+		assetCreationPayload.Flags()...,
+	)
+
+	logicID, _ := identifiers.GenerateLogicIDv0(
+		common.NewAccountID(common.Sender{
+			ID:         id,
+			KeyID:      0,
+			SequenceID: 0,
+		}),
+		0,
+		logicPayload.Flags()...,
+	)
 
 	rawLogicPayload, err := logicPayload.Bytes()
 	require.NoError(tn.T(), err)
 
 	ixArgsWithFuelParams := &rpcargs.IxArgs{
 		Sender: common.Sender{
-			Address: addr,
+			ID: id,
 		},
 		FuelPrice: (*hexutil.Big)(big.NewInt(1)),
 		FuelLimit: hexutil.Uint64(200),
@@ -1431,14 +1440,14 @@ func (tn *TestSingleNode) TestCall() {
 			},
 		},
 		Participants: []rpcargs.IxParticipant{{
-			Address:  addr,
+			ID:       id,
 			LockType: common.MutateLock,
 		}},
 	}
 
 	ixArgsWithoutFuelParams := &rpcargs.IxArgs{
 		Sender: common.Sender{
-			Address: addr,
+			ID: id,
 		},
 		IxOps: []rpcargs.IxOp{
 			{
@@ -1447,7 +1456,7 @@ func (tn *TestSingleNode) TestCall() {
 			},
 		},
 		Participants: []rpcargs.IxParticipant{{
-			Address:  addr,
+			ID:       id,
 			LockType: common.MutateLock,
 		}},
 	}
@@ -1460,17 +1469,12 @@ func (tn *TestSingleNode) TestCall() {
 		IxType: common.IxAssetCreate,
 	}
 
-	expectedAccountAddr := common.NewAccountAddress(addr, 0, 0)
-	expectedAssetID := identifiers.NewAssetIDv0(false, false, 0, 0, expectedAccountAddr)
-	expectedLogicID := identifiers.NewLogicIDv0(true, false, false, false, 0, expectedAccountAddr)
-
 	common.SetResultPayload(receiptWithoutFuelParams, common.AssetCreationResult{
-		AssetID:      expectedAssetID,
-		AssetAccount: expectedAccountAddr,
+		AssetID: assetID,
 	})
 
 	common.SetResultPayload(receiptWithFuelParams, common.LogicDeployResult{
-		LogicID: expectedLogicID,
+		LogicID: logicID,
 	})
 
 	testcases := []struct {
@@ -1483,15 +1487,15 @@ func (tn *TestSingleNode) TestCall() {
 			name: "fetched rpc receipt successfully when fuel limit and price are given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgsWithFuelParams,
-				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
-					addr: {
+				Options: map[identifiers.Identifier]*rpcargs.TesseractNumberOrHash{
+					id: {
 						TesseractNumber: &LatestTesseractNumber,
 					},
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
 				FuelUsed: hexutil.Uint64(3473),
-				From:     addr,
+				From:     id,
 				IxOps: []*rpcargs.RPCIxOpResult{
 					{
 						TxType: hexutil.Uint64(ixArgsWithFuelParams.IxOps[0].Type),
@@ -1504,15 +1508,15 @@ func (tn *TestSingleNode) TestCall() {
 			name: "fetched rpc receipt successfully when fuel limit and price are not given",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgsWithoutFuelParams,
-				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
-					addr: {
+				Options: map[identifiers.Identifier]*rpcargs.TesseractNumberOrHash{
+					id: {
 						TesseractNumber: &LatestTesseractNumber,
 					},
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
 				FuelUsed: hexutil.Uint64(100),
-				From:     addr,
+				From:     id,
 				IxOps: []*rpcargs.RPCIxOpResult{
 					{
 						TxType: hexutil.Uint64(ixArgsWithoutFuelParams.IxOps[0].Type),
@@ -1525,8 +1529,8 @@ func (tn *TestSingleNode) TestCall() {
 			name: "failed to retrieve stateHashes as options are empty",
 			callArgs: &rpcargs.CallArgs{
 				IxArgs: ixArgsWithFuelParams,
-				Options: map[identifiers.Address]*rpcargs.TesseractNumberOrHash{
-					addr: {
+				Options: map[identifiers.Identifier]*rpcargs.TesseractNumberOrHash{
+					id: {
 						TesseractNumber: &invalidHeight,
 					},
 				},

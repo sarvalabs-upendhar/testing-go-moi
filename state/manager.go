@@ -32,16 +32,16 @@ const (
 )
 
 type Store interface {
-	GetAccount(addr identifiers.Address, stateHash common.Hash) ([]byte, error)
-	GetContext(addr identifiers.Address, contextHash common.Hash) ([]byte, error)
-	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
-	GetDeeds(addr identifiers.Address, registryHash common.Hash) ([]byte, error)
-	GetAccountKeys(addr identifiers.Address, stateHash common.Hash) ([]byte, error)
-	GetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key []byte) ([]byte, error)
-	SetMerkleTreeEntry(address identifiers.Address, prefix storage.PrefixTag, key, value []byte) error
-	SetMerkleTreeEntries(address identifiers.Address, prefix storage.PrefixTag, entries map[string][]byte) error
-	WritePreImages(address identifiers.Address, entries map[common.Hash][]byte) error
-	GetPreImage(address identifiers.Address, hash common.Hash) ([]byte, error)
+	GetAccount(id identifiers.Identifier, stateHash common.Hash) ([]byte, error)
+	GetContext(id identifiers.Identifier, contextHash common.Hash) ([]byte, error)
+	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
+	GetDeeds(id identifiers.Identifier, registryHash common.Hash) ([]byte, error)
+	GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) ([]byte, error)
+	GetMerkleTreeEntry(id identifiers.Identifier, prefix storage.PrefixTag, key []byte) ([]byte, error)
+	SetMerkleTreeEntry(id identifiers.Identifier, prefix storage.PrefixTag, key, value []byte) error
+	SetMerkleTreeEntries(id identifiers.Identifier, prefix storage.PrefixTag, entries map[string][]byte) error
+	WritePreImages(id identifiers.Identifier, entries map[common.Hash][]byte) error
+	GetPreImage(id identifiers.Identifier, hash common.Hash) ([]byte, error)
 	DeleteEntry(key []byte) error
 	CreateEntry(key []byte, value []byte) error
 	ReadEntry(key []byte) ([]byte, error)
@@ -104,55 +104,55 @@ func NewStateManager(
 }
 
 func (sm *StateManager) CreateStateObject(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	accType common.AccountType, isGenesis bool,
 ) *Object {
-	stateObject := NewStateObject(addr, sm.cache, sm.treeCache, sm.db,
+	stateObject := NewStateObject(id, sm.cache, sm.treeCache, sm.db,
 		common.Account{AccType: accType}, sm.metrics, isGenesis)
 
 	return stateObject
 }
 
-func (sm *StateManager) HasParticipantStateAt(addr identifiers.Address, stateHash common.Hash) bool {
-	if _, err := sm.db.GetAccount(addr, stateHash); err != nil {
+func (sm *StateManager) HasParticipantStateAt(id identifiers.Identifier, stateHash common.Hash) bool {
+	if _, err := sm.db.GetAccount(id, stateHash); err != nil {
 		return false
 	}
 
 	return true
 }
 
-func (sm *StateManager) getStateObject(addr identifiers.Address, stateHash common.Hash) (*Object, error) {
+func (sm *StateManager) getStateObject(id identifiers.Identifier, stateHash common.Hash) (*Object, error) {
 	if stateHash.IsNil() {
-		return sm.GetLatestStateObject(addr)
+		return sm.GetLatestStateObject(id)
 	}
 
-	return sm.GetStateObjectByHash(addr, stateHash)
+	return sm.GetStateObjectByHash(id, stateHash)
 }
 
-func (sm *StateManager) RemoveCachedObject(addr identifiers.Address) {
-	sm.logger.Trace("removing cached state object", addr)
-	sm.objectLocks.Lock(addr.Hex())
+func (sm *StateManager) RemoveCachedObject(id identifiers.Identifier) {
+	sm.logger.Trace("removing cached state object", id)
+	sm.objectLocks.Lock(id.Hex())
 
 	defer func() {
-		if err := sm.objectLocks.Unlock(addr.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "addr", addr)
+		if err := sm.objectLocks.Unlock(id.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "id", id)
 		}
 	}()
 
-	sm.objectCache.Remove(addr)
+	sm.objectCache.Remove(id)
 }
 
-func (sm *StateManager) GetLatestStateObject(addr identifiers.Address) (*Object, error) {
+func (sm *StateManager) GetLatestStateObject(id identifiers.Identifier) (*Object, error) {
 	if sm.objectCache != nil {
-		sm.objectLocks.Lock(addr.Hex())
+		sm.objectLocks.Lock(id.Hex())
 
 		defer func() {
-			if err := sm.objectLocks.Unlock(addr.Hex()); err != nil {
-				sm.logger.Error("failed to unlock object", "err", err, "addr", addr)
+			if err := sm.objectLocks.Unlock(id.Hex()); err != nil {
+				sm.logger.Error("failed to unlock object", "err", err, "id", id)
 			}
 		}()
 
-		data, isCached := sm.objectCache.Get(addr)
+		data, isCached := sm.objectCache.Get(id)
 		if isCached {
 			so, ok := data.(*Object)
 			if !ok {
@@ -165,27 +165,27 @@ func (sm *StateManager) GetLatestStateObject(addr identifiers.Address) (*Object,
 		}
 	}
 
-	accMetaInfo, err := sm.GetAccountMetaInfo(addr)
+	accMetaInfo, err := sm.GetAccountMetaInfo(id)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch acc meta info")
 	}
 
-	so, err := sm.GetStateObjectByHash(addr, accMetaInfo.StateHash)
+	so, err := sm.GetStateObjectByHash(id, accMetaInfo.StateHash)
 	if err != nil {
 		return nil, err
 	}
 
 	if sm.objectCache != nil {
-		sm.objectCache.Add(addr, so)
+		sm.objectCache.Add(id, so)
 		sm.metrics.AddObjectCacheMissCount(1)
 	}
 
 	return so, err
 }
 
-func (sm *StateManager) GetStateObjectByHash(addr identifiers.Address, hash common.Hash) (*Object, error) {
+func (sm *StateManager) GetStateObjectByHash(id identifiers.Identifier, hash common.Hash) (*Object, error) {
 	// read the state
-	data, err := sm.db.GetAccount(addr, hash)
+	data, err := sm.db.GetAccount(id, hash)
 	if err != nil {
 		return nil, errors.Wrap(common.ErrStateNotFound, err.Error())
 	}
@@ -195,13 +195,13 @@ func (sm *StateManager) GetStateObjectByHash(addr identifiers.Address, hash comm
 		return nil, err
 	}
 
-	sObj := NewStateObject(addr, sm.cache, sm.treeCache, sm.db, *acc, sm.metrics, false)
+	sObj := NewStateObject(id, sm.cache, sm.treeCache, sm.db, *acc, sm.metrics, false)
 
 	return sObj, nil
 }
 
-func (sm *StateManager) GetLogicIDs(addr identifiers.Address, stateHash common.Hash) ([]identifiers.LogicID, error) {
-	obj, err := sm.getStateObject(addr, stateHash)
+func (sm *StateManager) GetLogicIDs(id identifiers.Identifier, stateHash common.Hash) ([]identifiers.LogicID, error) {
+	obj, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +222,7 @@ func (sm *StateManager) GetLogicIDs(addr identifiers.Address, stateHash common.H
 				return nil, err
 			}
 
-			logicIDs = append(logicIDs, identifiers.LogicID(hex.EncodeToString(logicID)))
+			logicIDs = append(logicIDs, identifiers.LogicID(logicID))
 		}
 	}
 
@@ -274,34 +274,7 @@ func (sm *StateManager) getTesseractByHash(
 	), nil
 }
 
-func (sm *StateManager) getContextObject(addr identifiers.Address, hash common.Hash) (*ContextObject, error) {
-	contextData, isAvailable := sm.cache.Get(hash)
-	if isAvailable {
-		contextObject, ok := contextData.(*ContextObject)
-		if !ok {
-			return nil, common.ErrInterfaceConversion
-		}
-
-		return contextObject, nil
-	}
-
-	rawData, err := sm.db.GetContext(addr, hash)
-	if err != nil {
-		return nil, common.ErrContextStateNotFound
-	}
-
-	object := new(ContextObject)
-
-	if err := object.FromBytes(rawData); err != nil {
-		return nil, errors.Wrap(err, "contextObject deserialization failed")
-	}
-
-	sm.cache.Add(hash, object)
-
-	return object, nil
-}
-
-func (sm *StateManager) getMetaContextObject(addr identifiers.Address, hash common.Hash) (*MetaContextObject, error) {
+func (sm *StateManager) getMetaContextObject(id identifiers.Identifier, hash common.Hash) (*MetaContextObject, error) {
 	metaData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
 		metaContextObject, ok := metaData.(*MetaContextObject)
@@ -312,7 +285,7 @@ func (sm *StateManager) getMetaContextObject(addr identifiers.Address, hash comm
 		return metaContextObject, nil
 	}
 
-	rawData, err := sm.db.GetContext(addr, hash)
+	rawData, err := sm.db.GetContext(id, hash)
 	if err != nil {
 		return nil, common.ErrContextStateNotFound
 	}
@@ -328,45 +301,36 @@ func (sm *StateManager) getMetaContextObject(addr identifiers.Address, hash comm
 	return object, nil
 }
 
-func (sm *StateManager) GetLatestContextAndPublicKeys(addr identifiers.Address) (
+func (sm *StateManager) GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 	latestContextHash common.Hash,
-	behaviourSet, randomSet []kramaid.KramaID,
-	bePublicKeys, rePublicKeys [][]byte,
+	consensusSet []kramaid.KramaID,
+	consensusPublicKeys [][]byte,
 	err error,
 ) {
-	latestContextHash, err = sm.GetCommittedContextHash(addr)
+	latestContextHash, err = sm.GetCommittedContextHash(id)
 	if err != nil {
-		return common.NilHash, nil, nil, nil, nil, err
+		return common.NilHash, nil, nil, err
 	}
 
-	behaviourSet, randomSet, err = sm.GetContext(addr, latestContextHash)
+	consensusSet, err = sm.GetConsensusNodes(id, latestContextHash)
 	if err != nil {
-		return common.NilHash, nil, nil, nil, nil, err
+		return common.NilHash, nil, nil, err
 	}
 
-	if len(behaviourSet) > 0 {
-		bePublicKeys, err = sm.GetPublicKeys(context.Background(), behaviourSet...)
+	if len(consensusSet) > 0 {
+		consensusPublicKeys, err = sm.GetPublicKeys(context.Background(), consensusSet...)
 		if err != nil {
-			sm.logger.Error("failed to retrieve the public key of behavioural set", "err", err)
+			sm.logger.Error("failed to retrieve the public key of consensus set", "err", err)
 
-			return common.NilHash, nil, nil, nil, nil, common.ErrPublicKeyNotFound
+			return common.NilHash, nil, nil, common.ErrPublicKeyNotFound
 		}
 	}
 
-	if len(randomSet) > 0 {
-		rePublicKeys, err = sm.GetPublicKeys(context.Background(), randomSet...)
-		if err != nil {
-			sm.logger.Error("failed to retrieve the public key of random set", "err", err)
-
-			return common.NilHash, nil, nil, nil, nil, common.ErrPublicKeyNotFound
-		}
-	}
-
-	return latestContextHash, behaviourSet, randomSet, bePublicKeys, rePublicKeys, err
+	return latestContextHash, consensusSet, consensusPublicKeys, err
 }
 
-func (sm *StateManager) GetCommittedContextHash(addr identifiers.Address) (common.Hash, error) {
-	accMetaInfo, err := sm.GetAccountMetaInfo(addr)
+func (sm *StateManager) GetCommittedContextHash(id identifiers.Identifier) (common.Hash, error) {
+	accMetaInfo, err := sm.GetAccountMetaInfo(id)
 	if err != nil {
 		return common.NilHash, errors.Wrap(err, "failed to fetch account meta info")
 	}
@@ -374,8 +338,8 @@ func (sm *StateManager) GetCommittedContextHash(addr identifiers.Address) (commo
 	return accMetaInfo.ContextHash, nil
 }
 
-func (sm *StateManager) GetICSSeed(addr identifiers.Address) ([32]byte, error) {
-	metaInfo, err := sm.GetAccountMetaInfo(addr)
+func (sm *StateManager) GetICSSeed(id identifiers.Identifier) ([32]byte, error) {
+	metaInfo, err := sm.GetAccountMetaInfo(id)
 	if err != nil {
 		return common.NilHash, err
 	}
@@ -388,39 +352,28 @@ func (sm *StateManager) GetICSSeed(addr identifiers.Address) ([32]byte, error) {
 	return ts.ICSSeed(), nil
 }
 
-func (sm *StateManager) GetContext(
-	addr identifiers.Address,
+func (sm *StateManager) GetConsensusNodes(
+	id identifiers.Identifier,
 	hash common.Hash,
 ) (
 	common.NodeList,
-	common.NodeList,
 	error,
 ) {
-	metaContextObject, err := sm.getMetaContextObject(addr, hash)
+	metaContextObject, err := sm.getMetaContextObject(id, hash)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "metaContextObject fetch failed")
+		return nil, errors.Wrap(err, "metaContextObject fetch failed")
 	}
 
-	behaviourContext, err := sm.getContextObject(addr, metaContextObject.BehaviouralContext)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "behaviouralContextObject fetch failed")
-	}
-
-	randomContext, err := sm.getContextObject(addr, metaContextObject.RandomContext)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "randomContextObject fetch failed")
-	}
-
-	return behaviourContext.Ids, randomContext.Ids, nil
+	return metaContextObject.ConsensusNodes, nil
 }
 
 // GetParticipantContextRaw loads the context info of a participant into the given map
 func (sm *StateManager) GetParticipantContextRaw(
-	address identifiers.Address,
+	id identifiers.Identifier,
 	hash common.Hash,
 	rawContext map[string][]byte,
 ) error {
-	metaObjectRaw, err := sm.db.GetContext(address, hash)
+	metaObjectRaw, err := sm.db.GetContext(id, hash)
 	if err != nil {
 		return err
 	}
@@ -432,86 +385,63 @@ func (sm *StateManager) GetParticipantContextRaw(
 
 	rawContext[hash.String()] = metaObjectRaw
 
-	if !metaObject.BehaviouralContext.IsNil() {
-		behavioural, err := sm.db.GetContext(address, metaObject.BehaviouralContext)
-		if err != nil {
-			return errors.Wrap(err, "failed to fetch behavioural context")
-		}
-
-		rawContext[metaObject.BehaviouralContext.String()] = behavioural
-	}
-
-	if !metaObject.RandomContext.IsNil() {
-		random, err := sm.db.GetContext(address, metaObject.RandomContext)
-		if err != nil {
-			return errors.Wrap(err, "failed to fetch random context")
-		}
-
-		rawContext[metaObject.RandomContext.String()] = random
-	}
-
 	return nil
 }
 
-// GetContextByHash fetches context using hash, if hash is nil, it returns error
-func (sm *StateManager) GetContextByHash(
-	address identifiers.Address,
+// GetConsensusNodesByHash fetches context using hash, if hash is nil, it returns error
+func (sm *StateManager) GetConsensusNodesByHash(
+	id identifiers.Identifier,
 	hash common.Hash,
-) (common.Hash, []kramaid.KramaID, []kramaid.KramaID, error) {
-	if address.IsNil() || hash.IsNil() {
-		return common.NilHash, nil, nil, common.ErrEmptyHashAndAddress
+) ([]kramaid.KramaID, error) {
+	if id.IsNil() || hash.IsNil() {
+		return nil, common.ErrEmptyHashAndID
 	}
 
-	behaviourSet, randomSet, err := sm.GetContext(address, hash)
-	if err != nil {
-		return common.NilHash, nil, nil, err
-	}
-
-	return hash, behaviourSet, randomSet, nil
+	return sm.GetConsensusNodes(id, hash)
 }
 
-func (sm *StateManager) IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error) {
+func (sm *StateManager) IsInitialTesseract(ts *common.Tesseract, id identifiers.Identifier) (bool, error) {
 	var (
 		accountRegistered bool
 		err               error
 	)
 
-	if info, ok := ts.State(common.SargaAddress); !ok {
-		accountRegistered, err = sm.IsAccountRegistered(addr)
+	if info, ok := ts.State(common.SargaAccountID); !ok {
+		accountRegistered, err = sm.IsAccountRegistered(id)
 	} else {
 		sm.logger.Debug(
 			"Checking for new account",
-			"addr", addr,
+			"id", id,
 			"height", info.Height,
 			"ts-hash", info.TransitiveLink,
 		)
 
-		accountRegistered, err = sm.IsAccountRegisteredAt(addr, info.TransitiveLink)
+		accountRegistered, err = sm.IsAccountRegisteredAt(id, info.TransitiveLink)
 	}
 
-	return !accountRegistered && ts.Height(addr) == 0, err
+	return !accountRegistered && ts.Height(id) == 0, err
 }
 
-func (sm *StateManager) IsAccountRegistered(addr identifiers.Address) (bool, error) {
-	if addr.IsNil() {
+func (sm *StateManager) IsAccountRegistered(id identifiers.Identifier) (bool, error) {
+	if id.IsNil() {
 		return true, nil
 	}
 
-	sm.sysLocks.Lock(common.SargaAddress.Hex())
+	sm.sysLocks.Lock(common.SargaAccountID.String())
 
 	defer func() {
-		if err := sm.sysLocks.Unlock(common.SargaAddress.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "addr", common.SargaAddress.Hex())
+		if err := sm.sysLocks.Unlock(common.SargaAccountID.String()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "id", common.SargaAccountID.Hex())
 		}
 	}()
 
-	sargaObject, err := sm.GetLatestStateObject(common.SargaAddress)
+	sargaObject, err := sm.GetLatestStateObject(common.SargaAccountID)
 	if err != nil {
 		return true, errors.Wrap(err, common.ErrObjectNotFound.Error())
 	}
 
 	// Fetch the account info from genesis state
-	_, err = sargaObject.GetStorageEntry(common.SargaLogicID, addr.Bytes())
+	_, err = sargaObject.GetStorageEntry(common.SargaLogicID, id.Bytes())
 	if errors.Is(err, common.ErrKeyNotFound) {
 		return false, nil
 	}
@@ -519,18 +449,18 @@ func (sm *StateManager) IsAccountRegistered(addr identifiers.Address) (bool, err
 	return true, err
 }
 
-func (sm *StateManager) IsAccountRegisteredAt(addr identifiers.Address, tesseractHash common.Hash) (bool, error) {
+func (sm *StateManager) IsAccountRegisteredAt(id identifiers.Identifier, tesseractHash common.Hash) (bool, error) {
 	ts, err := sm.getTesseractByHash(tesseractHash, false, false)
 	if err != nil {
 		return false, err
 	}
 
-	sargaObject, err := sm.GetStateObjectByHash(common.SargaAddress, ts.StateHash(common.SargaAddress))
+	sargaObject, err := sm.GetStateObjectByHash(common.SargaAccountID, ts.StateHash(common.SargaAccountID))
 	if err != nil {
 		return false, err
 	}
 
-	_, err = sargaObject.GetStorageEntry(common.SargaLogicID, addr.Bytes())
+	_, err = sargaObject.GetStorageEntry(common.SargaLogicID, id.Bytes())
 	if errors.Is(err, common.ErrKeyNotFound) {
 		return false, nil
 	}
@@ -538,12 +468,12 @@ func (sm *StateManager) IsAccountRegisteredAt(addr identifiers.Address, tesserac
 	return true, err
 }
 
-func (sm *StateManager) GetSequenceID(addr identifiers.Address, keyID uint64, stateHash common.Hash) (uint64, error) {
-	if addr.IsNil() {
-		return 0, common.ErrInvalidAddress
+func (sm *StateManager) GetSequenceID(id identifiers.Identifier, keyID uint64, stateHash common.Hash) (uint64, error) {
+	if id.IsNil() {
+		return 0, common.ErrInvalidIdentifier
 	}
 
-	so, err := sm.getStateObject(addr, stateHash)
+	so, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return 0, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -551,8 +481,8 @@ func (sm *StateManager) GetSequenceID(addr identifiers.Address, keyID uint64, st
 	return so.SequenceID(keyID)
 }
 
-func (sm *StateManager) GetPublicKey(addr identifiers.Address, keyID uint64, stateHash common.Hash) ([]byte, error) {
-	so, err := sm.getStateObject(addr, stateHash)
+func (sm *StateManager) GetPublicKey(id identifiers.Identifier, keyID uint64, stateHash common.Hash) ([]byte, error) {
+	so, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -560,8 +490,8 @@ func (sm *StateManager) GetPublicKey(addr identifiers.Address, keyID uint64, sta
 	return so.PublicKey(keyID)
 }
 
-func (sm *StateManager) GetBalances(addrs identifiers.Address, stateHash common.Hash) (common.AssetMap, error) {
-	stateObject, err := sm.getStateObject(addrs, stateHash)
+func (sm *StateManager) GetBalances(id identifiers.Identifier, stateHash common.Hash) (common.AssetMap, error) {
+	stateObject, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -575,9 +505,9 @@ func (sm *StateManager) GetBalances(addrs identifiers.Address, stateHash common.
 }
 
 func (sm *StateManager) GetDeeds(
-	addrs identifiers.Address, stateHash common.Hash,
-) (map[string]*common.AssetDescriptor, error) {
-	stateObject, err := sm.getStateObject(addrs, stateHash)
+	id identifiers.Identifier, stateHash common.Hash,
+) (map[identifiers.Identifier]*common.AssetDescriptor, error) {
+	stateObject, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -587,12 +517,12 @@ func (sm *StateManager) GetDeeds(
 		return nil, err
 	}
 
-	entries := make(map[string]*common.AssetDescriptor)
+	entries := make(map[identifiers.Identifier]*common.AssetDescriptor)
 
 	for aid := range deeds.Entries {
 		assetID := identifiers.AssetID(aid)
 
-		stateObject, err = sm.getStateObject(assetID.Address(), common.NilHash)
+		stateObject, err = sm.getStateObject(assetID.AsIdentifier(), common.NilHash)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to fetch state object")
 		}
@@ -607,9 +537,9 @@ func (sm *StateManager) GetDeeds(
 }
 
 func (sm *StateManager) GetMandates(
-	addrs identifiers.Address, stateHash common.Hash,
+	id identifiers.Identifier, stateHash common.Hash,
 ) ([]common.AssetMandateOrLockup, error) {
-	stateObject, err := sm.getStateObject(addrs, stateHash)
+	stateObject, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -618,9 +548,9 @@ func (sm *StateManager) GetMandates(
 }
 
 func (sm *StateManager) GetLockups(
-	addrs identifiers.Address, stateHash common.Hash,
+	id identifiers.Identifier, stateHash common.Hash,
 ) ([]common.AssetMandateOrLockup, error) {
-	stateObject, err := sm.getStateObject(addrs, stateHash)
+	stateObject, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -628,8 +558,8 @@ func (sm *StateManager) GetLockups(
 	return stateObject.Lockups()
 }
 
-func (sm *StateManager) GetAccountKeys(addrs identifiers.Address, stateHash common.Hash) (common.AccountKeys, error) {
-	so, err := sm.getStateObject(addrs, stateHash)
+func (sm *StateManager) GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) (common.AccountKeys, error) {
+	so, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -638,11 +568,11 @@ func (sm *StateManager) GetAccountKeys(addrs identifiers.Address, stateHash comm
 }
 
 func (sm *StateManager) GetBalance(
-	addrs identifiers.Address,
+	id identifiers.Identifier,
 	assetID identifiers.AssetID,
 	stateHash common.Hash,
 ) (*big.Int, error) {
-	so, err := sm.getStateObject(addrs, stateHash)
+	so, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return big.NewInt(0), errors.Wrap(err, "failed to fetch state object")
 	}
@@ -651,7 +581,7 @@ func (sm *StateManager) GetBalance(
 }
 
 func (sm *StateManager) GetAssetInfo(assetID identifiers.AssetID, state common.Hash) (*common.AssetDescriptor, error) {
-	stateObject, err := sm.getStateObject(assetID.Address(), state)
+	stateObject, err := sm.getStateObject(assetID.AsIdentifier(), state)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -659,12 +589,12 @@ func (sm *StateManager) GetAssetInfo(assetID identifiers.AssetID, state common.H
 	return stateObject.GetState(assetID)
 }
 
-func (sm *StateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
-	return sm.db.GetAccountMetaInfo(addr)
+func (sm *StateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
+	return sm.db.GetAccountMetaInfo(id)
 }
 
-func (sm *StateManager) GetAccountState(addr identifiers.Address, stateHash common.Hash) (*common.Account, error) {
-	rawData, err := sm.db.GetAccount(addr, stateHash)
+func (sm *StateManager) GetAccountState(id identifiers.Identifier, stateHash common.Hash) (*common.Account, error) {
+	rawData, err := sm.db.GetAccount(id, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "account state not found")
 	}
@@ -683,15 +613,15 @@ func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaI
 		return nil, errors.New("Empty Ids")
 	}
 
-	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
 
 	defer func() {
-		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		if err := sm.sysLocks.Unlock(common.GuardianAccountID.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "id", common.GuardianAccountID)
 		}
 	}()
 
-	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	object, err := sm.getStateObject(common.GuardianAccountID, common.NilHash)
 	if err != nil {
 		return nil, err
 	}
@@ -702,15 +632,15 @@ func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaI
 }
 
 func (sm *StateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error) {
-	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
 
 	defer func() {
-		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		if err := sm.sysLocks.Unlock(common.GuardianAccountID.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "id", common.GuardianAccountID)
 		}
 	}()
 
-	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	object, err := sm.getStateObject(common.GuardianAccountID, common.NilHash)
 	if err != nil {
 		return 0, err
 	}
@@ -721,15 +651,15 @@ func (sm *StateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error
 }
 
 func (sm *StateManager) GetRegisteredGuardiansCount() (int, error) {
-	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
 
 	defer func() {
-		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		if err := sm.sysLocks.Unlock(common.GuardianAccountID.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "id", common.GuardianAccountID)
 		}
 	}()
 
-	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	object, err := sm.getStateObject(common.GuardianAccountID, common.NilHash)
 	if err != nil {
 		return 0, err
 	}
@@ -740,15 +670,15 @@ func (sm *StateManager) GetRegisteredGuardiansCount() (int, error) {
 }
 
 func (sm *StateManager) GetTotalIncentives() (uint64, error) {
-	sm.sysLocks.Lock(common.GuardianLogicAddr.Hex())
+	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
 
 	defer func() {
-		if err := sm.sysLocks.Unlock(common.GuardianLogicAddr.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "addr", common.GuardianLogicAddr)
+		if err := sm.sysLocks.Unlock(common.GuardianAccountID.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "id", common.GuardianAccountID)
 		}
 	}()
 
-	object, err := sm.getStateObject(common.GuardianLogicAddr, common.NilHash)
+	object, err := sm.getStateObject(common.GuardianAccountID, common.NilHash)
 	if err != nil {
 		return 0, err
 	}
@@ -761,7 +691,7 @@ func (sm *StateManager) GetTotalIncentives() (uint64, error) {
 // IsLogicRegistered checks if the logicID is registered with the account.
 // If the logicID is not registered, this returns an error
 func (sm *StateManager) IsLogicRegistered(logicID identifiers.LogicID) error {
-	so, err := sm.GetLatestStateObject(logicID.Address())
+	so, err := sm.GetLatestStateObject(logicID.AsIdentifier())
 	if err != nil {
 		return err
 	}
@@ -783,7 +713,12 @@ func (sm *StateManager) SyncStorageTrees(
 	g, _ := errgroup.WithContext(ctx)
 
 	for logic, rootNode := range logicStorageTreeRoots {
-		storageRoot, logicID := rootNode, logic
+		storageRoot := rootNode
+
+		logicID, err := hex.DecodeString(logic)
+		if err != nil {
+			return err
+		}
 
 		g.Go(func() error {
 			return sm.syncLogicStorageTree(
@@ -897,7 +832,7 @@ func (sm *StateManager) SyncLogicTree(
 func (sm *StateManager) GetPersistentStorageEntry(
 	logicID identifiers.LogicID, slot []byte, state common.Hash,
 ) ([]byte, error) {
-	so, err := sm.getStateObject(logicID.Address(), state)
+	so, err := sm.getStateObject(logicID.AsIdentifier(), state)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -907,12 +842,12 @@ func (sm *StateManager) GetPersistentStorageEntry(
 
 // GetEphemeralStorageEntry returns the storage data associated with the given slot and logicID
 func (sm *StateManager) GetEphemeralStorageEntry(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	logicID identifiers.LogicID,
 	slot []byte,
 	state common.Hash,
 ) ([]byte, error) {
-	so, err := sm.getStateObject(addr, state)
+	so, err := sm.getStateObject(id, state)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -922,7 +857,7 @@ func (sm *StateManager) GetEphemeralStorageEntry(
 
 // GetLogicManifest returns the manifest associated with the given logicID
 func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash common.Hash) ([]byte, error) {
-	so, err := sm.getStateObject(logicID.Address(), stateHash)
+	so, err := sm.getStateObject(logicID.AsIdentifier(), stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -932,7 +867,7 @@ func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash 
 		return nil, errors.Wrap(err, "failed to fetch logic object")
 	}
 
-	logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID.Address(), logicObject.ManifestHash()))
+	logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID.AsIdentifier(), logicObject.ManifestHash()))
 	if err != nil {
 		return nil, errors.Wrap(err, common.ErrFetchingLogicManifest.Error())
 	}
@@ -943,37 +878,37 @@ func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash 
 func (sm *StateManager) getAuxiliaryStateObjects() (ObjectMap, error) {
 	auxiliaryObjects := make(ObjectMap)
 
-	auxObj, err := sm.GetLatestStateObject(common.SargaAddress)
+	auxObj, err := sm.GetLatestStateObject(common.SargaAccountID)
 	if err != nil {
 		return nil, errors.Wrap(err, "state object fetch failed")
 	}
 
-	auxiliaryObjects[common.SargaAddress] = auxObj.Copy()
+	auxiliaryObjects[common.SargaAccountID] = auxObj.Copy()
 
 	return auxiliaryObjects, nil
 }
 
 func (sm *StateManager) LoadTransitionObjects(
-	ixps map[identifiers.Address]common.ParticipantInfo,
+	ixps map[identifiers.Identifier]common.ParticipantInfo,
 ) (*Transition, error) {
 	// Create a new objects map
 	objects := make(ObjectMap)
 
-	for addr, p := range ixps {
+	for id, p := range ixps {
 		if p.IsGenesis {
-			objects[addr] = sm.CreateStateObject(addr, p.AccType, true)
+			objects[id] = sm.CreateStateObject(id, p.AccType, true)
 
 			continue
 		}
 
-		obj, err := sm.GetLatestStateObject(addr)
+		obj, err := sm.GetLatestStateObject(id)
 		if err != nil {
 			return nil, errors.Wrap(err, "state object fetch failed")
 		}
 
 		// copy inorder to avoid modifications to cached object
 
-		objects[addr] = obj.Copy()
+		objects[id] = obj.Copy()
 	}
 
 	auxiliaryObjects, err := sm.getAuxiliaryStateObjects()
@@ -986,7 +921,7 @@ func (sm *StateManager) LoadTransitionObjects(
 
 func (sm *StateManager) FetchIxStateObjects(
 	ixns common.Interactions,
-	hashes map[identifiers.Address]common.Hash,
+	hashes map[identifiers.Identifier]common.Hash,
 ) (
 	*Transition, error,
 ) {
@@ -997,18 +932,18 @@ func (sm *StateManager) FetchIxStateObjects(
 	// Create a new objects map
 	objects := make(ObjectMap)
 
-	for addr, p := range ps {
+	for id, p := range ps {
 		if p.IsGenesis {
-			objects[addr] = sm.CreateStateObject(addr, p.AccType, true)
+			objects[id] = sm.CreateStateObject(id, p.AccType, true)
 
 			continue
 		}
 
-		if stateHash, ok := hashes[addr]; !ok {
-			if objects[addr], err = sm.GetLatestStateObject(addr); err != nil {
+		if stateHash, ok := hashes[id]; !ok {
+			if objects[id], err = sm.GetLatestStateObject(id); err != nil {
 				return nil, errors.Wrap(err, "state object fetch failed")
 			}
-		} else if objects[addr], err = sm.GetStateObjectByHash(addr, stateHash); err != nil {
+		} else if objects[id], err = sm.GetStateObjectByHash(id, stateHash); err != nil {
 			return nil, errors.Wrap(err, "state object fetch failed")
 		}
 	}

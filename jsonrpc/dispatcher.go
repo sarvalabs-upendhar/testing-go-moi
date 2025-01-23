@@ -14,7 +14,6 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common/config"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 )
@@ -162,8 +161,7 @@ func (d *dispatcher) handleSubscribe(req Request, conn ConnManager) (string, Err
 			return "", NewInternalError(err.Error())
 		}
 
-		addr, _ := identifiers.NewAddressFromHex(args.Address)
-		subscriptionID := d.fm.NewTesseractsByAccountFilter(conn, addr)
+		subscriptionID := d.fm.NewTesseractsByAccountFilter(conn, args.ID)
 
 		return subscriptionID, nil
 	case rpcargs.NewLogsByFilter:

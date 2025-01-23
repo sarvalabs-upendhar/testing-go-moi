@@ -1,7 +1,6 @@
 package state
 
 import (
-	"encoding/hex"
 	"math/big"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -28,7 +27,7 @@ type Object struct {
 	cache     *lru.Cache
 	treeCache *fastcache.Cache
 
-	address   identifiers.Address
+	id        identifiers.Identifier
 	accType   common.AccountType
 	data      common.Account
 	isGenesis bool // used by transition objects in execution
@@ -51,13 +50,13 @@ type Object struct {
 	assetTreeTxn    *iradix.Txn
 	logicTreeTxn    *iradix.Txn
 
-	files   map[common.Hash][]byte
-	context *ContextObject
-	metrics *Metrics
+	files       map[common.Hash][]byte
+	metaContext *MetaContextObject
+	metrics     *Metrics
 }
 
 func NewStateObject(
-	id identifiers.Address,
+	id identifiers.Identifier,
 	cache *lru.Cache,
 	treeCache *fastcache.Cache,
 	db Store,
@@ -65,13 +64,13 @@ func NewStateObject(
 	metrics *Metrics,
 	isGenesis bool,
 ) *Object {
-	return &Object{
+	o := &Object{
 		accType:         account.AccType,
 		cache:           cache,
 		treeCache:       treeCache,
 		db:              db,
 		data:            account,
-		address:         id,
+		id:              id,
 		deeds:           nil,
 		keys:            nil,
 		files:           make(map[common.Hash][]byte),
@@ -82,11 +81,12 @@ func NewStateObject(
 		metrics:         metrics,
 		isGenesis:       isGenesis,
 	}
+
+	return o
 }
 
-// Address returns the participant's address associated with the object.
-func (object *Object) Address() identifiers.Address {
-	return object.address
+func (object *Object) Identifier() identifiers.Identifier {
+	return object.id
 }
 
 // IsGenesis indicates whether the object is a genesis object.
@@ -123,7 +123,7 @@ func (object *Object) Deeds() (*Deeds, error) {
 
 // CreateDeedsEntry creates a new entry in the deeds with the specified key and value.
 // If an entry with the same key already exists, an error is returned.
-func (object *Object) CreateDeedsEntry(key string) error {
+func (object *Object) CreateDeedsEntry(key identifiers.Identifier) error {
 	deeds, err := object.Deeds()
 	if err != nil {
 		return err
@@ -136,6 +136,10 @@ func (object *Object) CreateDeedsEntry(key string) error {
 	deeds.Entries[key] = struct{}{}
 
 	return nil
+}
+
+func (object *Object) SetMetaContextObject(mCtx *MetaContextObject) {
+	object.metaContext = mCtx
 }
 
 // updateAssetTree ensures the asset transaction tree is initialized and inserts the given asset object.
@@ -177,7 +181,7 @@ func (object *Object) Balances() (map[identifiers.AssetID]*big.Int, error) {
 				return nil, err
 			}
 
-			assetID := identifiers.AssetID(hex.EncodeToString(key))
+			assetID := identifiers.AssetID(key)
 
 			assetObject, err := object.getAssetObject(assetID, false)
 			if err != nil {
@@ -204,7 +208,7 @@ func (object *Object) loadKeys() error {
 
 	object.keys = make(common.AccountKeys, 0)
 
-	data, err := object.db.GetAccountKeys(object.address, object.data.KeysHash)
+	data, err := object.db.GetAccountKeys(object.id, object.data.KeysHash)
 	if err != nil {
 		return err
 	}
@@ -341,9 +345,9 @@ func (object *Object) SubBalance(assetID identifiers.AssetID, amount *big.Int) e
 }
 
 // CreateLockup transfers a specified amount from the participant's asset balance into a lockup
-// associated with a specified address. The lockup represents funds reserved for a specific purpose,
+// associated with a specified id. The lockup represents funds reserved for a specific purpose,
 // reducing the available balance for the participant.
-func (object *Object) CreateLockup(assetID identifiers.AssetID, address identifiers.Address, amount *big.Int) error {
+func (object *Object) CreateLockup(assetID identifiers.AssetID, id identifiers.Identifier, amount *big.Int) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
@@ -352,23 +356,23 @@ func (object *Object) CreateLockup(assetID identifiers.AssetID, address identifi
 	// Deduct the amount from asset balance
 	assetObject.Balance.Sub(assetObject.Balance, amount)
 
-	// Create a new lockup for the specified address
-	assetObject.Lockup[address] = amount
+	// Create a new lockup for the specified id
+	assetObject.Lockup[id] = amount
 
 	object.updateAssetTree(assetID, assetObject)
 
 	return nil
 }
 
-// ReleaseLockup reduces the lockup amount from a specified address for the given asset.
+// ReleaseLockup reduces the lockup amount from a specified id for the given asset.
 // If the lockup amount becomes zero, the lockup entry is deleted from the asset object.
-func (object *Object) ReleaseLockup(assetID identifiers.AssetID, address identifiers.Address, amount *big.Int) error {
+func (object *Object) ReleaseLockup(assetID identifiers.AssetID, id identifiers.Identifier, amount *big.Int) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	lockupAmount, ok := assetObject.Lockup[address]
+	lockupAmount, ok := assetObject.Lockup[id]
 	if !ok {
 		return common.ErrLockupNotFound
 	}
@@ -376,7 +380,7 @@ func (object *Object) ReleaseLockup(assetID identifiers.AssetID, address identif
 	lockupAmount.Sub(lockupAmount, amount)
 
 	if lockupAmount.Cmp(big.NewInt(0)) == 0 {
-		delete(assetObject.Lockup, address)
+		delete(assetObject.Lockup, id)
 	}
 
 	object.updateAssetTree(assetID, assetObject)
@@ -402,17 +406,17 @@ func (object *Object) Lockups() ([]common.AssetMandateOrLockup, error) {
 				return nil, err
 			}
 
-			assetID := identifiers.AssetID(hex.EncodeToString(key))
+			assetID := identifiers.AssetID(key)
 
 			assetObject, err := object.getAssetObject(assetID, false)
 			if err != nil {
 				return nil, err
 			}
 
-			for address, amount := range assetObject.Lockup {
+			for id, amount := range assetObject.Lockup {
 				lockups = append(lockups, common.AssetMandateOrLockup{
 					AssetID: assetID,
-					Address: address,
+					ID:      id,
 					Amount:  amount,
 				})
 			}
@@ -423,24 +427,24 @@ func (object *Object) Lockups() ([]common.AssetMandateOrLockup, error) {
 }
 
 // GetLockup retrieves the lockup amount for the given logic and asset id.
-func (object *Object) GetLockup(assetID identifiers.AssetID, address identifiers.Address) (*big.Int, error) {
+func (object *Object) GetLockup(assetID identifiers.AssetID, id identifiers.Identifier) (*big.Int, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return nil, common.ErrAssetNotFound
 	}
 
-	if amount, ok := assetObject.Lockup[address]; ok {
+	if amount, ok := assetObject.Lockup[id]; ok {
 		return amount, nil
 	}
 
 	return nil, common.ErrLockupNotFound
 }
 
-// CreateMandate assigns a spending mandate to an address for the specified asset.
+// CreateMandate assigns a spending mandate to an id for the specified asset.
 // The mandate grants the recipient the authorization to spend the specified amount on behalf of the participant.
 func (object *Object) CreateMandate(
 	assetID identifiers.AssetID,
-	address identifiers.Address,
+	id identifiers.Identifier,
 	amount *big.Int,
 	expiresAt uint64,
 ) error {
@@ -449,15 +453,15 @@ func (object *Object) CreateMandate(
 		return common.ErrAssetNotFound
 	}
 
-	if mandate, ok := assetObject.Mandate[address]; ok {
+	if mandate, ok := assetObject.Mandate[id]; ok {
 		// Increment the mandate amount if the mandate already exist
-		assetObject.Mandate[address] = &Mandate{
+		assetObject.Mandate[id] = &Mandate{
 			Amount:    mandate.Amount.Add(mandate.Amount, amount),
 			ExpiresAt: expiresAt,
 		}
 	} else {
 		// Create a new mandate if it doesn't exist
-		assetObject.Mandate[address] = &Mandate{
+		assetObject.Mandate[id] = &Mandate{
 			Amount:    amount,
 			ExpiresAt: expiresAt,
 		}
@@ -469,16 +473,16 @@ func (object *Object) CreateMandate(
 }
 
 // SubMandateBalance decrements the mandate balance of the specified asset by the given amount
-// for the specified address.
+// for the specified id.
 func (object *Object) SubMandateBalance(
-	assetID identifiers.AssetID, address identifiers.Address, amount *big.Int,
+	assetID identifiers.AssetID, id identifiers.Identifier, amount *big.Int,
 ) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	mandate, ok := assetObject.Mandate[address]
+	mandate, ok := assetObject.Mandate[id]
 	if !ok {
 		return common.ErrMandateNotFound
 	}
@@ -486,9 +490,9 @@ func (object *Object) SubMandateBalance(
 	// Decrement the mandate balance by the given amount
 	mandate.Amount = mandate.Amount.Sub(mandate.Amount, amount)
 
-	// If the mandate amount is zero, remove the mandate for the specified address.
+	// If the mandate amount is zero, remove the mandate for the specified id.
 	if mandate.Amount.Cmp(big.NewInt(0)) == 0 {
-		delete(assetObject.Mandate, address)
+		delete(assetObject.Mandate, id)
 	}
 
 	object.updateAssetTree(assetID, assetObject)
@@ -496,10 +500,10 @@ func (object *Object) SubMandateBalance(
 	return nil
 }
 
-// ConsumeMandate decrements the benefactor's mandate balance and asset balance
-func (object *Object) ConsumeMandate(assetID identifiers.AssetID, address identifiers.Address, amount *big.Int) error {
+// ConsumeMandate updates the benefactor's mandate entry and asset balance
+func (object *Object) ConsumeMandate(assetID identifiers.AssetID, id identifiers.Identifier, amount *big.Int) error {
 	// Deduct the mandate amount from the sender's mandate balance
-	if err := object.SubMandateBalance(assetID, address, amount); err != nil {
+	if err := object.SubMandateBalance(assetID, id, amount); err != nil {
 		return err
 	}
 
@@ -507,21 +511,21 @@ func (object *Object) ConsumeMandate(assetID identifiers.AssetID, address identi
 	return object.SubBalance(assetID, amount)
 }
 
-// DeleteMandate revokes a granted spending authorization from a specified address for the given asset id.
-func (object *Object) DeleteMandate(assetID identifiers.AssetID, address identifiers.Address) error {
+// DeleteMandate revokes a granted spending authorization from a specified id for the given asset id.
+func (object *Object) DeleteMandate(assetID identifiers.AssetID, id identifiers.Identifier) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	delete(assetObject.Mandate, address)
+	delete(assetObject.Mandate, id)
 
 	object.updateAssetTree(assetID, assetObject)
 
 	return nil
 }
 
-// Mandates retrieves and returns all the asset mandates with their corresponding asset IDs, addresses, and amounts.
+// Mandates retrieves and returns all the asset mandates with their corresponding asset IDs, ids, and amounts.
 func (object *Object) Mandates() ([]common.AssetMandateOrLockup, error) {
 	assetTree, err := object.getAssetTree()
 	if err != nil {
@@ -538,17 +542,17 @@ func (object *Object) Mandates() ([]common.AssetMandateOrLockup, error) {
 				return nil, err
 			}
 
-			assetID := identifiers.AssetID(hex.EncodeToString(key))
+			assetID := identifiers.AssetID(key)
 
 			assetObject, err := object.getAssetObject(assetID, false)
 			if err != nil {
 				return nil, err
 			}
 
-			for address, mandate := range assetObject.Mandate {
+			for id, mandate := range assetObject.Mandate {
 				mandates = append(mandates, common.AssetMandateOrLockup{
 					AssetID: assetID,
-					Address: address,
+					ID:      id,
 					Amount:  mandate.Amount,
 				})
 			}
@@ -558,14 +562,14 @@ func (object *Object) Mandates() ([]common.AssetMandateOrLockup, error) {
 	return mandates, nil
 }
 
-// GetMandate retrieves the mandate amount for the given address and asset id.
-func (object *Object) GetMandate(assetID identifiers.AssetID, address identifiers.Address) (*Mandate, error) {
+// GetMandate retrieves the mandate amount for the given id and asset id.
+func (object *Object) GetMandate(assetID identifiers.AssetID, id identifiers.Identifier) (*Mandate, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return nil, common.ErrAssetNotFound
 	}
 
-	if mandate, ok := assetObject.Mandate[address]; ok {
+	if mandate, ok := assetObject.Mandate[id]; ok {
 		return mandate, nil
 	}
 
@@ -600,7 +604,7 @@ func (object *Object) SetState(assetID identifiers.AssetID, properties *common.A
 
 // Copy creates and returns a new object that replicates the state and all associated data of the original state object.
 func (object *Object) Copy() *Object {
-	sObj := NewStateObject(object.address, object.cache, object.treeCache, object.db,
+	sObj := NewStateObject(object.id, object.cache, object.treeCache, object.db,
 		object.data, object.metrics, object.isGenesis)
 
 	sObj.dirtyEntries = object.dirtyEntries.Copy()
@@ -689,6 +693,11 @@ func (object *Object) Commit() (common.Hash, error) {
 		return common.NilHash, errors.Wrap(err, "failed to commit storage tree")
 	}
 
+	_, err := object.commitContextObject()
+	if err != nil {
+		return common.NilHash, errors.Wrap(err, "failed to commit context object")
+	}
+
 	accCid, err := object.commitAccount()
 	if err != nil {
 		return common.NilHash, errors.Wrap(err, "failed to commit account")
@@ -710,7 +719,7 @@ func (object *Object) commitAccountKeys() (common.Hash, error) {
 	hash := common.GetHash(data)
 
 	object.SetDirtyEntry(
-		common.BytesToHex(storage.KeyObjectKey(object.address, hash)),
+		common.BytesToHex(storage.KeyObjectKey(object.id, hash)),
 		data,
 	)
 
@@ -733,7 +742,7 @@ func (object *Object) commitDeeds() (common.Hash, error) {
 	hash := common.GetHash(data)
 
 	object.SetDirtyEntry(
-		common.BytesToHex(storage.DeedsKey(object.address, hash)),
+		common.BytesToHex(storage.DeedsKey(object.id, hash)),
 		data,
 	)
 
@@ -750,7 +759,7 @@ func (object *Object) commitAccount() (common.Hash, error) {
 	}
 
 	hash := common.GetHash(data)
-	key := common.BytesToHex(storage.AccountKey(object.address, hash))
+	key := common.BytesToHex(storage.AccountKey(object.id, hash))
 
 	object.SetDirtyEntry(key, data)
 
@@ -758,17 +767,25 @@ func (object *Object) commitAccount() (common.Hash, error) {
 }
 
 // commitContextObject serializes and stores the Context object to the dirty entries.
-func (object *Object) commitContextObject(obj Context) (common.Hash, error) {
+func (object *Object) commitContextObject() (common.Hash, error) {
 	// Add type checks here
-	rawData, err := obj.Bytes()
+	if object.metaContext == nil {
+		return object.ContextHash(), nil
+	}
+
+	rawData, err := object.metaContext.Bytes()
 	if err != nil {
 		return common.NilHash, err
 	}
 
 	hash := common.GetHash(rawData)
-	key := common.BytesToHex(storage.ContextObjectKey(object.address, hash))
+	key := common.BytesToHex(storage.ContextObjectKey(object.id, hash))
 
 	object.SetDirtyEntry(key, rawData)
+
+	// TODO:journal this
+	object.cache.Add(hash, object.metaContext)
+	object.data.ContextHash = hash
 
 	return hash, nil
 }
@@ -852,7 +869,7 @@ func (object *Object) commitAssets() (common.Hash, error) {
 
 	object.assetTreeTxn.Root().Walk(func(k []byte, v interface{}) bool {
 		obj, _ := v.(*AssetObject)
-		assetID := identifiers.AssetID(hex.EncodeToString(k))
+		assetID := identifiers.AssetID(k)
 		objects[assetID] = obj
 
 		return false
@@ -992,21 +1009,22 @@ func (object *Object) CreateStorageTreeForLogic(logicID identifiers.LogicID) err
 
 // CreateAsset creates an asset and returns its asset ID.
 func (object *Object) CreateAsset(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	descriptor *common.AssetDescriptor,
 ) (identifiers.AssetID, error) {
-	assetID := identifiers.NewAssetIDv0(
-		descriptor.IsLogical,
-		descriptor.IsStateFul,
-		descriptor.Dimension,
+	assetID, err := identifiers.GenerateAssetIDv0(
+		id.Fingerprint(),
+		id.Variant(),
 		uint16(descriptor.Standard),
-		addr,
-	)
+		descriptor.Flags()...)
+	if err != nil {
+		return identifiers.Nil, err
+	}
 
 	assetObject := NewAssetObject(big.NewInt(0), descriptor)
 
 	if err := object.InsertNewAssetObject(assetID, assetObject); err != nil {
-		return "", err
+		return identifiers.Nil, err
 	}
 
 	return assetID, nil
@@ -1039,20 +1057,20 @@ func (object *Object) BurnAsset(assetID identifiers.AssetID, amount *big.Int) (b
 // CreateLogic creates a new logic object and returns its logic ID.
 func (object *Object) CreateLogic(descriptor engineio.LogicDescriptor) (identifiers.LogicID, error) {
 	// Generate the key for the LogicManifest from its hash
-	key := common.BytesToHex(storage.LogicManifestKey(object.Address(), descriptor.ManifestHash))
+	key := common.BytesToHex(storage.LogicManifestKey(object.Identifier(), descriptor.ManifestHash))
 	// Write the manifest into the dirty entries
 	object.SetDirtyEntry(key, descriptor.ManifestData)
 
 	// Create a new LogicObject from the LogicDescriptor
-	logicObject := NewLogicObject(object.Address(), descriptor)
+	logicObject := NewLogicObject(object.Identifier(), descriptor)
 	// Insert the LogicObject into the state object
 	if err := object.InsertNewLogicObject(logicObject.ID, logicObject); err != nil {
-		return "", errors.Wrap(err, "could not insert logic object into state object")
+		return identifiers.Nil, errors.Wrap(err, "could not insert logic object into state object")
 	}
 
 	// Initialise the logic for itself
 	if err := object.InitLogicStorage(logicObject.LogicID()); err != nil {
-		return "", err
+		return identifiers.Nil, err
 	}
 
 	return logicObject.ID, nil
@@ -1071,7 +1089,7 @@ func (object *Object) InitLogicStorage(logicID identifiers.LogicID) error {
 }
 
 // AddAccountGenesisInfo adds genesis information for an account.
-func (object *Object) AddAccountGenesisInfo(address identifiers.Address, ixHash common.Hash) error {
+func (object *Object) AddAccountGenesisInfo(id identifiers.Identifier, ixHash common.Hash) error {
 	accInfo := common.AccountGenesisInfo{
 		IxHash: ixHash,
 	}
@@ -1081,11 +1099,11 @@ func (object *Object) AddAccountGenesisInfo(address identifiers.Address, ixHash 
 		return err
 	}
 
-	return object.SetStorageEntry(common.SargaLogicID, address.Bytes(), rawData)
+	return object.SetStorageEntry(common.SargaLogicID, id.Bytes(), rawData)
 }
 
-func (object *Object) IsAccountRegistered(address identifiers.Address) (bool, error) {
-	_, err := object.GetStorageEntry(common.SargaLogicID, address.Bytes())
+func (object *Object) IsAccountRegistered(id identifiers.Identifier) (bool, error) {
+	_, err := object.GetStorageEntry(common.SargaLogicID, id.Bytes())
 	if errors.Is(err, common.ErrKeyNotFound) {
 		return false, nil
 	}
@@ -1098,120 +1116,58 @@ func (object *Object) IsAccountRegistered(address identifiers.Address) (bool, er
 }
 
 // CreateContext creates a context object with given nodes and returns its hash.
-func (object *Object) CreateContext(behaviouralNodes, randomNodes []kramaid.KramaID) (common.Hash, error) {
-	if len(behaviouralNodes)+len(randomNodes) < MinimumContextSize {
-		return common.NilHash, errors.New("liveliness size not met")
+func (object *Object) CreateContext(consensusNodes []kramaid.KramaID) error {
+	if len(consensusNodes) < MinimumContextSize {
+		return errors.New("liveliness size not met")
 	}
 
-	var (
-		behaviouralContextObject = new(ContextObject)
-		randomContextObject      = new(ContextObject)
-		metaContextObject        = new(MetaContextObject)
-	)
+	metaContextObject := new(MetaContextObject)
 
-	behaviouralContextObject.Ids = append(behaviouralContextObject.Ids, behaviouralNodes...)
-	randomContextObject.Ids = append(randomContextObject.Ids, randomNodes...)
-
-	bHash, err := object.commitContextObject(behaviouralContextObject)
+	consensusNodesHash, err := common.PoloHash(consensusNodes)
 	if err != nil {
-		return common.NilHash, errors.Wrap(common.ErrContextCreation, err.Error())
+		return errors.Wrap(err, "failed to polorize context object")
 	}
 
-	rHash, err := object.commitContextObject(randomContextObject)
-	if err != nil {
-		return common.NilHash, errors.Wrap(common.ErrContextCreation, err.Error())
-	}
-
-	metaContextObject.BehaviouralContext = bHash
-	metaContextObject.RandomContext = rHash
+	metaContextObject.ConsensusNodesHash = consensusNodesHash
+	metaContextObject.ConsensusNodes = consensusNodes
 	metaContextObject.PreviousHash = common.NilHash
 
-	mHash, err := object.commitContextObject(metaContextObject)
-	if err != nil {
-		return common.NilHash, errors.Wrap(common.ErrContextCreation, err.Error())
-	}
+	object.metaContext = metaContextObject
 
-	// TODO:journal this
-	object.cache.Add(bHash, behaviouralContextObject)
-	object.cache.Add(rHash, randomContextObject)
-	object.cache.Add(mHash, metaContextObject)
-
-	// we set this object for temporary retrieval
-	object.context = behaviouralContextObject
-
-	object.data.ContextHash = mHash
-
-	return mHash, nil
+	return nil
 }
 
 // UpdateContext updates the context with new nodes and returns the new context hash.
-func (object *Object) UpdateContext(behaviouralNodes, randomNodes []kramaid.KramaID) (common.Hash, error) {
-	if len(behaviouralNodes) == 0 && len(randomNodes) == 0 {
-		return object.data.ContextHash, nil
+func (object *Object) UpdateContext(consensusNodes []kramaid.KramaID) error {
+	if len(consensusNodes) == 0 {
+		return nil
 	}
 
 	var (
-		err                 error
-		behaviourObjectHash common.Hash
-		randomObjectHash    common.Hash
+		err                error
+		consensusNodesHash common.Hash
 	)
 
 	metaObj, err := object.getMetaContextObjectCopy()
 	if err != nil {
-		return common.NilHash, err
+		return err
 	}
 
-	// Set the previous Hash
-	metaObj.PreviousHash = object.ContextHash()
-
-	if len(behaviouralNodes) > 0 {
-		behaviouralObj, err := object.getContextObjectCopy(metaObj.BehaviouralContext)
-		if err != nil {
-			return common.NilHash, err
-		}
-
-		behaviouralObj.AddNodes(behaviouralNodes, common.BehaviouralContextSize)
-
-		behaviourObjectHash, err = object.commitContextObject(behaviouralObj)
-		if err != nil {
-			return common.NilHash, err
-		}
-	}
-
-	if len(randomNodes) > 0 {
-		randomObj, err := object.getContextObjectCopy(metaObj.RandomContext)
-		if err != nil {
-			return common.NilHash, err
-		}
-
-		randomObj.AddNodes(randomNodes, common.StochasticSetSize)
-
-		// TODO:Sort based on the stake of the nodes
-
-		randomObjectHash, err = object.commitContextObject(randomObj)
-		if err != nil {
-			return common.NilHash, err
-		}
+	consensusNodesHash, err = common.PoloHash(consensusNodes)
+	if err != nil {
+		return errors.Wrap(err, "failed to generate consensus nodes hash")
 	}
 
 	// TODO:Sort based on the stake of the nodes
 
-	if !behaviourObjectHash.IsNil() {
-		metaObj.BehaviouralContext = behaviourObjectHash
-	}
+	// Set the previous Hash
+	metaObj.PreviousHash = object.ContextHash()
+	metaObj.ConsensusNodes = consensusNodes
+	metaObj.ConsensusNodesHash = consensusNodesHash
 
-	if !randomObjectHash.IsNil() {
-		metaObj.RandomContext = randomObjectHash
-	}
+	object.metaContext = metaObj
 
-	contextHash, err := object.commitContextObject(metaObj)
-	if err != nil {
-		return common.NilHash, err
-	}
-
-	object.data.ContextHash = contextHash
-
-	return contextHash, nil
+	return nil
 }
 
 // ContextHash returns the current context hash.
@@ -1231,7 +1187,7 @@ func (object *Object) getMetaContextObjectCopy() (*MetaContextObject, error) {
 		return metaContextObject.Copy(), nil
 	}
 
-	rawData, err := object.db.GetContext(object.address, object.ContextHash())
+	rawData, err := object.db.GetContext(object.id, object.ContextHash())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch meta context object")
 	}
@@ -1246,44 +1202,17 @@ func (object *Object) getMetaContextObjectCopy() (*MetaContextObject, error) {
 	return obj.Copy(), nil
 }
 
-// getContextObjectCopy retrieves a copy of a context object from cache or database.
-func (object *Object) getContextObjectCopy(hash common.Hash) (*ContextObject, error) {
-	data, isAvailable := object.cache.Get(hash)
-	if !isAvailable {
-		rawData, err := object.db.GetContext(object.address, hash)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to fetch context object")
-		}
-
-		obj := new(ContextObject)
-		if err := obj.FromBytes(rawData); err != nil {
-			return nil, err
-		}
-
-		object.cache.Add(hash, obj)
-
-		return obj.Copy(), nil
-	}
-
-	contextObject, ok := data.(*ContextObject)
-	if !ok {
-		return nil, common.ErrInterfaceConversion
-	}
-
-	return contextObject.Copy(), nil
-}
-
 // loads the asset deeds from the database or initializes a new one.
 func (object *Object) loadDeeds() error {
 	if object.data.AssetDeeds.IsNil() {
 		object.deeds = &Deeds{
-			Entries: make(map[string]struct{}),
+			Entries: make(map[identifiers.Identifier]struct{}),
 		}
 
 		return nil
 	}
 
-	data, err := object.db.GetDeeds(object.address, object.data.AssetDeeds)
+	data, err := object.db.GetDeeds(object.id, object.data.AssetDeeds)
 	if err != nil {
 		return err
 	}
@@ -1335,7 +1264,7 @@ func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTr
 	}
 
 	storageTree, err = tree.NewKramaHashTree(
-		object.address,
+		object.id,
 		common.BytesToHash(root),
 		object.db, blake256.New(),
 		storage.Storage,
@@ -1408,7 +1337,7 @@ func (object *Object) getMetaStorageTree() (tree.MerkleTree, error) {
 	}
 
 	merkleTree, err := tree.NewKramaHashTree(
-		object.address,
+		object.id,
 		object.data.StorageRoot,
 		object.db,
 		blake256.New(),
@@ -1433,7 +1362,7 @@ func (object *Object) createStorageTreeForLogic(logicID identifiers.LogicID) (tr
 	}
 
 	newStorageTree, err := tree.NewKramaHashTree(
-		object.address,
+		object.id,
 		common.NilHash,
 		object.db,
 		blake256.New(),
@@ -1478,7 +1407,7 @@ func (object *Object) getAssetTree() (tree.MerkleTree, error) {
 	}
 
 	merkleTree, err := tree.NewKramaHashTree(
-		object.address,
+		object.id,
 		object.data.AssetRoot,
 		object.db,
 		blake256.New(),
@@ -1503,7 +1432,7 @@ func (object *Object) getLogicTree() (tree.MerkleTree, error) {
 	}
 
 	merkleTree, err := tree.NewKramaHashTree(
-		object.address,
+		object.id,
 		object.data.LogicRoot,
 		object.db,
 		blake256.New(),
@@ -1637,6 +1566,6 @@ func (object *Object) DeductFuel(amount *big.Int) {
 	_ = object.SubBalance(common.KMOITokenAssetID, amount)
 }
 
-func (object *Object) BehaviourContextObj() *ContextObject {
-	return object.context
+func (object *Object) ConsensusNodes() []kramaid.KramaID {
+	return object.metaContext.ConsensusNodes
 }

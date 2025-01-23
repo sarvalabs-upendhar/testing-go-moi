@@ -198,7 +198,7 @@ func (ts TestVaults) GetVaults(participantIndex int, count int, exclude ...krama
 	return vals
 }
 
-func startTestview(state *KBFT, heights map[identifiers.Address]uint64, view uint64, err chan<- error) {
+func startTestview(state *KBFT, heights map[identifiers.Identifier]uint64, view uint64, err chan<- error) {
 	state.enterNewView(heights, view)
 
 	err1 := state.Start()
@@ -229,7 +229,7 @@ func signVote(
 	view uint64,
 	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	kramaVault *crypto.KramaVault,
 ) *ktypes.Vote {
 	t.Helper()
@@ -263,7 +263,7 @@ func signVotes(
 	view uint64,
 	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	kramaVault ...*crypto.KramaVault,
 ) []*ktypes.Vote {
 	t.Helper()
@@ -284,7 +284,7 @@ func signAddVotesSynchronously(
 	view uint64,
 	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
@@ -310,7 +310,7 @@ func signAddVotes(
 	view uint64,
 	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	kramaVault ...*crypto.KramaVault,
 ) {
 	t.Helper()
@@ -336,7 +336,7 @@ func sendAndEnsureVotes(
 	view uint64,
 	msgType common.ConsensusMsgType,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	voteSub *utils.Subscription,
 	expectedview uint64,
 	kramaVault ...*crypto.KramaVault,
@@ -355,7 +355,7 @@ func sendAndEnsurePreVote(
 	kbft *KBFT,
 	view uint64,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	voteSub *utils.Subscription,
 	expectedview uint64,
 	kramaVault ...*crypto.KramaVault,
@@ -370,7 +370,7 @@ func sendAndEnsurePrecommit(
 	kbft *KBFT,
 	view uint64,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	voteSub *utils.Subscription,
 	expectedview uint64,
 	kramaVault ...*crypto.KramaVault,
@@ -380,7 +380,7 @@ func sendAndEnsurePrecommit(
 	sendAndEnsureVotes(t, kbft, view, common.PRECOMMIT, tsHash, heights, voteSub, expectedview, kramaVault...)
 }
 
-func createIxs(t *testing.T, sender identifiers.Address, receiver identifiers.Address) common.Interactions {
+func createIxs(t *testing.T, sender identifiers.Identifier, receiver identifiers.Identifier) common.Interactions {
 	t.Helper()
 
 	ixParams := map[int]*tests.CreateIxParams{
@@ -398,30 +398,30 @@ func createIxs(t *testing.T, sender identifiers.Address, receiver identifiers.Ad
 func createTestClusterInfo(
 	t *testing.T,
 	icsNodes *ktypes.ICSCommittee,
-	newHeights map[identifiers.Address]uint64,
+	newHeights map[identifiers.Identifier]uint64,
 	ixs common.Interactions,
 ) *ktypes.ClusterState {
 	t.Helper()
 
-	ps := make(map[identifiers.Address]*common.Participant)
+	ps := make(map[identifiers.Identifier]*common.Participant)
 	pStates := make(common.ParticipantsState)
 
-	ps[ixs[0].SenderAddr()] = &common.Participant{
-		Address:         ixs[0].SenderAddr(),
+	ps[ixs[0].SenderID()] = &common.Participant{
+		ID:         ixs[0].SenderID(),
 		IsSigner:        true,
-		Height:          newHeights[ixs[0].SenderAddr()] - 1,
+		Height:          newHeights[ixs[0].SenderID()] - 1,
 		NodeSetPosition: 0,
 		LockType:        common.MutateLock,
 		ConsensusQuorum: 6,
 	}
 
-	pStates[ixs[0].SenderAddr()] = common.State{
-		Height: newHeights[ixs[0].SenderAddr()],
+	pStates[ixs[0].SenderID()] = common.State{
+		Height: newHeights[ixs[0].SenderID()],
 	}
 
 	if !ixs[0].Transaction(0).Target().IsNil() {
 		ps[ixs[0].Transaction(0).Target()] = &common.Participant{
-			Address:         ixs[0].Transaction(0).Target(),
+			Identifier:         ixs[0].Transaction(0).Target(),
 			Height:          newHeights[ixs[0].Transaction(0).Target()] - 1,
 			NodeSetPosition: 2,
 			LockType:        common.MutateLock,
@@ -465,7 +465,7 @@ func createTestClusterInfo(
 
 // ensureProposal times out if proposal event not received in time
 func ensureProposal(t *testing.T, proposals *utils.Subscription,
-heights map[identifiers.Address]uint64, view uint64) {
+heights map[identifiers.Identifier]uint64, view uint64) {
 	t.Helper()
 
 	select {
@@ -492,7 +492,7 @@ heights map[identifiers.Address]uint64, view uint64) {
 func validateviewState(
 	t *testing.T,
 	viewState eventDataViewState,
-	heights map[identifiers.Address]uint64, view uint64,
+	heights map[identifiers.Identifier]uint64, view uint64,
 	step ViewStepType,
 ) {
 	t.Helper()
@@ -508,7 +508,7 @@ func validateviewState(
 	require.Equal(t, step.String(), viewState.Step)
 }
 
-func ensureNewview(t *testing.T, viewSub *utils.Subscription, heights map[identifiers.Address]uint64, view uint64) {
+func ensureNewview(t *testing.T, viewSub *utils.Subscription, heights map[identifiers.Identifier]uint64, view uint64) {
 	t.Helper()
 
 	select {
@@ -525,7 +525,7 @@ func ensureNewview(t *testing.T, viewSub *utils.Subscription, heights map[identi
 	}
 }
 
-func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[identifiers.Address]uint64, view uint64) {
+func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[identifiers.Identifier]uint64, view uint64) {
 	t.Helper()
 
 	select {
@@ -545,7 +545,7 @@ func ensurePolka(t *testing.T, polkaSub *utils.Subscription, heights map[identif
 func ensurePrevoteTimeout(
 	t *testing.T,
 	timeoutSub *utils.Subscription,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	view uint64,
 	timeout int64,
 ) {
@@ -569,7 +569,7 @@ func ensurePrevoteTimeout(
 func ensurePrecommitTimeout(
 	t *testing.T,
 	timeoutSub *utils.Subscription,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	view uint64,
 	timeout int64,
 ) {
@@ -595,7 +595,7 @@ func ensureVote(
 	t *testing.T,
 	voteSub *utils.Subscription,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	view uint64,
 	voteType common.ConsensusMsgType,
 ) {
@@ -637,7 +637,7 @@ func ensurePrevote(
 	t *testing.T,
 	voteSub *utils.Subscription,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	view uint64,
 ) {
 	t.Helper()
@@ -649,7 +649,7 @@ func ensurePrecommit(
 	t *testing.T,
 	voteSub *utils.Subscription,
 	tsHash common.Hash,
-	heights map[identifiers.Address]uint64,
+	heights map[identifiers.Identifier]uint64,
 	view uint64,
 ) {
 	t.Helper()

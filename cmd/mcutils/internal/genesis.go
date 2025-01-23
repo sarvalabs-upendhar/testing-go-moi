@@ -56,12 +56,6 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 		"instances.json",
 		"Path to instances.json file.",
 	)
-	genesisTestCmd.Flags().StringSliceVar(
-		&accAddresses,
-		"address-list",
-		[]string{},
-		"List of account address.",
-	)
 	genesisTestCmd.Flags().Uint64Var(
 		&premineAmount,
 		"premine-amount",
@@ -69,16 +63,10 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 		"Amount of MOI Fuel tokens that need to be credited to each account.",
 	)
 	genesisTestCmd.Flags().IntVar(
-		&behaviouralNodesCount,
-		"behavioural-count",
-		common.BehaviouralContextSize,
-		"Number of behavioural krama ids per account.",
-	)
-	genesisTestCmd.Flags().IntVar(
-		&randomNodesCount,
-		"random-count",
-		cmdcommon.DefaultRandomCount,
-		"Number of random krama ids per account.",
+		&consensusNodesCount,
+		"consensus-count",
+		common.ConsensusNodesSize,
+		"Number of consensus krama ids per account.",
 	)
 }
 
@@ -103,7 +91,7 @@ func createTestGenesisFile() {
 
 	totalIDs := len(kramaIDs)
 
-	if behaviouralNodesCount+randomNodesCount > totalIDs {
+	if consensusNodesCount > totalIDs {
 		cmdcommon.Err(errors.New("insufficient krama IDs in instances file"))
 	}
 
@@ -121,14 +109,12 @@ func createTestGenesisFile() {
 		return ids
 	}
 
-	if len(accAddresses) == 0 {
-		accAddresses, err = tests.GetAddressFromAccountsFile(readAccountsFilePath)
-		if err != nil {
-			cmdcommon.Err(err)
-		}
+	accounts, err := tests.GetAccountsFromFile(readAccountsFilePath)
+	if err != nil {
+		cmdcommon.Err(err)
 	}
 
-	accCount := len(accAddresses)
+	accCount := len(accounts)
 
 	g := &common.GenesisFile{
 		Accounts: make([]common.AccountSetupArgs, 0, accCount),
@@ -141,20 +127,18 @@ func createTestGenesisFile() {
 
 	g.AddLogic(
 		common.LogicSetupArgs{
-			Name:               guardianArtifact.Name,
-			Callsite:           guardianArtifact.Callsite,
-			Calldata:           guardianArtifact.Calldata,
-			Manifest:           guardianArtifact.Manifest,
-			BehaviouralContext: getKramaIDs(behaviouralNodesCount),
-			RandomContext:      getKramaIDs(randomNodesCount),
+			Name:           guardianArtifact.Name,
+			Callsite:       guardianArtifact.Callsite,
+			Calldata:       guardianArtifact.Calldata,
+			Manifest:       guardianArtifact.Manifest,
+			ConsensusNodes: getKramaIDs(consensusNodesCount),
 		})
 
 	g.AddSargaAccount(common.AccountSetupArgs{
-		Address:            common.SargaAddress,
-		AccType:            common.SargaAccount,
-		MoiID:              common.BytesToHex(getRandomMOIID()),
-		BehaviouralContext: getKramaIDs(behaviouralNodesCount),
-		RandomContext:      getKramaIDs(randomNodesCount),
+		ID:             common.SargaAccountID,
+		AccType:        common.SargaAccount,
+		MoiID:          common.BytesToHex(getRandomMOIID()),
+		ConsensusNodes: getKramaIDs(consensusNodesCount),
 	})
 
 	assetInfo := common.AssetAccountSetupArgs{
@@ -164,37 +148,38 @@ func createTestGenesisFile() {
 			Standard:    0,
 			IsLogical:   false,
 			IsStateful:  false,
-			Operator:    identifiers.NilAddress,
+			Operator:    identifiers.Nil,
 			Allocations: make([]common.Allocation, 0, accCount),
 		},
-		BehaviouralContext: getKramaIDs(behaviouralNodesCount),
-		RandomContext:      getKramaIDs(randomNodesCount),
+		ConsensusNodes: getKramaIDs(consensusNodesCount),
 	}
 
 	for i := 0; i < accCount; i++ {
-		addr, _ := identifiers.NewAddressFromHex(accAddresses[i])
+		participantID, err := identifiers.NewParticipantIDFromHex(accounts[i].ID.String())
+		if err != nil {
+			panic(err)
+		}
 
 		g.AddAccount(
 			common.AccountSetupArgs{
-				Address: addr,
+				ID: participantID.AsIdentifier(),
 				Keys: []common.KeyArgs{
 					{
-						PublicKey:          addr.Bytes(),
+						PublicKey:          accounts[i].PublicKey,
 						Weight:             1000,
 						SignatureAlgorithm: 0,
 					},
 				},
-				AccType:            common.RegularAccount,
-				MoiID:              common.BytesToHex(getRandomMOIID()),
-				BehaviouralContext: getKramaIDs(behaviouralNodesCount),
-				RandomContext:      getKramaIDs(randomNodesCount),
+				AccType:        common.RegularAccount,
+				MoiID:          common.BytesToHex(getRandomMOIID()),
+				ConsensusNodes: getKramaIDs(consensusNodesCount),
 			},
 		)
 
 		if premineAmount > 0 {
 			assetInfo.AssetInfo.Allocations = append(assetInfo.AssetInfo.Allocations, common.Allocation{
-				Address: addr,
-				Amount:  (*hexutil.Big)(new(big.Int).SetUint64(premineAmount)),
+				ID:     participantID.AsIdentifier(),
+				Amount: (*hexutil.Big)(new(big.Int).SetUint64(premineAmount)),
 			})
 		}
 	}

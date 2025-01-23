@@ -33,7 +33,7 @@ type LogicCallsite struct {
 }
 
 type LogicMetadata struct {
-	LogicID  identifiers.LogicID `json:"logicID"`
+	LogicID  identifiers.LogicID `json:"logic_id"`
 	Manifest common.Hash         `json:"manifest"`
 }
 
@@ -42,16 +42,17 @@ func (logic Logic) FormatREPL() string {
 	var str strings.Builder
 
 	logicID := logic.Object.ID
-	identifier, _ := logicID.Identifier()
+	identifier := logicID.AsIdentifier()
 
-	str.WriteString(fmt.Sprintf("==== [ @>%v<@ ] [Ready: @>%v<@] [Address: %v] \n", logic.Name, logic.Ready, logicID.Address())) //nolint:lll
-	str.WriteString(fmt.Sprintf("[Edition: %v] [Logic ID: @>%v<@]\n", identifier.Edition(), logicID))
+	str.WriteString(fmt.Sprintf("==== [ @>%v<@ ] [Ready: @>%v<@] [Identifier: %v] \n", logic.Name, logic.Ready, logicID.AsIdentifier())) //nolint:lll
+	str.WriteString(fmt.Sprintf("[Edition: %v] [Logic ID: @>%v<@]\n", identifier.Variant(), logicID))
 	str.WriteString(fmt.Sprintf("[Engine: @>%v<@] [Manifest: %x]\n", logic.Object.Engine(), logic.Object.ManifestHash()))
-	str.WriteString(fmt.Sprintf(
-		"[Persistent: @>%v<@] [Ephemeral: @>%v<@] [Interactive: @>%v<@] [Asset Logic: @>%v<@]\n",
-		identifier.HasPersistentState(), identifier.HasEphemeralState(),
-		identifier.HasInteractableSites(), identifier.AssetLogic(),
-	))
+	// Todo: This has to be fixed
+	// str.WriteString(fmt.Sprintf(
+	//	"[Persistent: @>%v<@] [Ephemeral: @>%v<@] [Interactive: @>%v<@] [Asset Logic: @>%v<@]\n",
+	//	logicID.Flag(), identifier.HasEphemeralState(),
+	//	identifier.HasInteractableSites(), identifier.AssetLogic(),
+	// ))
 
 	str.WriteString("\n==== Callsites\n")
 
@@ -149,19 +150,21 @@ func (env *Environment) CompileLogic(
 		return nil, consumed, err
 	}
 
-	logicAddress := identifiers.NewRandomAddress()
+	logicID := identifiers.RandomLogicIDv0().AsIdentifier()
 
-	for env.AddrExists(logicAddress) {
-		logicAddress = identifiers.NewRandomAddress()
+	for env.IdentifierExists(logicID) {
+		logicID = identifiers.RandomLogicIDv0().AsIdentifier()
 	}
 	// Create a new LogicObject from the LogicDescriptor
 	// A random address is assigned to the logic account
-	logicObject := state.NewLogicObject(logicAddress, descriptor)
+	logicObject := state.NewLogicObject(logicID, descriptor)
 
 	// If the logic ID has no persistent state, it can be marked
 	// as ready, otherwise it requires a deployment to occur first
-	id, _ := logicObject.ID.Identifier()
-	ready := !id.HasPersistentState()
+	// id := logicObject.ID.AsIdentifier()
+
+	// TODO: fix this ready := !id.HasPersistentState()
+	ready := true
 
 	logic := &Logic{
 		Name:      name,
@@ -178,7 +181,7 @@ func (env *Environment) CompileLogic(
 		}
 	}
 
-	env.Addrs[logicObject.ID.Address()] = struct{}{}
+	env.Identifiers[logicObject.ID.AsIdentifier()] = struct{}{}
 	env.lcache[logic.Name] = logic
 	env.Logics[logic.Name] = LogicMetadata{
 		LogicID:  logicObject.ID,
@@ -230,7 +233,7 @@ func (env *Environment) RemoveLogic(name string) error {
 	// Delete all keys in logic's address subspace
 	// This includes the logic entity, the logic manifest
 	// as well as any persistent state storage of the logic
-	if err := env.database.PrefixDelete(db.AccountPrefix(env.ID, logicMetaData.LogicID.Address())); err != nil {
+	if err := env.database.PrefixDelete(db.AccountPrefix(env.ID, logicMetaData.LogicID.AsIdentifier())); err != nil {
 		return err
 	}
 

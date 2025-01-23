@@ -28,9 +28,9 @@ type engine interface {
 }
 
 type interestManager interface {
-	InterestedSessions(blocks []block.Block) (map[identifiers.Address][]block.Block, []block.Block)
-	RecordSessionInterest(addr identifiers.Address, ids ...cid.CID)
-	RemoveSessionInterest(addr identifiers.Address, ids ...cid.CID) []cid.CID
+	InterestedSessions(blocks []block.Block) (map[identifiers.Identifier][]block.Block, []block.Block)
+	RecordSessionInterest(id identifiers.Identifier, ids ...cid.CID)
+	RemoveSessionInterest(id identifiers.Identifier, ids ...cid.CID) []cid.CID
 }
 
 type Manager struct {
@@ -55,8 +55,8 @@ func NewSessionManager(
 	}
 }
 
-func (s *Manager) GetSession(addrs identifiers.Address) (*Session, error) {
-	session, ok := s.activeSessions.Load(addrs)
+func (s *Manager) GetSession(id identifiers.Identifier) (*Session, error) {
+	session, ok := s.activeSessions.Load(id)
 	if !ok {
 		return nil, errors.New("session not found")
 	}
@@ -71,15 +71,15 @@ func (s *Manager) GetSession(addrs identifiers.Address) (*Session, error) {
 
 func (s *Manager) NewSession(
 	ctx context.Context,
-	addrs identifiers.Address,
+	id identifiers.Identifier,
 	stateHash cid.CID,
 	network *network.AgoraNetwork,
 	contextPeers []kramaid.KramaID,
 ) (*Session, error) {
-	_, ok := s.activeSessions.Load(addrs)
+	_, ok := s.activeSessions.Load(id)
 	if !ok {
-		session := NewSession(ctx, addrs, s.logger, stateHash, network, s.notifier, s.im, s, contextPeers)
-		s.activeSessions.Store(addrs, session)
+		session := NewSession(ctx, id, s.logger, stateHash, network, s.notifier, s.im, s, contextPeers)
+		s.activeSessions.Store(id, session)
 
 		return session, nil
 	}
@@ -124,10 +124,10 @@ func (s *Manager) handleAgoraResponseMsg(id kramaid.KramaID, msg *message.AgoraR
 
 	sessions, _ := s.im.InterestedSessions(msg.GetBlocks()) // TODO: Add orphans to cache
 
-	for addr, blocks := range sessions {
-		session, err := s.GetSession(addr)
+	for id, blocks := range sessions {
+		session, err := s.GetSession(id)
 		if err != nil {
-			s.logger.Error("Error agora session not found", "addr", addr)
+			s.logger.Error("Error agora session not found", "id", id)
 
 			continue
 		}
@@ -138,7 +138,7 @@ func (s *Manager) handleAgoraResponseMsg(id kramaid.KramaID, msg *message.AgoraR
 	}
 }
 
-func (s *Manager) PeerDisconnected(sessions []identifiers.Address, peerID peer.ID) {
+func (s *Manager) PeerDisconnected(sessions []identifiers.Identifier, peerID peer.ID) {
 	for _, sessionID := range sessions {
 		if session, ok := s.activeSessions.Load(sessionID); ok {
 			session, ok := session.(*Session)
@@ -149,6 +149,6 @@ func (s *Manager) PeerDisconnected(sessions []identifiers.Address, peerID peer.I
 	}
 }
 
-func (s *Manager) CloseSession(sessionID identifiers.Address) {
+func (s *Manager) CloseSession(sessionID identifiers.Identifier) {
 	s.activeSessions.Delete(sessionID)
 }

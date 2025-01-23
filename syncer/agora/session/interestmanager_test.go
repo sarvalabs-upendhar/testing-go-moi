@@ -14,40 +14,40 @@ import (
 func TestRecordSessionInterest_MultipleAddress(t *testing.T) {
 	im := NewInterestManager()
 
-	address1 := tests.RandomAddress(t)
-	address2 := tests.RandomAddress(t)
+	id1 := tests.RandomIdentifier(t)
+	id2 := tests.RandomIdentifier(t)
 
 	set, _ := GetDummyBlocks(t, 20)
 	keys := set.Keys()
-	// record hashes with address1
-	im.RecordSessionInterest(address1, keys...)
+	// record hashes with id1
+	im.RecordSessionInterest(id1, keys...)
 
-	// record same hashes with address2
-	im.RecordSessionInterest(address2, keys...)
+	// record same hashes with id2
+	im.RecordSessionInterest(id2, keys...)
 
 	for _, hash := range keys {
-		addresses, ok := im.wants[hash]
+		ids, ok := im.wants[hash]
 
 		// hash should be recorded
 		require.True(t, ok, "hash not recorded")
 
-		// both addresses should be recorded
-		require.True(t, addresses[address1], "address1 is missing")
-		require.True(t, addresses[address2], "address2 is missing")
+		// both ids should be recorded
+		require.True(t, ids[id1], "id1 is missing")
+		require.True(t, ids[id2], "id2 is missing")
 	}
 }
 
 func TestRemoveSession_SingleAddress(t *testing.T) {
 	im := NewInterestManager()
 
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 
 	set, _ := GetDummyBlocks(t, 20)
 	keys := set.Keys()
-	// record hashes with address1
-	im.RecordSessionInterest(address, keys...)
+	// record hashes with id1
+	im.RecordSessionInterest(id, keys...)
 
-	removeSession(im, address)
+	removeSession(im, id)
 
 	for _, hash := range keys {
 		_, ok := im.wants[hash]
@@ -60,40 +60,40 @@ func TestRemoveSession_SingleAddress(t *testing.T) {
 func TestRemoveSession_MultipleAddress(t *testing.T) {
 	im := NewInterestManager()
 
-	address1 := tests.RandomAddress(t)
-	address2 := tests.RandomAddress(t)
+	id1 := tests.RandomIdentifier(t)
+	id2 := tests.RandomIdentifier(t)
 
 	set, _ := GetDummyBlocks(t, 20)
 	keys := set.Keys()
 
-	// record hashes with address1
-	im.RecordSessionInterest(address1, keys...)
-	// record same hashes with address2
-	im.RecordSessionInterest(address2, keys...)
+	// record hashes with id1
+	im.RecordSessionInterest(id1, keys...)
+	// record same hashes with id2
+	im.RecordSessionInterest(id2, keys...)
 
-	// remove keys associated with address1
-	removeSession(im, address1)
+	// remove keys associated with id1
+	removeSession(im, id1)
 
 	for _, hash := range keys {
 		addresses, ok := im.wants[hash]
 		// hash should be available
 		require.True(t, ok, "hash not available")
-		// address2 should be available
-		require.True(t, addresses[address2])
+		// id2 should be available
+		require.True(t, addresses[id2])
 	}
 }
 
 func TestInterestedSessions(t *testing.T) {
 	im := NewInterestManager()
 
-	address1 := tests.RandomAddress(t)
+	id1 := tests.RandomIdentifier(t)
 
 	set1, blocks1 := GetDummyBlocks(t, 20)
 
 	set2, blocks2 := GetDummyBlocks(t, 5)
 
 	// record set keys only
-	im.RecordSessionInterest(address1, set1.Keys()...)
+	im.RecordSessionInterest(id1, set1.Keys()...)
 
 	interestedSessions, orphanBlocks := im.InterestedSessions(appendBlocks(blocks1, blocks2))
 
@@ -103,7 +103,7 @@ func TestInterestedSessions(t *testing.T) {
 	}
 
 	// Verify that all set1 blocks are returned
-	blocks, ok := interestedSessions[address1]
+	blocks, ok := interestedSessions[id1]
 	require.True(t, ok, "set1 blocks missing")
 
 	for _, block := range blocks {
@@ -113,14 +113,14 @@ func TestInterestedSessions(t *testing.T) {
 
 func TestDeleteSession(t *testing.T) {
 	cid1 := block.NewAccountBlockFromRawData(0x00, []byte{1}).GetCid()
-	addr1 := tests.RandomAddress(t)
-	addr2 := tests.RandomAddress(t)
+	id1 := tests.RandomIdentifier(t)
+	id2 := tests.RandomIdentifier(t)
 
 	testcases := []struct {
 		name                string
 		cid                 cid.CID
-		wants               map[cid.CID]map[identifiers.Address]bool
-		addr                identifiers.Address
+		wants               map[cid.CID]map[identifiers.Identifier]bool
+		id                  identifiers.Identifier
 		deletedKeys         []cid.CID
 		expectedDeletedKeys []cid.CID
 		expectedWantsLength int
@@ -128,12 +128,12 @@ func TestDeleteSession(t *testing.T) {
 		{
 			name: "delete the last session that wants key",
 			cid:  cid1,
-			wants: map[cid.CID]map[identifiers.Address]bool{
+			wants: map[cid.CID]map[identifiers.Identifier]bool{
 				cid1: {
-					addr1: true,
+					id1: true,
 				},
 			},
-			addr:                addr1,
+			id:                  id1,
 			deletedKeys:         []cid.CID{},
 			expectedDeletedKeys: []cid.CID{cid1},
 			expectedWantsLength: 0,
@@ -141,13 +141,13 @@ func TestDeleteSession(t *testing.T) {
 		{
 			name: "delete the session that wants key",
 			cid:  cid1,
-			wants: map[cid.CID]map[identifiers.Address]bool{
+			wants: map[cid.CID]map[identifiers.Identifier]bool{
 				cid1: {
-					addr1: true,
-					addr2: true,
+					id1: true,
+					id2: true,
 				},
 			},
-			addr:                addr1,
+			id:                  id1,
 			deletedKeys:         []cid.CID{},
 			expectedDeletedKeys: []cid.CID{},
 			expectedWantsLength: 1,
@@ -156,7 +156,7 @@ func TestDeleteSession(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			deleteSession(test.cid, test.wants, test.addr, &test.deletedKeys)
+			deleteSession(test.cid, test.wants, test.id, &test.deletedKeys)
 			require.Equal(t, test.expectedDeletedKeys, test.deletedKeys)
 			require.Equal(t, test.expectedWantsLength, len(test.wants))
 		})

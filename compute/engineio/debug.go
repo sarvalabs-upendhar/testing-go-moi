@@ -44,16 +44,8 @@ type debugLogicDriver struct {
 	eventdefs map[string]Eventdef
 }
 
-func newDebugLogicDriver(t *testing.T, address identifiers.Address, descriptor LogicDescriptor) debugLogicDriver {
+func newDebugLogicDriver(t *testing.T, logicID identifiers.LogicID, descriptor LogicDescriptor) debugLogicDriver {
 	t.Helper()
-
-	// Generate the LogicID from the payload
-	logicID := identifiers.NewLogicIDv0(
-		descriptor.Persistent != nil,
-		descriptor.Ephemeral != nil,
-		descriptor.Interactable, false,
-		0, address,
-	)
 
 	return debugLogicDriver{
 		id:       logicID,
@@ -80,12 +72,8 @@ func (logic debugLogicDriver) ManifestHash() [32]byte       { return logic.manif
 func (logic debugLogicDriver) IsSealed() bool               { return logic.sealed }
 
 func (logic debugLogicDriver) IsInteractable() bool {
-	identifier, err := logic.id.Identifier()
-	if err != nil {
-		panic("failed to fetch logic identifier")
-	}
-
-	return identifier.HasInteractableSites()
+	// TODO: this is just a place holder
+	return true
 }
 
 func (logic debugLogicDriver) PersistentState() (ElementPtr, bool) {
@@ -133,25 +121,25 @@ func (logic debugLogicDriver) GetElementDeps(ptr ElementPtr) []ElementPtr {
 }
 
 type debugStateDriver struct {
-	address identifiers.Address
+	id      identifiers.Identifier
 	logicID identifiers.LogicID
 
 	logicstate map[string][]byte
 }
 
-func newDebugStateDriver(t *testing.T, address identifiers.Address, logicID identifiers.LogicID) *debugStateDriver {
+func newDebugStateDriver(t *testing.T, id identifiers.Identifier, logicID identifiers.LogicID) *debugStateDriver {
 	t.Helper()
 
 	return &debugStateDriver{
-		address:    address,
+		id:         id,
 		logicID:    logicID,
 		logicstate: make(map[string][]byte),
 	}
 }
 
-func (state debugStateDriver) Address() identifiers.Address  { return state.address }
-func (state debugStateDriver) LogicID() identifiers.LogicID  { return state.logicID }
-func (state debugStateDriver) LogicState() map[string][]byte { return state.logicstate }
+func (state debugStateDriver) Identifier() identifiers.Identifier { return state.id }
+func (state debugStateDriver) LogicID() identifiers.LogicID       { return state.logicID }
+func (state debugStateDriver) LogicState() map[string][]byte      { return state.logicstate }
 
 func (state debugStateDriver) GetStorageEntry(key []byte) ([]byte, error) {
 	val, ok := state.logicstate[hex.EncodeToString(key)]
@@ -170,7 +158,7 @@ func (state *debugStateDriver) SetStorageEntry(key, val []byte) error {
 
 func (state debugStateDriver) Copy() *debugStateDriver {
 	clone := &debugStateDriver{
-		address:    state.address,
+		id:         state.id,
 		logicID:    state.logicID,
 		logicstate: make(map[string][]byte),
 	}

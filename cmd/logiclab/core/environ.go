@@ -28,9 +28,9 @@ type Environment struct {
 	ID         string
 	SequenceID uint64
 
-	Addrs  map[identifiers.Address]struct{}
-	Users  map[string]identifiers.Address
-	Logics map[string]LogicMetadata
+	Identifiers map[identifiers.Identifier]struct{}
+	Users       map[string]identifiers.Identifier
+	Logics      map[string]LogicMetadata
 
 	Sender   string
 	CallFuel uint64
@@ -50,12 +50,12 @@ func NewEnvironment(name string, database db.Database) *Environment {
 		eventsHead: 0,
 		eventsSize: 0,
 
-		ID:         name,
-		SequenceID: 0,
-		Addrs:      map[identifiers.Address]struct{}{},
-		Users:      make(map[string]identifiers.Address),
-		Logics:     make(map[string]LogicMetadata),
-		CallFuel:   LabDefaultFuel,
+		ID:          name,
+		SequenceID:  0,
+		Identifiers: map[identifiers.Identifier]struct{}{},
+		Users:       make(map[string]identifiers.Identifier),
+		Logics:      make(map[string]LogicMetadata),
+		CallFuel:    LabDefaultFuel,
 
 		Config: ReplConfig{
 			HexBigInt: true,
@@ -136,9 +136,9 @@ func (env *Environment) Decode(encoded []byte) error {
 	return nil
 }
 
-// AddrExists returns whether an account with the given address exists in the Environment
-func (env *Environment) AddrExists(addr identifiers.Address) bool {
-	_, exists := env.Addrs[addr]
+// IdentifierExists returns whether an account with the given address exists in the Environment
+func (env *Environment) IdentifierExists(id identifiers.Identifier) bool {
+	_, exists := env.Identifiers[id]
 
 	return exists
 }
@@ -152,20 +152,20 @@ func (env *Environment) UserExists(name string) bool {
 
 // RegisterUser registers a User object to the Environment.
 // The user is indexed by their username.
-func (env *Environment) RegisterUser(name string, addr identifiers.Address) error {
+func (env *Environment) RegisterUser(name string, id identifiers.Identifier) error {
 	// Check if user with the given name already exists
 	if env.UserExists(name) {
 		return ErrUserAlreadyExists
 	}
 
-	if addr == identifiers.NilAddress {
-		addr = env.generateUniqueRandomAddress()
-	} else if env.AddrExists(addr) {
+	if id == identifiers.Nil {
+		id = env.generateUniqueRandomID()
+	} else if env.IdentifierExists(id) {
 		return ErrAddrAlreadyExists
 	}
 
-	env.Users[name] = addr
-	env.Addrs[addr] = struct{}{}
+	env.Users[name] = id
+	env.Identifiers[id] = struct{}{}
 
 	account := &Account{
 		Kind: UserAccount,
@@ -178,7 +178,7 @@ func (env *Environment) RegisterUser(name string, addr identifiers.Address) erro
 		return err
 	}
 
-	if err = env.database.Set(db.AccountKey(env.ID, addr), rawAccount); err != nil {
+	if err = env.database.Set(db.AccountKey(env.ID, id), rawAccount); err != nil {
 		return err
 	}
 
@@ -187,13 +187,13 @@ func (env *Environment) RegisterUser(name string, addr identifiers.Address) erro
 
 // RemoveUser removes a user from the Environment with a given username.
 func (env *Environment) RemoveUser(username string) error {
-	addr, ok := env.Users[username]
+	id, ok := env.Users[username]
 	if !ok {
 		return ErrUserNotFound
 	}
 
 	delete(env.Users, username)
-	delete(env.Addrs, addr)
+	delete(env.Identifiers, id)
 
 	// If the user is assigned as default sender, unset
 	if env.Sender == username {
@@ -201,7 +201,7 @@ func (env *Environment) RemoveUser(username string) error {
 	}
 
 	// Delete all entries prefixed with user's address
-	if err := env.database.PrefixDelete(db.AccountPrefix(env.ID, addr)); err != nil {
+	if err := env.database.PrefixDelete(db.AccountPrefix(env.ID, id)); err != nil {
 		return err
 	}
 
@@ -218,7 +218,7 @@ func (env *Environment) PurgeUsers() error {
 	}
 
 	// Reset the user registry
-	env.Users = make(map[string]identifiers.Address)
+	env.Users = make(map[string]identifiers.Identifier)
 
 	return nil
 }
@@ -242,14 +242,14 @@ func (env *Environment) SetDefaultSender(username string) error {
 }
 
 // LookupAccount returns the account details associated with the given address
-func (env *Environment) LookupAccount(addr identifiers.Address) (AccountKind, string) {
+func (env *Environment) LookupAccount(id identifiers.Identifier) (AccountKind, string) {
 	// Check if the address exists in the environment
-	if !env.AddrExists(addr) {
+	if !env.IdentifierExists(id) {
 		return UnknownAccKind, ""
 	}
 
 	// Get the raw account details from the db
-	rawAccount, err := env.database.Get(db.AccountKey(env.ID, addr))
+	rawAccount, err := env.database.Get(db.AccountKey(env.ID, id))
 	if err != nil {
 		return UnknownAccKind, err.Error()
 	}
@@ -264,14 +264,14 @@ func (env *Environment) LookupAccount(addr identifiers.Address) (AccountKind, st
 	return account.Kind, account.Name
 }
 
-func (env *Environment) Enlisted(addr identifiers.Address, logic identifiers.LogicID) bool {
+func (env *Environment) Enlisted(id identifiers.Identifier, logic identifiers.LogicID) bool {
 	// Check if the address exists in the environment
-	if !env.AddrExists(addr) {
+	if !env.IdentifierExists(id) {
 		return false
 	}
 
 	// Get the raw account details from the db
-	ok, err := env.database.Has(db.LogicStoragePrefix(env.ID, addr, logic))
+	ok, err := env.database.Has(db.LogicStoragePrefix(env.ID, id, logic))
 	if err != nil {
 		return false
 	}
@@ -279,14 +279,14 @@ func (env *Environment) Enlisted(addr identifiers.Address, logic identifiers.Log
 	return ok
 }
 
-func (env *Environment) Enlist(addr identifiers.Address, logic identifiers.LogicID) error {
+func (env *Environment) Enlist(id identifiers.Identifier, logic identifiers.LogicID) error {
 	// Check if the address exists in the environment
-	if !env.AddrExists(addr) {
+	if !env.IdentifierExists(id) {
 		return errors.New("user already enlisted")
 	}
 
 	// Get the raw account details from the db
-	if err := env.database.Set(db.LogicStoragePrefix(env.ID, addr, logic), []byte{2}); err != nil {
+	if err := env.database.Set(db.LogicStoragePrefix(env.ID, id, logic), []byte{2}); err != nil {
 		return err
 	}
 
@@ -298,12 +298,12 @@ func (env *Environment) IncrementSequenceID() {
 	env.SequenceID += 1
 }
 
-func (env *Environment) generateUniqueRandomAddress() identifiers.Address {
-	addr := identifiers.NewRandomAddress()
-	if env.AddrExists(addr) {
+func (env *Environment) generateUniqueRandomID() identifiers.Identifier {
+	id := identifiers.RandomParticipantIDv0().AsIdentifier()
+	if env.IdentifierExists(id) {
 		// If the generated address already exists, recursively generate a new one
-		return env.generateUniqueRandomAddress()
+		return env.generateUniqueRandomID()
 	}
 
-	return addr
+	return id
 }

@@ -28,9 +28,11 @@ func newState(driver engineio.StateDriver) *State {
 	}
 }
 
-func (state State) Address() [32]byte   { return state.driver.Address() }
-func (state State) LogicID() string     { return string(state.driver.LogicID()) }
-func (state State) LogicAddr() [32]byte { return state.driver.LogicID().Address() }
+// TODO: Update method names in the PISA state driver interface to improve clarity and consistency
+
+func (state State) Address() [32]byte   { return state.driver.Identifier() }
+func (state State) LogicID() string     { return string(state.driver.LogicID().Bytes()) }
+func (state State) LogicAddr() [32]byte { return state.driver.LogicID().AsIdentifier() }
 
 func (state *State) Free(slot pisastate.SlotDriver, tank drivers.FuelTank) bool {
 	if !state.IsBorrowed(slot.Slot()) {

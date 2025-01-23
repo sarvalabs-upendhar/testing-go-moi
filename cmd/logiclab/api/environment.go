@@ -20,10 +20,10 @@ type EnvironmentListResponse struct {
 }
 
 type EnvironmentInventoryResponse struct {
-	Name     string                         `json:"name"`
-	Users    map[string]identifiers.Address `json:"users"`
-	Logics   map[string]core.LogicMetadata  `json:"logics"`
-	Defaults EnvironmentDefaults            `json:"defaults"`
+	Name     string                            `json:"name"`
+	Users    map[string]identifiers.Identifier `json:"users"`
+	Logics   map[string]core.LogicMetadata     `json:"logics"`
+	Defaults EnvironmentDefaults               `json:"defaults"`
 }
 
 type EnvironmentDefaults struct {

@@ -18,8 +18,8 @@ type Mandate struct {
 // AssetObject represents an asset's state, including balance, lockups, mandates, and properties.
 type AssetObject struct {
 	Balance    *big.Int
-	Lockup     map[identifiers.Address]*big.Int
-	Mandate    map[identifiers.Address]*Mandate
+	Lockup     map[identifiers.Identifier]*big.Int
+	Mandate    map[identifiers.Identifier]*Mandate
 	Properties *common.AssetDescriptor
 }
 
@@ -27,8 +27,8 @@ type AssetObject struct {
 func NewAssetObject(balance *big.Int, properties *common.AssetDescriptor) *AssetObject {
 	return &AssetObject{
 		Balance:    balance,
-		Lockup:     make(map[identifiers.Address]*big.Int),
-		Mandate:    make(map[identifiers.Address]*Mandate),
+		Lockup:     make(map[identifiers.Identifier]*big.Int),
+		Mandate:    make(map[identifiers.Identifier]*Mandate),
 		Properties: properties,
 	}
 }

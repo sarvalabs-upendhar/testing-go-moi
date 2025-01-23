@@ -34,16 +34,15 @@ func parseUint256orHex(val *string) (*big.Int, error) {
 	return b, nil
 }
 
-func getContextNodes(instancesFile string, behaviourCount, randomCount int) ([]string, []string) {
+func getContextNodes(instancesFile string, consensusNodesCount int) []string {
 	kramaIDs, err := common.ReadKramaIDsFromInstancesFile(instancesFile)
 	if err != nil {
 		cmdcommon.Err(err)
 	}
 
-	if behaviourCount+randomCount > len(kramaIDs) {
+	if consensusNodesCount > len(kramaIDs) {
 		cmdcommon.Err(errors.New("insufficient krama IDs"))
 	}
 
-	return kramaIDs[0:behaviourCount],
-		kramaIDs[behaviourCount : behaviourCount+randomCount]
+	return kramaIDs[0:consensusNodesCount]
 }

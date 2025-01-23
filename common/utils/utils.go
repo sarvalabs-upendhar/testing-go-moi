@@ -123,7 +123,7 @@ func ExponentialTimeout(baseTime time.Duration, exponent int32) time.Duration {
 // Retrieves the host network interfaces and creates a multiaddr from the
 // first IPv4 address it encounters that is not also a loopback address.
 func AcquireMultiAddr() (multiaddr.Multiaddr, error) {
-	// Declare a variable for the IP Address
+	// Declare a variable for the IP ID
 	var ipaddrss string
 
 	// Retrieve the network interface address of the host machine

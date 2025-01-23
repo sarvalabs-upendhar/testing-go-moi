@@ -57,7 +57,7 @@ func (engine Engine) SpawnInstance(
 	}
 
 	// Check the logic driver and context driver's addresses
-	if logic.LogicID().Address() != state.Address() {
+	if logic.LogicID().AsIdentifier() != state.Identifier() {
 		return nil, errors.New("incompatible context driver for logic: address does not match")
 	}
 

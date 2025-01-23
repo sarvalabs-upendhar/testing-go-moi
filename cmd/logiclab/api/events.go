@@ -4,7 +4,6 @@ package api
 import (
 	"fmt"
 	"net/http"
-	"strings"
 
 	"github.com/sarvalabs/go-moi/common"
 
@@ -14,10 +13,10 @@ import (
 )
 
 const (
-	QueryLogicID = "logicid"
-	QueryAddress = "address"
-	QueryIxHash  = "ixhash"
-	QueryName    = "name"
+	QueryLogicID       = "logicid"
+	QueryParticipantID = "id"
+	QueryIxHash        = "ixhash"
+	QueryName          = "name"
 )
 
 func (api *API) getEvents(c *gin.Context) {
@@ -36,20 +35,24 @@ func (api *API) getEvents(c *gin.Context) {
 
 	filters := make([]core.EventFilter, 0)
 
-	if logicID := c.Query(QueryLogicID); logicID != "" {
-		logicID = strings.TrimPrefix(logicID, "0x")
-		filters = append(filters, core.FilterByLogicID(identifiers.LogicID(logicID)))
-	}
-
-	if address := c.Query(QueryAddress); address != "" {
-		// Generate identifiers.Address from addressQuery
-		addr, err := identifiers.NewAddressFromHex(address)
+	if queryLogicID := c.Query(QueryLogicID); queryLogicID != "" {
+		logicID, err := identifiers.NewLogicIDFromHex(queryLogicID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, Error(err))
 			return
 		}
 
-		filters = append(filters, core.FilterByAddress(addr))
+		filters = append(filters, core.FilterByLogicID(logicID))
+	}
+
+	if queryParticipantID := c.Query(QueryParticipantID); queryParticipantID != "" {
+		participantID, err := identifiers.NewParticipantIDFromHex(queryParticipantID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, Error(err))
+			return
+		}
+
+		filters = append(filters, core.FilterByIdentifier(participantID.AsIdentifier()))
 	}
 
 	if ixhash := c.Query(QueryIxHash); ixhash != "" {

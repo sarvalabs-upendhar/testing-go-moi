@@ -117,7 +117,7 @@ func (api *API) getDefaultSender(c *gin.Context) {
 	if env.Sender == "" {
 		c.JSON(http.StatusNotFound, Error(core.ErrSenderNotConf).WithData(User{
 			Username: "",
-			Address:  identifiers.NilAddress,
+			ID:       identifiers.Nil,
 		}))
 
 		return
@@ -125,12 +125,12 @@ func (api *API) getDefaultSender(c *gin.Context) {
 
 	// Get the sender
 	sender := env.Sender
-	// Get the sender address
-	addr := env.Users[sender]
+	// Get the sender id
+	id := env.Users[sender]
 
 	c.JSON(http.StatusOK, Success().WithData(User{
 		Username: sender,
-		Address:  addr,
+		ID:       id,
 	}))
 }
 

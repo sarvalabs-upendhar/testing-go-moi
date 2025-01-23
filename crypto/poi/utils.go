@@ -226,7 +226,7 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	moiIDPubBytes := moiIDPubInSecp256k1.SerializeCompressed()
 	// fmt.Println("Pub: ", moiIDPubBytes)
 	// moiID := getAddressFromPublicBytes(moiIDPubBytes)
-	// fmt.Println("Addr: ", moiID)
+	// fmt.Println("ID: ", moiID)
 	return aggPrivKey, trimHexString(hexutil.EncodeToString(moiIDPubBytes)), nil
 }
 

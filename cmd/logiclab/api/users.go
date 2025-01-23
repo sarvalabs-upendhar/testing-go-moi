@@ -12,8 +12,8 @@ import (
 )
 
 type User struct {
-	Username string              `json:"username"`
-	Address  identifiers.Address `json:"address,omitempty"`
+	Username string                 `json:"username"`
+	ID       identifiers.Identifier `json:"id,omitempty"`
 }
 
 // getUser retrieves a user by their username
@@ -34,7 +34,7 @@ func (api *API) getUser(c *gin.Context) {
 	// Extract the value for username
 	username := c.Param("name")
 	// Retrieve the user from the env
-	userAddr, exists := env.Users[username]
+	userID, exists := env.Users[username]
 	if !exists {
 		c.JSON(http.StatusNotFound, Error(core.ErrUserNotFound))
 		return
@@ -42,7 +42,7 @@ func (api *API) getUser(c *gin.Context) {
 
 	c.JSON(http.StatusOK, Success().WithData(User{
 		Username: username,
-		Address:  userAddr,
+		ID:       userID,
 	}))
 }
 
@@ -69,7 +69,7 @@ func (api *API) createUser(c *gin.Context) {
 	}
 
 	// Register the user with the environment
-	if err = env.RegisterUser(request.Username, request.Address); err != nil {
+	if err = env.RegisterUser(request.Username, request.ID); err != nil {
 		// User already exists -> error with conflict code
 		if errors.Is(err, core.ErrUserAlreadyExists) {
 			c.JSON(http.StatusConflict, Error(err))
@@ -82,7 +82,7 @@ func (api *API) createUser(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, Success().WithData(User{
 		Username: request.Username,
-		Address:  env.Users[request.Username],
+		ID:       env.Users[request.Username],
 	}))
 }
 

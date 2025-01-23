@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -14,6 +15,8 @@ import (
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
 )
+
+var DefaultBeneficiary identifiers.Identifier = identifiers.RandomParticipantIDv0().AsIdentifier()
 
 func createAssetCreatePayload(
 	symbol string,
@@ -121,9 +124,9 @@ func deployLogic(
 	return logicDeployReceipt.LogicID
 }
 
-func getBalance(te *TestEnvironment, addr identifiers.Address, assetID identifiers.AssetID, height int64) uint64 {
+func getBalance(te *TestEnvironment, id identifiers.Identifier, assetID identifiers.AssetID, height int64) uint64 {
 	senderBal, err := te.moiClient.Balance(context.Background(), &rpcargs.BalArgs{
-		Address: addr,
+		ID:      id,
 		AssetID: assetID,
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &height,
@@ -147,7 +150,6 @@ func getBalance(te *TestEnvironment, addr identifiers.Address, assetID identifie
 
 func checkForReceiptSuccess(t *testing.T, client *moiclient.Client, ixHash common.Hash) *rpcargs.RPCReceipt {
 	t.Helper()
-
 	// make sure interaction executed successfully
 	ctx, cancel := context.WithTimeout(context.Background(), DefaultConfirmIxTimeout)
 	defer cancel()
@@ -156,4 +158,13 @@ func checkForReceiptSuccess(t *testing.T, client *moiclient.Client, ixHash commo
 	require.Equal(t, common.ReceiptOk, receipt.Status)
 
 	return receipt
+}
+
+func DocGen(t *testing.T, values map[string]any) polo.Document {
+	t.Helper()
+
+	doc, err := polo.PolorizeDocument(values, polo.DocStructs(), polo.DocStringMaps())
+	require.NoError(t, err, "cannot generate document")
+
+	return doc
 }

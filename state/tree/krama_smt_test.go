@@ -12,7 +12,7 @@ import (
 )
 
 func TestKramaHashTree_Set_NewEntry(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := NewMockDB()
 
 	tt := []struct {
@@ -43,7 +43,7 @@ func TestKramaHashTree_Set_NewEntry(t *testing.T) {
 
 	hashTree := createTestHashTreeWithEntries(
 		t,
-		address,
+		id,
 		db,
 		nil,
 	)
@@ -69,7 +69,7 @@ func TestKramaHashTree_Set_NewEntry(t *testing.T) {
 }
 
 func TestKramaHashTree_Set_UpdateEntry(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := NewMockDB()
 
 	key := []byte("Test-Key")
@@ -78,7 +78,7 @@ func TestKramaHashTree_Set_UpdateEntry(t *testing.T) {
 
 	hashTree := createTestHashTreeWithEntries(
 		t,
-		address,
+		id,
 		db,
 		map[string][]byte{string(key): initialValue},
 	)
@@ -104,7 +104,7 @@ func TestKramaHashTree_Set_UpdateEntry(t *testing.T) {
 }
 
 func TestKramaHashTree_Get_UnCommitted_Entry(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := NewMockDB()
 
 	key := []byte("Test-Key")
@@ -112,7 +112,7 @@ func TestKramaHashTree_Get_UnCommitted_Entry(t *testing.T) {
 
 	hashTree := createTestHashTreeWithEntries(
 		t,
-		address,
+		id,
 		db,
 		map[string][]byte{string(key): value},
 	)
@@ -126,7 +126,7 @@ func TestKramaHashTree_Get_UnCommitted_Entry(t *testing.T) {
 }
 
 func TestKramaHashTree_Get_Committed_Entry(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := NewMockDB()
 
 	key := []byte("Test-Key")
@@ -134,7 +134,7 @@ func TestKramaHashTree_Get_Committed_Entry(t *testing.T) {
 
 	hashTree := createTestHashTreeWithEntries(
 		t,
-		address,
+		id,
 		db,
 		map[string][]byte{string(key): value},
 	)
@@ -156,7 +156,7 @@ func TestKramaHashTree_Get_Committed_Entry(t *testing.T) {
 }
 
 func TestNewKramaHashTree_Flush(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := NewMockDB()
 
 	key := []byte("Test-Key")
@@ -164,7 +164,7 @@ func TestNewKramaHashTree_Flush(t *testing.T) {
 
 	hashTree := createTestHashTreeWithEntries(
 		t,
-		address,
+		id,
 		db,
 		map[string][]byte{string(key): value},
 	)
@@ -186,14 +186,14 @@ func TestNewKramaHashTree_Flush(t *testing.T) {
 	require.False(t, hashTree.IsDirty())
 
 	// check for pre-image in persistent db
-	preImage, err := db.GetPreImage(address, HashKey(key))
+	preImage, err := db.GetPreImage(id, HashKey(key))
 	require.NoError(t, err, "pre-image not found in persistent db")
 
 	require.Equal(t, key, preImage)
 
 	// check for the tree nodes in db
 	for k, nodeBlob := range nodes {
-		v, err := db.GetMerkleTreeEntry(address, storage.Storage, k.Bytes())
+		v, err := db.GetMerkleTreeEntry(id, storage.Storage, k.Bytes())
 		require.NoError(t, err)
 
 		require.Equal(t, nodeBlob, v)
@@ -201,12 +201,12 @@ func TestNewKramaHashTree_Flush(t *testing.T) {
 }
 
 func TestKramaHashTree_Commit(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := NewMockDB()
 
 	hashTree := createTestHashTreeWithEntries(
 		t,
-		address,
+		id,
 		db,
 		nil,
 	)
@@ -241,7 +241,7 @@ func TestKramaHashTree_Commit(t *testing.T) {
 }
 
 func TestKramaHashTree_Delete(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := NewMockDB()
 
 	key := []byte("Test-Key")
@@ -249,7 +249,7 @@ func TestKramaHashTree_Delete(t *testing.T) {
 
 	hashTree := createTestHashTreeWithEntries(
 		t,
-		address,
+		id,
 		db,
 		map[string][]byte{string(key): value},
 	)
@@ -271,7 +271,7 @@ func TestKramaHashTree_Delete(t *testing.T) {
 }
 
 func TestKramaHashTree_Copy(t *testing.T) {
-	address := tests.RandomAddress(t)
+	id := tests.RandomIdentifier(t)
 	db := NewMockDB()
 
 	key := []byte("Test-Key")
@@ -279,7 +279,7 @@ func TestKramaHashTree_Copy(t *testing.T) {
 
 	kht := createTestHashTreeWithEntries(
 		t,
-		address,
+		id,
 		db,
 		map[string][]byte{string(key): value},
 	)

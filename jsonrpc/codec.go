@@ -2,11 +2,13 @@ package jsonrpc
 
 import (
 	"encoding/json"
+
+	identifiers "github.com/sarvalabs/go-moi-identifiers"
 )
 
 // TesseractArgs is the jsonrpc request parameter for new tesseracts event filter
 type TesseractArgs struct {
-	Address string `json:"address"`
+	ID identifiers.Identifier `json:"id"`
 }
 
 // Request is a jsonrpc request

@@ -8,21 +8,21 @@ import (
 )
 
 type IxBatchRegistry struct {
-	ParticipantBatchLookup map[identifiers.Address]int
+	ParticipantBatchLookup map[identifiers.Identifier]int
 	batches                []*common.IxBatch
 }
 
 func newBatchRegistry() *IxBatchRegistry {
 	return &IxBatchRegistry{
-		ParticipantBatchLookup: make(map[identifiers.Address]int),
+		ParticipantBatchLookup: make(map[identifiers.Identifier]int),
 		batches:                make([]*common.IxBatch, 0),
 	}
 }
 
-func (r *IxBatchRegistry) batchID(addr identifiers.Address) (int, bool) {
-	id, ok := r.ParticipantBatchLookup[addr]
+func (r *IxBatchRegistry) batchID(id identifiers.Identifier) (int, bool) {
+	batchID, ok := r.ParticipantBatchLookup[id]
 
-	return id, ok
+	return batchID, ok
 }
 
 func (r *IxBatchRegistry) len() int {
@@ -38,12 +38,12 @@ func (r *IxBatchRegistry) addIxToBatch(batchID int, ixn *common.Interaction) boo
 		return false
 	}
 
-	for addr, info := range ixn.Participants() {
+	for id, info := range ixn.Participants() {
 		if info.IsGenesis {
 			continue
 		}
 
-		r.ParticipantBatchLookup[addr] = batchID
+		r.ParticipantBatchLookup[id] = batchID
 	}
 
 	return true
@@ -127,15 +127,15 @@ func (r *IxBatchRegistry) selectOptimalBatches() []*common.IxBatch {
 	return batches
 }
 
-func (r *IxBatchRegistry) findBatchID(ps map[identifiers.Address]*common.ParticipantInfo) int {
+func (r *IxBatchRegistry) findBatchID(ps map[identifiers.Identifier]*common.ParticipantInfo) int {
 	batchID := BatchIDNotFound
 
-	for addr := range ps {
-		if psBatchID, exists := r.batchID(addr); exists {
+	for id := range ps {
+		if psBatchID, exists := r.batchID(id); exists {
 			batchID = psBatchID
 
-			for addr := range ps {
-				if nextPsBatchID, exists := r.batchID(addr); exists &&
+			for id := range ps {
+				if nextPsBatchID, exists := r.batchID(id); exists &&
 					psBatchID != nextPsBatchID {
 					return conflictBatchID
 				}

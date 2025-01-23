@@ -21,7 +21,7 @@ package consensus
 //	testcases := []struct {
 //		name          string
 //		ps            common.Participants
-//		icsSeeds      map[identifiers.Address][32]byte
+//		icsSeeds      map[identifiers.Identifier][32]byte
 //		expected      [32]byte
 //		expectedError error
 //	}{
@@ -31,7 +31,7 @@ package consensus
 //				addresses[0]: {TesseractHash: tsHases[0], IsGenesis: false},
 //				addresses[1]: {TesseractHash: tsHases[1], IsGenesis: false},
 //			},
-//			icsSeeds: map[identifiers.Address][32]byte{
+//			icsSeeds: map[identifiers.Identifier][32]byte{
 //				addresses[0]: seeds[0],
 //				addresses[1]: seeds[1],
 //			},
@@ -44,7 +44,7 @@ package consensus
 //				addresses[0]: {TesseractHash: tsHases[0], IsGenesis: true},
 //				addresses[1]: {TesseractHash: tsHases[1], IsGenesis: false},
 //			},
-//			icsSeeds: map[identifiers.Address][32]byte{
+//			icsSeeds: map[identifiers.Identifier][32]byte{
 //				addresses[0]: seeds[0],
 //				addresses[1]: seeds[1],
 //			},
@@ -57,7 +57,7 @@ package consensus
 //				addresses[0]: {TesseractHash: tsHases[0], IsGenesis: false},
 //				addresses[1]: {TesseractHash: tsHases[0], IsGenesis: false},
 //			},
-//			icsSeeds: map[identifiers.Address][32]byte{
+//			icsSeeds: map[identifiers.Identifier][32]byte{
 //				addresses[0]: seeds[0],
 //				addresses[1]: seeds[0],
 //			},
@@ -69,7 +69,7 @@ package consensus
 //			ps: common.Participants{
 //				addresses[0]: {TesseractHash: tsHases[0], IsGenesis: false},
 //			},
-//			icsSeeds:      map[identifiers.Address][32]byte{},
+//			icsSeeds:      map[identifiers.Identifier][32]byte{},
 //			expectedError: errors.New("seed not found"),
 //		},
 //		{
@@ -78,7 +78,7 @@ package consensus
 //				addresses[0]:        {TesseractHash: tsHases[0], IsGenesis: false},
 //				common.SargaAddress: {TesseractHash: tsHases[0], IsGenesis: false},
 //			},
-//			icsSeeds: map[identifiers.Address][32]byte{
+//			icsSeeds: map[identifiers.Identifier][32]byte{
 //				addresses[0]:        seeds[0],
 //				common.SargaAddress: seeds[1],
 //			},

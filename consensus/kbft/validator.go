@@ -8,7 +8,7 @@ import (
 )
 
 type Validator struct {
-	Address     identifiers.Address `json:"address"`
+	ID          identifiers.Identifier `json:"id"`
 	KipID       kramaid.KramaID
 	PubKey      crypto.PublicKey `json:"pub_key"`
 	VotingPower int32            `json:"voting_power"`

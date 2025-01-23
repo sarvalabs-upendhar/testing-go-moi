@@ -50,8 +50,8 @@ func CreateRPCInteraction(
 			}
 
 			rpcPayload := RPCParticipantCreate{
-				Address: payload.Address,
-				Amount:  (*hexutil.Big)(payload.Amount),
+				ID:     payload.ID,
+				Amount: (*hexutil.Big)(payload.Amount),
 			}
 
 			rawPayload, err = json.Marshal(rpcPayload)
@@ -149,7 +149,7 @@ func CreateRPCInteraction(
 
 	for i, signature := range ix.Signatures() {
 		signatures[i] = RPCSignature{
-			Address:   signature.Address,
+			ID:        signature.ID,
 			KeyID:     hexutil.Uint64(signature.KeyID),
 			Signature: signature.Signature,
 		}
@@ -164,7 +164,7 @@ func CreateRPCInteraction(
 		IxIndex: hexutil.Uint64(ixIndex),
 
 		Sender: RPCSender{
-			Address:    data.Sender.Address,
+			ID:         data.Sender.ID,
 			SequenceID: hexutil.Uint64(data.Sender.SequenceID),
 			KeyID:      hexutil.Uint64(data.Sender.KeyID),
 		},
@@ -230,7 +230,7 @@ func CreateRPCIxParticipants(ixParticipants []common.IxParticipant) RPCIxPartici
 	rpcIxParticipants := make(RPCIxParticipants, len(ixParticipants))
 	for i, participant := range ixParticipants {
 		rpcIxParticipants[i] = RPCIxParticipant{
-			Address:  participant.Address,
+			ID:       participant.ID,
 			LockType: participant.LockType,
 		}
 	}
@@ -245,9 +245,9 @@ func CreateRPCParticipantStates(participants common.ParticipantsState) RPCPartic
 
 	rpcParticipants := make(RPCParticipantsStates, 0, len(participants))
 
-	for addr, state := range participants {
+	for id, state := range participants {
 		rpcParticipants = append(rpcParticipants, RPCState{
-			Address:        addr,
+			ID:             id,
 			Height:         hexutil.Uint64(state.Height),
 			TransitiveLink: state.TransitiveLink,
 			PrevContext:    state.PreviousContext,
@@ -338,7 +338,7 @@ func CreateRPCReceipt(
 
 			return opResults
 		}(),
-		From:         ix.SenderAddr(),
+		From:         ix.SenderID(),
 		IXIndex:      hexutil.Uint64(ixIndex),
 		TSHash:       tsHash,
 		Participants: CreateRPCParticipantStates(participants),

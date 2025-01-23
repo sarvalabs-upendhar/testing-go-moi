@@ -36,7 +36,7 @@ type senatusStore interface {
 }
 
 type stateManager interface {
-	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
+	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
 	GetPersistentStorageEntry(logicID identifiers.LogicID, slot []byte, state common.Hash) ([]byte, error)
 }
 
@@ -475,7 +475,7 @@ func (r *ReputationEngine) isGuardianRegisterd(kramaID kramaid.KramaID) bool {
 	// Generate the storage key for the guardian with the given krama ID
 	storageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
 
-	accMetaInfo, err := r.State.GetAccountMetaInfo(common.GuardianLogicID.Address())
+	accMetaInfo, err := r.State.GetAccountMetaInfo(common.GuardianLogicID.AsIdentifier())
 	if err != nil {
 		r.logger.Error("failed to get account meta info", "err", err)
 
@@ -492,7 +492,7 @@ func (r *ReputationEngine) isGuardianRegisterd(kramaID kramaid.KramaID) bool {
 	_, err = r.State.GetPersistentStorageEntry(
 		common.GuardianLogicID,
 		storageKey,
-		ts.StateHash(common.GuardianLogicID.Address()),
+		ts.StateHash(common.GuardianLogicID.AsIdentifier()),
 	)
 	if err == nil {
 		// If no error was returned, the key was found.

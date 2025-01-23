@@ -29,46 +29,46 @@ func EnvironmentPrefix(env string) []byte {
 	return []byte(env)
 }
 
-func AccountKey(env string, addr identifiers.Address) []byte {
-	// {env}-{addr}
-	return bytes.Join([][]byte{[]byte(env), addr.Bytes()}, TagDelim)
+func AccountKey(env string, id identifiers.Identifier) []byte {
+	// {env}-{id}
+	return bytes.Join([][]byte{[]byte(env), id.Bytes()}, TagDelim)
 }
 
-// AccountPrefix returns a key prefix for all items under an address
-func AccountPrefix(env string, addr identifiers.Address) []byte {
-	// {env}-{addr}
-	return bytes.Join([][]byte{[]byte(env), addr.Bytes()}, TagDelim)
+// AccountPrefix returns a key prefix for all items under an id
+func AccountPrefix(env string, id identifiers.Identifier) []byte {
+	// {env}-{id}
+	return bytes.Join([][]byte{[]byte(env), id.Bytes()}, TagDelim)
 }
 
 // LogicAccountKey returns a key to the entity item of a Logic
-// It is the same as the prefix key for all items in the logic's address
+// It is the same as the prefix key for all items in the logic's id
 func LogicAccountKey(env string, logic identifiers.LogicID) []byte {
-	// {env}-{addr}
-	return AccountPrefix(env, logic.Address())
+	// {env}-{id}
+	return AccountPrefix(env, logic.AsIdentifier())
 }
 
 // LogicManifestKey returns a key for the manifest of a logic
 func LogicManifestKey(env string, logic identifiers.LogicID) []byte {
-	// {env}-{addr}-manifest
-	return bytes.Join([][]byte{[]byte(env), logic.Address().Bytes(), TagManifest}, TagDelim)
+	// {env}-{id}-manifest
+	return bytes.Join([][]byte{[]byte(env), logic.Bytes(), TagManifest}, TagDelim)
 }
 
-// StoragePrefix returns a key prefix for all storage keys for a given address
-func StoragePrefix(env string, addr identifiers.Address) []byte {
-	// {env}-{addr}-storage
-	return bytes.Join([][]byte{[]byte(env), addr.Bytes(), TagStorage}, TagDelim)
+// StoragePrefix returns a key prefix for all storage keys for a given id
+func StoragePrefix(env string, id identifiers.Identifier) []byte {
+	// {env}-{id}-storage
+	return bytes.Join([][]byte{[]byte(env), id.Bytes(), TagStorage}, TagDelim)
 }
 
-// LogicStoragePrefix returns a key prefix for all storage keys of a particular logic for a given address
-func LogicStoragePrefix(env string, addr identifiers.Address, logic identifiers.LogicID) []byte {
-	// {env}-{addr}-storage-{logic}
-	return bytes.Join([][]byte{[]byte(env), addr.Bytes(), TagStorage, logic.Bytes()}, TagDelim)
+// LogicStoragePrefix returns a key prefix for all storage keys of a particular logic for a given id
+func LogicStoragePrefix(env string, id identifiers.Identifier, logic identifiers.LogicID) []byte {
+	// {env}-{id}-storage-{logic}
+	return bytes.Join([][]byte{[]byte(env), id.Bytes(), TagStorage, logic.Bytes()}, TagDelim)
 }
 
-// StorageKey returns a key for a specific storage key of a logic in a given address
-func StorageKey(env string, addr identifiers.Address, logic identifiers.LogicID, key []byte) []byte {
-	// {env}-{addr}-storage-{logic}-{key}
-	return bytes.Join([][]byte{[]byte(env), addr.Bytes(), TagStorage, logic.Bytes(), key}, TagDelim)
+// StorageKey returns a key for a specific storage key of a logic in a given id
+func StorageKey(env string, id identifiers.Identifier, logic identifiers.LogicID, key []byte) []byte {
+	// {env}-{id}-storage-{logic}-{key}
+	return bytes.Join([][]byte{[]byte(env), id.Bytes(), TagStorage, logic.Bytes(), key}, TagDelim)
 }
 
 // EventKey returns a key for a specific index
@@ -92,7 +92,7 @@ func EventSizeKey(env string) []byte {
 	return bytes.Join([][]byte{[]byte(env), TagEvents, TagSize}, TagDelim)
 }
 
-// AssetEntity: {env}-{addr} ?
-// SpendableBalance: {env}-{addr}-balance-spendable-{asset}
-// ApprovalBalance: {env}-{addr}-balance-approval-{asset}-{spender}
-// LockupBalance: {env}-{addr}-balance-lockup-{asset}-{logic}
+// AssetEntity: {env}-{id} ?
+// SpendableBalance: {env}-{id}-balance-spendable-{asset}
+// ApprovalBalance: {env}-{id}-balance-approval-{asset}-{spender}
+// LockupBalance: {env}-{id}-balance-lockup-{asset}-{logic}

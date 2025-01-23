@@ -11,7 +11,7 @@ import (
 // It is bounded to a particular account and can only mutate within applicable portions
 // of the state within the bounds of the logic's namespace
 type StateDriver interface {
-	Address() identifiers.Address
+	Identifier() identifiers.Identifier
 	LogicID() identifiers.LogicID
 
 	GetStorageEntry([]byte) ([]byte, error)

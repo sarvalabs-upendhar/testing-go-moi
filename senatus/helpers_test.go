@@ -3,6 +3,7 @@ package senatus
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"testing"
 
 	identifiers "github.com/sarvalabs/go-moi-identifiers"
@@ -117,13 +118,13 @@ func (bw *mockBatchWriter) Flush() error {
 }
 
 type MockStateManager struct {
-	accMetaInfo  map[identifiers.Address]*common.AccountMetaInfo
+	accMetaInfo  map[identifiers.Identifier]*common.AccountMetaInfo
 	logicStorage map[string]map[string]string // first key denotes logic id, second key denotes storage key
 }
 
 func NewMockState() *MockStateManager {
 	return &MockStateManager{
-		accMetaInfo:  make(map[identifiers.Address]*common.AccountMetaInfo),
+		accMetaInfo:  make(map[identifiers.Identifier]*common.AccountMetaInfo),
 		logicStorage: make(map[string]map[string]string),
 	}
 }
@@ -131,11 +132,11 @@ func NewMockState() *MockStateManager {
 func (m *MockStateManager) setAccountMetaInfo(t *testing.T, accMetaInfo *common.AccountMetaInfo) {
 	t.Helper()
 
-	m.accMetaInfo[accMetaInfo.Address] = accMetaInfo
+	m.accMetaInfo[accMetaInfo.ID] = accMetaInfo
 }
 
-func (m *MockStateManager) GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error) {
-	accMetaInfo, ok := m.accMetaInfo[addr]
+func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
+	accMetaInfo, ok := m.accMetaInfo[id]
 	if !ok {
 		return nil, common.ErrAccountNotFound
 	}
@@ -154,7 +155,7 @@ func (m *MockStateManager) setStorageEntry(
 
 	store[string(slot)] = "value"
 
-	m.logicStorage[string(logicID)] = store
+	m.logicStorage[hex.EncodeToString(logicID.Bytes())] = store
 }
 
 func (m *MockStateManager) GetPersistentStorageEntry(
@@ -162,7 +163,7 @@ func (m *MockStateManager) GetPersistentStorageEntry(
 	slot []byte,
 	state common.Hash,
 ) ([]byte, error) {
-	store, ok := m.logicStorage[string(logicID)]
+	store, ok := m.logicStorage[hex.EncodeToString(logicID.Bytes())]
 	if !ok {
 		return nil, common.ErrLogicStorageTreeNotFound
 	}

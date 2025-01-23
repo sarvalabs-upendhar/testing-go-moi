@@ -24,7 +24,7 @@ import (
 
 type SessionManager interface {
 	HandlePeerMessage(id kramaid.KramaID, msg interface{})
-	PeerDisconnected(sessions []identifiers.Address, id peer.ID)
+	PeerDisconnected(sessions []identifiers.Identifier, id peer.ID)
 }
 
 type AgoraNetwork struct {
@@ -58,7 +58,7 @@ func (an *AgoraNetwork) streamHandler(stream p2pnet.Stream) {
 		id:             stream.Conn().RemotePeer(),
 		stream:         stream,
 		connected:      true,
-		activeSessions: make(map[identifiers.Address]struct{}),
+		activeSessions: make(map[identifiers.Identifier]struct{}),
 	}
 
 	an.peers.Store(agoraPeer.id, agoraPeer)
@@ -145,7 +145,7 @@ func (an *AgoraNetwork) SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.
 		}
 
 		abstractPeer = &AgoraPeer{
-			activeSessions: map[identifiers.Address]struct{}{msg.GetSessionID(): {}},
+			activeSessions: map[identifiers.Identifier]struct{}{msg.GetSessionID(): {}},
 			id:             peerID,
 			stream:         stream,
 			connected:      true,
@@ -218,7 +218,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 	}
 }
 
-func (an *AgoraNetwork) ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Address) error {
+func (an *AgoraNetwork) ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Identifier) error {
 	peerID, err := utils.GetNetworkID(kramaID)
 	if err != nil {
 		an.logger.Error("Error parsing krama ID", "krama-id", kramaID)

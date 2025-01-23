@@ -55,7 +55,7 @@ type ClusterConfig struct {
 	GenesisAccountCount int
 	PremineAmount       int
 	GenesisAssetCount   int
-	BehaviouralCount    int
+	consensusNodesCount int
 	RandomCount         int
 	LogsDir             string
 	WithLogs            bool
@@ -83,7 +83,7 @@ func DefaultClusterConfig() *ClusterConfig {
 		GenesisAccountCount: 15,
 		GenesisAssetCount:   1,
 		PremineAmount:       3000000000,
-		BehaviouralCount:    1,
+		consensusNodesCount: 1,
 		RandomCount:         1,
 		WithLogs:            true,
 		WithStdout:          true,

@@ -47,17 +47,13 @@ func (tm *TesseractSyncMsg) GetTesseract() (*common.Tesseract, error) {
 
 	if tm.Ixns != nil && !ts.InteractionsHash().IsNil() {
 		if err := ixns.FromBytes(tm.Ixns); err != nil {
-			if !errors.Is(err, polo.ErrNullPack) {
-				return nil, err
-			}
+			return nil, err
 		}
 	}
 
 	if tm.Receipts != nil && !ts.ReceiptsHash().IsNil() {
 		if err := receipts.FromBytes(tm.Receipts); err != nil {
-			if !errors.Is(err, polo.ErrNullPack) {
-				return nil, err
-			}
+			return nil, err
 		}
 	}
 

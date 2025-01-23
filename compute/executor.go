@@ -76,9 +76,9 @@ func (executor *IxExecutor) executeInteraction(
 		executor.transition.UpdateSnapshot(snapshot)
 	}
 
-	// Increment the sequenceID of the sender address
-	if ix.SenderAddr() != identifiers.NilAddress {
-		executor.transition.IncrementSequenceID(ix.SenderAddr(), ix.SenderKeyID())
+	// Increment the sequenceID of the sender id
+	if ix.SenderID() != identifiers.Nil {
+		executor.transition.IncrementSequenceID(ix.SenderID(), ix.SenderKeyID())
 	}
 
 	// Set the receipt to the transition
@@ -86,7 +86,7 @@ func (executor *IxExecutor) executeInteraction(
 
 	// Deduct fuel for the ix execution from the sender
 	executor.transition.DeductFuel(
-		ix.SenderAddr(),
+		ix.SenderID(),
 		new(big.Int).Mul(ix.FuelPrice(), new(big.Int).SetUint64(receipt.FuelUsed)),
 	)
 
@@ -95,22 +95,22 @@ func (executor *IxExecutor) executeInteraction(
 
 // UpdateContext updates the context of the participant accounts using context delta
 func (executor *IxExecutor) UpdateContext() error {
-	for address, object := range executor.transition.Objects() {
-		delta, ok := executor.execContext.ContextDelta()[address]
+	for id, object := range executor.transition.Objects() {
+		delta, ok := executor.execContext.ContextDelta()[id]
 		if !ok {
 			continue
 		}
 
 		// Create a context for the account state object if it is a new account
-		if executor.transition.IsGenesis(object.Address()) {
-			if _, err := object.CreateContext(delta.BehaviouralNodes, delta.RandomNodes); err != nil {
+		if executor.transition.IsGenesis(object.Identifier()) {
+			if err := object.CreateContext(delta.ConsensusNodes); err != nil {
 				return errors.Wrap(common.ErrContextCreation, err.Error())
 			}
 
 			continue
 		}
 
-		_, err := object.UpdateContext(delta.BehaviouralNodes, delta.RandomNodes)
+		err := object.UpdateContext(delta.ConsensusNodes)
 		if err != nil {
 			return errors.Wrap(common.ErrContextCreation, err.Error())
 		}
@@ -122,8 +122,8 @@ func (executor *IxExecutor) UpdateContext() error {
 // CommitStateObjects commits all StateObjects of the interaction participants to the state db.
 // If the interaction receiver is a new account, the Object of the sarga account is also committed.
 func (executor *IxExecutor) CommitStateObjects() error {
-	for addr, ps := range executor.Interactions.Participants() {
-		obj := executor.transition.GetObject(addr)
+	for id, ps := range executor.Interactions.Participants() {
+		obj := executor.transition.GetObject(id)
 
 		previousHash, err := obj.Data().Hash()
 		if err != nil {
@@ -131,8 +131,8 @@ func (executor *IxExecutor) CommitStateObjects() error {
 		}
 
 		if ps.LockType > common.MutateLock {
-			executor.commitHashes.SetStateHash(addr, previousHash)
-			executor.commitHashes.SetContextHash(addr, obj.Data().ContextHash)
+			executor.commitHashes.SetStateHash(id, previousHash)
+			executor.commitHashes.SetContextHash(id, obj.Data().ContextHash)
 
 			continue
 		}
@@ -143,14 +143,14 @@ func (executor *IxExecutor) CommitStateObjects() error {
 		}
 
 		if newHash == previousHash {
-			executor.commitHashes.SetStateHash(addr, common.NilHash)
-			executor.commitHashes.SetContextHash(addr, common.NilHash)
+			executor.commitHashes.SetStateHash(id, common.NilHash)
+			executor.commitHashes.SetContextHash(id, common.NilHash)
 
 			continue
 		}
 
-		executor.commitHashes.SetStateHash(addr, newHash)
-		executor.commitHashes.SetContextHash(addr, obj.ContextHash())
+		executor.commitHashes.SetStateHash(id, newHash)
+		executor.commitHashes.SetContextHash(id, obj.ContextHash())
 	}
 
 	return nil

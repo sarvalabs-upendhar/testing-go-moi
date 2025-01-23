@@ -37,7 +37,7 @@ type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiple
 
 type lattice interface {
 	AddTesseractWithState(
-		addr identifiers.Address,
+		id identifiers.Identifier,
 		dirtyStorage map[common.Hash][]byte,
 		ts *common.Tesseract,
 		transition *state.Transition,
@@ -45,7 +45,7 @@ type lattice interface {
 	) error
 	AddTesseract(
 		cache bool,
-		addr identifiers.Address,
+		id identifiers.Identifier,
 		t *common.Tesseract,
 		transition *state.Transition,
 		allParticipants bool,
@@ -85,39 +85,38 @@ type kramaTransport interface {
 }
 
 type stateManager interface {
-	GetPublicKey(addr identifiers.Address, KeyID uint64, stateHash common.Hash) ([]byte, error)
-	LoadTransitionObjects(ps map[identifiers.Address]common.ParticipantInfo) (*state.Transition, error)
-	CreateStateObject(identifiers.Address, common.AccountType, bool) *state.Object
-	GetLatestContextAndPublicKeys(addr identifiers.Address) (
+	GetPublicKey(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) ([]byte, error)
+	LoadTransitionObjects(ps map[identifiers.Identifier]common.ParticipantInfo) (*state.Transition, error)
+	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
+	GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 		latestContextHash common.Hash,
-		behaviouralSet, randomSet []kramaid.KramaID,
-		bePublicKeys, beRandomKeys [][]byte,
+		consensusSet []kramaid.KramaID,
+		randomPublicKeys [][]byte,
 		err error,
 	)
 	GetPublicKeys(context context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error)
-	GetICSSeed(addr identifiers.Address) ([32]byte, error)
-	GetAccountMetaInfo(addr identifiers.Address) (*common.AccountMetaInfo, error)
-	IsAccountRegistered(addr identifiers.Address) (bool, error)
-	GetLatestStateObject(addr identifiers.Address) (*state.Object, error)
-	GetSequenceID(addr identifiers.Address, KeyID uint64, stateHash common.Hash) (uint64, error)
-	IsInitialTesseract(ts *common.Tesseract, addr identifiers.Address) (bool, error)
+	GetICSSeed(id identifiers.Identifier) ([32]byte, error)
+	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
+	IsAccountRegistered(id identifiers.Identifier) (bool, error)
+	GetLatestStateObject(id identifiers.Identifier) (*state.Object, error)
+	GetSequenceID(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) (uint64, error)
+	IsInitialTesseract(ts *common.Tesseract, id identifiers.Identifier) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
-	RemoveCachedObject(addr identifiers.Address)
+	RemoveCachedObject(id identifiers.Identifier)
 	GetRegisteredGuardiansCount() (int, error)
 	GetGuardianIncentives(id kramaid.KramaID) (uint64, error)
 	GetTotalIncentives() (uint64, error)
-	GetContext(
-		addr identifiers.Address,
+	GetConsensusNodes(
+		id identifiers.Identifier,
 		hash common.Hash,
 	) (
-		common.NodeList,
 		common.NodeList,
 		error,
 	)
 }
 
 type ixPool interface {
-	IncrementWaitTime(addr identifiers.Address, baseTime time.Duration) error
+	IncrementWaitTime(id identifiers.Identifier, baseTime time.Duration) error
 	Executables() ixpool.InteractionQueue
 	Drop(ix *common.Interaction)
 	ProcessableBatches() []*common.IxBatch
@@ -130,16 +129,16 @@ type execution interface {
 }
 
 type store interface {
-	HasAccMetaInfoAt(addr identifiers.Address, height uint64) bool
-	GetAccountMetaInfo(id identifiers.Address) (*common.AccountMetaInfo, error)
-	GetSafetyData(addr identifiers.Address) ([]byte, error)
+	HasAccMetaInfoAt(id identifiers.Identifier, height uint64) bool
+	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
+	GetSafetyData(id identifiers.Identifier) ([]byte, error)
 	GetCommitInfo(tsHash common.Hash) ([]byte, error)
-	SetSafetyData(addr identifiers.Address, data []byte) error
+	SetSafetyData(id identifiers.Identifier, data []byte) error
 	SetConsensusProposalInfo(tsHash common.Hash, data []byte) error
 	GetConsensusProposalInfo(tsHash common.Hash) ([]byte, error)
 	DeleteConsensusProposalInfo(tsHash common.Hash) error
 	GetAllConsensusProposalInfo(ctx context.Context) ([][]byte, error)
-	DeleteSafetyData(addr identifiers.Address) error
+	DeleteSafetyData(id identifiers.Identifier) error
 	HasTesseract(tsHash common.Hash) bool
 }
 
@@ -176,7 +175,7 @@ type Engine struct {
 	tsTracker           map[common.Hash]*utils.TSTrackerEvent
 	view                atomic.Uint64
 	viewTimeOutDeadline atomic.Value
-	accountLocks        map[identifiers.Address]*ktypes.AccConsensusLockInfo
+	accountLocks        map[identifiers.Identifier]*ktypes.AccConsensusLockInfo
 	safety              *safety.ConsensusSafety
 	trustedPeersPresent bool
 	futureMsg           []*ktypes.ICSMSG
@@ -261,7 +260,7 @@ func (k *Engine) createICS(
 	ctx context.Context,
 	clusterID common.ClusterID,
 	ixns common.Interactions,
-	locks map[identifiers.Address]common.LockType,
+	locks map[identifiers.Identifier]common.LockType,
 ) (*ktypes.Slot, common.ClusterID, error) {
 	slot, activeCluster := k.slots.CreateSlotAndLockAccounts(clusterID, ktypes.OperatorSlot, locks)
 	if slot == nil {
@@ -305,7 +304,7 @@ func (k *Engine) loadClusterState(
 		return nil, err
 	}
 
-	viewInfos, err := k.loadViewInfo(participants.Addrs())
+	viewInfos, err := k.loadViewInfo(participants.IDs())
 	if err != nil {
 		k.logger.Error("Failed to load view info", err)
 
@@ -329,7 +328,7 @@ func (k *Engine) loadClusterState(
 
 func (k *Engine) fetchParticipantsAndCommittee(
 	ctx context.Context,
-	ps map[identifiers.Address]common.ParticipantInfo,
+	ps map[identifiers.Identifier]common.ParticipantInfo,
 ) (
 	common.Participants,
 	*ktypes.ICSCommittee,
@@ -338,25 +337,25 @@ func (k *Engine) fetchParticipantsAndCommittee(
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "fetchIxAccounts")
 	defer span.End()
 
-	participants := make(map[identifiers.Address]*common.Participant)
-	addrs := make(common.Addresses, 0, len(ps))
+	participants := make(map[identifiers.Identifier]*common.Participant)
+	ids := make(common.IdentifierList, 0, len(ps))
 
-	for addr, info := range ps {
-		if _, ok := participants[addr]; ok {
+	for id, info := range ps {
+		if _, ok := participants[id]; ok {
 			continue
 		}
 
-		addrs = append(addrs, addr)
+		ids = append(ids, id)
 
 		if !info.IsGenesis {
-			accInfo, err := k.state.GetAccountMetaInfo(addr)
+			accInfo, err := k.state.GetAccountMetaInfo(id)
 			if err != nil {
 				return nil, nil, err
 			}
 
-			participants[addr] = &common.Participant{
+			participants[id] = &common.Participant{
 				AccType:       accInfo.Type,
-				Address:       addr,
+				ID:            id,
 				IsGenesis:     info.IsGenesis,
 				Height:        accInfo.Height,
 				TesseractHash: accInfo.TesseractHash,
@@ -368,9 +367,9 @@ func (k *Engine) fetchParticipantsAndCommittee(
 			continue
 		}
 
-		participants[addr] = &common.Participant{
+		participants[id] = &common.Participant{
 			AccType:       info.AccType,
-			Address:       addr,
+			ID:            id,
 			IsGenesis:     info.IsGenesis,
 			Height:        0,
 			TesseractHash: common.NilHash,
@@ -379,28 +378,28 @@ func (k *Engine) fetchParticipantsAndCommittee(
 		}
 	}
 
-	sort.Sort(addrs)
+	sort.Sort(ids)
 
-	committee := ktypes.NewICSCommittee(len(addrs) + 1)
+	committee := ktypes.NewICSCommittee(len(ids) + 1)
 
-	for index, addr := range addrs {
+	for index, id := range ids {
 		position := index
 
-		participants[addr].NodeSetPosition = position
+		participants[id].NodeSetPosition = position
 
-		if participants[addr].IsGenesis {
+		if participants[id].IsGenesis {
 			continue
 		}
 
-		contextHash, bSet, _, bPublicKeys, _, err := k.state.GetLatestContextAndPublicKeys(addr)
+		contextHash, consensusSet, consensusPublicKeys, err := k.state.GetLatestContextAndPublicKeys(id)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		committee.UpdateNodeSet(position, ktypes.NewNodeSet(bSet, bPublicKeys, uint32(len(bSet))))
+		committee.UpdateNodeSet(position, ktypes.NewNodeSet(consensusSet, consensusPublicKeys, uint32(len(consensusSet))))
 
-		participants[addr].ContextHash = contextHash
-		participants[addr].ConsensusQuorum = committee.ParticipantQuorum(participants[addr].NodeSetPosition)
+		participants[id].ContextHash = contextHash
+		participants[id].ConsensusQuorum = committee.ParticipantQuorum(participants[id].NodeSetPosition)
 	}
 
 	return participants, committee, nil
@@ -408,11 +407,11 @@ func (k *Engine) fetchParticipantsAndCommittee(
 
 // isOperatorEligible checks if the operator is eligible to propose a tesseract for the given interactions.
 func (k *Engine) isOperatorEligible(peerID kramaid.KramaID, ixns common.Interactions) bool {
-	addr := ixns.LeaderCandidateAddress()
+	id := ixns.LeaderCandidateID()
 
-	fmt.Println("Leader candidate address", "address", addr, "ixns-size", ixns.Len())
+	fmt.Println("Leader candidate info", "id", id, "ixns-size", ixns.Len())
 
-	metaInfo, err := k.state.GetAccountMetaInfo(addr)
+	metaInfo, err := k.state.GetAccountMetaInfo(id)
 	if err != nil {
 		k.logger.Error("failed to check operator eligibility", "error", err)
 
@@ -428,19 +427,19 @@ func (k *Engine) isOperatorEligible(peerID kramaid.KramaID, ixns common.Interact
 
 		currentView := k.view.Load()
 
-		fmt.Println("Current View", currentView, currentView%common.BehaviouralContextSize)
+		fmt.Println("Current View", currentView, currentView%common.ConsensusNodesSize)
 
-		return currentView%common.BehaviouralContextSize == uint64(metaInfo.PositionInContextSet)
+		return currentView%common.ConsensusNodesSize == uint64(metaInfo.PositionInContextSet)
 	}
 
-	behaviourContext, _, err := k.state.GetContext(addr, metaInfo.ContextHash)
+	consensusNodes, err := k.state.GetConsensusNodes(id, metaInfo.ContextHash)
 	if err != nil {
 		k.logger.Error("failed to check operator eligibility", "error", err)
 
 		return false
 	}
 
-	return behaviourContext.Contains(peerID)
+	return consensusNodes.Contains(peerID)
 }
 
 func (k *Engine) updateContextDelta(cs *ktypes.ClusterState) error {
@@ -460,17 +459,15 @@ func (k *Engine) updateContextDelta(cs *ktypes.ClusterState) error {
 
 		if ps.IsGenesis {
 			// Fetch new nodes for the receiver account
-			behaviouralNodes, randomNodes, err := k.getContextNodes(
+			consensusNodes, err := k.getConsensusNodes(
 				cs,
-				common.StochasticSetSize,
-				common.BehaviouralContextSize,
+				common.ConsensusNodesSize,
 			)
 			if err != nil {
 				return err
 			}
 
-			deltaGroup.RandomNodes = append(deltaGroup.RandomNodes, randomNodes...)
-			deltaGroup.BehaviouralNodes = append(deltaGroup.BehaviouralNodes, behaviouralNodes...)
+			deltaGroup.ConsensusNodes = append(deltaGroup.ConsensusNodes, consensusNodes...)
 
 			ps.ContextDelta = deltaGroup
 
@@ -481,22 +478,16 @@ func (k *Engine) updateContextDelta(cs *ktypes.ClusterState) error {
 	return nil
 }
 
-// getContextNodes returns a list of nodes for updating the behavioural and random context of an account.
+// getConsensusNodes returns a list of nodes for updating the consensus nodes of an account.
 // If trusted peers are available, it returns the trusted peers. Otherwise, it returns the nodes from the random set.
-func (k *Engine) getContextNodes(
+func (k *Engine) getConsensusNodes(
 	clusterInfo *ktypes.ClusterState,
-	requiredRandomNodes,
-	requiredBehaviouralNodes int,
-) (behaviouralNodes []kramaid.KramaID, randomNodes []kramaid.KramaID, err error) {
-	if requiredRandomNodes < requiredBehaviouralNodes {
-		return nil, nil, errors.New("required random nodes cannot be less than behavioural nodes")
-	}
-
+	requiredConsensusNodes int,
+) (consensusNodes []kramaid.KramaID, err error) {
 	if k.trustedPeersPresent {
 		peers := clusterInfo.TrustedPeers
 
-		return peers[:requiredBehaviouralNodes],
-			peers[requiredBehaviouralNodes : requiredBehaviouralNodes+requiredRandomNodes], nil
+		return peers[:requiredConsensusNodes], nil
 	}
 
 	// TODO: Need to improve this function
@@ -505,21 +496,18 @@ func (k *Engine) getContextNodes(
 
 	for index, info := range set.Infos {
 		if set.Responses.GetIndex(index) {
-			if len(behaviouralNodes) != requiredBehaviouralNodes {
-				behaviouralNodes = append(behaviouralNodes, info.ID)
-				count++
-			} else {
-				randomNodes = append(randomNodes, info.ID)
+			if len(consensusNodes) != requiredConsensusNodes {
+				consensusNodes = append(consensusNodes, info.ID)
 				count++
 			}
 		}
 
-		if count == requiredRandomNodes+requiredBehaviouralNodes {
+		if count == requiredConsensusNodes {
 			break
 		}
 	}
 
-	return behaviouralNodes, randomNodes, nil
+	return consensusNodes, nil
 }
 
 func (k *Engine) getStochasticNodes(
@@ -565,13 +553,13 @@ func (k *Engine) createICSForProposal(ctx context.Context, sender kramaid.KramaI
 	slot, _ := k.slots.CreateSlotAndLockAccounts(msg.ClusterID(), ktypes.ValidatorSlot, msg.Locks())
 	if slot == nil {
 		ps := msg.Tesseract.Participants()
-		for addr, lockInfo := range k.slots.ActiveAccounts() {
-			if _, ok := ps[addr]; !ok {
+		for id, lockInfo := range k.slots.ActiveAccounts() {
+			if _, ok := ps[id]; !ok {
 				continue
 			}
 
 			for _, info := range lockInfo {
-				k.logger.Debug("krama active accounts", "cluster-id", msg.ClusterID(), "address", addr, "lock-info", info.String())
+				k.logger.Debug("krama active accounts", "cluster-id", msg.ClusterID(), "id", id, "lock-info", info.String())
 			}
 		}
 
@@ -725,17 +713,17 @@ func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesse
 	}
 
 	lockInfo := cs.Participants.LockInfo(true)
-	lastCommitHash := make(map[identifiers.Address]common.Hash)
+	lastCommitHash := make(map[identifiers.Identifier]common.Hash)
 
-	for addr := range lockInfo {
-		lastCommitHash[addr] = cs.Participants[addr].CommitHash
+	for id := range lockInfo {
+		lastCommitHash[id] = cs.Participants[id].CommitHash
 	}
 
 	poxt := common.PoXtData{
 		Proposer:     k.selfID,
 		View:         k.view.Load(),
 		LastCommit:   lastCommitHash,
-		EvidenceHash: make(map[identifiers.Address]common.Hash),
+		EvidenceHash: make(map[identifiers.Identifier]common.Hash),
 		AccountLocks: cs.Participants.LockInfo(true),
 		ICSSeed:      newSeed,
 		ICSProof:     proof,
@@ -764,7 +752,7 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 	cs := slot.ClusterState()
 
 	if err = k.lattice.AddTesseractWithState(
-		identifiers.NilAddress,
+		identifiers.Nil,
 		cs.GetDirty(),
 		tesseract,
 		cs.Transition,
@@ -773,9 +761,9 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		return err
 	}
 
-	for addr := range cs.Participants {
-		if err := k.safety.DeleteSafetyData(addr); err != nil {
-			k.logger.Error("Failed to delete safety data", "err", err, "addr", addr)
+	for id := range cs.Participants {
+		if err := k.safety.DeleteSafetyData(id); err != nil {
+			k.logger.Error("Failed to delete safety data", "err", err, "id", id)
 		}
 	}
 
@@ -817,8 +805,8 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		}
 	}
 
-	for _, addr := range tesseract.Addresses() {
-		k.state.RemoveCachedObject(addr)
+	for _, id := range tesseract.AccountIDs() {
+		k.state.RemoveCachedObject(id)
 	}
 
 	return nil
@@ -832,7 +820,7 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 			"Validating interaction",
 			"ix-hash", ixHash,
 			"sequence-id", ix.SequenceID(),
-			"from", ix.SenderAddr().Hex(),
+			"from", ix.SenderID().Hex(),
 		)
 		/*
 			Checks to perform
@@ -840,7 +828,7 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 			2) Verify balances
 			3) Verify the account states
 		*/
-		latestSequenceID, err := k.state.GetSequenceID(ix.SenderAddr(), ix.SenderKeyID(), common.NilHash)
+		latestSequenceID, err := k.state.GetSequenceID(ix.SenderID(), ix.SenderKeyID(), common.NilHash)
 		if err != nil {
 			return err
 		}
@@ -860,15 +848,15 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 
 // isIxValid performs validity checks based on the type of interaction
 func (k *Engine) isIxValid(ix *common.Interaction) error {
-	if ix.SenderAddr().IsNil() {
-		return common.ErrInvalidAddress
+	if ix.SenderID().IsNil() {
+		return common.ErrInvalidIdentifier
 	}
 
-	if accountRegistered, err := k.state.IsAccountRegistered(ix.SenderAddr()); err != nil || !accountRegistered {
+	if accountRegistered, err := k.state.IsAccountRegistered(ix.SenderID()); err != nil || !accountRegistered {
 		return common.ErrAccountNotFound
 	}
 
-	senderObject, err := k.state.GetLatestStateObject(ix.SenderAddr())
+	senderObject, err := k.state.GetLatestStateObject(ix.SenderID())
 	if err != nil {
 		return err
 	}
@@ -886,7 +874,7 @@ func (k *Engine) isIxValid(ix *common.Interaction) error {
 }
 
 func (k *Engine) verifyTransitions(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	ts *common.Tesseract,
 	allParticipants bool,
 ) error {
@@ -894,16 +882,16 @@ func (k *Engine) verifyTransitions(
 		return nil
 	}
 
-	addresses := make([]identifiers.Address, 0)
+	ids := make([]identifiers.Identifier, 0)
 
 	if allParticipants {
-		addresses = ts.Addresses()
+		ids = ts.AccountIDs()
 	} else {
-		addresses = append(addresses, addr)
+		ids = append(ids, id)
 	}
 
-	for _, addr := range addresses {
-		initial, err := k.state.IsInitialTesseract(ts, addr)
+	for _, id := range ids {
+		initial, err := k.state.IsInitialTesseract(ts, id)
 		if err != nil {
 			return errors.Wrap(err, "Sarga account not found")
 		}
@@ -912,20 +900,20 @@ func (k *Engine) verifyTransitions(
 			continue
 		}
 
-		lockType, ok := ts.ConsensusInfo().AccountLocks[addr]
+		lockType, ok := ts.ConsensusInfo().AccountLocks[id]
 		if ok && lockType > common.MutateLock {
 			continue
 		}
 
-		parent, err := k.lattice.GetTesseract(ts.TransitiveLink(addr), false, false)
+		parent, err := k.lattice.GetTesseract(ts.TransitiveLink(id), false, false)
 		if err != nil {
-			k.logger.Error("Failed to fetch parent tesseract", "err", err, "addr", addr)
+			k.logger.Error("Failed to fetch parent tesseract", "err", err, "id", id)
 
 			return common.ErrPreviousTesseractNotFound
 		}
 
 		// Check Heights
-		if parent.Height(addr) != ts.Height(addr)-1 {
+		if parent.Height(id) != ts.Height(id)-1 {
 			return common.ErrInvalidHeight
 		}
 		// TODO: Add more checks
@@ -939,7 +927,7 @@ func (k *Engine) verifyTransitions(
 }
 
 func (k *Engine) verifyQc(
-	addrs common.Addresses,
+	ids common.IdentifierList,
 	ps common.ParticipantsState,
 	view uint64,
 	ics *ktypes.ICSCommittee,
@@ -950,7 +938,7 @@ func (k *Engine) verifyQc(
 	var (
 		verificationInitTime = time.Now()
 		publicKeys           = make([][]byte, 0, qc.SignerIndices.TrueIndicesSize())
-		votesCounter         = make([]uint32, len(addrs)+1)
+		votesCounter         = make([]uint32, len(ids)+1)
 	)
 
 	for _, valIndex := range qc.SignerIndices.GetTrueIndices() {
@@ -962,12 +950,12 @@ func (k *Engine) verifyQc(
 				votesCounter[index]++
 			}
 		} else {
-			k.logger.Debug("Error fetching validator address", "index", valIndex)
+			k.logger.Debug("Error fetching validator id", "index", valIndex)
 		}
 	}
 
-	for index, addr := range addrs {
-		if ps.IsExcluded(addr) {
+	for index, id := range ids {
+		if ps.IsExcluded(id) {
 			continue
 		}
 
@@ -976,7 +964,7 @@ func (k *Engine) verifyQc(
 		}
 	}
 
-	if votesCounter[len(addrs)] < ics.RandomQuorumSize() {
+	if votesCounter[len(ids)] < ics.RandomQuorumSize() {
 		return false, common.ErrRandomQuorumFailed
 	}
 
@@ -1003,7 +991,7 @@ func (k *Engine) verifyQc(
 
 func (k *Engine) verifySignatures(ts *common.Tesseract, ics *ktypes.ICSCommittee) (bool, error) {
 	return k.verifyQc(
-		ts.Addresses(),
+		ts.AccountIDs(),
 		ts.Participants(),
 		ts.ConsensusInfo().View,
 		ics,
@@ -1012,12 +1000,12 @@ func (k *Engine) verifySignatures(ts *common.Tesseract, ics *ktypes.ICSCommittee
 }
 
 func (k *Engine) ValidateTesseract(
-	addr identifiers.Address,
+	id identifiers.Identifier,
 	ts *common.Tesseract,
 	ics *ktypes.ICSCommittee,
 	allParticipants bool,
 ) error {
-	if k.db.HasAccMetaInfoAt(addr, ts.Height(addr)) {
+	if k.db.HasAccMetaInfoAt(id, ts.Height(id)) {
 		return common.ErrAlreadyKnown
 	}
 
@@ -1028,13 +1016,13 @@ func (k *Engine) ValidateTesseract(
 		return common.ErrInvalidSeal
 	}
 
-	if err = k.verifyTransitions(addr, ts, allParticipants); err != nil {
+	if err = k.verifyTransitions(id, ts, allParticipants); err != nil {
 		return err
 	}
 
 	verified, err := k.verifySignatures(ts, ics)
 	if !verified || err != nil {
-		return errors.Wrap(err, fmt.Sprintf("failed to verify signatures %v %v", addr, ts.Height(addr)))
+		return errors.Wrap(err, fmt.Sprintf("failed to verify signatures %v %v", id, ts.Height(id)))
 	}
 
 	return nil
@@ -1068,14 +1056,18 @@ func (k *Engine) ExecuteAndValidate(
 	return nil
 }
 
-func (k *Engine) AddActiveAccount(addr identifiers.Address, lockType common.LockType, clusterID common.ClusterID) bool {
-	return k.slots.AddActiveAccount(addr, lockType, clusterID)
+func (k *Engine) AddActiveAccount(
+	id identifiers.Identifier,
+	lockType common.LockType,
+	clusterID common.ClusterID,
+) bool {
+	return k.slots.AddActiveAccount(id, lockType, clusterID)
 }
 
-func (k *Engine) ClearActiveAccount(addr identifiers.Address, clusterID common.ClusterID) {
-	k.slots.ClearActiveAccount(addr, clusterID)
+func (k *Engine) ClearActiveAccount(id identifiers.Identifier, clusterID common.ClusterID) {
+	k.slots.ClearActiveAccount(id, clusterID)
 
-	k.logger.Trace("removed from active accounts", "address", addr)
+	k.logger.Trace("removed from active accounts", "id", id)
 }
 
 /*
@@ -1240,8 +1232,8 @@ func (k *Engine) Close() {
 }
 
 func areStateHashesValid(ts *common.Tesseract, postExecState common.AccStateHashes) bool {
-	for addr, participantState := range ts.Participants() {
-		if postExecState.StateHash(addr) != participantState.StateHash {
+	for id, participantState := range ts.Participants() {
+		if postExecState.StateHash(id) != participantState.StateHash {
 			return false
 		}
 	}
@@ -1265,14 +1257,14 @@ func isReceiptsHashValid(ts *common.Tesseract, receipts common.Receipts) bool {
 func participantStates(cs *ktypes.ClusterState, ps common.AccStateHashes) common.ParticipantsState {
 	participants := make(common.ParticipantsState, len(cs.Participants))
 
-	for addr, p := range cs.Participants {
-		participants[addr] = common.State{
+	for id, p := range cs.Participants {
+		participants[id] = common.State{
 			Height:          p.NewHeight(),
 			TransitiveLink:  p.TSHash(),
 			PreviousContext: p.ContextHash,
-			LatestContext:   ps.ContextHash(addr),
+			LatestContext:   ps.ContextHash(id),
 			ContextDelta:    p.ContextDelta,
-			StateHash:       ps.StateHash(addr),
+			StateHash:       ps.StateHash(id),
 		}
 	}
 

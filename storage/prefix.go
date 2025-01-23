@@ -54,9 +54,9 @@ func (p PrefixTag) IsAccountBasedKey() bool {
 }
 
 func SenatusPrefix() []byte {
-	return dbKey(identifiers.NilAddress, Senatus, nil)
+	return dbKey(identifiers.Nil, Senatus, nil)
 }
 
 func AccountSyncPrefix() []byte {
-	return dbKey(identifiers.NilAddress, AccountSyncJob, nil)
+	return dbKey(identifiers.Nil, AccountSyncJob, nil)
 }

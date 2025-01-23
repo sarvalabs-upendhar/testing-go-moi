@@ -16,7 +16,7 @@ const (
 
 // ParticipantInfo holds all basic information of the participant account
 type ParticipantInfo struct {
-	Address   identifiers.Address
+	ID        identifiers.Identifier
 	AccType   AccountType
 	IsSigner  bool
 	LockType  LockType
@@ -26,13 +26,13 @@ type ParticipantInfo struct {
 // Participant holds all the information required to achieve consensus on the participants state
 type Participant struct {
 	AccType       AccountType
-	Address       identifiers.Address
+	ID            identifiers.Identifier
 	IsGenesis     bool
 	IsSigner      bool
 	Height        uint64
 	ContextHash   Hash
 	TesseractHash Hash
-	// The participants within an ICS file are arranged by their addresses.
+	// The participants within an ICS file are arranged by their ids.
 	// This field indicates the index of the participant's nodeSet.
 	NodeSetPosition int
 	LockType        LockType
@@ -68,10 +68,10 @@ func (p *Participant) ExcludedFromICS() bool {
 	return p.ExcludeFromICS
 }
 
-type Participants map[identifiers.Address]*Participant
+type Participants map[identifiers.Identifier]*Participant
 
-func (ps Participants) IxnParticipants() map[identifiers.Address]ParticipantInfo {
-	ixnParticipants := make(map[identifiers.Address]ParticipantInfo)
+func (ps Participants) IxnParticipants() map[identifiers.Identifier]ParticipantInfo {
+	ixnParticipants := make(map[identifiers.Identifier]ParticipantInfo)
 
 	for k, v := range ps {
 		ixnParticipants[k] = ParticipantInfo{
@@ -85,8 +85,8 @@ func (ps Participants) IxnParticipants() map[identifiers.Address]ParticipantInfo
 }
 
 func (ps Participants) HasSystemAccounts() bool {
-	for addr := range ps {
-		if IsSystemAccount(addr) {
+	for id := range ps {
+		if IsSystemAccount(id) {
 			return true
 		}
 	}
@@ -94,40 +94,40 @@ func (ps Participants) HasSystemAccounts() bool {
 	return false
 }
 
-func (ps Participants) LockInfo(activeParticipantsOnly bool) map[identifiers.Address]LockType {
-	lockInfo := make(map[identifiers.Address]LockType)
+func (ps Participants) LockInfo(activeParticipantsOnly bool) map[identifiers.Identifier]LockType {
+	lockInfo := make(map[identifiers.Identifier]LockType)
 
-	for addr, info := range ps {
+	for id, info := range ps {
 		if !activeParticipantsOnly {
-			lockInfo[addr] = info.LockType
+			lockInfo[id] = info.LockType
 
 			continue
 		}
 
 		if !info.ExcludedFromICS() {
-			lockInfo[addr] = info.LockType
+			lockInfo[id] = info.LockType
 		}
 	}
 
 	return lockInfo
 }
 
-func (ps Participants) ExcludeFromICS(addrs Addresses) {
-	for _, addr := range addrs {
-		if info := ps[addr]; info != nil {
+func (ps Participants) ExcludeFromICS(ids IdentifierList) {
+	for _, id := range ids {
+		if info := ps[id]; info != nil {
 			info.ExcludeFromICS = true
 		}
 	}
 }
 
-func (ps Participants) Addrs() Addresses {
-	addrs := make(Addresses, 0, len(ps))
+func (ps Participants) IDs() IdentifierList {
+	ids := make(IdentifierList, 0, len(ps))
 
-	for addr := range ps {
-		addrs = append(addrs, addr)
+	for id := range ps {
+		ids = append(ids, id)
 	}
 
-	sort.Sort(addrs)
+	sort.Sort(ids)
 
-	return addrs
+	return ids
 }

@@ -20,14 +20,14 @@ func TestNewInteraction(t *testing.T) {
 	rawAssetCreatePayload, _ := assetCreatePayload.Bytes()
 
 	assetSupplyPayload := common.AssetSupplyPayload{
-		AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+		AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 		Amount:  big.NewInt(500),
 	}
 	rawAssetSupplyPayload, _ := assetSupplyPayload.Bytes()
 
 	assetActionPayload := common.AssetActionPayload{
-		Beneficiary: tests.RandomAddress(t),
-		AssetID:     tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+		Beneficiary: tests.RandomIdentifier(t),
+		AssetID:     tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 		Amount:      big.NewInt(500),
 	}
 	rawAssetActionPayload, _ := assetActionPayload.Bytes()
@@ -37,14 +37,14 @@ func TestNewInteraction(t *testing.T) {
 		Callsite: "hello",
 		Calldata: []byte{0, 7, 8, 1},
 		Interfaces: map[string]identifiers.LogicID{
-			"hello": tests.GetLogicID(t, tests.RandomAddress(t)),
+			"hello": tests.GetLogicID(t, tests.RandomIdentifier(t)),
 		},
 	}
 	rawLogicPayload, _ := logicPayload.Bytes()
 
 	signatures := common.Signatures{
 		{
-			Address:   tests.RandomAddress(t),
+			ID:        tests.RandomIdentifier(t),
 			KeyID:     2,
 			Signature: []byte{1, 2, 3},
 		},
@@ -66,7 +66,7 @@ func TestNewInteraction(t *testing.T) {
 					},
 				}
 				ixData.Participants = append(ixData.Participants, common.IxParticipant{
-					Address: assetActionPayload.Beneficiary,
+					ID: assetActionPayload.Beneficiary,
 				})
 			}),
 		},
@@ -129,7 +129,7 @@ func TestNewInteraction(t *testing.T) {
 					},
 				}
 				ixData.Participants = append(ixData.Participants, common.IxParticipant{
-					Address: assetSupplyPayload.AssetID.Address(),
+					ID: assetSupplyPayload.AssetID.AsIdentifier(),
 				})
 			}),
 		},
@@ -155,7 +155,7 @@ func TestNewInteraction(t *testing.T) {
 					},
 				}
 				ixData.Participants = append(ixData.Participants, common.IxParticipant{
-					Address: assetSupplyPayload.AssetID.Address(),
+					ID: assetSupplyPayload.AssetID.AsIdentifier(),
 				})
 			}),
 		},
@@ -193,10 +193,10 @@ func TestNewInteraction(t *testing.T) {
 				}
 				ixData.Participants = append(ixData.Participants, []common.IxParticipant{
 					{
-						Address: logicPayload.Logic.Address(),
+						ID: logicPayload.Logic.AsIdentifier(),
 					},
 					{
-						Address: logicPayload.Interfaces["hello"].Address(),
+						ID: logicPayload.Interfaces["hello"].AsIdentifier(),
 					},
 				}...)
 			}),
@@ -212,7 +212,7 @@ func TestNewInteraction(t *testing.T) {
 				}
 				ixData.Participants = append(ixData.Participants, []common.IxParticipant{
 					{
-						Address: logicPayload.Logic.Address(),
+						ID: logicPayload.Logic.AsIdentifier(),
 					},
 				}...)
 			}),
@@ -296,37 +296,34 @@ func TestNewInteraction(t *testing.T) {
 			// check for payload
 			checkIxOperations(t, ix, assetCreatePayload, assetActionPayload, assetSupplyPayload, logicPayload)
 
-			if test.ixData.IxOps[0].Type == common.IxAssetCreate ||
-				test.ixData.IxOps[0].Type == common.IxLogicDeploy {
-				addr := common.NewAccountAddress(ix.SenderAddr(), ix.SenderKeyID(), ix.SequenceID())
-				info := ix.Participants()
-				_, ok := info[addr]
-				require.True(t, ok)
-
-				_, ok = info[common.SargaAddress]
-				require.True(t, ok)
-			}
+			checkForIxParticipants(t, test.ixData, test.ixData.IxOps[0], ix.Participants())
 		})
 	}
 }
 
 func TestUpdateLeaderCandidateAddr(t *testing.T) {
-	regularAccount, err := identifiers.NewAddressFromHex(
-		"0x0000000000000000000000000516a2efe9cd53c3d54e1f9a6e60e9077e9f9384")
+	// we create a max sender id to test the leader candidate id
+	senderID, err := identifiers.GenerateParticipantIDv0(tests.Max24Byte(t), 0)
 	require.NoError(t, err)
 
-	nonRegularAccount1, err := identifiers.NewAddressFromHex(
-		"0xeeee000000000000000000000516a2efe9cd53c3d54e1f9a6e60e9077e9f9384")
+	// we create a min sender id to test the leader candidate id
+	psID, err := identifiers.GenerateParticipantIDv0(tests.Min24Byte(t), 0)
 	require.NoError(t, err)
 
-	nonRegularAccount2, err := identifiers.NewAddressFromHex(
-		"0xee00000000000000000000000516a2efe9cd53c3d54e1f9a6e60e9077e9f9384")
+	regularAccount := psID.AsIdentifier()
+
+	logicID, err := identifiers.GenerateLogicIDv0(identifiers.RandomFingerprint(), 0)
+	require.NoError(t, err)
+
+	nonRegularAccount1, _ := logicID.AsIdentifier().DeriveVariant(1, nil, nil)
+
+	nonRegularAccount2, err := logicID.AsIdentifier().DeriveVariant(2, nil, nil)
 	require.NoError(t, err)
 
 	testcases := []struct {
 		name              string
 		createIxParams    tests.CreateIxParams
-		expectedLeaderAcc identifiers.Address
+		expectedLeaderAcc identifiers.Identifier
 	}{
 		{
 			name: "sarga account is selected as leader",
@@ -334,30 +331,31 @@ func TestUpdateLeaderCandidateAddr(t *testing.T) {
 				IxDataCallback: func(ix *common.IxData) {
 					ix.IxOps = append(ix.IxOps, common.IxOpRaw{
 						Type:    common.IxLogicInvoke,
-						Payload: tests.CreateRawLogicPayload(t, nonRegularAccount1),
+						Payload: tests.CreateRawLogicPayload(t, identifiers.MustLogicID(nonRegularAccount1)),
 					})
 
 					ix.Participants = append(ix.Participants, []common.IxParticipant{
 						{
-							Address:  common.SargaAddress,
+							ID:       common.SargaAccountID,
 							LockType: common.MutateLock,
 						},
 						{
-							Address:  regularAccount,
+							ID:       regularAccount,
 							LockType: common.MutateLock,
 						},
 					}...)
 				},
 			},
-			expectedLeaderAcc: common.SargaAddress,
+			expectedLeaderAcc: common.SargaAccountID,
 		},
 		{
 			name: "first account from sorted regular accounts is chosen as leader",
 			createIxParams: tests.CreateIxParams{
 				IxDataCallback: func(ix *common.IxData) {
+					ix.Sender.ID = senderID.AsIdentifier()
 					ix.Participants = append(ix.Participants, []common.IxParticipant{
 						{
-							Address:  regularAccount,
+							ID:       regularAccount,
 							LockType: common.MutateLock,
 						},
 					}...)
@@ -371,21 +369,21 @@ func TestUpdateLeaderCandidateAddr(t *testing.T) {
 				IxDataCallback: func(ix *common.IxData) {
 					ix.IxOps = append(ix.IxOps, common.IxOpRaw{
 						Type:    common.IxLogicInvoke,
-						Payload: tests.CreateRawLogicPayload(t, nonRegularAccount1),
+						Payload: tests.CreateRawLogicPayload(t, identifiers.MustLogicID(nonRegularAccount1)),
 					})
 					ix.IxOps = append(ix.IxOps, common.IxOpRaw{
 						Type:    common.IxLogicInvoke,
-						Payload: tests.CreateRawLogicPayload(t, nonRegularAccount2),
+						Payload: tests.CreateRawLogicPayload(t, identifiers.MustLogicID(nonRegularAccount2)),
 					})
 					ix.Participants = append(ix.Participants, []common.IxParticipant{
 						{
-							Address:  regularAccount,
+							ID:       regularAccount,
 							LockType: common.MutateLock,
 						},
 					}...)
 				},
 			},
-			expectedLeaderAcc: nonRegularAccount2,
+			expectedLeaderAcc: nonRegularAccount1,
 		},
 		{
 			name: "non-regular account with read lock is not chosen as leader",
@@ -393,15 +391,15 @@ func TestUpdateLeaderCandidateAddr(t *testing.T) {
 				IxDataCallback: func(ix *common.IxData) {
 					ix.IxOps = append(ix.IxOps, common.IxOpRaw{
 						Type:    common.IxLogicInvoke,
-						Payload: tests.CreateRawLogicPayload(t, nonRegularAccount1),
+						Payload: tests.CreateRawLogicPayload(t, identifiers.MustLogicID(nonRegularAccount1)),
 					})
 					ix.Participants = append(ix.Participants, []common.IxParticipant{
 						{
-							Address:  regularAccount,
+							ID:       regularAccount,
 							LockType: common.MutateLock,
 						},
 						{
-							Address:  nonRegularAccount1,
+							ID:       nonRegularAccount1,
 							LockType: common.ReadLock,
 						},
 					}...)
@@ -414,7 +412,6 @@ func TestUpdateLeaderCandidateAddr(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			ix := tests.CreateIX(t, &testcase.createIxParams)
-
 			require.Equal(t, testcase.expectedLeaderAcc, ix.LeaderCandidateAcc())
 		})
 	}
@@ -428,14 +425,14 @@ func TestCopyIxFund(t *testing.T) {
 		{
 			name: "copy ix fund with all populated fields",
 			data: common.IxFund{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 				Amount:  big.NewInt(5000),
 			},
 		},
 		{
 			name: "copy ix fund with empty fields",
 			data: common.IxFund{
-				AssetID: tests.GetRandomAssetID(t, tests.RandomAddress(t)),
+				AssetID: tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			},
 		},
 	}
@@ -669,16 +666,16 @@ func TestAccountType(t *testing.T) {
 		tests.CreateIX(t, &tests.CreateIxParams{
 			IxDataCallback: func(ix *common.IxData) {
 				ix.Sender = common.Sender{
-					Address: tests.RandomAddress(t),
+					ID: tests.RandomIdentifier(t),
 				}
 				ix.IxOps = []common.IxOpRaw{
 					{
 						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, identifiers.NilAddress),
+						Payload: tests.CreateRawAssetActionPayload(t, identifiers.Nil),
 					},
 					{
 						Type:    common.IxLogicDeploy,
-						Payload: tests.CreateRawLogicPayload(t, tests.RandomAddress(t)),
+						Payload: tests.CreateRawLogicPayload(t, identifiers.RandomLogicIDv0()),
 					},
 				}
 			},
@@ -687,45 +684,45 @@ func TestAccountType(t *testing.T) {
 
 	testcases := []struct {
 		name         string
-		address      identifiers.Address
+		id           identifiers.Identifier
 		expectedType common.AccountType
 		expectedErr  error
 	}{
 		{
 			name:         "sender should be a regular account",
-			address:      ixns.IxList()[0].SenderAddr(),
+			id:           ixns.IxList()[0].SenderID(),
 			expectedType: common.RegularAccount,
 		},
 		{
 			name:         "payer should be a regular account",
-			address:      ixns.IxList()[1].Payer(),
+			id:           ixns.IxList()[1].Payer(),
 			expectedType: common.RegularAccount,
 		},
 		{
 			name:         "target should be an asset account",
-			address:      ixns.IxList()[0].GetIxOp(0).Target(),
+			id:           ixns.IxList()[0].GetIxOp(0).Target(),
 			expectedType: common.AssetAccount,
 		},
 		{
 			name:         "target should be a logic account",
-			address:      ixns.IxList()[1].GetIxOp(1).Target(),
+			id:           ixns.IxList()[1].GetIxOp(1).Target(),
 			expectedType: common.LogicAccount,
 		},
 		{
 			name:         "target should be a regular account",
-			address:      ixns.IxList()[1].GetIxOp(0).Target(),
+			id:           ixns.IxList()[1].GetIxOp(0).Target(),
 			expectedType: common.RegularAccount,
 		},
 		{
 			name:        "account not found",
-			address:     tests.RandomAddress(t),
+			id:          tests.RandomIdentifier(t),
 			expectedErr: common.ErrAccountNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			accountType, err := ixns.AccountType(test.address)
+			accountType, err := ixns.AccountType(test.id)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
@@ -757,7 +754,7 @@ func TestPolorizeInteractions(t *testing.T) {
 			ix.IxOps = []common.IxOpRaw{
 				{
 					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, identifiers.NilAddress),
+					Payload: tests.CreateRawAssetActionPayload(t, identifiers.Nil),
 				},
 			}
 		},
@@ -779,7 +776,7 @@ func TestPolorizeInteractions(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, interactions.Len(), depolorizedInteractions.Len())
-	require.Equal(t, interactions.LeaderCandidateAddress(), depolorizedInteractions.LeaderCandidateAddress())
+	require.Equal(t, interactions.LeaderCandidateID(), depolorizedInteractions.LeaderCandidateID())
 }
 
 // helper functions
@@ -813,5 +810,57 @@ func checkIxOperations(
 		default:
 			t.Fatalf("unsupported ixOp type: %v", op.Type())
 		}
+	}
+}
+
+func checkForIxParticipants(
+	t *testing.T,
+	ixData common.IxData,
+	op common.IxOpRaw,
+	ps map[identifiers.Identifier]*common.ParticipantInfo,
+) {
+	t.Helper()
+
+	var id identifiers.Identifier
+
+	if op.Type == common.IxAssetCreate {
+		assetCreatePayload := new(common.AssetCreatePayload)
+		if err := assetCreatePayload.FromBytes(op.Payload); err != nil {
+			require.NoError(t, err)
+		}
+
+		assetID, err := identifiers.GenerateAssetIDv0(
+			common.NewAccountID(ixData.Sender),
+			0,
+			uint16(assetCreatePayload.Standard),
+			assetCreatePayload.Flags()...,
+		)
+
+		require.NoError(t, err)
+
+		id = assetID.AsIdentifier()
+	}
+
+	if op.Type == common.IxLogicDeploy {
+		logicPayload := new(common.LogicPayload)
+		if err := logicPayload.FromBytes(op.Payload); err != nil {
+			require.NoError(t, err)
+		}
+
+		logicID, _ := identifiers.GenerateLogicIDv0(
+			common.NewAccountID(ixData.Sender),
+			0,
+			logicPayload.Flags()...,
+		)
+
+		id = logicID.AsIdentifier()
+	}
+
+	if !id.IsNil() {
+		_, ok := ps[id]
+		require.True(t, ok)
+
+		_, ok = ps[common.SargaAccountID]
+		require.True(t, ok)
 	}
 }
