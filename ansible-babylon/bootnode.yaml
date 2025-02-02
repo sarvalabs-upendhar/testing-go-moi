@@ -10,61 +10,42 @@
       debug:
         msg: "The timestamp is: {{ timestamp }}"
 
+###########################################################
+# Ensure AWS CLI is installed on all hosts
+###########################################################
+
+- name: Ensure AWS CLI is installed on all hosts
+  hosts: bootnode-server
+  gather_facts: true
+  tasks:    
+  - name: Ensure AWS CLI is installed on all bootnode servers
+    include_tasks: common/install_aws_cli.yaml
 
 ###################################
 # Docker stop on bootnode servers #
 ###################################
 
-- name: Run bootnode_stop.sh on the bootnode server
+- name: Run bootnode_stop.sh on the bootnode servers
   hosts: bootnode-server
   gather_facts: false    
   tasks:
-    - name: Copy bootnode_stop.sh to the bootnode server
-      copy:
-        src: "{{ playbook_dir }}/scripts/bootnode_stop.sh"
-        dest: "/home/moichain/bootnode_stop.sh"
+    - name: Run bootnode_stop.sh on bootnode servers
+      include_tasks: common/stop.yaml
+      vars:
+        file_name: bootnode_stop.sh
         owner: root
         group: root
         mode: '0755'
-      become_user: root
-
-    - name: Run bootnode_stop.sh on the bootnode server
-      shell: "./bootnode_stop.sh"
-      args:
-        chdir: "/home/moichain"
-      become_user: root
+        become_user: root
 
 ######################################################
 ## Backup folder on bootnode server and upload to s3 #
 ######################################################
 
-- name: Backup folder on bootnode server and upload to S3
+- name: Backup folder on bootnode servers and upload to S3
   hosts: bootnode-server
   gather_facts: true
   tasks:
-  - name: Ensure AWS CLI is installed on Ubuntu 22.04
-    package:
-      name: awscli
-      state: present
-    when: 
-    - ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '22.04'
-
-  - name: Ensure snapd is installed
-    apt:
-      name: snapd
-      state: present
-      update_cache: yes
-    when: 
-    - ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
-
-  - name: Install AWS CLI v2 via Snap
-    snap:
-      name: aws-cli
-      state: present
-      classic: true
-    when: 
-    - ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
-
   - name: Ensure backup directory exists
     file:
       path: "{{ backup_dir }}"
@@ -89,31 +70,45 @@
   - name: Upload the backup tar file to S3
     command: >
       aws s3 cp {{ backup_dir }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
-      s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ timestamp }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
+      s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
     environment:
       AWS_ACCESS_KEY_ID: "{{ lookup('env', 'AWS_ACCESS_KEY_ID') }}"
       AWS_SECRET_ACCESS_KEY: "{{ lookup('env', 'AWS_SECRET_ACCESS_KEY') }}"
       AWS_DEFAULT_REGION: "{{ lookup('env', 'AWS_DEFAULT_REGION') }}"
 
+#################################################
+# update docker compose file on bootnode #
+#################################################
+
+- name: Generate docker-compose.yml file for bootnode
+  hosts: bootnode-server
+  become: true
+  become_user: "{{ become_user }}"
+  tasks:
+    - name: Backup the existing docker-compose.yml file
+      become_user: "{{ become_user }}"
+      copy:
+        src: "/home/{{ app_user }}/stack/bootnode/docker-compose.yml"
+        dest: "/home/{{ app_user }}/stack/bootnode/docker-compose.yml.bak"
+        remote_src: true
+    - name: Create docker-compose.yaml from template
+      template:
+        src: "bootnode-docker-compose-template.yaml.j2"
+        dest: "/home/{{ app_user }}/stack/bootnode/docker-compose.yml"
+
 #####################################
 # Docker start on bootnode servers  #
 #####################################
 
-- name: Run bootnode_start.sh on the bootnode server
+- name: Run bootnode_start.sh on the bootnode servers
   hosts: bootnode-server
   gather_facts: false  
   tasks:
-  - name: Copy bootnode_start.sh to the bootnode server
-    copy:
-      src: "{{ playbook_dir }}/scripts/bootnode_start.sh"
-      dest: "/home/moichain/bootnode_start.sh"
+  - name: Run bootnode_start.sh on bootnode servers
+    include_tasks: common/start.yaml
+    vars:
+      file_name: bootnode_start.sh
       owner: root
       group: root
       mode: '0755'
-    become_user: root
-
-  - name: Run bootnode_start.sh on the bootnode server
-    shell: "./bootnode_start.sh"
-    args:
-      chdir: "/home/moichain"
-    become_user: root
+      become_user: root

@@ -1,7 +1,7 @@
 name: Start/Stop Devnet Bootnode
 on:
   workflow_dispatch: {}
-            
+
 env: 
   BRANCH_NAME: ${{ github.ref_name }}
 
@@ -61,7 +61,9 @@ jobs:
             export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
             export SUDO_PASSWORD=${{ secrets.SUDO_PASSWORD }}
+            echo "${{ vars.DEVNET_BOOTNODE_INVENTORY_FILE }}" | base64 -d > /tmp/bootnode.yml
+            cat /tmp/bootnode.yml
             # Run the Ansible playbook with extra vars 
-            ansible-playbook -i ansible-playbooks/inventory/devnet/bootnode.yml ansible-playbooks/bootnode.yaml -f 10 \
+            ansible-playbook -i /tmp/bootnode.yml ansible-devnet/bootnode.yaml -f 10 \
             --extra-vars "ansible_ssh_private_key_file=/home/github/.ssh/id_rsa" \
-            -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}"
+            -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}"            

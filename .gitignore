@@ -30,3 +30,8 @@ instances.json
 # LogicLab Environments
 .logiclab
 .artifacts
+
+
+devnet-ansible/inventory
+babylon-ansible/inventory
+ansible-inventory

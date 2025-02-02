@@ -1,4 +1,4 @@
-name: Network Upgrade Devnet
+name: Devnet Internal Testing - Test Nodes
 on:
 
   workflow_dispatch:
@@ -13,7 +13,6 @@ on:
             - Full_Deployment
             - Genesis_Update_Only
             - Config_Update_Only   
-            
 
 env: 
   BRANCH_NAME: ${{ github.ref_name }}
@@ -81,7 +80,10 @@ jobs:
             export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
             export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
             export SUDO_PASSWORD=${{ secrets.SUDO_PASSWORD }}
+            aws s3 cp s3://devnet-config-template/config_template.json.j2 /tmp/config_template.json.j2
+            echo "${{ vars.DEVNET_TEST_NODE_INVENTORY_FILE }}" | base64 -d > /tmp/node.yml
+            cat /tmp/node.yml
             # Run the Ansible playbook with extra vars based on deployment option
-            ansible-playbook -i ansible-playbooks/inventory/devnet/nodes.yml ansible-playbooks/network-upgrade.yaml -f 10 \
+            ansible-playbook -i /tmp/node.yml ansible-devnet/network-upgrade.yaml -f 10 \
             --extra-vars "ansible_ssh_private_key_file=/home/github/.ssh/id_rsa" \
             -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} deployment_option=${{ env.DEPLOYMENT_OPTION }} SUDO_PASSWORD=${{ secrets.SUDO_PASSWORD }}"
