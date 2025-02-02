@@ -1,0 +1,69 @@
+name: Start/Stop Devnet Bootnode
+on:
+  workflow_dispatch: {}
+
+env: 
+  BRANCH_NAME: ${{ github.ref_name }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b # v4.0.0
+
+      - name: Login to Registry
+        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 # v3.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.ACCESS_TOKEN }}
+          logout: true
+
+      - name: Build, & Push moipod container image ( pr_merge_event )
+        uses: docker/build-push-action@2cdde995de11925a030ce8070c3d77a52ffcf1c0 # v5.3.0
+        with:
+          context: .
+          push: true
+          file: ./docker/moipod/internal.amd64
+          tags: "ghcr.io/sarvalabs/moipod:latest"
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
+
+  ansible-playbook:
+    runs-on: ubuntu-latest
+    needs: [publish]
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 3: Connect to the jump server and execute the playbook
+      - name: Run Ansible Playbook on Jump Server
+        uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6
+        with:
+          host: ${{ secrets.TELEPORT_HOST }}
+          username: ${{ secrets.TELEPORT_USER }}
+          key: ${{ secrets.TELEPORT_PRIVATE_KEY }}
+          port: ${{ secrets.TELEPORT_PORT }}
+          script: |
+            echo "Starting playbook execution..."
+            cd /home/github/go-moi
+            echo ${{ github.ref_name }}
+            echo "Pulling latest changes from branch: ${{ github.ref_name }}"
+            git checkout ${{ github.ref_name }}
+            git pull origin ${{ github.ref_name }}
+            # Export AWS credentials as environment variables
+            export AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }}
+            export AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }}
+            export AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}
+            export SUDO_PASSWORD=${{ secrets.SUDO_PASSWORD }}
+            echo "${{ vars.DEVNET_BOOTNODE_INVENTORY_FILE }}" | base64 -d > /tmp/bootnode.yml
+            cat /tmp/bootnode.yml
+            # Run the Ansible playbook with extra vars 
+            ansible-playbook -i /tmp/bootnode.yml ansible-devnet/bootnode.yaml -f 10 \
+            --extra-vars "ansible_ssh_private_key_file=/home/github/.ssh/id_rsa" \
+            -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}"            
