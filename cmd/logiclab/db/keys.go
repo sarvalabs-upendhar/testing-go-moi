@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 var (

@@ -33,7 +33,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/identifiers"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/crypto"
 

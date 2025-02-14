@@ -4,11 +4,11 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/jsonrpc"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/utils"

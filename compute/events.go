@@ -1,8 +1,8 @@
 package compute
 
 import (
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 type EventStream struct {

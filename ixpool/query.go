@@ -4,7 +4,7 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 )

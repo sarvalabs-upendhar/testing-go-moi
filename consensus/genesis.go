@@ -7,8 +7,9 @@ import (
 	"os"
 	"sort"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/compute"
 	"github.com/sarvalabs/go-moi/state"

@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/compute/exlogics/tokenledger"
 
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-polo"

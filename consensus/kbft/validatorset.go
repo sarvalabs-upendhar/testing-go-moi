@@ -3,7 +3,7 @@ package kbft
 import (
 	"bytes"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 type ValidatorSet struct {

@@ -3,8 +3,9 @@ package kbft
 import (
 	"crypto"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 type Validator struct {

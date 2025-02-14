@@ -4,10 +4,10 @@ package api
 import (
 	"net/http"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/gin-gonic/gin"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/cmd/logiclab/core"
 )
 

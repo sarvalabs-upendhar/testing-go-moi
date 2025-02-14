@@ -3,8 +3,9 @@ package consensus
 import (
 	"context"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/state"

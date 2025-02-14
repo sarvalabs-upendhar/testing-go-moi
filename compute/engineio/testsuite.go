@@ -7,10 +7,11 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-pisa/drivers"

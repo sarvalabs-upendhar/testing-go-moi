@@ -3,6 +3,8 @@ package state
 import (
 	"math/big"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/VictoriaMetrics/fastcache"
 
 	"github.com/decred/dcrd/crypto/blake256"
@@ -11,8 +13,6 @@ import (
 	"github.com/pkg/errors"
 
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"

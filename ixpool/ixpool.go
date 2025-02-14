@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/petar/GoLLRB/llrb"
 
 	"github.com/hashicorp/go-hclog"
@@ -16,8 +18,6 @@ import (
 	"github.com/pkg/errors"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/state"
-
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"

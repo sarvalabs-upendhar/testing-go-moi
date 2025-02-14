@@ -1,8 +1,7 @@
 package kbft
 
 import (
-	"github.com/sarvalabs/go-moi-identifiers"
-
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 )
 

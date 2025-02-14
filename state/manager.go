@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"math/big"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/moby/locker"
 	"github.com/sarvalabs/go-moi/crypto"
 
@@ -18,7 +20,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/state/tree"

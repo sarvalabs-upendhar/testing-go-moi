@@ -3,9 +3,9 @@ package compute
 import (
 	"math/big"
 
-	"github.com/pkg/errors"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
+	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
 )

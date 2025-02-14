@@ -6,10 +6,10 @@ import (
 	"log"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -403,7 +403,9 @@ func (p *PersistenceManager) GetTesseractHeightEntry(id identifiers.Identifier, 
 	return p.ReadEntry(tesseractHeightKey(id, height))
 }
 
-func (p *PersistenceManager) SetTesseractHeightEntry(id identifiers.Identifier, height uint64, hash common.Hash) error {
+func (p *PersistenceManager) SetTesseractHeightEntry(
+	id identifiers.Identifier, height uint64, hash common.Hash,
+) error {
 	return p.CreateEntry(tesseractHeightKey(id, height), hash.Bytes())
 }
 

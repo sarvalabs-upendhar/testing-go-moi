@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 // PrefixTag represents the tag used for DB Key prefix

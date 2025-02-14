@@ -3,8 +3,9 @@ package kbft
 import (
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-moi-identifiers"
 )
 
 // timeoutInfo is a struct that represents some timeout information that are emitted by the Ticker struct

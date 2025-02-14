@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/jsonrpc"
@@ -14,8 +16,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"

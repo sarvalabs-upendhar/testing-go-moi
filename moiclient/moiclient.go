@@ -14,11 +14,11 @@ import (
 	"strconv"
 	"sync/atomic"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/jsonrpc"
 
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"

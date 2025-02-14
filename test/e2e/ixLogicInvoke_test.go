@@ -3,10 +3,11 @@ package e2e
 import (
 	"context"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"

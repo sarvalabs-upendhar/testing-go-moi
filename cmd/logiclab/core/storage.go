@@ -1,9 +1,8 @@
 package core
 
 import (
-	"github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/cmd/logiclab/db"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 // StorageDriver is the storage state accessor for

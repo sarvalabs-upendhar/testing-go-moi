@@ -3,6 +3,8 @@ package core
 import (
 	"fmt"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/compute"
@@ -11,7 +13,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/cmd/logiclab/db"
 	"github.com/sarvalabs/go-moi/common"
 )

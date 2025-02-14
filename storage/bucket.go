@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"math/big"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 func BucketKeyAndID(addr IdentifierKey) ([]byte, uint64) {

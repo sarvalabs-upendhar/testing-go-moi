@@ -5,9 +5,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/petar/GoLLRB/llrb"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/petar/GoLLRB/llrb"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"

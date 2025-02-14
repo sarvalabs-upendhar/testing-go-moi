@@ -7,7 +7,7 @@ package kbft
 //	"time"
 //
 //	"github.com/hashicorp/go-hclog"
-//	identifiers "github.com/sarvalabs/go-moi-identifiers"
+//	"github.com/sarvalabs/go-moi/identifiers"
 //	"github.com/sarvalabs/go-moi/common"
 //	"github.com/stretchr/testify/require"
 //

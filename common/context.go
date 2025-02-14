@@ -2,7 +2,7 @@ package common
 
 import (
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 const NodeNotFound = -1

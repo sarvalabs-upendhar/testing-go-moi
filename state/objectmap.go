@@ -1,6 +1,8 @@
 package state
 
-import "github.com/sarvalabs/go-moi-identifiers"
+import (
+	"github.com/sarvalabs/go-moi/common/identifiers"
+)
 
 type ObjectMap map[identifiers.Identifier]*Object
 

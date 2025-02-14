@@ -5,13 +5,13 @@ import (
 	"hash"
 	"sync"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/VictoriaMetrics/fastcache"
 
 	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/storage"
 )

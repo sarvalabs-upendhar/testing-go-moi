@@ -3,7 +3,7 @@ package jsonrpc
 import (
 	"encoding/json"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 // TesseractArgs is the jsonrpc request parameter for new tesseracts event filter

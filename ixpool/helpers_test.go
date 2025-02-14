@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/crypto"
-
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/state"

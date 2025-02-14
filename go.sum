@@ -524,14 +524,10 @@ github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99
 github.com/russross/blackfriday v1.5.2/go.mod h1:JO/DiYxRf+HjHt06OyowR9PTA263kcR/rfWxYHBV53g=
 github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
-github.com/sarvalabs/battleground v0.3.0 h1:ZFvS9JkdCSEnjeKLux8LsZx0ptXupXdPKS0pMT87WhM=
-github.com/sarvalabs/battleground v0.3.0/go.mod h1:jM2rgRRQSfJUuBlqWd7ceSASg8d3bQ9mso3htwCM9ZU=
+github.com/sarvalabs/battleground v0.3.1 h1:UUd759i9U6AbqQjjntnlVtromLoiqrplPNKG44M7xXo=
+github.com/sarvalabs/battleground v0.3.1/go.mod h1:q3OnSk0d5kY997EbGxtp3koohB1JEf76IpTfhGmSNno=
 github.com/sarvalabs/go-legacy-kramaid v0.1.0 h1:YB2ySZGUvGfaF9aDOEye7QU1GhrZ5/PXw5cSLBtoTWk=
 github.com/sarvalabs/go-legacy-kramaid v0.1.0/go.mod h1:mepQbz24Umrv4O2tUOGcMYzBs1eq71pu0l4dW7JhZnI=
-github.com/sarvalabs/go-moi-identifiers v0.2.1 h1:vYQfQl6oJ11FrtwkbDNrAmRsPUNWp3W7iNXDGd4z7W0=
-github.com/sarvalabs/go-moi-identifiers v0.2.1/go.mod h1:fbFJVG27Le95Q2wDAUyBKfa4j/7LV0a9cKIIQGARSDs=
-github.com/sarvalabs/go-moi-identifiers v0.2.2 h1:gwdT1FOUmg56Y8aMeswuF0VsCd3RuR7cWxpKMh171+U=
-github.com/sarvalabs/go-moi-identifiers v0.2.2/go.mod h1:EM1fMe/1fTRWVKxiO+ZLYrA/PasE5T1zu5ihkJbNplg=
 github.com/sarvalabs/go-pisa v0.3.3-provisional h1:njvje881szenwW/MlZW2skzQmbVx6en8hwtbT25S5IY=
 github.com/sarvalabs/go-pisa v0.3.3-provisional/go.mod h1:0YnJOuaSa3anFPJP5VdTTCueQ494lUx99rNU4LDBBpg=
 github.com/sarvalabs/go-polo v0.4.9 h1:/ZuiQaAIw8N8GbAViC8WlvmlWWOszohRm+rlt/A1H1o=

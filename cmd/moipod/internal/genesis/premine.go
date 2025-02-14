@@ -5,8 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/spf13/cobra"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"

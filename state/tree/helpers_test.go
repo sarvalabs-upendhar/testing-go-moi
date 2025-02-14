@@ -5,10 +5,11 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/common/tests"
 
 	"github.com/decred/dcrd/crypto/blake256"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 

@@ -5,8 +5,9 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/spf13/cobra"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"

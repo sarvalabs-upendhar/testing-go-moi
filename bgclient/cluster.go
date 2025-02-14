@@ -15,6 +15,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 
 	"github.com/google/uuid"
@@ -23,7 +25,6 @@ import (
 	"github.com/pkg/errors"
 
 	bgcommon "github.com/sarvalabs/battleground/common"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"

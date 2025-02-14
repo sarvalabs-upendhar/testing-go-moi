@@ -2,8 +2,7 @@ package engineio
 
 import (
 	"github.com/manishmeganathan/depgraph"
-
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 type (

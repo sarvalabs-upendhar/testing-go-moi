@@ -5,9 +5,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/mr-tron/base58"
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	gtypes "github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-polo"

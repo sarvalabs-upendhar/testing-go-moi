@@ -42,9 +42,8 @@ require (
 	github.com/peterh/liner v1.2.2
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
-	github.com/sarvalabs/battleground v0.3.0
+	github.com/sarvalabs/battleground v0.3.1
 	github.com/sarvalabs/go-legacy-kramaid v0.1.0
-	github.com/sarvalabs/go-moi-identifiers v0.2.2
 	github.com/sarvalabs/go-pisa v0.3.3-provisional
 	github.com/sarvalabs/go-polo v0.4.9
 	github.com/spf13/cobra v1.7.0

@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/compute/pisa"
@@ -26,7 +28,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"

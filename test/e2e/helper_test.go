@@ -6,7 +6,8 @@ import (
 	"math/big"
 	"testing"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 

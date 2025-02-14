@@ -3,9 +3,9 @@ package tree
 import (
 	"sync"
 
-	"github.com/VictoriaMetrics/fastcache"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/VictoriaMetrics/fastcache"
 
 	"github.com/sarvalabs/go-moi/common"
 	db "github.com/sarvalabs/go-moi/storage"

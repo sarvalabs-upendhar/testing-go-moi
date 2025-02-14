@@ -2,7 +2,7 @@ package state
 
 import (
 	"github.com/pkg/errors"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 

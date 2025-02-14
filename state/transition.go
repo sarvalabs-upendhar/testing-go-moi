@@ -3,8 +3,9 @@ package state
 import (
 	"math/big"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 )
 

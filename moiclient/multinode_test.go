@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 

@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 

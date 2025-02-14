@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
+	"github.com/hashicorp/go-hclog"
 	"github.com/sarvalabs/go-moi/common"
 	db "github.com/sarvalabs/go-moi/storage"
 	dhruva "github.com/sarvalabs/go-moi/storage/db"

@@ -4,7 +4,8 @@ import (
 	"encoding/binary"
 	"testing"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	tests "github.com/sarvalabs/go-moi/common/tests"
 	"github.com/stretchr/testify/require"
 )

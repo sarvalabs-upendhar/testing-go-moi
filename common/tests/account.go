@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sarvalabs/go-moi-identifiers"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 type AccountWithMnemonic struct {

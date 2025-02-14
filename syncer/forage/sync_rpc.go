@@ -6,9 +6,10 @@ import (
 	"log"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-moi/common"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )

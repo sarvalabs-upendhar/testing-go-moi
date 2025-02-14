@@ -11,13 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/crypto"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
 
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/bgclient"
@@ -214,7 +215,9 @@ func GetLockups(t *testing.T, client *Client, id identifiers.Identifier, height 
 }
 
 // GetLogicID returns logicID for the given id and height
-func GetLogicID(t *testing.T, client *Client, txnID int, id identifiers.Identifier, height int64) identifiers.LogicID {
+func GetLogicID(
+	t *testing.T, client *Client, txnID int, id identifiers.Identifier, height int64,
+) identifiers.LogicID {
 	t.Helper()
 
 	ts := GetTesseract(t, client, id, height)

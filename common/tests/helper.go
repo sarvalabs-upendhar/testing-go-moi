@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/VictoriaMetrics/fastcache"
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -23,8 +25,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/crypto"
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"

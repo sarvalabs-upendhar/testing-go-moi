@@ -8,11 +8,12 @@ import (
 	"os"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/peterh/liner"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 
-	"github.com/sarvalabs/go-moi-identifiers"
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"

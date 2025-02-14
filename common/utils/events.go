@@ -3,8 +3,9 @@ package utils
 import (
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-	identifiers "github.com/sarvalabs/go-moi-identifiers"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/sarvalabs/go-moi/common"

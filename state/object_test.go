@@ -5,10 +5,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-moi-identifiers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
