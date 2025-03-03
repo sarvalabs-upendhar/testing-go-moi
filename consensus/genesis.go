@@ -101,11 +101,10 @@ func createGenesisTesseract(
 
 	for i, id := range ids {
 		participants[id] = common.State{
-			Height:          0,
-			TransitiveLink:  common.NilHash,
-			PreviousContext: common.NilHash,
-			LatestContext:   contextHashes[i],
-			StateHash:       stateHashes[i],
+			Height:         0,
+			TransitiveLink: common.NilHash,
+			LockedContext:  common.NilHash,
+			StateHash:      stateHashes[i],
 			ContextDelta: &common.DeltaGroup{
 				ConsensusNodes: transition.GetObject(id).ConsensusNodes(),
 			},

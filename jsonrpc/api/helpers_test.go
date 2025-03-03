@@ -210,14 +210,34 @@ type MockStateManager struct {
 	mandates                map[identifiers.Identifier][]common.AssetMandateOrLockup
 	lockups                 map[identifiers.Identifier][]common.AssetMandateOrLockup
 	accounts                map[identifiers.Identifier]*common.Account
-	consensusNodes          map[identifiers.Identifier][]kramaid.KramaID
 	assetDeeds              map[identifiers.AssetID]*common.AssetDescriptor
 	logicManifests          map[string][]byte
 	logicStorage            map[string]map[string]string // first key denotes logic id, second key denotes storage key
 	accMetaInfo             map[identifiers.Identifier]*common.AccountMetaInfo
 	logicIDs                map[identifiers.Identifier][]identifiers.LogicID
 	deeds                   map[identifiers.Identifier]map[identifiers.Identifier]*common.AssetDescriptor
+	mctxObject              map[common.Hash]*state.MetaContextObject
 	fetchIxStateObjectsHook func() error
+}
+
+func (s *MockStateManager) GetSubAccountCount(id identifiers.Identifier) (uint64, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (s *MockStateManager) setMetaContextObject(ctxHash common.Hash, obj *state.MetaContextObject) {
+	s.mctxObject[ctxHash] = obj
+}
+
+func (s *MockStateManager) GetMetaContextObject(id identifiers.Identifier,
+	hash common.Hash,
+) (*state.MetaContextObject, error) {
+	obj, ok := s.mctxObject[hash]
+	if !ok {
+		return nil, common.ErrObjectNotFound
+	}
+
+	return obj, nil
 }
 
 func NewMockStateManager(t *testing.T) *MockStateManager {
@@ -231,12 +251,12 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState.lockups = make(map[identifiers.Identifier][]common.AssetMandateOrLockup)
 	mockState.storage = make(map[common.Hash][]byte)
 	mockState.accounts = make(map[identifiers.Identifier]*common.Account)
-	mockState.consensusNodes = make(map[identifiers.Identifier][]kramaid.KramaID)
 	mockState.logicManifests = make(map[string][]byte)
 	mockState.logicStorage = make(map[string]map[string]string)
 	mockState.accMetaInfo = make(map[identifiers.Identifier]*common.AccountMetaInfo)
 	mockState.logicIDs = make(map[identifiers.Identifier][]identifiers.LogicID)
 	mockState.deeds = make(map[identifiers.Identifier]map[identifiers.Identifier]*common.AssetDescriptor)
+	mockState.mctxObject = make(map[common.Hash]*state.MetaContextObject)
 
 	return mockState
 }
@@ -455,17 +475,6 @@ func (s *MockStateManager) GetAccountState(id identifiers.Identifier, stateHash 
 	return account, nil
 }
 
-func (s *MockStateManager) GetConsensusNodesByHash(id identifiers.Identifier,
-	hash common.Hash,
-) ([]kramaid.KramaID, error) {
-	nodes, ok := s.consensusNodes[id]
-	if !ok {
-		return nil, common.ErrContextStateNotFound
-	}
-
-	return nodes, nil
-}
-
 func (s *MockStateManager) GetBalances(id identifiers.Identifier, stateHash common.Hash) (common.AssetMap, error) {
 	if _, ok := s.balances[id]; ok {
 		return s.balances[id].Copy(), nil
@@ -501,14 +510,6 @@ func (s *MockStateManager) IsGenesis(id identifiers.Identifier) (bool, error) {
 func (s *MockStateManager) setBalance(id identifiers.Identifier, assetID identifiers.AssetID, balance *big.Int) {
 	s.balances[id] = make(common.AssetMap)
 	s.balances[id][assetID] = balance
-}
-
-func (s *MockStateManager) setConsensusNodes(t *testing.T, id identifiers.Identifier,
-	consensusNodes []kramaid.KramaID,
-) {
-	t.Helper()
-
-	s.consensusNodes[id] = consensusNodes
 }
 
 func (s *MockStateManager) setAccount(id identifiers.Identifier, acc common.Account) {

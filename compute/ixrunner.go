@@ -17,6 +17,7 @@ func lookupOpRunner(kind common.IxOpType) OpRunner {
 var opRunnerLookup = map[common.IxOpType]OpRunner{
 	common.IxParticipantCreate: RunParticipantCreate,
 	common.IXAccountConfigure:  RunAccountConfigure,
+	common.IXAccountInherit:    RunAccountInherit,
 	common.IxAssetTransfer:     RunAssetTransfer,
 	common.IxAssetCreate:       RunAssetCreate,
 	common.IxAssetApprove:      RunAssetApprove,

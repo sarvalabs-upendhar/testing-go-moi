@@ -43,7 +43,7 @@ func (p *PublicCoreAPI) SendInteractions(sendIx *rpcargs.SendIX) (common.Hash, e
 
 	// TODO Add validation to check for max ixn group size
 	// add the interactions to ix pool
-	ixs := common.NewInteractionsWithLeaderCheck(true, ixn)
+	ixs := common.NewInteractionsWithLeaderCheck(false, ixn)
 
 	errs := p.ixpool.AddLocalInteractions(ixs)
 	if len(errs) > 0 {

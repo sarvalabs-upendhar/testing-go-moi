@@ -22,6 +22,8 @@ const (
 	Success
 )
 
+const minProposalSize = 20 * 1024 // 20 KB
+
 func (rc ICSResponseCode) String() string {
 	switch rc {
 	case SlotsFull:
@@ -49,12 +51,13 @@ type ICSPayload interface {
 }
 
 type ICSMSG struct {
-	Sender       id.KramaID
-	ClusterID    common.ClusterID
-	MsgType      message.MsgType
-	Payload      []byte
-	DecodedMsg   interface{} `polo:"-"`
-	ReceivedFrom id.KramaID  `polo:"-"`
+	Sender           id.KramaID
+	ClusterID        common.ClusterID
+	MsgType          message.MsgType
+	UnCompressedSize int // UnCompressedSize will be zero, if payload is not compressed
+	Payload          []byte
+	DecodedMsg       interface{} `polo:"-"`
+	ReceivedFrom     id.KramaID  `polo:"-"`
 }
 
 func NewICSMsg(sender id.KramaID, clusterID common.ClusterID, msgType message.MsgType, payload []byte) *ICSMSG {
@@ -79,6 +82,37 @@ func (im *ICSMSG) FromBytes(bytes []byte) error {
 	if err := polo.Depolorize(im, bytes); err != nil {
 		return errors.Wrap(err, "failed to depolorize ics message")
 	}
+
+	return nil
+}
+
+func (im *ICSMSG) CompressPayload(compressor common.Compressor) error {
+	size := len(im.Payload)
+
+	if size >= minProposalSize {
+		data, err := compressor.Compress(im.Payload)
+		if err != nil {
+			return errors.Wrap(err, "failed to compress ics payload")
+		}
+
+		im.Payload = data
+		im.UnCompressedSize = size
+	}
+
+	return nil
+}
+
+func (im *ICSMSG) DeCompressPayload(compressor common.Compressor) error {
+	if im.UnCompressedSize == 0 {
+		return nil
+	}
+
+	dst, err := compressor.Decompress(im.Payload, im.UnCompressedSize)
+	if err != nil {
+		return errors.Wrap(err, "failed to decompress ics payload")
+	}
+
+	im.Payload = dst
 
 	return nil
 }

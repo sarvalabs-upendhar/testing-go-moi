@@ -271,13 +271,22 @@ func (service *SYNCRPCService) SyncLattice(
 			return err
 		}
 
-		for id, contextHash := range ts.PreviousContext() {
+		for id, contextHash := range ts.LockedContext() {
 			if contextHash.IsNil() {
 				continue
 			}
 
+			if id.IsParticipantVariant() {
+				accMetaInfo, err := service.syncer.state.GetAccountMetaInfo(id)
+				if err != nil {
+					return err
+				}
+
+				id = accMetaInfo.InheritedAccount
+			}
+
 			if err = service.syncer.state.GetParticipantContextRaw(id, contextHash, msg.Delta); err != nil {
-				return errors.Wrap(err, fmt.Sprintf("failed to fetch participant context for %v", id))
+				return errors.Wrap(err, fmt.Sprintf("failed to fetch participant context for %v,%v", id, contextHash))
 			}
 		}
 

@@ -121,6 +121,18 @@ func (t *Transition) ConsensusNodesHash(id identifiers.Identifier) common.Hash {
 	return t.objects[id].metaContext.ConsensusNodesHash
 }
 
+func (t *Transition) ContextHash(id identifiers.Identifier) common.Hash {
+	return t.objects[id].data.ContextHash
+}
+
+func (t *Transition) InheritedAccount(id identifiers.Identifier) identifiers.Identifier {
+	if t.objects[id].metaContext == nil {
+		return identifiers.Nil
+	}
+
+	return t.objects[id].metaContext.InheritedAccount
+}
+
 func (t *Transition) IsGenesis(id identifiers.Identifier) bool {
 	return t.objects[id].isGenesis
 }

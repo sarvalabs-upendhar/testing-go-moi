@@ -43,14 +43,14 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Subsystem: "syncer",
 			Name:      "job_processing_time",
 			Help:      "Time taken to process the job",
-			Buckets:   []float64{0.1, 0.2, 0.5, 60, 120},
+			Buckets:   []float64{100, 250, 500, 700, 850, 1000, 2000, 3000, 4000, 5000},
 		}, labels).With(labelsWithValues...),
 		JobTimeInQueue: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "syncer",
 			Name:      "job_time_in_queue",
 			Help:      "Time spent by job in the queue",
-			Buckets:   []float64{10, 50, 100, 200, 500, 800},
+			Buckets:   []float64{100, 250, 500, 700, 850, 1000, 2000, 3000, 4000, 5000},
 		}, labels).With(labelsWithValues...),
 		BucketSyncTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
@@ -88,11 +88,11 @@ func (metrics *Metrics) captureTotalJobs(delta float64) {
 }
 
 func (metrics *Metrics) captureJobProcessingTime(requestTime time.Time) {
-	metrics.JobProcessingTime.Observe(time.Since(requestTime).Seconds())
+	metrics.JobProcessingTime.Observe(float64(time.Since(requestTime).Milliseconds()))
 }
 
 func (metrics *Metrics) captureJobTimeInQueue(requestTime time.Time) {
-	metrics.JobTimeInQueue.Observe(time.Since(requestTime).Seconds())
+	metrics.JobTimeInQueue.Observe(float64(time.Since(requestTime).Milliseconds()))
 }
 
 func (metrics *Metrics) captureBucketSyncTime(requestTime time.Time) {

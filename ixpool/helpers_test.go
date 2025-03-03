@@ -136,9 +136,7 @@ func (ms *MockStateManager) SetAccountMetaInfo(id identifiers.Identifier, accMet
 func (ms *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
 	accMetaInfo, ok := ms.accMetaInfos[id]
 	if !ok {
-		return &common.AccountMetaInfo{
-			PositionInContextSet: common.NodeNotFound,
-		}, nil
+		return nil, errors.New("account meta info not found")
 	}
 
 	return accMetaInfo, nil
@@ -292,7 +290,7 @@ func CreateTestIxpool(
 		}
 	}
 
-	return NewIxPool(
+	ixpool, err := NewIxPool(
 		hclog.NewNullLogger(),
 		new(utils.TypeMux),
 		network,
@@ -303,6 +301,9 @@ func CreateTestIxpool(
 		verifier,
 		0,
 	)
+	require.NoError(t, err)
+
+	return ixpool
 }
 
 type MockExecutionManager struct {
@@ -506,6 +507,19 @@ func getOperationInfo(
 		}
 
 		return ixOperation, nil, ixParticipant
+	case common.IXAccountInherit:
+		payload, ok := opPayload.(common.AccountInheritPayload)
+		require.True(t, ok)
+
+		rawPayload, err := payload.Bytes()
+		require.NoError(t, err)
+
+		ixOperation := &common.IxOpRaw{
+			Type:    ixType,
+			Payload: rawPayload,
+		}
+
+		return ixOperation, nil, nil
 
 	case common.IXAccountConfigure:
 		payload, ok := opPayload.(common.AccountConfigurePayload)
@@ -699,6 +713,7 @@ func createTestIxs(
 }
 
 // createTestIxs creates and returns multiple instances of types.Interactions based on the given range
+// It generates ixns for each key of same account based on key count is given
 func createTestAssetTransferIxs(
 	t *testing.T,
 	startNonce int,
@@ -713,13 +728,13 @@ func createTestAssetTransferIxs(
 
 	for nonce := startNonce; nonce < endNonce; nonce++ {
 		for i := 0; i < keyCount; i++ {
-			ben, _ := identifiers.GenerateParticipantIDv0(identifiers.RandomFingerprint(), 0)
+			beneficiary := tests.RandomIdentifierWithZeroVariant(t)
 			ixs = append(ixs, newTestInteraction(
-				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, ben.AsIdentifier()),
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, beneficiary),
 				nonce, id, uint64(i), nil,
 			))
 
-			sm.registerAccounts(ben.AsIdentifier())
+			sm.registerAccounts(beneficiary)
 		}
 	}
 
@@ -738,7 +753,16 @@ func getTesseractWithIxs(t *testing.T, id identifiers.Identifier, nonce int) *co
 	tsParams := &tests.CreateTesseractParams{
 		IDs:     []identifiers.Identifier{id},
 		Heights: []uint64{0},
-		Ixns:    ixs,
+		ParticipantsCallback: func(participants common.ParticipantsState) {
+			state := participants[id]
+
+			state.ContextDelta = &common.DeltaGroup{
+				ConsensusNodes: tests.RandomKramaIDs(t, 2),
+			}
+
+			participants[id] = state
+		},
+		Ixns: ixs,
 	}
 
 	ts := tests.CreateTesseract(t, tsParams)
@@ -891,8 +915,8 @@ func benchmarkDigestCache(b *testing.B, m cacheMaker, numThreads int) {
 }
 
 type CreateBatch struct {
-	ixnCount int
-	psCount  int
+	ixnCount                int
+	consensusNodesHashCount int
 }
 
 type CreateBatches struct {
@@ -900,7 +924,7 @@ type CreateBatches struct {
 	batch      CreateBatch
 }
 
-func addBatch(t *testing.T, registry *IxBatchRegistry, ixnCount int, psCount int) {
+func addBatch(t *testing.T, registry *IxBatchRegistry, ixnCount int, consensusNodesHashCount int) {
 	t.Helper()
 
 	ix := tests.CreateIX(t, &tests.CreateIxParams{
@@ -912,13 +936,17 @@ func addBatch(t *testing.T, registry *IxBatchRegistry, ixnCount int, psCount int
 				},
 			}
 
-			for i := 0; i < psCount-2; i++ {
+			for i := 0; i < consensusNodesHashCount-2; i++ {
 				ix.Participants = append(ix.Participants, common.IxParticipant{
 					ID: tests.RandomIdentifier(t),
 				})
 			}
 		},
 	})
+
+	for id := range ix.Participants() {
+		registry.consensusNodesHash[id] = tests.RandomHash(t)
+	}
 
 	for i := 0; i < ixnCount; i++ {
 		registry.addIx(ix)
@@ -930,7 +958,7 @@ func addBatches(t *testing.T, registry *IxBatchRegistry, batchesList []CreateBat
 
 	for _, batches := range batchesList {
 		for i := 0; i < batches.batchCount; i++ {
-			addBatch(t, registry, batches.batch.ixnCount, batches.batch.psCount)
+			addBatch(t, registry, batches.batch.ixnCount, batches.batch.consensusNodesHashCount)
 		}
 	}
 }
@@ -956,7 +984,9 @@ func validateAllocatedView(t *testing.T, allocatedView uint64, currentView uint6
 // - The first element in each group represents the sender.
 // - If the second element is a "sarga" id, a "participant creation" interaction is created.
 // - Otherwise, an "asset transfer" interaction is generated.
+// - always use the participants indexes in sequential manner.
 // interactions are generated in increasing sequenceID order starting from zero
+// 0-100 is reserved for primary accounts and 101-200 reserved for sub accounts
 func createIxnsFromParticipants(t *testing.T, input [][]int) []*common.Interaction {
 	t.Helper()
 
@@ -970,8 +1000,19 @@ func createIxnsFromParticipants(t *testing.T, input [][]int) []*common.Interacti
 		}
 	}
 
-	participants := common.IdentifierList(tests.GetIdentifiers(t, participantCount))
-	sort.Sort(participants)
+	primaryAccounts := common.IdentifierList(tests.GetIdentifiers(t, participantCount))
+	sort.Sort(primaryAccounts)
+
+	subAccounts := common.IdentifierList(tests.GetSubAccountIdentifiers(t, participantCount))
+	sort.Sort(subAccounts)
+
+	getAccount := func(index int) identifiers.Identifier {
+		if index >= 101 {
+			return subAccounts[index]
+		} else {
+			return primaryAccounts[index]
+		}
+	}
 
 	nonces := make(map[identifiers.Identifier]int)
 	ixns := make([]*common.Interaction, len(input))
@@ -979,35 +1020,35 @@ func createIxnsFromParticipants(t *testing.T, input [][]int) []*common.Interacti
 	for i, list := range input {
 		nonce := 0
 
-		if n, ok := nonces[participants[list[0]]]; ok {
+		if n, ok := nonces[getAccount(list[0])]; ok {
 			nonce = n
 		}
 
 		if list[1] == 999 {
 			ixns[i] = newTestInteraction(
 				t, common.IxAssetCreate, tests.CreateAssetCreatePayload(t),
-				nonce, participants[list[0]], 0, func(ixData *common.IxData) {
+				nonce, getAccount(list[0]), 0, func(ixData *common.IxData) {
 					for i := 2; i < len(list); i++ {
 						ixData.Participants = append(ixData.Participants, common.IxParticipant{
-							ID: participants[list[i]],
+							ID: getAccount(list[i]),
 						})
 					}
 				},
 			)
 		} else {
 			ixns[i] = newTestInteraction(
-				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, participants[list[1]]),
-				nonce, participants[list[0]], 0, func(ixData *common.IxData) {
+				t, common.IxAssetTransfer, tests.CreateAssetActionPayload(t, getAccount(list[1])),
+				nonce, getAccount(list[0]), 0, func(ixData *common.IxData) {
 					for i := 2; i < len(list); i++ {
 						ixData.Participants = append(ixData.Participants, common.IxParticipant{
-							ID: participants[list[i]],
+							ID: getAccount(list[i]),
 						})
 					}
 				},
 			)
 		}
 
-		nonces[participants[list[0]]] = nonce + 1
+		nonces[getAccount(list[0])] = nonce + 1
 	}
 
 	return ixns

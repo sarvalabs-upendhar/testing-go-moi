@@ -80,6 +80,10 @@ type InteractionCountArgs struct {
 	Options TesseractNumberOrHash  `json:"options"`
 }
 
+type SubAccountCountArgs struct {
+	ID identifiers.Identifier `json:"id"`
+}
+
 type GetLogicStorageArgs struct {
 	ID         identifiers.Identifier `json:"id"`
 	LogicID    identifiers.LogicID    `json:"logic_id"`
@@ -133,6 +137,10 @@ type SyncJobRequest struct {
 type PeerScoreRequest struct{}
 
 // Public ix args
+
+type SendIXList struct {
+	Ixns []SendIX `json:"ixns"`
+}
 
 type SendIX struct {
 	IXArgs     string `json:"ix_args"`
@@ -226,6 +234,12 @@ type RPCAssetSupply struct {
 type RPCParticipantCreate struct {
 	ID     identifiers.Identifier `json:"id"`
 	Amount *hexutil.Big           `json:"amount"`
+}
+
+type RPCAccountInheritPayload struct {
+	TargetAccount   identifiers.Identifier `json:"target_account"`
+	Amount          *hexutil.Big           `json:"amount"`
+	SubAccountIndex hexutil.Uint64         `json:"target_sub_account_count"`
 }
 
 type KeyAddPayload struct {

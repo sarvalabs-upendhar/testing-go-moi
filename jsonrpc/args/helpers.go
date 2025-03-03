@@ -235,8 +235,7 @@ func CheckForRPCParticipantState(
 
 		require.Equal(t, participant.Height, rpcParticipant.Height.ToUint64())
 		require.Equal(t, participant.TransitiveLink, rpcParticipant.TransitiveLink)
-		require.Equal(t, participant.PreviousContext, rpcParticipant.PrevContext)
-		require.Equal(t, participant.LatestContext, rpcParticipant.LatestContext)
+		require.Equal(t, participant.LockedContext, rpcParticipant.LockedContext)
 		require.Equal(t, participant.ContextDelta, rpcParticipant.ContextDelta)
 		require.Equal(t, participant.StateHash, rpcParticipant.StateHash)
 	}

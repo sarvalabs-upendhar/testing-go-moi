@@ -119,10 +119,40 @@ func (executor *IxExecutor) UpdateContext() error {
 	return nil
 }
 
+// SuccessIxParticipants returns a map indicating whether a participant is part of a successful interaction.
+func (executor *IxExecutor) SuccessIxParticipants() map[identifiers.Identifier]bool {
+	var (
+		ps = make(map[identifiers.Identifier]bool)
+		rs = executor.transition.Receipts()
+	)
+
+	for _, ix := range executor.Interactions.IxList() {
+		// mark sender of failed ixn as success as it requires state change
+		ps[ix.SenderID()] = true
+
+		if rs.IsSuccess(ix.Hash()) {
+			for id := range ix.Participants() {
+				ps[id] = true
+			}
+		}
+	}
+
+	return ps
+}
+
 // CommitStateObjects commits all StateObjects of the interaction participants to the state db.
 // If the interaction receiver is a new account, the Object of the sarga account is also committed.
 func (executor *IxExecutor) CommitStateObjects() error {
+	isSuccess := executor.SuccessIxParticipants()
+
 	for id, ps := range executor.Interactions.Participants() {
+		if !isSuccess[id] {
+			executor.commitHashes.SetStateHash(id, common.NilHash)
+			executor.commitHashes.SetContextHash(id, common.NilHash)
+
+			continue
+		}
+
 		obj := executor.transition.GetObject(id)
 
 		previousHash, err := obj.Data().Hash()
@@ -140,13 +170,6 @@ func (executor *IxExecutor) CommitStateObjects() error {
 		newHash, err := obj.Commit()
 		if err != nil {
 			return err
-		}
-
-		if newHash == previousHash {
-			executor.commitHashes.SetStateHash(id, common.NilHash)
-			executor.commitHashes.SetContextHash(id, common.NilHash)
-
-			continue
 		}
 
 		executor.commitHashes.SetStateHash(id, newHash)

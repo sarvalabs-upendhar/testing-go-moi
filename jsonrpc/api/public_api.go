@@ -23,7 +23,7 @@ func NewPublicAPI(backend *backend.Backend, filterMan *jsonrpc.FilterManager) *P
 		IxPoolAPI: NewPublicIXPoolAPI(backend.Ixpool),
 		CoreAPI:   NewPublicCoreAPI(backend.Ixpool, backend.Chain, backend.SM, backend.Exec, backend.Syncer, filterMan),
 		NetAPI:    NewPublicNetAPI(backend.Net),
-		DebugAPI:  NewPublicDebugAPI(backend.DB, backend.Net, backend.Syncer),
+		DebugAPI:  NewPublicDebugAPI(backend.Ixpool, backend.DB, backend.Net, backend.Syncer),
 	}
 }
 

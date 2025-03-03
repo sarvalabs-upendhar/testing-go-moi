@@ -150,22 +150,44 @@ func (p *PublicCoreAPI) getStateHash(args *rpcargs.TesseractArgs) (common.Hash, 
 	return ts.StateHash(args.ID), nil
 }
 
-func (p *PublicCoreAPI) getContextHash(args *rpcargs.TesseractArgs) (common.Hash, error) {
+func (p *PublicCoreAPI) getContextHash(args *rpcargs.TesseractArgs) (identifiers.Identifier, common.Hash, error) {
 	accMetaInfo, err := p.getAccMetaInfo(args)
 	if err != nil {
-		return common.NilHash, err
+		return identifiers.Nil, common.NilHash, err
 	}
 
 	if accMetaInfo != nil {
-		return accMetaInfo.ContextHash, nil
+		if args.ID.IsParticipantVariant() {
+			if accMetaInfo, err = p.sm.GetAccountMetaInfo(accMetaInfo.InheritedAccount); err != nil {
+				return identifiers.Nil, common.NilHash, err
+			}
+		}
+
+		return accMetaInfo.ID, accMetaInfo.ContextHash, nil
 	}
 
 	ts, err := p.getTesseract(args)
 	if err != nil {
-		return common.NilHash, err
+		return identifiers.Nil, common.NilHash, err
 	}
 
-	return ts.LatestContextHash(args.ID), nil
+	// In case of sub account, locked context is the actual context as there won't be context delta for a sub account
+	// but in case of primary account, there could be context delta involved so fetch from state
+	if args.ID.IsParticipantVariant() {
+		accMetaInfo, err = p.sm.GetAccountMetaInfo(args.ID)
+		if err != nil {
+			return identifiers.Nil, common.NilHash, err
+		}
+
+		return accMetaInfo.InheritedAccount, ts.LockedContextHash(args.ID), nil
+	}
+
+	acc, err := p.sm.GetAccountState(args.ID, ts.StateHash(args.ID))
+	if err != nil {
+		return identifiers.Nil, common.NilHash, err
+	}
+
+	return args.ID, acc.ContextHash, nil
 }
 
 // Tesseract returns the rpc tesseract using given arguments
@@ -182,22 +204,30 @@ func (p *PublicCoreAPI) Tesseract(args *rpcargs.TesseractArgs) (*rpcargs.RPCTess
 	return rpcargs.CreateRPCTesseract(ts)
 }
 
-// ConsensusNodes will fetch the context associated with the given ids
-func (p *PublicCoreAPI) ConsensusNodes(args *rpcargs.ContextInfoArgs) (*rpcargs.ContextResponse, error) {
-	contextHash, err := p.getContextHash(getTesseractArgs(args.ID, args.Options))
+// ContextInfo will fetch the context associated with the given ids
+func (p *PublicCoreAPI) ContextInfo(args *rpcargs.ContextInfoArgs) (*rpcargs.ContextResponse, error) {
+	id, contextHash, err := p.getContextHash(getTesseractArgs(args.ID, args.Options))
 	if err != nil {
 		return nil, err
 	}
 
-	consensusNodes, err := p.sm.GetConsensusNodesByHash(args.ID, contextHash)
+	obj, err := p.sm.GetMetaContextObject(id, contextHash)
 	if err != nil {
 		return nil, err
 	}
 
-	return &rpcargs.ContextResponse{
-		ConsensusNodes: utils.KramaIDToString(consensusNodes),
+	res := &rpcargs.ContextResponse{
+		ConsensusNodes: utils.KramaIDToString(obj.ConsensusNodes),
 		StorageNodes:   make([]string, 0),
-	}, nil
+	}
+
+	if args.ID.IsParticipantVariant() {
+		res.InheritedAccount = id
+	} else {
+		res.SubAccounts = rpcargs.CreateRPCSubAccounts(obj.SubAccounts)
+	}
+
+	return res, nil
 }
 
 // Balance is a method of PublicCoreAPI for retrieving the balance of an ids.
@@ -346,6 +376,24 @@ func (p *PublicCoreAPI) InteractionReceipt(args *rpcargs.ReceiptArgs) (*rpcargs.
 	}
 
 	return rpcargs.CreateRPCReceipt(receipt, ix, hash, participants, ixIndex), nil
+}
+
+// SubAccountCount returns the number of sub accounts of an identifier
+func (p *PublicCoreAPI) SubAccountCount(args *rpcargs.SubAccountCountArgs) (*hexutil.Uint64, error) {
+	if args.ID.IsNil() {
+		return nil, common.ErrEmptyID
+	}
+
+	if args.ID.IsParticipantVariant() {
+		return nil, common.ErrExpectedPrimaryAccount
+	}
+
+	count, err := p.sm.GetSubAccountCount(args.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*hexutil.Uint64)(&count), nil
 }
 
 // InteractionCount returns the number of interactions sent for the given ids

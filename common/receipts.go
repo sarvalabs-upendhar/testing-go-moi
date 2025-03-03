@@ -323,8 +323,15 @@ func (rs Receipts) FuelUsed() (fuelUsed uint64) {
 	return fuelUsed
 }
 
+func (rs Receipts) IsSuccess(ixHash Hash) bool {
+	receipt := rs[ixHash]
+
+	return receipt.Status == ReceiptOk
+}
+
 type OperationResultPayload interface {
-	AssetCreationResult | AssetSupplyResult | LogicDeployResult | LogicInvokeResult | LogicEnlistResult
+	AssetCreationResult | AssetSupplyResult | LogicDeployResult |
+		LogicInvokeResult | LogicEnlistResult | AccountInheritResult
 }
 
 // AssetCreationResult holds the result of asset creation operation.
@@ -353,4 +360,9 @@ type LogicInvokeResult struct {
 type LogicEnlistResult struct {
 	Outputs hexutil.Bytes `json:"outputs"`
 	Error   hexutil.Bytes `json:"error"`
+}
+
+// AccountInheritResult holds the result of account inherit operation.
+type AccountInheritResult struct {
+	SubAccount identifiers.Identifier `json:"sub_account"`
 }

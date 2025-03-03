@@ -230,6 +230,15 @@ func (op *IxOp) GetAccountConfigurePayload() (*AccountConfigurePayload, error) {
 	return op.Payload.participant.Configure, nil
 }
 
+// GetAccountInheritPayload returns the account inherit payload if its present.
+func (op *IxOp) GetAccountInheritPayload() (*AccountInheritPayload, error) {
+	if op.Payload == nil || op.Payload.participant == nil || op.Payload.participant.Inherit == nil {
+		return nil, errors.New("payload not found")
+	}
+
+	return op.Payload.participant.Inherit, nil
+}
+
 // getAssetPayload returns the asset payload if its present.
 func (op *IxOp) getAssetPayload() *AssetPayload {
 	// If payload has been decoded, return the asset form
@@ -356,6 +365,13 @@ func (op *IxOp) Target() identifiers.Identifier {
 		}
 
 		op.target = payload.Beneficiary
+	case IXAccountInherit:
+		payload, err := op.GetAccountInheritPayload()
+		if err != nil {
+			panic(err)
+		}
+
+		op.target, _ = op.SenderID().DeriveVariant(payload.SubAccountIndex, nil, nil)
 	case IxAssetMint, IxAssetBurn:
 		payload, err := op.GetAssetSupplyPayload()
 		if err != nil {
@@ -525,6 +541,49 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 						Configure: accConfigurePayload,
 					},
 				},
+			}
+
+		case IXAccountInherit:
+			accInheritPayload := new(AccountInheritPayload)
+			if err := accInheritPayload.FromBytes(op.Payload); err != nil {
+				return nil, err
+			}
+
+			ix.ops[idx] = &IxOp{
+				Interaction: ix,
+				OpType:      op.Type,
+				Payload: &IxOpPayload{
+					participant: &ParticipantPayload{
+						Inherit: accInheritPayload,
+					},
+				},
+			}
+
+			subAccount, err := ix.SenderID().DeriveVariant(accInheritPayload.SubAccountIndex, nil, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			_, ok := ix.ps[subAccount]
+			if !ok {
+				ix.ps[subAccount] = &ParticipantInfo{
+					ID:        subAccount,
+					AccType:   RegularAccount,
+					IsSigner:  false,
+					LockType:  MutateLock,
+					IsGenesis: true,
+				}
+			}
+
+			_, ok = ix.ps[SargaAccountID]
+			if !ok {
+				ix.ps[SargaAccountID] = &ParticipantInfo{
+					AccType:   SargaAccount,
+					IsSigner:  false,
+					LockType:  MutateLock,
+					IsGenesis: false,
+					ID:        SargaAccountID,
+				}
 			}
 
 		case IxAssetTransfer:
@@ -1275,36 +1334,6 @@ func (ixs Interactions) FuelLimit() (limit uint64) {
 	}
 
 	return limit
-}
-
-// AccountType returns the type of the given id or an error if not found.
-func (ixs Interactions) AccountType(id identifiers.Identifier) (AccountType, error) {
-	if SargaAccountID == id {
-		return RegularAccount, nil
-	}
-
-	for _, ix := range ixs.ixns {
-		if ix.SenderID() == id || ix.Payer() == id {
-			return RegularAccount, nil
-		}
-
-		for _, op := range ix.Ops() {
-			if op.Target() != id && op.Benefactor() != id {
-				continue
-			}
-
-			switch op.Type() {
-			case IxAssetCreate:
-				return AssetAccount, nil
-			case IxLogicDeploy:
-				return LogicAccount, nil
-			default:
-				return RegularAccount, nil
-			}
-		}
-	}
-
-	return -1, ErrAccountNotFound
 }
 
 type IxBySequenceID Interactions

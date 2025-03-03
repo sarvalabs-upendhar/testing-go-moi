@@ -201,6 +201,16 @@ func (k *Engine) handleConsensusMessage(msg *types.ICSMSG) {
 		})
 
 	case message.PROPOSAL:
+		deCompressionTime := time.Now()
+
+		if err := msg.DeCompressPayload(k.compressor); err != nil {
+			k.logger.Error("failed to decompress payload", "err", err)
+
+			return
+		}
+
+		k.metrics.captureDeCompressionTime(deCompressionTime)
+
 		proposal := new(types.ProposalMsg)
 		if err := proposal.FromBytes(msg.Payload); err != nil {
 			k.logger.Error("failed to depolarize proposal msg", "err", err)

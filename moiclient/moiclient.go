@@ -251,7 +251,7 @@ func (c *Client) TDU(ctx context.Context, args *rpcargs.QueryArgs) ([]rpcargs.TD
 func (c *Client) ContextInfo(ctx context.Context, args *rpcargs.ContextInfoArgs) (*rpcargs.ContextResponse, error) {
 	var contextResp rpcargs.ContextResponse
 
-	err := c.Call(ctx, &contextResp, "moi.ConsensusNodes", args)
+	err := c.Call(ctx, &contextResp, "moi.ContextInfo", args)
 	if err != nil {
 		return nil, err
 	}
@@ -299,6 +299,18 @@ func (c *Client) InteractionReceipt(ctx context.Context, args *rpcargs.ReceiptAr
 	}
 
 	return &receipt, nil
+}
+
+// SubAccountCount returns the number of sub accounts of an identifier
+func (c *Client) SubAccountCount(ctx context.Context, args *rpcargs.SubAccountCountArgs) (*hexutil.Uint64, error) {
+	var count *hexutil.Uint64
+
+	err := c.Call(ctx, &count, "moi.SubAccountCount", args)
+	if err != nil {
+		return nil, err
+	}
+
+	return count, nil
 }
 
 // InteractionCount returns the number of interactions sent for the given address

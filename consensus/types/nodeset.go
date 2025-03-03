@@ -68,25 +68,93 @@ func (ns *NodeSet) KramaIDs() []kramaid.KramaID {
 	return ids
 }
 
-// ICSCommittee manages the NodeSets of participants in the ICS, including RandomNodes and ObserverNodes.
-// Each participant possesses 1 NodeSets, which are arranged according to their addresses.
-// For instance, in the scenario of two participants, ICSCommittee will contain 1 * Participants + 1 sets.
-// [P0.Set, P1.Set, RandomSet]
+// NodesetData keeps track of node set position of consensus nodes hash
+// If PSCount and ExcludedPSCount are equal, it means the nodeset can be excluded from consensus.
+type NodesetData struct {
+	Position        int
+	PSCount         int // PSCount represents the number of unique participants having same consensus nodes hash
+	ExcludedPSCount int // ExcludedPSCount represents the number of unique participants excluded from consensus
+}
+
+// ICSCommittee manages the NodeSets for unique consensus nodes hash of participants in the ICS,
+// including RandomNodes and ObserverNodes.
+// ConsensusNodesHash helps in keeping track of index of consensus nodes hash in the node set.
+// For instance, in the scenario of 4 participants where c1, c2, c1, c2 are consensus nodes hash
+// of participants respectively,
+// ICSCommittee will contain 2 nodes set (due to 2 unique consensus nodes hash) + 1 random sets.
+// [c1, c2, RandomSet]
+// ConsensusNodesHash represents mapping between ConsensusNodesHash and it's nodeset position
 type ICSCommittee struct {
-	Sets       []*NodeSet
-	totalNodes int
-	size       int
+	Sets               []*NodeSet
+	ConsensusNodesHash map[common.Hash]*NodesetData
+	totalNodes         int
+	size               int
 }
 
 // NewICSCommittee creates and returns a new instance of NodeSet
-func NewICSCommittee(size int) *ICSCommittee {
+func NewICSCommittee() *ICSCommittee {
 	ics := &ICSCommittee{
-		Sets:       make([]*NodeSet, size),
-		totalNodes: 0,
-		size:       size,
+		Sets:               make([]*NodeSet, 0),
+		ConsensusNodesHash: make(map[common.Hash]*NodesetData),
+		totalNodes:         0,
 	}
 
 	return ics
+}
+
+func (i *ICSCommittee) IncrementPSCount(consensusNodesHash common.Hash) {
+	nodesetData := i.ConsensusNodesHash[consensusNodesHash]
+	nodesetData.PSCount++
+}
+
+func (i *ICSCommittee) IncrementExcludedPSCount(consensusNodesHash common.Hash) {
+	nodesetData := i.ConsensusNodesHash[consensusNodesHash]
+	nodesetData.ExcludedPSCount++
+
+	if nodesetData.ExcludedPSCount == nodesetData.PSCount {
+		i.Sets[nodesetData.Position].ExcludedFromICS = true
+	}
+}
+
+// AppendNodeSet appends a node set and tracks its position using the consensus nodes hash.
+// When appending a random set, provide nilHash as the consensus nodes hash,
+// since the random nodes hash differs from the consensus nodes hash, it doesn't need to be stored.
+func (i *ICSCommittee) AppendNodeSet(consensusNodesHash common.Hash, data *NodeSet) {
+	if data == nil {
+		return
+	}
+
+	i.Sets = append(i.Sets, data)
+	i.totalNodes += len(data.Infos)
+	i.size++
+
+	if !consensusNodesHash.IsNil() {
+		i.ConsensusNodesHash[consensusNodesHash] = &NodesetData{
+			Position: len(i.Sets) - 1,
+			PSCount:  1,
+		}
+	}
+}
+
+func (i *ICSCommittee) UpdateNodeset(consensusNodesHash common.Hash, consensusSet *NodeSet, ps common.State) {
+	if _, ok := i.GetNodesetPosition(consensusNodesHash); !ok {
+		i.AppendNodeSet(consensusNodesHash, consensusSet)
+	} else {
+		i.IncrementPSCount(consensusNodesHash)
+	}
+
+	if ps.StateHash == common.NilHash {
+		i.IncrementExcludedPSCount(consensusNodesHash)
+	}
+}
+
+func (i *ICSCommittee) GetNodesetPosition(hash common.Hash) (int, bool) {
+	data, ok := i.ConsensusNodesHash[hash]
+	if !ok {
+		return 0, false
+	}
+
+	return data.Position, ok
 }
 
 func (i *ICSCommittee) TotalNodes() int {
@@ -295,16 +363,6 @@ func (i *ICSCommittee) GetIndex(peerID kramaid.KramaID) (int, int) {
 	return -1, -1
 }
 
-// UpdateNodeSet updates the specific node set of the ICSNodes based on the node set type
-func (i *ICSCommittee) UpdateNodeSet(setType int, data *NodeSet) {
-	if data == nil {
-		return
-	}
-
-	i.Sets[setType] = data
-	i.totalNodes += len(data.Infos)
-}
-
 // GetNodes returns krama id's of all the nodes from the ICSNodes nodeset
 func (i *ICSCommittee) GetNodes(respondedOnly bool) []kramaid.KramaID {
 	nodes := make(map[kramaid.KramaID]struct{})
@@ -461,12 +519,6 @@ func (i *ICSCommittee) Responses() []*common.ArrayOfBits {
 	}
 
 	return responses
-}
-
-func (i *ICSCommittee) ExcludeParticipantsFromICS(position int) {
-	if set := i.Sets[position]; set != nil {
-		set.ExcludedFromICS = true
-	}
 }
 
 func DistinctNodes(operator kramaid.KramaID, nodeSets []*NodeSet) ([]kramaid.KramaID, int, bool) {

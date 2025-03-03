@@ -11,40 +11,6 @@ import (
 	"github.com/sarvalabs/go-moi/state"
 )
 
-func (k *Engine) GetICSCommittee(
-	ts *common.Tesseract,
-	info *common.CommitInfo,
-) (*types.ICSCommittee, error) {
-	ids := ts.AccountIDs()
-	ps := ts.Participants()
-
-	ics := types.NewICSCommittee(len(ids) + 1)
-
-	for index, id := range ids {
-		if ps[id].PreviousContext == common.NilHash {
-			continue
-		}
-
-		consensusNodes, err := k.fetchParticipantContextByHash(id, ps[id].PreviousContext)
-		if err != nil {
-			return nil, err
-		}
-
-		if consensusNodes != nil {
-			ics.UpdateNodeSet(index, consensusNodes)
-		}
-	}
-
-	randomSet, err := k.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
-	if err != nil {
-		return nil, err
-	}
-
-	ics.UpdateNodeSet(ics.StochasticSetPosition(), randomSet)
-
-	return ics, nil
-}
-
 func (k *Engine) NodeSet(ids []kramaid.KramaID, setSizeWithoutDelta uint32) (*types.NodeSet, error) {
 	var (
 		publicKeys [][]byte
@@ -63,6 +29,40 @@ func (k *Engine) NodeSet(ids []kramaid.KramaID, setSizeWithoutDelta uint32) (*ty
 	return types.NewNodeSet(ids, publicKeys, setSizeWithoutDelta), nil
 }
 
+func (k *Engine) GetICSCommittee(
+	ts *common.Tesseract,
+	info *common.CommitInfo,
+) (*types.ICSCommittee, error) {
+	ids := ts.AccountIDs()
+	ps := ts.Participants()
+
+	ics := types.NewICSCommittee()
+
+	for _, id := range ids {
+		if ps[id].LockedContext == common.NilHash {
+			continue
+		}
+
+		consensusNodes, consensusNodesHash, err := k.fetchParticipantContextByHash(id, ps[id].LockedContext)
+		if err != nil {
+			return nil, err
+		}
+
+		if consensusNodes != nil {
+			ics.UpdateNodeset(consensusNodesHash, consensusNodes, ps[id])
+		}
+	}
+
+	randomSet, err := k.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
+	if err != nil {
+		return nil, err
+	}
+
+	ics.AppendNodeSet(common.NilHash, randomSet)
+
+	return ics, nil
+}
+
 func (k *Engine) GetICSCommitteeFromRawContext(
 	ts *common.Tesseract,
 	rawContext map[string][]byte,
@@ -72,17 +72,15 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 	ids := ts.AccountIDs()
 	ps := ts.Participants()
 
-	ics := types.NewICSCommittee(len(ids) + 1)
+	ics := types.NewICSCommittee()
 
-	for index, id := range ids {
-		position := index
-
-		if ps[id].PreviousContext == common.NilHash {
+	for _, id := range ids {
+		if ps[id].LockedContext == common.NilHash {
 			continue
 		}
 
 		metaObject := new(state.MetaContextObject)
-		if err := metaObject.FromBytes(rawContext[ps[id].PreviousContext.String()]); err != nil {
+		if err := metaObject.FromBytes(rawContext[ps[id].LockedContext.String()]); err != nil {
 			return nil, err
 		}
 
@@ -91,9 +89,19 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 			return nil, err
 		}
 
-		ics.UpdateNodeSet(position, nodeSet)
+		contextHashes = append(contextHashes, ps[id].LockedContext)
 
-		contextHashes = append(contextHashes, ps[id].PreviousContext)
+		ics.UpdateNodeset(metaObject.ConsensusNodesHash, nodeSet, ps[id])
+
+		if _, ok := ics.GetNodesetPosition(metaObject.ConsensusNodesHash); !ok {
+			ics.AppendNodeSet(metaObject.ConsensusNodesHash, nodeSet)
+		} else {
+			ics.IncrementPSCount(metaObject.ConsensusNodesHash)
+		}
+
+		if ps[id].StateHash == common.NilHash {
+			ics.IncrementExcludedPSCount(metaObject.ConsensusNodesHash)
+		}
 	}
 
 	// delete the context hashes from delta separately instead of deleting in above for loop
@@ -108,7 +116,7 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 		return nil, err
 	}
 
-	ics.UpdateNodeSet(ics.StochasticSetPosition(), randomSet)
+	ics.AppendNodeSet(common.NilHash, randomSet)
 
 	return ics, nil
 }
@@ -117,13 +125,14 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 // and returns a NodeSet which holds the kramaIDs and public keys
 func (k *Engine) fetchParticipantContextByHash(id identifiers.Identifier, hash common.Hash) (
 	consensusSet *types.NodeSet,
+	consensusNodesHash common.Hash,
 	err error,
 ) {
-	consensusNodes, err := k.state.GetConsensusNodes(id, hash)
+	consensusNodes, consensusNodesHash, err := k.state.GetConsensusNodes(id, hash)
 	if err != nil {
-		k.logger.Error("failed to retrieve context nodes", "err", err, "id", id)
+		k.logger.Error("failed to retrieve context nodes", "err", err, "id", id, "hash", hash)
 
-		return nil, err
+		return nil, common.NilHash, err
 	}
 
 	if len(consensusNodes) > 0 {
@@ -131,11 +140,11 @@ func (k *Engine) fetchParticipantContextByHash(id identifiers.Identifier, hash c
 		if err != nil {
 			k.logger.Error("failed to retrieve the public key of consensus nodes", "err", err)
 
-			return nil, common.ErrPublicKeyNotFound
+			return nil, common.NilHash, common.ErrPublicKeyNotFound
 		}
 
 		consensusSet = types.NewNodeSet(consensusNodes, publicKeys, uint32(len(consensusNodes)))
 	}
 
-	return consensusSet, nil
+	return consensusSet, consensusNodesHash, nil
 }

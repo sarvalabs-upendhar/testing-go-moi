@@ -41,7 +41,7 @@ const (
 	DefaultShutdownTimeout  = 10 * time.Minute
 	DefaultConfirmIxTimeout = 1 * time.Minute
 	DefaultAccountCount     = 4
-	InitialKMOITokens       = 2000000
+	InitialKMOITokens       = 200000000
 	DefaultJSONRPCPort      = 29000
 )
 

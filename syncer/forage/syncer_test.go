@@ -215,7 +215,7 @@ func TestFullSync_SyncPeers(t *testing.T) {
 		nil,
 	)
 
-	id := tests.RandomIdentifier(t)
+	id := tests.RandomIdentifierWithZeroVariant(t)
 
 	accountsToSync := map[identifiers.Identifier]int{
 		common.GuardianAccountID: 10,
@@ -338,7 +338,7 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 		)
 	}
 
-	id := tests.RandomIdentifier(t)
+	id := tests.RandomIdentifierWithZeroVariant(t)
 
 	accountsToSync := map[identifiers.Identifier]int{
 		common.GuardianAccountID: 10,
@@ -836,7 +836,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 		)
 	}
 
-	id := tests.RandomIdentifier(t)
+	id := tests.RandomIdentifierWithZeroVariant(t)
 
 	accountsToSync := map[identifiers.Identifier]int{
 		common.GuardianAccountID: 1,
@@ -982,7 +982,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 		)
 	}
 
-	id := tests.RandomIdentifier(t)
+	id := tests.RandomIdentifierWithZeroVariant(t)
 	expectedHeight := 12
 	accountsToSync := map[identifiers.Identifier]int{
 		id: expectedHeight,
@@ -1558,7 +1558,7 @@ func TestSyncPeerInPeerstore(t *testing.T) {
 
 func TestFetchReceipts(t *testing.T) {
 	mockDB := NewMockDB()
-	mockSession := newMockSession(tests.RandomIdentifier(t))
+	mockSession := newMockSession(tests.RandomIdentifierWithZeroVariant(t))
 
 	hashes := tests.GetHashes(t, 2)
 	receipts := tests.CreateReceiptsWithTestData(t, tests.RandomHash(t))
@@ -1609,7 +1609,7 @@ func TestFetchReceipts(t *testing.T) {
 
 func TestFetchInteractions(t *testing.T) {
 	mockDB := NewMockDB()
-	mockSession := newMockSession(tests.RandomIdentifier(t))
+	mockSession := newMockSession(tests.RandomIdentifierWithZeroVariant(t))
 
 	hashes := tests.GetHashes(t, 2)
 	ixnsList := tests.CreateIxns(t, 1, nil)
@@ -1662,7 +1662,7 @@ func TestFetchInteractions(t *testing.T) {
 
 func TestFetchContextForAgora(t *testing.T) {
 	// initializing accountID here as we need same accountID for multiple tesseracts in chain
-	id := tests.RandomIdentifier(t)
+	id := tests.RandomIdentifierWithZeroVariant(t)
 	hash := tests.RandomHash(t)
 	nodes := tests.RandomKramaIDs(t, 3)
 
@@ -1704,8 +1704,8 @@ func TestFetchContextForAgora(t *testing.T) {
 					IDs: []identifiers.Identifier{id},
 					Participants: common.ParticipantsState{
 						id: {
-							ContextDelta:    getDeltaGroup(t, 4, 0),
-							PreviousContext: hash,
+							ContextDelta:  getDeltaGroup(t, 4, 0),
+							LockedContext: hash,
 						},
 					},
 				},
@@ -1724,9 +1724,9 @@ func TestFetchContextForAgora(t *testing.T) {
 					IDs: []identifiers.Identifier{id},
 					Participants: common.ParticipantsState{
 						id: {
-							TransitiveLink:  tests.RandomHash(t),
-							ContextDelta:    getDeltaGroup(t, 4, 0),
-							PreviousContext: hash,
+							TransitiveLink: tests.RandomHash(t),
+							ContextDelta:   getDeltaGroup(t, 4, 0),
+							LockedContext:  hash,
 						},
 					},
 				},

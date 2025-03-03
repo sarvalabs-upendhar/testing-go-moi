@@ -25,6 +25,10 @@ type Metrics struct {
 	AgreementFailureCount        metrics.Counter
 	SignatureVerificationTime    metrics.Histogram
 	TesseractMissCount           metrics.Counter
+	ProposalPayloadSize          metrics.Gauge
+	CompressionRatio             metrics.Histogram
+	CompressionTime              metrics.Histogram
+	DeCompressionTime            metrics.Histogram
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -132,6 +136,33 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "block_miss_count",
 			Help:      "Number of blocks missing",
 		}, labels).With(labelsWithValues...),
+		ProposalPayloadSize: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "krama",
+			Name:      "proposal_payload_size",
+			Help:      "Input and compressed payload sizes of proposal",
+		}, append(labels, []string{"payload_type"}...)).With(labelsWithValues...),
+		CompressionRatio: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "krama",
+			Name:      "compression_ratio",
+			Help:      "Measure of how much a proposal's payload is reduced in size after compression",
+			Buckets:   []float64{10, 30, 50, 70, 80, 90, 100},
+		}, labels).With(labelsWithValues...),
+		CompressionTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "krama",
+			Name:      "compression_time",
+			Help:      "Time taken to compress proposal payload",
+			Buckets:   []float64{0.5, 1, 2, 3, 4, 5, 6, 10, 15},
+		}, labels).With(labelsWithValues...),
+		DeCompressionTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "krama",
+			Name:      "decompression_time",
+			Help:      "Time taken to decompress proposal payload",
+			Buckets:   []float64{0.1, 0.3, 0.5, 1, 2, 5, 10, 15},
+		}, labels).With(labelsWithValues...),
 	}
 }
 
@@ -152,6 +183,10 @@ func NilMetrics() *Metrics {
 		AgreementFailureCount:        discard.NewCounter(),
 		SignatureVerificationTime:    discard.NewHistogram(),
 		TesseractMissCount:           discard.NewCounter(),
+		ProposalPayloadSize:          discard.NewGauge(),
+		CompressionRatio:             discard.NewHistogram(),
+		CompressionTime:              discard.NewHistogram(),
+		DeCompressionTime:            discard.NewHistogram(),
 	}
 }
 
@@ -221,4 +256,25 @@ func (metrics *Metrics) captureSignatureVerificationTime(verificationInitTime ti
 
 func (metrics *Metrics) AddTesseractMissCount(delta float64) {
 	metrics.TesseractMissCount.Add(delta)
+}
+
+// methods to capture telemetry metrics
+func (metrics *Metrics) captureInputPayloadSize(size float64) {
+	metrics.ProposalPayloadSize.With("payload_type", "input").Set(size)
+}
+
+func (metrics *Metrics) captureCompressedPayloadSize(size float64) {
+	metrics.ProposalPayloadSize.With("payload_type", "compressed").Set(size)
+}
+
+func (metrics *Metrics) captureCompressionRatio(ratio float64) {
+	metrics.CompressionRatio.Observe(ratio)
+}
+
+func (metrics *Metrics) captureCompressionTime(compressionTime time.Time) {
+	metrics.CompressionTime.Observe(time.Since(compressionTime).Seconds())
+}
+
+func (metrics *Metrics) captureDeCompressionTime(deCompressionTime time.Time) {
+	metrics.DeCompressionTime.Observe(time.Since(deCompressionTime).Seconds())
 }

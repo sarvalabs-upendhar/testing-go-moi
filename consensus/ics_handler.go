@@ -6,6 +6,8 @@ import (
 	"sort"
 	"time"
 
+	networkmsg "github.com/sarvalabs/go-moi/network/message"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/telemetry/tracing"
@@ -45,7 +47,7 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 
 	for {
 		select {
-		case <-time.After(time.Until(k.viewTimeOutDeadline.Load().(time.Time))): //nolint
+		case <-time.After(time.Until(slot.ViewTimeoutDeadline())): //nolint
 			// we should handle this time out if bft is not started
 
 			if stage := slot.GetStage(); stage == ktypes.PrepareStage || stage == ktypes.PreparedStage {
@@ -96,10 +98,10 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 
 				// Start the BFT handler
 				icsEvidence := kbft.NewEvidence(ixnHash, cs.Operator(), cs.Size())
-				bft := kbft.NewKBFTService( //nolint
+				bft := kbft.NewKBFTService(
 					ctx,
 					msg.PeerID,
-					k.viewTimeOutDeadline.Load().(time.Time),
+					slot.ViewTimeoutDeadline(),
 					k.cfg,
 					k.vault, cs.VoteSet(), slot, k.safety, k.finalizedTesseractHandler,
 					kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
@@ -125,6 +127,12 @@ func (k *Engine) startBFT(bft *kbft.KBFT, slot *ktypes.Slot) {
 	k.metrics.captureAgreementTime(agreementInitTime)
 }
 
+func (k *Engine) captureCompressionMetrics(compressionTime time.Time, before float64, after float64) {
+	k.metrics.captureCompressionTime(compressionTime)
+	k.metrics.captureCompressedPayloadSize(after)
+	k.metrics.captureCompressionRatio(((before - after) / before) * 100)
+}
+
 // handleOutboundMessage processes the outbound vote messages.
 func (k *Engine) handleOutboundMessage(
 	ctx context.Context,
@@ -144,6 +152,23 @@ func (k *Engine) handleOutboundMessage(
 
 	k.logger.Debug("Handling outbound message", "cluster-id", clusterID,
 		"recipient", msg.Recipient, "msg-type", icsMsg.MsgType)
+
+	if icsMsg.MsgType == networkmsg.PROPOSAL {
+		before := float64(len(icsMsg.Payload))
+		compressionTime := time.Now()
+
+		k.metrics.captureInputPayloadSize(before)
+
+		if err := icsMsg.CompressPayload(k.compressor); err != nil {
+			k.logger.Error("unable to compress payload", err)
+
+			return
+		}
+
+		after := float64(len(icsMsg.Payload))
+
+		k.captureCompressionMetrics(compressionTime, before, after)
+	}
 
 	// we should broadcast the message if the recipient is empty
 	if msg.Recipient == "" {
@@ -379,10 +404,10 @@ func (k *Engine) handlePrepared(
 	ixnsHash := cs.IxnsHash()
 
 	// Start the BFT system
-	bft := kbft.NewKBFTService( //nolint
+	bft := kbft.NewKBFTService(
 		ctx,
 		k.selfID,
-		k.viewTimeOutDeadline.Load().(time.Time),
+		slot.ViewTimeoutDeadline(),
 		k.cfg,
 		k.vault, cs.VoteSet(), slot, k.safety, k.finalizedTesseractHandler,
 		kbft.WithLogger(k.logger.With("cluster-id", clusterID)),
@@ -430,8 +455,7 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 	}
 
 	// update the committee with the stochastic node set
-	cs.UpdateNodeSet(
-		cs.Committee().StochasticSetPosition(),
+	cs.AppendNodeSet(
 		ktypes.NewNodeSet(stochasticNodes, publicKeys, uint32(common.StochasticSetSize)),
 	)
 
@@ -517,7 +541,7 @@ func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID kramaid.K
 			return err
 		}
 
-		isVerified, err := k.verifyQc(ts.AccountIDs(), ts.Participants(), qc.View, ics, qc)
+		isVerified, err := k.verifyQc(qc.View, ics, qc)
 		if err != nil {
 			return errors.Wrap(err, "failed to verify QC")
 		}

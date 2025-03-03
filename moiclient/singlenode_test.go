@@ -504,6 +504,9 @@ func (tn *TestSingleNode) TestGetContextInfo() {
 				require.Equal(tn.T(), string(tn.genesis.SargaAccount.ConsensusNodes[i]),
 					contextInfo.ConsensusNodes[i])
 			}
+
+			require.Equal(tn.T(), 0, len(contextInfo.SubAccounts))
+			require.True(tn.T(), contextInfo.InheritedAccount.IsNil())
 		})
 	}
 }
@@ -1551,6 +1554,43 @@ func (tn *TestSingleNode) TestCall() {
 
 			require.NoError(tn.T(), err)
 			checkForCallReceipt(tn.T(), test.expectedReceipt, receipt)
+		})
+	}
+}
+
+func (tn *TestSingleNode) TestSubAccountCount() {
+	ctx := context.Background()
+	testcases := []struct {
+		name          string
+		StatusArgs    *rpcargs.SubAccountCountArgs
+		expectedError error
+	}{
+		{
+			name: "should return error if failed to fetch sub account count",
+			StatusArgs: &rpcargs.SubAccountCountArgs{
+				ID: tests.RandomIdentifierWithZeroVariant(tn.T()),
+			},
+			expectedError: common.ErrAccountNotFound,
+		},
+		{
+			name: "sub account count fetched successfully",
+			StatusArgs: &rpcargs.SubAccountCountArgs{
+				ID: tn.accounts[0].ID,
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		tn.Run(test.name, func() {
+			count, err := tn.moiClient.SubAccountCount(ctx, test.StatusArgs)
+			if test.expectedError != nil {
+				require.ErrorContains(tn.T(), err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(tn.T(), err)
+			require.Equal(tn.T(), uint64(0), count.ToUint64())
 		})
 	}
 }

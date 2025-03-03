@@ -149,6 +149,7 @@ func (m *MockDB) UpdateAccMetaInfo(
 	stateHash common.Hash,
 	contextHash common.Hash,
 	consensusNodesHash common.Hash,
+	inheritedAccount identifiers.Identifier,
 	commitHash common.Hash,
 	accType common.AccountType,
 	shouldUpdateContextSetPosition bool,

@@ -170,7 +170,7 @@ func (te *TestEnvironment) TestAssetTransfer() {
 			sender: sender,
 			assetActionPayload: &common.AssetActionPayload{
 				Beneficiary: receiver.ID,
-				AssetID:     tests.GetRandomAssetID(te.T(), tests.RandomIdentifier(te.T())),
+				AssetID:     tests.GetRandomAssetID(te.T(), tests.RandomIdentifierWithZeroVariant(te.T())),
 				Amount:      big.NewInt(100),
 			},
 			expectedError: common.ErrAssetNotFound,

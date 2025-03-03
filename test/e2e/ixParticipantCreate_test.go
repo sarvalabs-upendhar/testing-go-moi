@@ -121,7 +121,7 @@ func (te *TestEnvironment) TestParticipantCreate() {
 	sender := accs[0]
 	receiver := accs[1]
 
-	id := tests.RandomIdentifier(te.T())
+	id := tests.RandomIdentifierWithZeroVariant(te.T())
 
 	testcases := []struct {
 		name                     string
@@ -155,7 +155,7 @@ func (te *TestEnvironment) TestParticipantCreate() {
 			name:   "register participants with multiple keys",
 			sender: sender,
 			participantCreatePayload: &common.ParticipantCreatePayload{
-				ID: tests.RandomIdentifier(te.T()),
+				ID: tests.RandomIdentifierWithZeroVariant(te.T()),
 				KeysPayload: []common.KeyAddPayload{
 					{
 						PublicKey:          id.Bytes(),
@@ -163,7 +163,7 @@ func (te *TestEnvironment) TestParticipantCreate() {
 						SignatureAlgorithm: 0,
 					},
 					{
-						PublicKey:          tests.RandomIdentifier(te.T()).Bytes(),
+						PublicKey:          tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
 						Weight:             800,
 						SignatureAlgorithm: 0,
 					},
@@ -184,7 +184,7 @@ func (te *TestEnvironment) TestParticipantCreate() {
 						SignatureAlgorithm: 0,
 					},
 					{
-						PublicKey:          tests.RandomIdentifier(te.T()).Bytes(),
+						PublicKey:          tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
 						Weight:             299,
 						SignatureAlgorithm: 0,
 					},

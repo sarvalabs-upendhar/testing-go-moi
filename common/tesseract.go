@@ -15,12 +15,11 @@ import (
 )
 
 type State struct {
-	Height          uint64
-	TransitiveLink  Hash
-	PreviousContext Hash
-	LatestContext   Hash
-	ContextDelta    *DeltaGroup
-	StateHash       Hash
+	Height         uint64
+	TransitiveLink Hash
+	LockedContext  Hash
+	ContextDelta   *DeltaGroup
+	StateHash      Hash
 }
 
 func (s *State) Copy() State {
@@ -369,19 +368,15 @@ func (t *Tesseract) StateHash(id identifiers.Identifier) Hash {
 	return t.participants[id].StateHash
 }
 
-func (t *Tesseract) LatestContextHash(id identifiers.Identifier) Hash {
-	return t.participants[id].LatestContext
+func (t *Tesseract) LockedContextHash(id identifiers.Identifier) Hash {
+	return t.participants[id].LockedContext
 }
 
-func (t *Tesseract) PreviousContextHash(id identifiers.Identifier) Hash {
-	return t.participants[id].PreviousContext
-}
-
-func (t *Tesseract) PreviousContext() map[identifiers.Identifier]Hash {
+func (t *Tesseract) LockedContext() map[identifiers.Identifier]Hash {
 	previousContext := make(map[identifiers.Identifier]Hash)
 
 	for id, p := range t.participants {
-		previousContext[id] = p.PreviousContext
+		previousContext[id] = p.LockedContext
 	}
 
 	return previousContext

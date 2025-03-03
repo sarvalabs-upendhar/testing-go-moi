@@ -456,7 +456,7 @@ func TestStateManager_GetMetaContextObject(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ctx, err := sm.getMetaContextObject(identifiers.Nil, test.hash)
+			ctx, err := sm.GetMetaContextObject(identifiers.Nil, test.hash)
 			if test.expectedError != nil {
 				require.EqualError(t, err, test.expectedError.Error())
 
@@ -502,7 +502,7 @@ func TestStateManager_GetConsensusNodes(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			consensusNodes, err := sm.GetConsensusNodes(identifiers.Nil, test.hash)
+			consensusNodes, hash, err := sm.GetConsensusNodes(identifiers.Nil, test.hash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -512,12 +512,17 @@ func TestStateManager_GetConsensusNodes(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, common.NodeList(mObj[0].ConsensusNodes), consensusNodes)
+			require.Equal(t, mObj[0].ConsensusNodesHash, hash)
 		})
 	}
 }
 
 func TestStateManager_GetCommittedContextHash(t *testing.T) {
-	id := tests.RandomIdentifier(t)
+	id := tests.RandomIdentifierWithZeroVariant(t)
+
+	subAccount, err := identifiers.GenerateParticipantIDv0(id.Fingerprint(), 1)
+	require.NoError(t, err)
+
 	contextHash := tests.RandomHash(t)
 
 	smParams := &createStateManagerParams{
@@ -525,6 +530,11 @@ func TestStateManager_GetCommittedContextHash(t *testing.T) {
 			db.setAccountMetaInfo(&common.AccountMetaInfo{
 				ID:          id,
 				ContextHash: contextHash,
+			})
+
+			db.setAccountMetaInfo(&common.AccountMetaInfo{
+				ID:               subAccount.AsIdentifier(),
+				InheritedAccount: id,
 			})
 		},
 	}
@@ -539,12 +549,17 @@ func TestStateManager_GetCommittedContextHash(t *testing.T) {
 	}{
 		{
 			name:          "context doesn't exist",
-			id:            tests.RandomIdentifier(t),
+			id:            tests.RandomIdentifierWithZeroVariant(t),
 			expectedError: errors.New("failed to fetch account meta info"),
 		},
 		{
-			name:        "context exists",
+			name:        "primary context exists",
 			id:          id,
+			contextHash: contextHash,
+		},
+		{
+			name:        "sub account context exists",
+			id:          subAccount.AsIdentifier(),
 			contextHash: contextHash,
 		},
 	}
@@ -971,7 +986,7 @@ func TestStateManager_FetchContextLock(t *testing.T) {
 
 		for i, id := range ids {
 			participants[id] = common.State{
-				PreviousContext: hashes[i],
+				LockedContext: hashes[i],
 			}
 		}
 
@@ -1848,12 +1863,13 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 
 	sm := createTestStateManager(t, smParams)
 	testcases := []struct {
-		name          string
-		id            identifiers.Identifier
-		ctxHash       common.Hash
-		consensusSet  []id.KramaID
-		consensusKeys [][]byte
-		expectedError error
+		name             string
+		id               identifiers.Identifier
+		ctxHash          common.Hash
+		consensusSet     []id.KramaID
+		consensusSetHash common.Hash
+		consensusKeys    [][]byte
+		expectedError    error
 	}{
 		{
 			name:          "tesseract doesn't exist",
@@ -1871,17 +1887,18 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 			expectedError: errors.New("metaContextObject fetch failed"),
 		},
 		{
-			name:          "valid hash and public keys",
-			id:            ids[0],
-			ctxHash:       mHash[0],
-			consensusSet:  mObj[0].ConsensusNodes,
-			consensusKeys: pk[:2],
+			name:             "valid hash and public keys",
+			id:               ids[0],
+			ctxHash:          mHash[0],
+			consensusSet:     mObj[0].ConsensusNodes,
+			consensusSetHash: mObj[0].ConsensusNodesHash,
+			consensusKeys:    pk[:2],
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			hash, consensusSet, consensusKeys, err := sm.GetLatestContextAndPublicKeys(test.id)
+			hash, consensusSet, consensusSetHash, consensusKeys, err := sm.GetLatestContextAndPublicKeys(test.id)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1893,6 +1910,7 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 			require.Equal(t, test.ctxHash, hash)
 			require.Equal(t, test.consensusSet, consensusSet)
 			require.Equal(t, test.consensusKeys, consensusKeys)
+			require.Equal(t, test.consensusSetHash, consensusSetHash)
 		})
 	}
 }

@@ -38,22 +38,30 @@ func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
 		},
 	})
 
+	consensusNodesHash := make(map[identifiers.Identifier]common.Hash)
+
+	for _, ix := range ixns {
+		for id := range ix.Participants() {
+			consensusNodesHash[id] = tests.RandomHash(t)
+		}
+	}
+
 	testcases := []struct {
-		name            string
-		batchID         int
-		ix              *common.Interaction
-		preTestFn       func(batch *IxBatchRegistry)
-		expectedAdd     bool
-		expectedIxCount int
-		expectedPsCount int
+		name                            string
+		batchID                         int
+		ix                              *common.Interaction
+		preTestFn                       func(batch *IxBatchRegistry)
+		expectedAdd                     bool
+		expectedIxCount                 int
+		expectedConsensusNodesHashCount int
 	}{
 		{
-			name:            "add ixn to batch successfully",
-			batchID:         0,
-			ix:              ixns[0],
-			expectedAdd:     true,
-			expectedIxCount: 1,
-			expectedPsCount: 2,
+			name:                            "add ixn to batch successfully",
+			batchID:                         0,
+			ix:                              ixns[0],
+			expectedAdd:                     true,
+			expectedIxCount:                 1,
+			expectedConsensusNodesHashCount: 2,
 		},
 		{
 			name:    "failed to add ixn to batch",
@@ -64,16 +72,16 @@ func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
 					require.True(t, batch.addIxToBatch(0, ixns[0]))
 				}
 			},
-			expectedAdd:     false,
-			expectedIxCount: 101,
-			expectedPsCount: 2,
+			expectedAdd:                     false,
+			expectedIxCount:                 101,
+			expectedConsensusNodesHashCount: 2,
 		},
 		{
-			name:            "add ixn where one of the participant is genesis account",
-			ix:              ixns[2],
-			expectedAdd:     true,
-			expectedIxCount: 1,
-			expectedPsCount: 2,
+			name:                            "add ixn where one of the participant is genesis account",
+			ix:                              ixns[2],
+			expectedAdd:                     true,
+			expectedIxCount:                 1,
+			expectedConsensusNodesHashCount: 2,
 		},
 	}
 
@@ -81,6 +89,7 @@ func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			batchRegistry := newBatchRegistry()
 			batchRegistry.appendEmptyBatch()
+			batchRegistry.consensusNodesHash = consensusNodesHash
 
 			if testcase.preTestFn != nil {
 				testcase.preTestFn(batchRegistry)
@@ -90,13 +99,14 @@ func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
 			require.Equal(t, testcase.expectedAdd, added)
 
 			require.Equal(t, testcase.expectedIxCount, batchRegistry.batches[testcase.batchID].IxCount())
-			require.Equal(t, testcase.expectedPsCount, batchRegistry.batches[testcase.batchID].PsCount())
+			require.Equal(t, testcase.expectedConsensusNodesHashCount,
+				batchRegistry.batches[testcase.batchID].ConsensusNodesHashCount())
 
 			if testcase.expectedAdd {
 				ixns := batchRegistry.batches[testcase.batchID].IxList()
 				require.Equal(t, testcase.ix, ixns[len(ixns)-1])
 
-				psBatchLookup := batchRegistry.ParticipantBatchLookup
+				psBatchLookup := batchRegistry.participantBatchLookup
 				ps := testcase.ix.Participants()
 
 				for id, p := range ps {
@@ -305,8 +315,8 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 				{
 					batchCount: 6,
 					batch: CreateBatch{
-						ixnCount: 1,
-						psCount:  2,
+						ixnCount:                1,
+						consensusNodesHashCount: 2,
 					},
 				},
 			},
@@ -314,8 +324,8 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 				{
 					batchCount: 3,
 					batch: CreateBatch{
-						ixnCount: 2,
-						psCount:  4,
+						ixnCount:                2,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -327,8 +337,8 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 				{
 					batchCount: 46,
 					batch: CreateBatch{
-						ixnCount: 1,
-						psCount:  2,
+						ixnCount:                1,
+						consensusNodesHashCount: 2,
 					},
 				},
 			},
@@ -336,8 +346,8 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 				{
 					batchCount: 20,
 					batch: CreateBatch{
-						ixnCount: 2,
-						psCount:  4,
+						ixnCount:                2,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -349,29 +359,29 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 				{
 					batchCount: 10,
 					batch: CreateBatch{
-						ixnCount: 1,
-						psCount:  3,
+						ixnCount:                1,
+						consensusNodesHashCount: 3,
 					},
 				},
 				{
 					batchCount: 10,
 					batch: CreateBatch{
-						ixnCount: 2,
-						psCount:  4,
+						ixnCount:                2,
+						consensusNodesHashCount: 4,
 					},
 				},
 				{
 					batchCount: 10,
 					batch: CreateBatch{
-						ixnCount: 1,
-						psCount:  3,
+						ixnCount:                1,
+						consensusNodesHashCount: 3,
 					},
 				},
 				{
 					batchCount: 10,
 					batch: CreateBatch{
-						ixnCount: 2,
-						psCount:  4,
+						ixnCount:                2,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -379,8 +389,8 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 				{
 					batchCount: 20,
 					batch: CreateBatch{
-						ixnCount: 2,
-						psCount:  4,
+						ixnCount:                2,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -392,15 +402,15 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 				{
 					batchCount: 4,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  2,
+						ixnCount:                3,
+						consensusNodesHashCount: 2,
 					},
 				},
 				{
 					batchCount: 19,
 					batch: CreateBatch{
-						ixnCount: 4,
-						psCount:  3,
+						ixnCount:                4,
+						consensusNodesHashCount: 3,
 					},
 				},
 			},
@@ -408,15 +418,15 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 				{
 					batchCount: 2,
 					batch: CreateBatch{
-						ixnCount: 6,
-						psCount:  4,
+						ixnCount:                6,
+						consensusNodesHashCount: 4,
 					},
 				},
 				{
 					batchCount: 18,
 					batch: CreateBatch{
-						ixnCount: 4,
-						psCount:  3,
+						ixnCount:                4,
+						consensusNodesHashCount: 3,
 					},
 				},
 			},
@@ -437,7 +447,7 @@ func TestIxBatchRegistry_selectOptimalBatches(t *testing.T) {
 
 			for _, batches := range testcase.expectedBatchList {
 				for i := 0; i < batches.batchCount; i++ {
-					require.Equal(t, batches.batch.psCount, result[index].PsCount())
+					require.Equal(t, batches.batch.consensusNodesHashCount, result[index].ConsensusNodesHashCount())
 					require.Equal(t, batches.batch.ixnCount, result[index].IxCount())
 
 					index++
@@ -460,29 +470,29 @@ func TestIxBatchRegistry_sort(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 4,
-						psCount:  2,
+						ixnCount:                4,
+						consensusNodesHashCount: 2,
 					},
 				},
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  4,
+						ixnCount:                3,
+						consensusNodesHashCount: 4,
 					},
 				},
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  2,
+						ixnCount:                3,
+						consensusNodesHashCount: 2,
 					},
 				},
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 6,
-						psCount:  4,
+						ixnCount:                6,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -490,29 +500,29 @@ func TestIxBatchRegistry_sort(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 6,
-						psCount:  4,
+						ixnCount:                6,
+						consensusNodesHashCount: 4,
 					},
 				},
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 4,
-						psCount:  2,
+						ixnCount:                4,
+						consensusNodesHashCount: 2,
 					},
 				},
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  2,
+						ixnCount:                3,
+						consensusNodesHashCount: 2,
 					},
 				},
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  4,
+						ixnCount:                3,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -532,7 +542,7 @@ func TestIxBatchRegistry_sort(t *testing.T) {
 
 			for _, batches := range testcase.expectedBatchList {
 				for i := 0; i < batches.batchCount; i++ {
-					require.Equal(t, batches.batch.psCount, batchRegistry.batches[index].PsCount())
+					require.Equal(t, batches.batch.consensusNodesHashCount, batchRegistry.batches[index].ConsensusNodesHashCount())
 					require.Equal(t, batches.batch.ixnCount, batchRegistry.batches[index].IxCount())
 
 					index++

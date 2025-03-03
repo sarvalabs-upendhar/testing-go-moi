@@ -36,11 +36,12 @@ type ClusterState struct {
 	IsObserver               bool
 	quorum                   []uint32
 	// TODO: Load following view infos appropriately
-	localViewInfo   common.Views
-	highestViewInfo common.Views
-	preparedQc      *PreparedInfo
-	view            uint64
-	TrustedPeers    []kramaid.KramaID
+	localViewInfo       common.Views
+	highestViewInfo     common.Views
+	preparedQc          *PreparedInfo
+	view                uint64
+	viewTimeoutDeadline time.Time
+	TrustedPeers        []kramaid.KramaID
 }
 
 func (cs *ClusterState) SetPrepareQc(prepareQc *PreparedInfo) {
@@ -63,22 +64,24 @@ func NewICS(
 	participants map[identifiers.Identifier]*common.Participant,
 	viewInfos common.Views,
 	currentView uint64,
+	viewTimeoutDeadline time.Time,
 ) *ClusterState {
 	return &ClusterState{
-		ixns:             ixs,
-		selfID:           selfID,
-		ClusterID:        clusterID,
-		operator:         operator,
-		operatorIncluded: false,
-		dirty:            make(map[common.Hash][]byte),
-		ICSReqTime:       reqTime,
-		ICSRespCount:     0,
-		Participants:     participants,
-		committee:        committee,
-		Transition:       gtypes.NewTransition(nil, nil),
-		localViewInfo:    viewInfos.Copy(),
-		highestViewInfo:  viewInfos.Copy(),
-		view:             currentView,
+		ixns:                ixs,
+		selfID:              selfID,
+		ClusterID:           clusterID,
+		operator:            operator,
+		operatorIncluded:    false,
+		dirty:               make(map[common.Hash][]byte),
+		ICSReqTime:          reqTime,
+		ICSRespCount:        0,
+		Participants:        participants,
+		committee:           committee,
+		Transition:          gtypes.NewTransition(nil, nil),
+		localViewInfo:       viewInfos.Copy(),
+		highestViewInfo:     viewInfos.Copy(),
+		view:                currentView,
+		viewTimeoutDeadline: viewTimeoutDeadline,
 	}
 }
 
@@ -136,11 +139,11 @@ func (cs *ClusterState) GetNodeSet(nodeSetPosition int) *NodeSet {
 	return cs.committee.Sets[nodeSetPosition]
 }
 
-func (cs *ClusterState) UpdateNodeSet(nodeSetPosition int, data *NodeSet) {
+func (cs *ClusterState) AppendNodeSet(data *NodeSet) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	cs.committee.UpdateNodeSet(nodeSetPosition, data)
+	cs.committee.AppendNodeSet(common.NilHash, data)
 }
 
 func (cs *ClusterState) UpdateNodeSetResponses(nodeSetPosition int, responses *common.ArrayOfBits) {
@@ -170,7 +173,7 @@ func (cs *ClusterState) ExcludeParticipantsFromICS(ids common.IdentifierList) {
 
 	for _, info := range cs.Participants {
 		if info.ExcludedFromICS() {
-			cs.committee.ExcludeParticipantsFromICS(info.NodeSetPosition)
+			cs.committee.IncrementExcludedPSCount(info.ConsensusNodesHash)
 		}
 	}
 }
@@ -297,14 +300,14 @@ func (cs *ClusterState) GetQuorum() []uint32 {
 		return cs.quorum
 	}
 
-	quorum := make([]uint32, len(cs.Participants)+1) // We add one here for random Set
+	quorum := make([]uint32, cs.committee.Size())
 
-	for _, ps := range cs.Participants {
-		if ps.ExcludeFromICS {
+	for i := 0; i < cs.committee.Size()-1; i++ {
+		if cs.committee.Sets[i].ExcludedFromICS {
 			continue
 		}
 
-		quorum[ps.NodeSetPosition] = ps.ConsensusQuorum
+		quorum[i] = cs.committee.ParticipantQuorum(i)
 	}
 
 	quorum[len(quorum)-1] = cs.committee.RandomQuorumSize()

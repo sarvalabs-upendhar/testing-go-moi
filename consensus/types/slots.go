@@ -99,6 +99,10 @@ func (info *Slot) ClusterID() common.ClusterID {
 	return info.cs.ClusterID
 }
 
+func (info *Slot) ViewTimeoutDeadline() time.Time {
+	return info.cs.viewTimeoutDeadline
+}
+
 func (info *Slot) ClusterState() *ClusterState {
 	return info.cs
 }

@@ -131,14 +131,12 @@ func (p *Proposal) Ixs() common.Interactions {
 
 func (p Proposal) ProposalMsg() *ProposalMsg {
 	ixn := p.Tesseract.Interactions()
-	receipts := p.Tesseract.Receipts()
 
 	return &ProposalMsg{
 		Type:         p.Type,
 		PrepareQc:    p.PrepareQc,
 		Tesseract:    p.Tesseract,
 		Interactions: ixn.IxList(),
-		Receipts:     &receipts,
 		CommitInfo:   p.Tesseract.CommitInfo(),
 	}
 }
@@ -148,7 +146,6 @@ type ProposalMsg struct {
 	PrepareQc    *PreparedInfo
 	Tesseract    *common.Tesseract
 	Interactions []*common.Interaction
-	Receipts     *common.Receipts
 	CommitInfo   *common.CommitInfo
 }
 
@@ -172,7 +169,7 @@ func (pmsg *ProposalMsg) FromBytes(rawData []byte) error {
 func (pmsg *ProposalMsg) Proposal() *Proposal {
 	// TODO: Check if we need to deep copy on Tesseract
 	ixns := common.NewInteractionsWithLeaderCheck(true, pmsg.Interactions...)
-	pmsg.Tesseract.WithIxnAndReceipts(ixns, *pmsg.Receipts, pmsg.CommitInfo)
+	pmsg.Tesseract.WithIxnAndReceipts(ixns, nil, pmsg.CommitInfo)
 
 	return &Proposal{
 		Type:      pmsg.Type,

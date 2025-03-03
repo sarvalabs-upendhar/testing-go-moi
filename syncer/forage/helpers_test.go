@@ -327,7 +327,7 @@ func (m *MockLattice) AddTesseractWithState(
 		m.setTesseractByHeight(id, p.Height, ts)
 		m.setTesseractHeightEntry(id, p.Height, ts.Hash())
 
-		accountType, err := ts.Interactions().AccountType(ts.AnyAccountID())
+		accountType, err := common.AccountTypeFromID(ts.AnyAccountID())
 		if err != nil {
 			return err
 		}
@@ -337,8 +337,9 @@ func (m *MockLattice) AddTesseractWithState(
 			p.Height,
 			ts.Hash(),
 			ts.StateHash(ts.AnyAccountID()),
-			ts.LatestContextHash(ts.AnyAccountID()),
+			ts.LockedContextHash(ts.AnyAccountID()),
 			common.NilHash,
+			identifiers.Nil,
 			ts.CommitHash(),
 			accountType,
 			true,
@@ -396,7 +397,7 @@ func (m *MockLattice) AddAccountMetaInfo(tesseracts ...*common.Tesseract) error 
 		for id, s := range ts.Participants() {
 			m.logger.Trace("adding account meta info ", "accountID", id, "height", s.Height)
 
-			accountType, err := ts.Interactions().AccountType(ts.AnyAccountID())
+			accountType, err := common.AccountTypeFromID(ts.AnyAccountID())
 			if err != nil {
 				return err
 			}
@@ -406,8 +407,9 @@ func (m *MockLattice) AddAccountMetaInfo(tesseracts ...*common.Tesseract) error 
 				s.Height,
 				ts.Hash(),
 				ts.StateHash(ts.AnyAccountID()),
-				ts.LatestContextHash(ts.AnyAccountID()),
+				ts.LockedContextHash(ts.AnyAccountID()),
 				common.NilHash,
+				identifiers.Nil,
 				ts.CommitHash(),
 				accountType,
 				true,
@@ -523,6 +525,11 @@ type MockStateManager struct {
 	db               store
 	sealedTesseracts map[common.Hash]bool
 	consensusNodes   map[common.Hash][]kramaid.KramaID
+}
+
+func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
+	// TODO implement me
+	panic("implement me")
 }
 
 func newMockStateManager(db store) *MockStateManager {
@@ -1028,7 +1035,7 @@ func storeTesseractInDB(t *testing.T, ts *common.Tesseract, syncers ...*Syncer) 
 
 		for id, participant := range ts.Participants() {
 			acc := common.Account{
-				ContextHash: participant.LatestContext,
+				ContextHash: participant.LockedContext,
 			}
 
 			value, err := acc.Bytes()
@@ -1063,7 +1070,7 @@ func storeAccountMetaInfoAndSnapInDB(t *testing.T, ts *common.Tesseract, syncers
 
 		for id, participant := range ts.Participants() {
 			acc := common.Account{
-				ContextHash: participant.LatestContext,
+				ContextHash: participant.LockedContext,
 			}
 
 			value, err := acc.Bytes()
@@ -1105,7 +1112,7 @@ func storeTesseractInSession(t *testing.T, ts *common.Tesseract, syncers ...*Syn
 	for _, s := range syncers {
 		for id, participant := range ts.Participants() {
 			acc := common.Account{
-				ContextHash: participant.LatestContext,
+				ContextHash: participant.LockedContext,
 			}
 
 			value, err := acc.Bytes()
@@ -1235,10 +1242,10 @@ func generateTesseracts(
 
 		for _, id := range ids {
 			participants[id] = common.State{
-				StateHash:       tests.RandomHash(t),
-				Height:          uint64(i),
-				PreviousContext: tests.RandomHash(t),
-				TransitiveLink:  prevHash,
+				StateHash:      tests.RandomHash(t),
+				Height:         uint64(i),
+				LockedContext:  tests.RandomHash(t),
+				TransitiveLink: prevHash,
 			}
 
 			heights = append(heights, uint64(i))
@@ -1606,8 +1613,8 @@ func NewMockDB() *MockDB {
 }
 
 func (m MockDB) UpdateAccMetaInfo(id identifiers.Identifier, height uint64, tesseractHash common.Hash,
-	stateHash, contextHash common.Hash, consensusNodesHash common.Hash, commitHash common.Hash,
-	accType common.AccountType, shouldUpdateContextSetPosition bool, positionInContextSet int,
+	stateHash, contextHash common.Hash, consensusNodesHash common.Hash, inheritedAccount identifiers.Identifier,
+	commitHash common.Hash, accType common.AccountType, shouldUpdateContextSetPosition bool, positionInContextSet int,
 ) (int32, bool, error) {
 	// TODO implement me
 	panic("implement me")
@@ -1905,7 +1912,7 @@ func fetchContextFromLattice(
 		delta, _ := ts.GetContextDelta(id)
 		peers = append(peers, delta.ConsensusNodes...)
 
-		consensusNodes, err := s.state.GetConsensusNodesByHash(id, ts.PreviousContextHash(id))
+		consensusNodes, err := s.state.GetConsensusNodesByHash(id, ts.LockedContextHash(id))
 		if err == nil {
 			peers = append(peers, consensusNodes...)
 

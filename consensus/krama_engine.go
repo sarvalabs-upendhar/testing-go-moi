@@ -92,6 +92,7 @@ type stateManager interface {
 	GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 		latestContextHash common.Hash,
 		consensusSet []kramaid.KramaID,
+		consensusSetHash common.Hash,
 		randomPublicKeys [][]byte,
 		err error,
 	)
@@ -112,6 +113,7 @@ type stateManager interface {
 		hash common.Hash,
 	) (
 		common.NodeList,
+		common.Hash,
 		error,
 	)
 }
@@ -180,6 +182,7 @@ type Engine struct {
 	safety              *safety.ConsensusSafety
 	trustedPeersPresent bool
 	futureMsg           []*ktypes.ICSMSG
+	compressor          common.Compressor
 }
 
 func NewKramaEngine(
@@ -207,6 +210,11 @@ func NewKramaEngine(
 	operatorSortition, err := NewOperatorSelection(selfID, val, state)
 	if err != nil {
 		return nil, err
+	}
+
+	compressor, err := common.NewZstdWriter()
+	if err != nil {
+		return nil, errors.Wrap(err, "compressor intialization failed")
 	}
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
@@ -238,6 +246,7 @@ func NewKramaEngine(
 		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
 		safety:              safety.NewConsensusSafety(db, val),
 		futureMsg:           make([]*ktypes.ICSMSG, 0, 30),
+		compressor:          compressor,
 	}
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
@@ -312,7 +321,7 @@ func (k *Engine) loadClusterState(
 		return nil, err
 	}
 
-	clusterState := ktypes.NewICS(
+	clusterState := ktypes.NewICS( //nolint:forcetypeassert
 		ixns,
 		clusterID,
 		operator,
@@ -322,6 +331,7 @@ func (k *Engine) loadClusterState(
 		participants,
 		viewInfos,
 		k.view.Load(),
+		k.viewTimeOutDeadline.Load().(time.Time),
 	)
 
 	return clusterState, nil
@@ -381,26 +391,40 @@ func (k *Engine) fetchParticipantsAndCommittee(
 
 	sort.Sort(ids)
 
-	committee := ktypes.NewICSCommittee(len(ids) + 1)
+	committee := ktypes.NewICSCommittee()
 
-	for index, id := range ids {
-		position := index
+	position := 0
 
-		participants[id].NodeSetPosition = position
-
+	for _, id := range ids {
 		if participants[id].IsGenesis {
 			continue
 		}
 
-		contextHash, consensusSet, consensusPublicKeys, err := k.state.GetLatestContextAndPublicKeys(id)
+		contextHash, consensusSet, consensusNodesHash, consensusPublicKeys, err := k.state.GetLatestContextAndPublicKeys(id)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		committee.UpdateNodeSet(position, ktypes.NewNodeSet(consensusSet, consensusPublicKeys, uint32(len(consensusSet))))
-
 		participants[id].ContextHash = contextHash
-		participants[id].ConsensusQuorum = committee.ParticipantQuorum(participants[id].NodeSetPosition)
+
+		existingPosition, ok := committee.GetNodesetPosition(consensusNodesHash)
+		if ok {
+			participants[id].NodeSetPosition = existingPosition
+			participants[id].ConsensusQuorum = committee.ParticipantQuorum(existingPosition)
+			participants[id].ConsensusNodesHash = consensusNodesHash
+			committee.IncrementPSCount(consensusNodesHash)
+
+			continue
+		}
+
+		committee.AppendNodeSet(consensusNodesHash,
+			ktypes.NewNodeSet(consensusSet, consensusPublicKeys, uint32(len(consensusSet))))
+
+		participants[id].NodeSetPosition = position
+		participants[id].ConsensusQuorum = committee.ParticipantQuorum(position)
+		participants[id].ConsensusNodesHash = consensusNodesHash
+
+		position++
 	}
 
 	return participants, committee, nil
@@ -419,6 +443,15 @@ func (k *Engine) isOperatorEligible(peerID kramaid.KramaID, ixns common.Interact
 		return false
 	}
 
+	if id.IsParticipantVariant() {
+		metaInfo, err = k.state.GetAccountMetaInfo(metaInfo.InheritedAccount)
+		if err != nil {
+			k.logger.Error("failed to check operator eligibility", "error", err)
+
+			return false
+		}
+	}
+
 	fmt.Print("PositionInContextSet", metaInfo.PositionInContextSet)
 
 	if peerID == k.selfID {
@@ -433,7 +466,7 @@ func (k *Engine) isOperatorEligible(peerID kramaid.KramaID, ixns common.Interact
 		return currentView%common.ConsensusNodesSize == uint64(metaInfo.PositionInContextSet)
 	}
 
-	consensusNodes, err := k.state.GetConsensusNodes(id, metaInfo.ContextHash)
+	consensusNodes, _, err := k.state.GetConsensusNodes(id, metaInfo.ContextHash)
 	if err != nil {
 		k.logger.Error("failed to check operator eligibility", "error", err)
 
@@ -583,7 +616,7 @@ func (k *Engine) createICSForProposal(ctx context.Context, sender kramaid.KramaI
 		return err
 	}
 
-	cs.Committee().UpdateNodeSet(cs.Committee().StochasticSetPosition(), ktypes.NewNodeSet(
+	cs.Committee().AppendNodeSet(common.NilHash, ktypes.NewNodeSet(
 		ts.CommitInfo().RandomSet,
 		pk,
 		ts.CommitInfo().RandomSetSizeWithoutDelta,
@@ -928,8 +961,6 @@ func (k *Engine) verifyTransitions(
 }
 
 func (k *Engine) verifyQc(
-	ids common.IdentifierList,
-	ps common.ParticipantsState,
 	view uint64,
 	ics *ktypes.ICSCommittee,
 	qc *common.Qc,
@@ -939,7 +970,7 @@ func (k *Engine) verifyQc(
 	var (
 		verificationInitTime = time.Now()
 		publicKeys           = make([][]byte, 0, qc.SignerIndices.TrueIndicesSize())
-		votesCounter         = make([]uint32, len(ids)+1)
+		votesCounter         = make([]uint32, ics.Size())
 	)
 
 	for _, valIndex := range qc.SignerIndices.GetTrueIndices() {
@@ -955,8 +986,8 @@ func (k *Engine) verifyQc(
 		}
 	}
 
-	for index, id := range ids {
-		if ps.IsExcluded(id) {
+	for index := 0; index < ics.Size()-1; index++ {
+		if ics.Sets[index].ExcludedFromICS {
 			continue
 		}
 
@@ -965,7 +996,7 @@ func (k *Engine) verifyQc(
 		}
 	}
 
-	if votesCounter[len(ids)] < ics.RandomQuorumSize() {
+	if votesCounter[ics.StochasticSetPosition()] < ics.RandomQuorumSize() {
 		return false, common.ErrRandomQuorumFailed
 	}
 
@@ -992,8 +1023,6 @@ func (k *Engine) verifyQc(
 
 func (k *Engine) verifySignatures(ts *common.Tesseract, ics *ktypes.ICSCommittee) (bool, error) {
 	return k.verifyQc(
-		ts.AccountIDs(),
-		ts.Participants(),
 		ts.ConsensusInfo().View,
 		ics,
 		ts.CommitInfo().QC,
@@ -1036,7 +1065,7 @@ func (k *Engine) ExecuteAndValidate(
 	k.logger.Debug(
 		"Executing interactions of grid",
 		"ts-hash", ts.Hash(),
-		"lock", ts.PreviousContext(),
+		"lock", ts.LockedContext(),
 	)
 
 	stateHashes, err := k.exec.ExecuteInteractions(
@@ -1260,12 +1289,11 @@ func participantStates(cs *ktypes.ClusterState, ps common.AccStateHashes) common
 
 	for id, p := range cs.Participants {
 		participants[id] = common.State{
-			Height:          p.NewHeight(),
-			TransitiveLink:  p.TSHash(),
-			PreviousContext: p.ContextHash,
-			LatestContext:   ps.ContextHash(id),
-			ContextDelta:    p.ContextDelta,
-			StateHash:       ps.StateHash(id),
+			Height:         p.NewHeight(),
+			TransitiveLink: p.TSHash(),
+			LockedContext:  p.ContextHash,
+			ContextDelta:   p.ContextDelta,
+			StateHash:      ps.StateHash(id),
 		}
 	}
 

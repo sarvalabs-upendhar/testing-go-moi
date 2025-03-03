@@ -183,6 +183,18 @@ type MockStateManager struct {
 	accMetaInfo map[identifiers.Identifier]*common.AccountMetaInfo
 }
 
+func (m *MockStateManager) GetSubAccountCount(id identifiers.Identifier) (uint64, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) GetMetaContextObject(id identifiers.Identifier,
+	hash common.Hash,
+) (*state.MetaContextObject, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func NewMockStateManager(t *testing.T) *MockStateManager {
 	t.Helper()
 

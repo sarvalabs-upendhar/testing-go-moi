@@ -809,7 +809,7 @@ func createTestStateObject(t *testing.T, params *createStateObjectParams) *Objec
 	t.Helper()
 
 	var (
-		id    = tests.RandomIdentifier(t)
+		id    = tests.RandomIdentifierWithZeroVariant(t)
 		mDB   = mockDB()
 		cache = mockCache(t)
 		data  = new(common.Account)

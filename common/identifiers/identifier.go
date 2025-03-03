@@ -154,6 +154,11 @@ func (id Identifier) IsVariant() bool {
 	return !(variant[0] == 0 && variant[1] == 0 && variant[2] == 0 && variant[3] == 0)
 }
 
+// IsParticipantVariant returns if the Identifier has a non-zero variant ID and account type is regular account
+func (id Identifier) IsParticipantVariant() bool {
+	return id.IsVariant() && id.Tag().Kind() == KindParticipant
+}
+
 // DeriveVariant returns a new Identifier with the given variant ID and specified flags set/unset.
 // Returns an error if the given flags are not supported for the Identifier tag.
 func (id Identifier) DeriveVariant(variant uint32, set []Flag, unset []Flag) (Identifier, error) {

@@ -68,7 +68,7 @@ func (te *TestEnvironment) createAssetWithMultiSig(
 }
 
 func (te *TestEnvironment) TestMultiSig() {
-	newAcc := tests.RandomIdentifier(te.T())
+	newAcc := tests.RandomIdentifierWithZeroVariant(te.T())
 	acc := te.chooseRandomAccount()
 
 	accounts, err := cmdCommon.GetAccountsWithMnemonic(4)

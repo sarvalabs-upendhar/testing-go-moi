@@ -1,6 +1,8 @@
 package compute
 
 import (
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/state"
@@ -55,16 +57,6 @@ func createAccountKeys(startID int, keysPayload []common.KeyAddPayload) common.A
 	return accountKeys
 }
 
-func validateAccRevoke(keysCount uint64, revoke []common.KeyRevokePayload) bool {
-	for _, revokeKey := range revoke {
-		if revokeKey.KeyID >= keysCount {
-			return false
-		}
-	}
-
-	return true
-}
-
 // RunParticipantCreate performs the given IxParticipantCreate operation.
 // The stateObjectRetriever must contain state objects for the sender and Target of the op.
 //
@@ -117,6 +109,16 @@ func RunParticipantCreate(
 	return opResult.WithStatus(common.ResultOk)
 }
 
+func validateAccRevoke(keysCount uint64, revoke []common.KeyRevokePayload) bool {
+	for _, revokeKey := range revoke {
+		if revokeKey.KeyID >= keysCount {
+			return false
+		}
+	}
+
+	return true
+}
+
 func RunAccountConfigure(
 	op *common.IxOp,
 	_ *common.ExecutionContext,
@@ -133,7 +135,7 @@ func RunAccountConfigure(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleParticipantCreate) {
+	if !tank.Exhaust(FuelAccountConfigure) {
 		return opResult.WithStatus(common.ResultFuelExhausted)
 	}
 
@@ -156,6 +158,79 @@ func RunAccountConfigure(
 	if err := sender.RevokeAccountKeys(payload.Revoke); err != nil {
 		return opResult.WithStatus(common.ResultStateReverted)
 	}
+
+	return opResult.WithStatus(common.ResultOk)
+}
+
+func validateAccountInherit(sender, sarga *state.Object, logicID identifiers.Identifier,
+	payload *common.AccountInheritPayload,
+) error {
+	// Check if the account is already registered
+	// Fetch the account info from genesis state
+	if _, err := sarga.GetStorageEntry(common.SargaLogicID, logicID.Bytes()); err != nil {
+		return common.ErrTargetAccountNotFound
+	}
+
+	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	// Check if sender has sufficient balance
+	if assetObject.Balance.Cmp(payload.Amount) == -1 {
+		return common.ErrInsufficientFunds
+	}
+
+	if int(payload.SubAccountIndex) != sender.SubAccountCount()+1 {
+		return common.ErrInvalidSubAccountCount
+	}
+
+	return nil
+}
+
+func RunAccountInherit(
+	op *common.IxOp,
+	_ *common.ExecutionContext,
+	tank *FuelTank,
+	transition *state.Transition,
+) *common.IxOpResult {
+	// Obtain the participant create Payload from the Interaction
+	payload, _ := op.GetAccountInheritPayload()
+
+	sender := transition.GetObject(op.SenderID())
+	sarga := transition.GetObject(common.SargaAccountID)
+	logicID := payload.TargetAccount
+	subAccount := transition.GetObject(op.Target())
+
+	// Create a new result for the op
+	opResult := common.NewIxOpResult(op.Type())
+
+	// Exhaust fuel from tank
+	if !tank.Exhaust(FuelAccountInherit) {
+		return opResult.WithStatus(common.ResultFuelExhausted)
+	}
+
+	// Validate account inherit payload
+	if err := validateAccountInherit(sender, sarga, logicID, payload); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	_ = sender.UpdateSubAccount(subAccount.Identifier(), logicID)
+
+	// Deduct the transfer amount from the sender's asset balance and add it to sub account
+	if err := sender.SubBalance(common.KMOITokenAssetID, payload.Amount); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	if err := addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
+		return opResult.WithStatus(common.ResultStateReverted)
+	}
+
+	subAccount.InheritAccount(payload, sender)
+
+	common.SetResultPayload(opResult, common.AccountInheritResult{
+		SubAccount: subAccount.Identifier(),
+	})
 
 	return opResult.WithStatus(common.ResultOk)
 }

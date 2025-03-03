@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/common/tests"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -65,6 +67,22 @@ func CreateRPCInteraction(
 			}
 
 			rpcPayload := GetRPCAccountConfigurePayload(payload)
+
+			rawPayload, err = json.Marshal(rpcPayload)
+			if err != nil {
+				return nil, err
+			}
+		case common.IXAccountInherit:
+			payload, err := op.GetAccountInheritPayload()
+			if err != nil {
+				return nil, err
+			}
+
+			rpcPayload := RPCAccountInheritPayload{
+				TargetAccount:   payload.TargetAccount,
+				Amount:          (*hexutil.Big)(payload.Amount),
+				SubAccountIndex: hexutil.Uint64(payload.SubAccountIndex),
+			}
 
 			rawPayload, err = json.Marshal(rpcPayload)
 			if err != nil {
@@ -250,8 +268,7 @@ func CreateRPCParticipantStates(participants common.ParticipantsState) RPCPartic
 			ID:             id,
 			Height:         hexutil.Uint64(state.Height),
 			TransitiveLink: state.TransitiveLink,
-			PrevContext:    state.PreviousContext,
-			LatestContext:  state.LatestContext,
+			LockedContext:  state.LockedContext,
 			ContextDelta:   state.ContextDelta,
 			StateHash:      state.StateHash,
 		})
@@ -311,6 +328,32 @@ func CreateRPCTesseract(ts *common.Tesseract) (*RPCTesseract, error) {
 		Ixns:       rpcIxns,
 		CommitInfo: CreateRPCCommitInfo(ts.CommitInfo()),
 	}, nil
+}
+
+func CreateRPCSubAccounts(subAccounts map[identifiers.Identifier]identifiers.Identifier) []RPCSubAccounts {
+	rpcSubAccounts := make([]RPCSubAccounts, 0)
+	inheritedAccountIndex := make(map[identifiers.Identifier]int)
+
+	i := 0
+
+	for subAccount, InheritedAcc := range subAccounts {
+		index, ok := inheritedAccountIndex[InheritedAcc]
+		if ok {
+			rpcSubAccounts[index].SubAccounts = append(rpcSubAccounts[index].SubAccounts, subAccount)
+
+			continue
+		}
+
+		rpcSubAccounts = append(rpcSubAccounts, RPCSubAccounts{
+			InheritedAccount: InheritedAcc,
+			SubAccounts:      []identifiers.Identifier{subAccount},
+		})
+
+		inheritedAccountIndex[InheritedAcc] = i
+		i++
+	}
+
+	return rpcSubAccounts
 }
 
 // CreateRPCReceipt creates rpc receipt from receipt, interaction, ts hash, participants, interaction index

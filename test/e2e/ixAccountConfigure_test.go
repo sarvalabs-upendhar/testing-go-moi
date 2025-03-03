@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
@@ -15,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+//nolint:dupl
 func (te *TestEnvironment) configureAccount(
 	senderID identifiers.Identifier,
 	senderKeyID uint64,
@@ -54,7 +54,7 @@ func (te *TestEnvironment) configureAccount(
 }
 
 func (te *TestEnvironment) TestIXAccountConfigure() {
-	newAcc := tests.RandomIdentifier(te.T())
+	newAcc := tests.RandomIdentifierWithZeroVariant(te.T())
 	acc := te.chooseRandomAccount()
 
 	keysWithMnemonic, err := cmdCommon.GetAccountsWithMnemonic(4)
@@ -116,11 +116,11 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 			accountConfigurePayload: &common.AccountConfigurePayload{
 				Add: []common.KeyAddPayload{
 					{
-						PublicKey: tests.RandomIdentifier(te.T()).Bytes(),
+						PublicKey: tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
 						Weight:    500,
 					},
 					{
-						PublicKey: tests.RandomIdentifier(te.T()).Bytes(),
+						PublicKey: tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
 						Weight:    500,
 					},
 				},
@@ -162,7 +162,7 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 			accountConfigurePayload: &common.AccountConfigurePayload{
 				Add: []common.KeyAddPayload{
 					{
-						PublicKey: tests.RandomIdentifier(te.T()).Bytes(),
+						PublicKey: tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
 						Weight:    500,
 					},
 				},
@@ -187,8 +187,6 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 				},
 			})
 			require.NoError(te.T(), err)
-
-			fmt.Printf("before %+v\n", prevAccKeys)
 
 			ixHash, err := te.configureAccount(test.senderID, test.senderKeyID,
 				test.accountConfigurePayload, test.signers)

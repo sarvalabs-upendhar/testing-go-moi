@@ -31,6 +31,7 @@ type store interface {
 		tesseractHash common.Hash,
 		stateHash, contextHash common.Hash,
 		consensusNodesHash common.Hash,
+		inheritedAccount identifiers.Identifier,
 		commitHash common.Hash,
 		accType common.AccountType,
 		shouldUpdateContextSetPosition bool,
@@ -305,8 +306,9 @@ func (c *ChainManager) addParticipant(id identifiers.Identifier, tsHash common.H
 		participantState.Height,
 		tsHash,
 		participantState.StateHash,
-		participantState.LatestContext,
+		transition.ContextHash(id),
 		transition.ConsensusNodesHash(id),
+		transition.InheritedAccount(id),
 		commitHash,
 		accType,
 		participantState.ContextDelta != nil,
@@ -427,6 +429,8 @@ func (c *ChainManager) AddTesseract(
 		if cache {
 			c.tesseracts.Add(t.Hash(), t.GetTesseractWithoutIxns())
 		}
+
+		c.metrics.captureIxnsPerTesseract(float64(t.Interactions().Len()))
 
 		if err := c.mux.Post(utils.TesseractAddedEvent{Tesseract: t}); err != nil {
 			c.logger.Error("Error sending tesseract added event", "err", err)

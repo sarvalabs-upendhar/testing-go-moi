@@ -25,13 +25,14 @@ type ParticipantInfo struct {
 
 // Participant holds all the information required to achieve consensus on the participants state
 type Participant struct {
-	AccType       AccountType
-	ID            identifiers.Identifier
-	IsGenesis     bool
-	IsSigner      bool
-	Height        uint64
-	ContextHash   Hash
-	TesseractHash Hash
+	AccType            AccountType
+	ID                 identifiers.Identifier
+	IsGenesis          bool
+	IsSigner           bool
+	Height             uint64
+	ContextHash        Hash
+	ConsensusNodesHash Hash
+	TesseractHash      Hash
 	// The participants within an ICS file are arranged by their ids.
 	// This field indicates the index of the participant's nodeSet.
 	NodeSetPosition int
@@ -57,6 +58,10 @@ func (p *Participant) TSHash() Hash {
 
 // IsContextUpdateRequired returns true if this participant is the signer and account type is regular
 func (p *Participant) IsContextUpdateRequired() bool {
+	if p.ID.IsParticipantVariant() {
+		return false
+	}
+
 	if !p.IsSigner && !p.IsGenesis && p.AccType == RegularAccount {
 		return false
 	}

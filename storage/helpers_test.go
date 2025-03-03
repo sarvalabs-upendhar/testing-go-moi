@@ -238,6 +238,7 @@ func insertTestAccMetaInfo(t *testing.T, pm *PersistenceManager) map[uint64]comm
 			AccMetaInfo.StateHash,
 			AccMetaInfo.ContextHash,
 			AccMetaInfo.ConsensusNodesHash,
+			AccMetaInfo.InheritedAccount,
 			AccMetaInfo.CommitHash,
 			AccMetaInfo.Type,
 			true,

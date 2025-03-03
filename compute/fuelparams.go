@@ -6,6 +6,8 @@ var (
 	FuelAssetCreation           uint64 = 100
 	FuelLogicObjectDeployment   uint64 = 100
 	FuelAssetSupplyModulate     uint64 = 100
+	FuelAccountInherit          uint64 = 100
+	FuelAccountConfigure        uint64 = 100
 )
 
 var (

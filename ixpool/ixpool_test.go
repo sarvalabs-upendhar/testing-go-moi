@@ -40,16 +40,175 @@ const (
 	ixMaxSize      = 128 * 1024 // 128Kb
 )
 
+func TestGetPrimaryAccountConsensusNodesHash(t *testing.T) {
+	ids := tests.GetIdentifiers(t, 3)
+	hashes := tests.GetHashes(t, 2)
+
+	testcases := []struct {
+		name          string
+		id            identifiers.Identifier
+		preTestFn     func(sm *MockStateManager, ixPool *IxPool)
+		expectedHash  common.Hash
+		expectedError error
+	}{
+		{
+			name: "fetch consensus nodes hash from db",
+			id:   ids[1],
+			preTestFn: func(sm *MockStateManager, ixPool *IxPool) {
+				sm.SetAccountMetaInfo(ids[1], &common.AccountMetaInfo{
+					ConsensusNodesHash: hashes[1],
+				})
+			},
+			expectedHash: hashes[1],
+		},
+		{
+			name: "fetch consensus nodes hash from cache",
+			id:   ids[0],
+			preTestFn: func(sm *MockStateManager, ixPool *IxPool) {
+				ixPool.consensusNodesHash.Add(ids[0], hashes[0])
+			},
+			expectedHash: hashes[0],
+		},
+		{
+			name:          "account not found",
+			id:            ids[2],
+			expectedError: errors.New("account meta info not found"),
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			sm := NewMockStateManager(t)
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+				c.Mode = WaitMode
+				c.PriceLimit = defaultIxPriceLimit
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
+			}, true, sm, nil, newMockNetwork(""))
+
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(sm, ixPool)
+			}
+
+			ixHash, err := ixPool.getPrimaryAccountConsensusNodesHash(testcase.id)
+
+			if testcase.expectedError != nil {
+				require.ErrorContains(t, err, testcase.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			require.Equal(t, testcase.expectedHash, ixHash)
+
+			val, isCached := ixPool.consensusNodesHash.Get(testcase.id)
+			require.True(t, isCached)
+
+			require.Equal(t, testcase.expectedHash, val.(common.Hash)) //nolint:forcetypeassert
+		})
+	}
+}
+
+func TestGetConsensusNodesHash(t *testing.T) {
+	ids := tests.GetIdentifiers(t, 1)
+	hashes := tests.GetHashes(t, 1)
+
+	subAccount := tests.RandomSubAccountIdentifier(t, 1)
+
+	testcases := []struct {
+		name          string
+		id            identifiers.Identifier
+		preTestFn     func(sm *MockStateManager, ixPool *IxPool)
+		expectedHash  common.Hash
+		expectedError error
+	}{
+		{
+			name: "fetch sub account consensus nodes hash",
+			id:   subAccount,
+			preTestFn: func(sm *MockStateManager, ixPool *IxPool) {
+				sm.SetAccountMetaInfo(subAccount, &common.AccountMetaInfo{
+					InheritedAccount: ids[0],
+				})
+
+				sm.SetAccountMetaInfo(ids[0], &common.AccountMetaInfo{
+					ConsensusNodesHash: hashes[0],
+				})
+			},
+			expectedHash: hashes[0],
+		},
+		{
+			name: "fetch primary consensus nodes hash from db",
+			id:   ids[0],
+			preTestFn: func(sm *MockStateManager, ixPool *IxPool) {
+				ixPool.consensusNodesHash.Add(ids[0], hashes[0])
+			},
+			expectedHash: hashes[0],
+		},
+		{
+			name:          "sub-account not found",
+			id:            subAccount,
+			expectedError: errors.New("account meta info not found"),
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			sm := NewMockStateManager(t)
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+				c.Mode = WaitMode
+				c.PriceLimit = defaultIxPriceLimit
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
+			}, true, sm, nil, newMockNetwork(""))
+
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(sm, ixPool)
+			}
+
+			ixHash, err := ixPool.getConsensusNodesHash(testcase.id)
+
+			if testcase.expectedError != nil {
+				require.ErrorContains(t, err, testcase.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, testcase.expectedHash, ixHash)
+		})
+	}
+}
+
 // Each interaction is represented by a group of participants,
 // participants are represented by numbers to draw a comparison on the lexicographic order or ids
 // 999 is used to represent sarga account.
+// 0-100 is reserved for primary accounts and 101-200 reserved for sub accounts
 func TestIsEligibleForProposal(t *testing.T) {
 	testcases := []struct {
 		name                   string
 		input                  [][]int
+		preTestFn              func(sm *MockStateManager, ixPool *IxPool, ixns []*common.Interaction)
 		expectedEligibleInputs [][]int
 		expectedEligibility    []bool
 	}{
+		{
+			name:  "ixns from sub accounts to logic account",
+			input: [][]int{{101, 0}, {102, 0}, {103, 0}, {104, 0}, {105, 0}, {106, 0}, {107, 0}},
+			preTestFn: func(sm *MockStateManager, ixPool *IxPool, ixns []*common.Interaction) {
+				logicID := ixns[0].IxParticipants()[1].ID
+
+				for _, ix := range ixns {
+					for id := range ix.Participants() {
+						if id.IsParticipantVariant() {
+							sm.SetAccountMetaInfo(id, &common.AccountMetaInfo{
+								InheritedAccount: logicID,
+							})
+						}
+					}
+				}
+			},
+			expectedEligibleInputs: [][]int{{101, 0}, {102, 0}, {103, 0}, {104, 0}, {105, 0}, {106, 0}, {107, 0}},
+			expectedEligibility:    []bool{true, true, true, true, true, true, true},
+		},
 		{
 			name:                   "all ixns are eligible when they are mutually exclusive",
 			input:                  [][]int{{0, 1}, {2, 3}, {4, 5}},
@@ -75,13 +234,13 @@ func TestIsEligibleForProposal(t *testing.T) {
 			expectedEligibility:    []bool{true, false},
 		},
 		{
-			name:                   "max unique participants per leader - multiple senders",
+			name:                   "max unique consensus nodes hash per leader - multiple senders",
 			input:                  [][]int{{0, 1}, {0, 2}, {2, 0}, {3, 0}, {4, 0}, {5, 4}},
 			expectedEligibleInputs: [][]int{{0, 1}, {0, 2}, {2, 0}, {3, 0}, {5, 4}},
 			expectedEligibility:    []bool{true, true, true, true, false, true},
 		},
 		{
-			name:                   "max unique participants per leader - single sender",
+			name:                   "max unique consensus nodes hash per leader - single sender",
 			input:                  [][]int{{0, 1}, {0, 2}, {0, 3}, {0, 4}, {0, 5}},
 			expectedEligibleInputs: [][]int{{0, 1}, {0, 2}, {0, 3}},
 			expectedEligibility:    []bool{true, true, true, false, false},
@@ -133,15 +292,36 @@ func TestIsEligibleForProposal(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			var (
-				participantToAcquirer  = make(map[identifiers.Identifier]identifiers.Identifier)
-				acquirerToParticipants = make(map[identifiers.Identifier]map[identifiers.Identifier]struct{})
+				participantToAcquirer         = make(map[identifiers.Identifier]identifiers.Identifier)
+				acquirerToConsensusNodeHashes = make(map[identifiers.Identifier]map[common.Hash]struct{})
+				registry                      = newBatchRegistry()
 			)
 
 			ixns := createIxnsFromParticipants(t, testcase.input)
 			eligibility := make([]bool, len(ixns))
 
+			sm := NewMockStateManager(t)
+			ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+				c.Mode = WaitMode
+				c.PriceLimit = defaultIxPriceLimit
+				c.MaxSlots = config.DefaultMaxIXPoolSlots
+			}, true, sm, nil, nil)
+
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(sm, ixPool, ixns)
+			}
+
+			// generate random consensus nodes hash for each identifier
+			for _, ixn := range ixns {
+				for id := range ixn.Participants() {
+					if !id.IsParticipantVariant() {
+						ixPool.consensusNodesHash.Add(id, tests.RandomHash(t))
+					}
+				}
+			}
+
 			for i, ix := range ixns {
-				index := isEligibleForProposal(ix, participantToAcquirer, acquirerToParticipants)
+				index := ixPool.isEligibleForProposal(ix, participantToAcquirer, acquirerToConsensusNodeHashes, registry)
 				eligibility[i] = index
 			}
 
@@ -287,7 +467,7 @@ func TestAllocateView(t *testing.T) {
 func TestIxPool_validateAndEnqueueIx_ReplaceIx(t *testing.T) {
 	var (
 		transferPayload = &common.AssetActionPayload{
-			Beneficiary: tests.RandomIdentifier(t),
+			Beneficiary: tests.RandomIdentifierWithZeroVariant(t),
 			AssetID:     common.KMOITokenAssetID,
 			Amount:      big.NewInt(1),
 		}
@@ -1676,7 +1856,10 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 			acc := ixPool.accounts.getAccountQueue(senderID, 0)
 			require.Equal(t, len(testcase.ixs), len(acc.sequenceIDToIX.mapping))
 
+			ixPool.consensusNodesHash.Add(senderID, tests.RandomHash(t))
+
 			ts := getTesseractWithIxs(t, senderID, int(testcase.nonce))
+
 			ixPool.ResetWithHeaders(ts)
 
 			ixPool.mu.RLock()
@@ -1688,6 +1871,9 @@ func TestIxPool_ResetWithHeaders(t *testing.T) {
 			require.Equal(t, testcase.expected.enqueued, acc.enqueued.length())
 			require.Equal(t, testcase.expected.promoted, acc.promoted.length())
 			require.Equal(t, testcase.expected.enqueued+testcase.expected.promoted, uint64(len(acc.sequenceIDToIX.mapping)))
+
+			_, ok := ixPool.consensusNodesHash.Get(senderID)
+			require.False(t, ok)
 		})
 	}
 }
@@ -2363,6 +2549,86 @@ func TestIxPool_ValidateAssetCreate(t *testing.T) {
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
 			err := ixPool.validateAssetCreate(testcase.ix, 0)
+			if testcase.expectedErr != nil {
+				require.ErrorContains(t, err, testcase.expectedErr.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+		})
+	}
+}
+
+func TestIxPool_ValidateAccountInherit(t *testing.T) {
+	sm := NewMockStateManager(t)
+	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
+		c.Mode = WaitMode
+		c.PriceLimit = defaultIxPriceLimit
+	}, false, sm, nil, nil)
+
+	id := tests.RandomIdentifierWithZeroVariant(t)
+	sm.registerAccounts(id)
+
+	logicID, err := identifiers.GenerateLogicIDv0(identifiers.RandomFingerprint(), 0)
+	require.NoError(t, err)
+
+	accountInheritPayload := common.AccountInheritPayload{
+		TargetAccount:   logicID.AsIdentifier(),
+		Amount:          big.NewInt(100),
+		SubAccountIndex: 2,
+	}
+
+	testcases := []struct {
+		name        string
+		ix          *common.Interaction
+		expectedErr error
+	}{
+		{
+			name: "should return success if payload is valid",
+			ix:   newTestInteraction(t, common.IXAccountInherit, accountInheritPayload, 0, id, 0, nil),
+		},
+		{
+			name: "sender should be primary account",
+			ix: newTestInteraction(t, common.IXAccountInherit, common.AccountInheritPayload{
+				TargetAccount:   logicID.AsIdentifier(),
+				Amount:          big.NewInt(100),
+				SubAccountIndex: 2,
+			}, 0, tests.RandomSubAccountIdentifier(t, 1), 0, nil),
+			expectedErr: common.ErrSenderAccount,
+		},
+		{
+			name: "target should be logic account",
+			ix: newTestInteraction(t, common.IXAccountInherit, common.AccountInheritPayload{
+				TargetAccount:   tests.RandomIdentifier(t),
+				Amount:          big.NewInt(100),
+				SubAccountIndex: 2,
+			}, 0, id, 0, nil),
+			expectedErr: common.ErrInvalidTargetAccount,
+		},
+		{
+			name: "invalid amount",
+			ix: newTestInteraction(t, common.IXAccountInherit, common.AccountInheritPayload{
+				TargetAccount:   logicID.AsIdentifier(),
+				Amount:          big.NewInt(0),
+				SubAccountIndex: 2,
+			}, 0, id, 0, nil),
+			expectedErr: common.ErrInvalidValue,
+		},
+		{
+			name: "target is nil",
+			ix: newTestInteraction(t, common.IXAccountInherit, common.AccountInheritPayload{
+				TargetAccount:   identifiers.Nil,
+				Amount:          big.NewInt(100),
+				SubAccountIndex: 2,
+			}, 0, id, 0, nil),
+			expectedErr: common.ErrInvalidIdentifier,
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.name, func(t *testing.T) {
+			err := ixPool.validateAccountInherit(testcase.ix, 0)
 			if testcase.expectedErr != nil {
 				require.ErrorContains(t, err, testcase.expectedErr.Error())
 
@@ -3548,8 +3814,8 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 	ids := make([]identifiers.Identifier, 2)
 
 	// we create two participant id with the lowest possible value
-	ps1, _ := identifiers.GenerateParticipantIDv0(tests.Min24Byte(t), 1)
-	ps2, _ := identifiers.GenerateParticipantIDv0(tests.Min24Byte(t), 2)
+	ps1, _ := identifiers.GenerateParticipantIDv0(tests.Min24Byte(t, 1), 0)
+	ps2, _ := identifiers.GenerateParticipantIDv0(tests.Min24Byte(t, 2), 0)
 
 	ids[0] = ps1.AsIdentifier()
 	ids[1] = ps2.AsIdentifier()
@@ -3564,6 +3830,7 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 		// this function returns the interactions that will be added to the ixpool and
 		// the interactions that are expected to be batched
 		getIxns           func() (input []*common.Interaction, expected []*common.Interaction)
+		preTestFn         func(sm *MockStateManager, ixPool *IxPool, ixns []*common.Interaction)
 		expectedBatchList []CreateBatches
 	}{
 		{
@@ -3583,8 +3850,8 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  4,
+						ixnCount:                3,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -3606,8 +3873,8 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  4,
+						ixnCount:                3,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -3631,8 +3898,8 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  4,
+						ixnCount:                3,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -3657,8 +3924,8 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 2,
-						psCount:  4,
+						ixnCount:                2,
+						consensusNodesHashCount: 4,
 					},
 				},
 			},
@@ -3682,8 +3949,8 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 1,
-						psCount:  2,
+						ixnCount:                1,
+						consensusNodesHashCount: 2,
 					},
 				},
 			},
@@ -3707,8 +3974,8 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 1,
-						psCount:  2,
+						ixnCount:                1,
+						consensusNodesHashCount: 2,
 					},
 				},
 			},
@@ -3729,8 +3996,44 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 				{
 					batchCount: 1,
 					batch: CreateBatch{
-						ixnCount: 3,
-						psCount:  4,
+						ixnCount:                3,
+						consensusNodesHashCount: 4,
+					},
+				},
+			},
+		},
+		{
+			name:        "ixns from sub accounts to inherited account should be clubbed in to single batch",
+			currentView: 4,
+			getIxns: func() (input []*common.Interaction, expected []*common.Interaction) {
+				ixns := createIxnsFromParticipants(t,
+					[][]int{{101, 0}, {102, 0}, {103, 0}, {104, 0}, {105, 0}, {106, 0}, {107, 0}})
+				for _, ixn := range ixns {
+					ixn.SetShouldPropose(true)
+					ixn.UpdateAllottedView(4)
+				}
+
+				return ixns, ixns
+			},
+			preTestFn: func(sm *MockStateManager, ixPool *IxPool, ixns []*common.Interaction) {
+				logicID := ixns[0].IxParticipants()[1].ID
+
+				for _, ix := range ixns {
+					for id := range ix.Participants() {
+						if id.IsParticipantVariant() {
+							sm.SetAccountMetaInfo(id, &common.AccountMetaInfo{
+								InheritedAccount: logicID,
+							})
+						}
+					}
+				}
+			},
+			expectedBatchList: []CreateBatches{
+				{
+					batchCount: 1,
+					batch: CreateBatch{
+						ixnCount:                7,
+						consensusNodesHashCount: 1,
 					},
 				},
 			},
@@ -3748,6 +4051,20 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 			ixPool.UpdateCurrentView(testcase.currentView)
 			input, expectedIxns := testcase.getIxns()
 
+			if testcase.preTestFn != nil {
+				testcase.preTestFn(sm, ixPool, input)
+			}
+
+			// generate random consensus nodes hash for each identifier
+
+			for _, ixn := range input {
+				for id := range ixn.Participants() {
+					if !id.IsParticipantVariant() {
+						ixPool.consensusNodesHash.Add(id, tests.RandomHash(t))
+					}
+				}
+			}
+
 			insertIxnsInPromotedQueue(ixPool, input)
 
 			batches := ixPool.ProcessableBatches()
@@ -3757,10 +4074,10 @@ func TestIxBatchRegistry_ProcessableBatches(t *testing.T) {
 			for _, expectedBatches := range testcase.expectedBatchList {
 				for i := 0; i < expectedBatches.batchCount; i++ {
 					require.Equal(t, expectedBatches.batch.ixnCount, batches[i].IxCount())
-					require.Equal(t, expectedBatches.batch.psCount, batches[i].PsCount())
+					require.Equal(t, expectedBatches.batch.consensusNodesHashCount, batches[i].ConsensusNodesHashCount())
 
 					for _, ix := range batches[i].IxList() {
-						require.Equal(t, expectedIxns[index], ix)
+						require.Equal(t, expectedIxns[index].SenderID(), ix.SenderID())
 
 						index++
 					}

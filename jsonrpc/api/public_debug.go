@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"time"
@@ -23,14 +24,18 @@ import (
 
 // PublicDebugAPI is the collection of APIs exposed over the public debugging endpoint
 type PublicDebugAPI struct {
+	ixpool  backend.IxPool
 	db      backend.DB
 	network backend.Network
 	syncer  backend.Syncer
 }
 
-func NewPublicDebugAPI(db backend.DB, network backend.Network, syncer backend.Syncer) *PublicDebugAPI {
+func NewPublicDebugAPI(ixpool backend.IxPool, db backend.DB,
+	network backend.Network, syncer backend.Syncer,
+) *PublicDebugAPI {
 	// Create the public Debug API wrapper and return it
 	return &PublicDebugAPI{
+		ixpool:  ixpool,
 		db:      db,
 		network: network,
 		syncer:  syncer,
@@ -210,6 +215,48 @@ func (p *PublicDebugAPI) PeersScore(args *rpcargs.PeerScoreRequest) (rpcargs.RPC
 	peersScores := p.network.GetPeersScores()
 
 	return rpcargs.CreateRPCPeersScore(peersScores), nil
+}
+
+// SendInteractions is a method of PublicIXAPI that stores the interaction
+func (p *PublicDebugAPI) SendInteractions(sendIXList *rpcargs.SendIXList) ([]common.Hash, error) {
+	ixns := make([]*common.Interaction, len(sendIXList.Ixns))
+	hashes := make([]common.Hash, len(sendIXList.Ixns))
+
+	for i, sendIx := range sendIXList.Ixns {
+		signs, err := hex.DecodeString(sendIx.Signatures)
+		if err != nil {
+			return hashes, err
+		}
+
+		ixData, err := validateArgumentsWithSign(&sendIx)
+		if err != nil {
+			return hashes, err
+		}
+
+		signatures := make(common.Signatures, 0)
+		if err := signatures.FromBytes(signs); err != nil {
+			return hashes, err
+		}
+
+		ixn, err := common.NewInteraction(*ixData, signatures)
+		if err != nil {
+			return hashes, err
+		}
+
+		ixns[i] = ixn
+		hashes[i] = ixn.Hash()
+	}
+
+	// TODO Add validation to check for max ixn group size
+	// add the interactions to ix pool
+	ixs := common.NewInteractionsWithLeaderCheck(false, ixns...)
+
+	errs := p.ixpool.AddLocalInteractions(ixs)
+	if len(errs) > 0 {
+		return hashes, errs[0]
+	}
+
+	return hashes, nil
 }
 
 // helper functions

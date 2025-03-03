@@ -133,7 +133,7 @@ func (n *Node) setupIxPool() error {
 		return err
 	}
 
-	n.ixpool = ixpool.NewIxPool(
+	n.ixpool, err = ixpool.NewIxPool(
 		n.logger,
 		n.eventMux,
 		n.network,
@@ -144,6 +144,9 @@ func (n *Node) setupIxPool() error {
 		crypto.Verify,
 		n.cfg.Consensus.GenesisTimestamp,
 	)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

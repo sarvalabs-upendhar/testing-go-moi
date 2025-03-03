@@ -52,7 +52,7 @@ package consensus
 //
 //				require.Equal(t, uint64(0), p.Height)
 //				require.Equal(t, common.NilHash, p.TransitiveLink)
-//				require.Equal(t, common.NilHash, p.PreviousContext)
+//				require.Equal(t, common.NilHash, p.LockedContext)
 //				require.Equal(t, test.contextHashes[i], p.LatestContext)
 //				require.Equal(t, test.stateHashes[i], p.StateHash)
 //				require.Nil(t, p.ContextDelta)

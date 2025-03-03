@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"net"
 	"os"
@@ -55,6 +56,22 @@ func RandomIdentifier(t *testing.T) identifiers.Identifier {
 	t.Helper()
 
 	return identifiers.RandomParticipantIDv0().AsIdentifier()
+}
+
+func RandomSubAccountIdentifier(t *testing.T, i uint32) identifiers.Identifier {
+	t.Helper()
+
+	id, _ := identifiers.GenerateParticipantIDv0(identifiers.RandomFingerprint(), i)
+
+	return id.AsIdentifier()
+}
+
+func RandomIdentifierWithZeroVariant(t *testing.T) identifiers.Identifier {
+	t.Helper()
+
+	id, _ := identifiers.GenerateParticipantIDv0(identifiers.RandomFingerprint(), 0)
+
+	return id.AsIdentifier()
 }
 
 func RandomIDWithMnemonic(t *testing.T) (identifiers.Identifier, string) {
@@ -442,8 +459,9 @@ func GetRandomAccMetaInfo(t *testing.T, height uint64) *common.AccountMetaInfo {
 	t.Helper()
 
 	return &common.AccountMetaInfo{
-		ID:                   RandomIdentifier(t),
+		ID:                   RandomIdentifierWithZeroVariant(t),
 		Type:                 common.AccountType(1),
+		InheritedAccount:     RandomIdentifier(t),
 		Height:               height,
 		TesseractHash:        RandomHash(t),
 		StateHash:            RandomHash(t),
@@ -605,6 +623,25 @@ func CreateTesseract(t *testing.T, params *CreateTesseractParams) *common.Tesser
 	)
 }
 
+func GetArrayOfBits(num int) *common.ArrayOfBits {
+	if num%64 == 0 {
+		num /= 64
+	} else {
+		num = (num / 64) + 1
+	}
+
+	a := &common.ArrayOfBits{
+		Size:     8,
+		Elements: make([]uint64, num),
+	}
+
+	for i := 0; i < num; i++ {
+		a.Elements[i] = math.MaxUint64
+	}
+
+	return a
+}
+
 func CreateTesseracts(t *testing.T, count int, paramsMap map[int]*CreateTesseractParams) []*common.Tesseract {
 	t.Helper()
 
@@ -638,7 +675,18 @@ func GetIdentifiers(t *testing.T, count int) []identifiers.Identifier {
 
 	ids := make([]identifiers.Identifier, count)
 	for i := 0; i < count; i++ {
-		ids[i] = RandomIdentifier(t)
+		ids[i] = RandomIdentifierWithZeroVariant(t)
+	}
+
+	return ids
+}
+
+func GetSubAccountIdentifiers(t *testing.T, count int) []identifiers.Identifier {
+	t.Helper()
+
+	ids := make([]identifiers.Identifier, count)
+	for i := 0; i < count; i++ {
+		ids[i] = RandomSubAccountIdentifier(t, uint32(i+1))
 	}
 
 	return ids
@@ -804,7 +852,7 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 	}
 
 	if data.Sender.ID == identifiers.Nil {
-		data.Sender.ID = RandomIdentifier(t)
+		data.Sender.ID = RandomIdentifierWithZeroVariant(t)
 	}
 
 	AppendParticipantsInIxData(t, data)
@@ -831,7 +879,7 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 	return ix
 }
 
-func Min24Byte(t *testing.T) [24]byte {
+func Min24Byte(t *testing.T, lastByte byte) [24]byte {
 	t.Helper()
 
 	var minValue [24]byte
@@ -839,6 +887,8 @@ func Min24Byte(t *testing.T) [24]byte {
 	for i := range minValue {
 		minValue[i] = 0x00
 	}
+
+	minValue[23] = lastByte
 
 	return minValue
 }
@@ -1118,11 +1168,10 @@ func CreateStateWithTestData(t *testing.T) common.State {
 	t.Helper()
 
 	s := common.State{
-		Height:          6,
-		TransitiveLink:  RandomHash(t),
-		PreviousContext: RandomHash(t),
-		LatestContext:   RandomHash(t),
-		StateHash:       RandomHash(t),
+		Height:         6,
+		TransitiveLink: RandomHash(t),
+		LockedContext:  RandomHash(t),
+		StateHash:      RandomHash(t),
 		ContextDelta: &common.DeltaGroup{
 			ConsensusNodes: RandomKramaIDs(t, 2),
 			ReplacedNodes:  RandomKramaIDs(t, 2),
@@ -1423,7 +1472,7 @@ func CreateAssetActionPayload(t *testing.T, id identifiers.Identifier) common.As
 	t.Helper()
 
 	if id.IsNil() {
-		id = RandomIdentifier(t)
+		id = RandomIdentifierWithZeroVariant(t)
 	}
 
 	return common.AssetActionPayload{

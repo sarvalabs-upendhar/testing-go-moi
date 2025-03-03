@@ -8,6 +8,7 @@ const (
 	IxInvalid IxOpType = iota
 	IxParticipantCreate
 	IXAccountConfigure
+	IXAccountInherit
 	IxAssetTransfer
 	IxFuelSupply // TODO: Remove this
 	IxAssetCreate
@@ -29,6 +30,7 @@ var txTypeToString = map[IxOpType]string{
 	IxInvalid:           "IxInvalid",
 	IxParticipantCreate: "IxParticipantCreate",
 	IXAccountConfigure:  "IxAccountConfigure",
+	IXAccountInherit:    "IxAccountInherit",
 	IxAssetTransfer:     "IxAssetTransfer",
 	IxAssetCreate:       "IxAssetCreate",
 	IxAssetApprove:      "IxAssetApprove",

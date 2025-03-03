@@ -46,10 +46,17 @@ type RPCTesseract struct {
 	Seal             hexutil.Bytes         `json:"seal"`
 }
 
+type RPCSubAccounts struct {
+	InheritedAccount identifiers.Identifier   `json:"inherited_account"`
+	SubAccounts      []identifiers.Identifier `json:"sub_accounts"`
+}
+
 // ContextResponse is response object for fetching context info
 type ContextResponse struct {
-	ConsensusNodes []string `json:"consensus_nodes"`
-	StorageNodes   []string `json:"storage_nodes"`
+	ConsensusNodes   []string               `json:"consensus_nodes"`
+	StorageNodes     []string               `json:"storage_nodes"`
+	InheritedAccount identifiers.Identifier `json:"inherited_account"`
+	SubAccounts      []RPCSubAccounts       `json:"sub_accounts"`
 }
 
 type RPCAssetDescriptor struct {
@@ -356,8 +363,7 @@ type RPCState struct {
 	ID             identifiers.Identifier `json:"id"`
 	Height         hexutil.Uint64         `json:"height"`
 	TransitiveLink common.Hash            `json:"transitive_link"`
-	PrevContext    common.Hash            `json:"prev_context"`
-	LatestContext  common.Hash            `json:"latest_context"`
+	LockedContext  common.Hash            `json:"locked_context"`
 	ContextDelta   *common.DeltaGroup     `json:"context_delta"`
 	StateHash      common.Hash            `json:"state_hash"`
 }

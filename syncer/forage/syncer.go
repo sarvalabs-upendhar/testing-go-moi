@@ -71,6 +71,7 @@ type stateManager interface {
 	LoadTransitionObjects(ps map[identifiers.Identifier]common.ParticipantInfo) (*state.Transition, error)
 	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
 	GetLatestStateObject(id identifiers.Identifier) (*state.Object, error)
+	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
 	SyncStorageTrees(
 		ctx context.Context,
 		newRoot *common.RootNode,
@@ -143,6 +144,7 @@ type store interface {
 		tesseractHash common.Hash,
 		stateHash, contextHash common.Hash,
 		consensusNodesHash common.Hash,
+		inheritedAccount identifiers.Identifier,
 		commitHash common.Hash,
 		accType common.AccountType,
 		shouldUpdateContextSetPosition bool,
@@ -1636,7 +1638,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 
 		ps := make(map[identifiers.Identifier]common.ParticipantInfo)
 
-		accountType, err := msg.tesseract.Interactions().AccountType(msg.id())
+		accountType, err := common.AccountTypeFromID(msg.id())
 		if err != nil {
 			return false, err
 		}
@@ -1852,6 +1854,8 @@ func (s *Syncer) fetchTesseractState(
 	if err = s.syncStorageTree(ctx, newSession, acc.StorageRoot, object); err != nil {
 		return errors.Wrap(err, "failed to sync storage tree")
 	}
+
+	object.SetAccount(*acc)
 
 	if !islocal {
 		if err = s.db.SetAccount(id, tesseract.StateHash(id), blk.GetData()); err != nil {
@@ -2724,7 +2728,7 @@ func (s *Syncer) fetchContextForAgora(id identifiers.Identifier, ts common.Tesse
 		// add the delta peers to the list
 		peers = append(peers, deltaGroup.ConsensusNodes...)
 
-		consensusNodes, err := s.state.GetConsensusNodesByHash(id, ts.PreviousContextHash(id))
+		consensusNodes, err := s.state.GetConsensusNodesByHash(id, ts.LockedContextHash(id))
 		if err == nil {
 			peers = append(peers, consensusNodes...)
 

@@ -20,7 +20,7 @@ import (
 
 func TestPublicDebugAPI_DBGet(t *testing.T) {
 	db := NewMockDatabase(t)
-	debugAPI := NewPublicDebugAPI(db, nil, nil)
+	debugAPI := NewPublicDebugAPI(nil, db, nil, nil)
 	key := tests.RandomHash(t)
 	value := tests.RandomHash(t)
 
@@ -130,7 +130,7 @@ func TestPublicDebugAPI_GetNodeMetaInfo(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			db := NewMockDatabase(t)
-			debugAPI := NewPublicDebugAPI(db, nil, nil)
+			debugAPI := NewPublicDebugAPI(nil, db, nil, nil)
 
 			if test.entries != nil {
 				db.setNodeMetaInfo(t, test.entries)
@@ -183,7 +183,7 @@ func TestPublicDebugAPI_GetAccounts(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(testing *testing.T) {
 			db := NewMockDatabase(t)
-			debugAPI := NewPublicDebugAPI(db, nil, nil)
+			debugAPI := NewPublicDebugAPI(nil, db, nil, nil)
 
 			if test.setAddressFn != nil {
 				test.setAddressFn(db)
@@ -199,7 +199,7 @@ func TestPublicDebugAPI_GetAccounts(t *testing.T) {
 
 func TestPublicDebugAPI_GetConns(t *testing.T) {
 	mn := NewMockNetwork(t)
-	debugAPI := NewPublicDebugAPI(nil, mn, nil)
+	debugAPI := NewPublicDebugAPI(nil, nil, mn, nil)
 
 	conns := createConns(t, 3, 3)
 	mn.setConns(conns)
@@ -241,7 +241,7 @@ func TestPublicDebugAPI_GetConns(t *testing.T) {
 
 func TestPublicDebugAPI_GetSyncJob(t *testing.T) {
 	syncer := NewMockSyncer(t)
-	debugAPI := NewPublicDebugAPI(nil, nil, syncer)
+	debugAPI := NewPublicDebugAPI(nil, nil, nil, syncer)
 
 	ids := tests.GetIdentifiers(t, 2)
 	syncJob := &rpcargs.SyncJobInfo{}

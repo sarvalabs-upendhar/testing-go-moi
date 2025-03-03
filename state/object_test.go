@@ -1931,6 +1931,7 @@ func TestUpdateContext(t *testing.T) {
 		metaHash       common.Hash
 		soParams       *createStateObjectParams
 		mCtx           *MetaContextObject
+		shouldUpdate   bool
 		expectedError  error
 	}{
 		{
@@ -1949,7 +1950,15 @@ func TestUpdateContext(t *testing.T) {
 					insertContextHash(so, mHash[0])
 				},
 			},
-			mCtx: mObj[0],
+			mCtx:         mObj[0],
+			shouldUpdate: true,
+		},
+		{
+			name:           "context should not be updated for sub account",
+			consensusNodes: consensusNodes,
+			soParams: &createStateObjectParams{
+				id: tests.RandomSubAccountIdentifier(t, 1),
+			},
 		},
 		{
 			name:           "empty consensus nodes",
@@ -1972,7 +1981,9 @@ func TestUpdateContext(t *testing.T) {
 
 			require.NoError(t, err)
 
-			if len(test.consensusNodes) == 0 {
+			if !test.shouldUpdate {
+				require.Nil(t, sObj.metaContext)
+
 				return
 			}
 

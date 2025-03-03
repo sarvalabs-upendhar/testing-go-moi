@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/petar/GoLLRB/llrb"
@@ -86,26 +88,26 @@ type IxConfig struct {
 }
 
 type IxPool struct {
-	ctx         context.Context
-	ctxCancel   context.CancelFunc
-	mu          sync.RWMutex
-	logger      hclog.Logger
-	cfg         *config.IxPoolConfig
-	msgCache    *ixSaltedCache
-	network     p2pServer
-	sm          stateManager
-	exec        executionManager
-	allIxs      *lookupMap
-	close       chan struct{}
-	sealing     bool
-	mux         *utils.TypeMux
-	accounts    *accountsManager
-	gauge       slotGauge // gauge for measuring pool capacity
-	pruneCh     chan struct{}
-	metrics     *Metrics
-	verifier    func(data, signature, pubBytes []byte) (bool, error)
-	view        uint64
-	genesisTime time.Time
+	ctx                context.Context
+	ctxCancel          context.CancelFunc
+	mu                 sync.RWMutex
+	logger             hclog.Logger
+	cfg                *config.IxPoolConfig
+	msgCache           *ixSaltedCache
+	network            p2pServer
+	sm                 stateManager
+	exec               executionManager
+	allIxs             *lookupMap
+	close              chan struct{}
+	mux                *utils.TypeMux
+	accounts           *accountsManager
+	gauge              slotGauge // gauge for measuring pool capacity
+	pruneCh            chan struct{}
+	metrics            *Metrics
+	verifier           func(data, signature, pubBytes []byte) (bool, error)
+	view               uint64
+	genesisTime        time.Time
+	consensusNodesHash *lru.Cache // consensusNodesHash holds only primary account's consensus nodes hash
 }
 
 func NewIxPool(
@@ -118,8 +120,11 @@ func NewIxPool(
 	metrics *Metrics,
 	verifier func(data, signature, pubBytes []byte) (bool, error),
 	genesisTime uint64,
-) *IxPool {
+) (*IxPool, error) {
 	ctx, ctxCancel := context.WithCancel(context.Background())
+
+	var err error
+
 	i := &IxPool{
 		ctx:       ctx,
 		ctxCancel: ctxCancel,
@@ -130,7 +135,6 @@ func NewIxPool(
 		exec:      exec,
 		allIxs:    NewLookupMap(),
 		close:     make(chan struct{}),
-		sealing:   false,
 		accounts:  newAccountsMap(),
 		gauge: slotGauge{
 			total:   0,
@@ -148,7 +152,48 @@ func NewIxPool(
 		i.msgCache = newSaltedCache(int(cfg.IxIncomingFilterMaxSize))
 	}
 
-	return i
+	if i.consensusNodesHash, err = lru.New(2000); err != nil {
+		return nil, err
+	}
+
+	return i, nil
+}
+
+func (i *IxPool) getPrimaryAccountConsensusNodesHash(id identifiers.Identifier) (common.Hash, error) {
+	val, isCached := i.consensusNodesHash.Get(id)
+	if isCached {
+		return val.(common.Hash), nil //nolint:forcetypeassert
+	}
+
+	accMetaInfo, err := i.sm.GetAccountMetaInfo(id)
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	i.consensusNodesHash.Add(id, accMetaInfo.ConsensusNodesHash)
+
+	return accMetaInfo.ConsensusNodesHash, nil
+}
+
+func (i *IxPool) getConsensusNodesHash(id identifiers.Identifier) (common.Hash, error) {
+	if id.IsParticipantVariant() {
+		accMetaInfo, err := i.sm.GetAccountMetaInfo(id)
+		if err != nil {
+			return common.NilHash, err
+		}
+
+		return i.getPrimaryAccountConsensusNodesHash(accMetaInfo.InheritedAccount)
+	}
+
+	return i.getPrimaryAccountConsensusNodesHash(id)
+}
+
+func (i *IxPool) loadConsensusNodesHash(ix *common.Interaction) {
+	for id, ps := range ix.Participants() {
+		if !id.IsParticipantVariant() && !ps.IsGenesis {
+			i.getPrimaryAccountConsensusNodesHash(id)
+		}
+	}
 }
 
 func (i *IxPool) ViewTimeOut() time.Duration {
@@ -178,18 +223,33 @@ func (i *IxPool) getNextView(view uint64, nodePos uint64) uint64 {
 
 func (i *IxPool) allocateView(view uint64, ixns ...*common.Interaction) {
 	for _, ixn := range ixns {
-		acc, _ := i.sm.GetAccountMetaInfo(ixn.LeaderCandidateAcc())
-		if acc.PositionInContextSet == common.NodeNotFound {
+		accMetaInfo, err := i.sm.GetAccountMetaInfo(ixn.LeaderCandidateAcc())
+		if err != nil {
+			i.logger.Error("account meta info not found", "id", ixn.LeaderCandidateAcc())
+
+			continue
+		}
+
+		if ixn.LeaderCandidateAcc().IsParticipantVariant() {
+			accMetaInfo, err = i.sm.GetAccountMetaInfo(accMetaInfo.InheritedAccount)
+			if err != nil {
+				i.logger.Error("account meta info of inherited account not found", "id", ixn.LeaderCandidateAcc())
+
+				continue
+			}
+		}
+
+		if accMetaInfo.PositionInContextSet == common.NodeNotFound {
 			continue
 		}
 
 		ixn.SetShouldPropose(true)
 
-		nextView := i.getNextView(view, uint64(acc.PositionInContextSet))
+		nextView := i.getNextView(view, uint64(accMetaInfo.PositionInContextSet))
 		ixn.UpdateAllottedView(nextView)
 
 		i.logger.Trace("Allotted view for ixn", "ixn-hash",
-			ixn.Hash(), "position", acc.PositionInContextSet,
+			ixn.Hash(), "position", accMetaInfo.PositionInContextSet,
 			"current-view", view, "next-view", nextView, "leader-id", ixn.LeaderCandidateAcc())
 	}
 }
@@ -353,6 +413,8 @@ func (i *IxPool) validateAndEnqueueIx(ix *common.Interaction) error {
 		i.logger.Error("Error sending interaction added event", "err", err)
 	}
 
+	i.loadConsensusNodesHash(ix)
+
 	i.logger.Info("added ix to enqueue ", ix.Hash())
 
 	if ix.SequenceID() == accQueue.getSequenceID() {
@@ -458,6 +520,13 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 		// cleanup the lookup queue
 		i.allIxs.remove(ixs...)
 
+		// invalidate the consensusNodesHash cache if consensus nodes changes
+		for addr, delta := range ts.ContextDelta() {
+			if !addr.IsParticipantVariant() && len(delta.ConsensusNodes) > 0 {
+				i.consensusNodesHash.Remove(addr)
+			}
+		}
+
 		processedAccounts := make(map[identifiers.Identifier]uint64)
 
 		for _, ix := range ixs {
@@ -473,7 +542,7 @@ func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
 				latestSequenceID = ix.SequenceID() + 1
 			}
 
-			i.logger.Debug("Latest sequenceID in the ixpool", "sequenceID", latestSequenceID)
+			i.logger.Debug("Latest sequenceID in the ixpool", "sequenceID", latestSequenceID, from.ID)
 			// update the result map
 			processedAccounts[from.ID] = latestSequenceID
 
@@ -565,19 +634,22 @@ func (i *IxPool) Executables() InteractionQueue {
 	return nil
 }
 
-func isEligibleForProposal(
+// isEligibleForProposal ensures mutual exclusion of participants among batches and also limits consensus nodes hashes
+// per batch up to 4
+func (i *IxPool) isEligibleForProposal(
 	ixn *common.Interaction,
 	participantToAcquirer map[identifiers.Identifier]identifiers.Identifier,
-	acquirerToParticipants map[identifiers.Identifier]map[identifiers.Identifier]struct{},
+	acquirerToConsensusNodeHashes map[identifiers.Identifier]map[common.Hash]struct{},
+	batchRegistry *IxBatchRegistry,
 ) bool {
 	var (
-		newParticipantsCount = 0
-		leaderAcc            = ixn.LeaderCandidateAcc()
+		newConsensusNodesHashCount = 0
+		leaderAcc                  = ixn.LeaderCandidateAcc()
 	)
 
-	existingPS, ok := acquirerToParticipants[leaderAcc]
+	existingConsensusNodesHash, ok := acquirerToConsensusNodeHashes[leaderAcc]
 	if !ok {
-		existingPS = make(map[identifiers.Identifier]struct{})
+		existingConsensusNodesHash = make(map[common.Hash]struct{})
 	}
 
 	for _, participant := range ixn.Participants() {
@@ -593,19 +665,29 @@ func isEligibleForProposal(
 			continue
 		}
 
+		hash, err := i.getConsensusNodesHash(participant.ID)
+		if err != nil {
+			i.logger.Error("Error getting consensus node hash", "err", err, "id", participant.ID)
+
+			return false
+		}
+
+		// add consensus nodes hash to batch registry as they will be useful in counting unique hashes in a batch
+		batchRegistry.addConsensusNodesHash(participant.ID, hash)
+
 		// Count new participants
-		if _, exists := existingPS[participant.ID]; !exists {
-			newParticipantsCount++
+		if _, exists := existingConsensusNodesHash[hash]; !exists {
+			newConsensusNodesHashCount++
 		}
 	}
 
 	// Check if total participants would exceed limit
-	if len(existingPS)+newParticipantsCount > 4 {
+	if len(existingConsensusNodesHash)+newConsensusNodesHashCount > 4 {
 		return false
 	}
 
-	if _, ok := acquirerToParticipants[leaderAcc]; !ok {
-		acquirerToParticipants[leaderAcc] = make(map[identifiers.Identifier]struct{})
+	if _, ok := acquirerToConsensusNodeHashes[leaderAcc]; !ok {
+		acquirerToConsensusNodeHashes[leaderAcc] = make(map[common.Hash]struct{})
 	}
 
 	for _, participant := range ixn.Participants() {
@@ -613,13 +695,19 @@ func isEligibleForProposal(
 			continue
 		}
 
+		// consensus nodes hash are fetched successfully for all participants above, so don't check for error here
+		hash, _ := i.getConsensusNodesHash(participant.ID)
+
 		participantToAcquirer[participant.ID] = leaderAcc
-		acquirerToParticipants[leaderAcc][participant.ID] = struct{}{}
+		acquirerToConsensusNodeHashes[leaderAcc][hash] = struct{}{}
 	}
 
 	return true
 }
 
+// ProcessableBatches picks interactions in deterministic fashion to avoid consensus failure
+// due to multiple nodes trying to acquire a participant ending up with no quorum.
+// It also ensures that interactions are picked only if they can be proposed by this node in the current view
 func (i *IxPool) ProcessableBatches() []*common.IxBatch {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -629,7 +717,7 @@ func (i *IxPool) ProcessableBatches() []*common.IxBatch {
 	batchRegistry := newBatchRegistry()
 
 	participantToAcquirer := make(map[identifiers.Identifier]identifiers.Identifier)
-	acquirerToParticipants := make(map[identifiers.Identifier]map[identifiers.Identifier]struct{})
+	acquirerToConsensusNodeHashes := make(map[identifiers.Identifier]map[common.Hash]struct{})
 
 	i.accounts.sortedParticipants.AscendGreaterOrEqual(
 		&ID{id: identifiers.Nil},
@@ -643,7 +731,7 @@ func (i *IxPool) ProcessableBatches() []*common.IxBatch {
 				sort.Sort(ixns)
 
 				for _, ixn := range ixns.List() {
-					if !isEligibleForProposal(ixn, participantToAcquirer, acquirerToParticipants) {
+					if !i.isEligibleForProposal(ixn, participantToAcquirer, acquirerToConsensusNodeHashes, batchRegistry) {
 						break
 					}
 
@@ -943,6 +1031,8 @@ func (i *IxPool) validateOperations(ix *common.Interaction) error {
 			return i.validateParticipantCreate(ix, idx)
 		case common.IXAccountConfigure:
 			return i.validateAccountConfigure(ix, idx)
+		case common.IXAccountInherit:
+			return i.validateAccountInherit(ix, idx)
 		case common.IxAssetCreate:
 			return i.validateAssetCreate(ix, idx)
 		case common.IxAssetApprove:
@@ -966,6 +1056,31 @@ func (i *IxPool) validateOperations(ix *common.Interaction) error {
 		default:
 			return common.ErrInvalidInteractionType
 		}
+	}
+
+	return nil
+}
+
+func (i *IxPool) validateAccountInherit(ix *common.Interaction, txnID int) error {
+	payload, err := ix.GetIxOp(txnID).GetAccountInheritPayload()
+	if err != nil {
+		return err
+	}
+
+	if ix.SenderID().IsParticipantVariant() {
+		return common.ErrSenderAccount
+	}
+
+	if payload.TargetAccount.IsNil() {
+		return common.ErrInvalidIdentifier
+	}
+
+	if payload.TargetAccount.Tag().Kind() != identifiers.KindLogic {
+		return common.ErrInvalidTargetAccount
+	}
+
+	if payload.Amount.Sign() <= 0 {
+		return common.ErrInvalidValue
 	}
 
 	return nil

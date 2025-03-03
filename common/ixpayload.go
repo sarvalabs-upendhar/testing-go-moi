@@ -22,6 +22,7 @@ type IxOpPayload struct {
 type ParticipantPayload struct {
 	Create    *ParticipantCreatePayload
 	Configure *AccountConfigurePayload
+	Inherit   *AccountInheritPayload
 }
 
 // AssetPayload holds different types of asset operations data.
@@ -202,6 +203,31 @@ func (configure *AccountConfigurePayload) Bytes() ([]byte, error) {
 func (configure *AccountConfigurePayload) FromBytes(data []byte) error {
 	if err := polo.Depolorize(configure, data); err != nil {
 		return errors.Wrap(err, "failed to depolorize account configure payload")
+	}
+
+	return nil
+}
+
+type AccountInheritPayload struct {
+	TargetAccount   identifiers.Identifier
+	Amount          *big.Int
+	SubAccountIndex uint32
+}
+
+// Bytes serializes ParticipantCreatePayload to bytes.
+func (inherit *AccountInheritPayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(inherit)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize account inherit payload")
+	}
+
+	return data, nil
+}
+
+// FromBytes deserializes account configure payload from bytes.
+func (inherit *AccountInheritPayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(inherit, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize account inherit payload")
 	}
 
 	return nil

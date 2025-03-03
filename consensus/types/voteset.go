@@ -80,7 +80,7 @@ func NewVoteSet(
 		votingPowerSum:   make([]int32, len(heights)+1),
 		votesBitArray:    common.NewArrayOfBits(validatorSet.Size()),
 		votesByTesseract: make(map[common.Hash]*tesseractVoteSet, validatorSet.Size()),
-		sum:              make([]uint32, len(heights)+1),
+		sum:              make([]uint32, validatorSet.committee.Size()),
 	}
 }
 

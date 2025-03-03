@@ -41,7 +41,7 @@ func (ti *TesseractInfo) height() uint64 {
 func (ti *TesseractInfo) extractICSNodeset(s *Syncer) bool {
 	var err error
 
-	for _, contextHash := range ti.tesseract.PreviousContext() {
+	for _, contextHash := range ti.tesseract.LockedContext() {
 		if contextHash.IsNil() {
 			continue
 		}

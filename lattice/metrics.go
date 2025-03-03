@@ -12,6 +12,7 @@ import (
 type Metrics struct {
 	StatefulTesseractAdditionTime metrics.Histogram
 	StatefulTesseractCounter      metrics.Counter
+	IxnsPerTesseract              metrics.Histogram
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -35,6 +36,13 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Name:      "stateful_tesseract_counter",
 			Help:      "Number of tesseracts created",
 		}, labels).With(labelsWithValues...),
+		IxnsPerTesseract: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "chain_manager",
+			Name:      "ixns_per_tesseract",
+			Help:      "Number ixns in a tesseract",
+			Buckets:   []float64{5, 10, 20, 40, 60, 80, 100, 150, 200, 300, 400},
+		}, labels).With(labelsWithValues...),
 	}
 }
 
@@ -42,6 +50,7 @@ func NilMetrics() *Metrics {
 	return &Metrics{
 		StatefulTesseractAdditionTime: discard.NewHistogram(),
 		StatefulTesseractCounter:      discard.NewCounter(),
+		IxnsPerTesseract:              discard.NewHistogram(),
 	}
 }
 
@@ -51,4 +60,8 @@ func (metrics *Metrics) captureStatefulTesseractAdditionTime(tsAdditionInitTime 
 
 func (metrics *Metrics) captureStatefulTesseractCounter(delta float64) {
 	metrics.StatefulTesseractCounter.Add(delta)
+}
+
+func (metrics *Metrics) captureIxnsPerTesseract(count float64) {
+	metrics.IxnsPerTesseract.Observe(count)
 }

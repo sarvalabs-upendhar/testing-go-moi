@@ -121,6 +121,10 @@ func (object *Object) Deeds() (*Deeds, error) {
 	return object.deeds, nil
 }
 
+func (object *Object) SetAccount(account common.Account) {
+	object.data = account
+}
+
 // CreateDeedsEntry creates a new entry in the deeds with the specified key and value.
 // If an entry with the same key already exists, an error is returned.
 func (object *Object) CreateDeedsEntry(key identifiers.Identifier) error {
@@ -193,6 +197,63 @@ func (object *Object) Balances() (map[identifiers.AssetID]*big.Int, error) {
 	}
 
 	return balances, nil
+}
+
+func (object *Object) loadMetaCtxObject() error {
+	if object.data.ContextHash.IsNil() {
+		object.metaContext = &MetaContextObject{
+			SubAccounts: make(map[identifiers.Identifier]identifiers.Identifier),
+		}
+
+		return nil
+	}
+
+	object.metaContext = new(MetaContextObject)
+
+	data, err := object.db.GetContext(object.id, object.data.ContextHash)
+	if err != nil {
+		return err
+	}
+
+	return object.metaContext.FromBytes(data)
+}
+
+func (object *Object) UpdateSubAccount(subAccount, targetAccount identifiers.Identifier) error {
+	if object.metaContext == nil {
+		if err := object.loadMetaCtxObject(); err != nil {
+			panic(err)
+		}
+	}
+
+	if object.metaContext.SubAccounts == nil {
+		object.metaContext.SubAccounts = make(map[identifiers.Identifier]identifiers.Identifier)
+	}
+
+	object.metaContext.SubAccounts[subAccount] = targetAccount
+
+	return nil
+}
+
+func (object *Object) SubAccountCount() int {
+	if object.metaContext == nil {
+		if err := object.loadMetaCtxObject(); err != nil {
+			panic(err)
+		}
+	}
+
+	return len(object.metaContext.SubAccounts)
+}
+
+func (object *Object) UpdateInheritedAccount(inheritedAccount identifiers.Identifier) error {
+	if object.metaContext == nil {
+		if err := object.loadMetaCtxObject(); err != nil {
+			panic(err)
+		}
+	}
+
+	object.metaContext.InheritedAccount = inheritedAccount
+
+	return nil
 }
 
 func (object *Object) UpdateKeys(keys common.AccountKeys) {
@@ -1139,7 +1200,7 @@ func (object *Object) CreateContext(consensusNodes []kramaid.KramaID) error {
 
 // UpdateContext updates the context with new nodes and returns the new context hash.
 func (object *Object) UpdateContext(consensusNodes []kramaid.KramaID) error {
-	if len(consensusNodes) == 0 {
+	if len(consensusNodes) == 0 || object.Identifier().IsParticipantVariant() {
 		return nil
 	}
 
@@ -1568,4 +1629,13 @@ func (object *Object) DeductFuel(amount *big.Int) {
 
 func (object *Object) ConsensusNodes() []kramaid.KramaID {
 	return object.metaContext.ConsensusNodes
+}
+
+func (object *Object) InheritAccount(payload *common.AccountInheritPayload, sender *Object) {
+	_ = object.UpdateInheritedAccount(payload.TargetAccount)
+
+	_ = object.InsertNewAssetObject(common.KMOITokenAssetID, NewAssetObject(payload.Amount, nil))
+
+	accountKeys, _ := sender.AccountKeys()
+	object.UpdateKeys(accountKeys.CopyForInheritAccount())
 }

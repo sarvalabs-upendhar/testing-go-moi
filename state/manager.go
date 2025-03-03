@@ -201,6 +201,20 @@ func (sm *StateManager) GetStateObjectByHash(id identifiers.Identifier, hash com
 	return sObj, nil
 }
 
+func (sm *StateManager) GetSubAccountCount(id identifiers.Identifier) (uint64, error) {
+	accMetaInfo, err := sm.GetAccountMetaInfo(id)
+	if err != nil {
+		return 0, common.ErrAccountNotFound
+	}
+
+	mCtx, err := sm.GetMetaContextObject(id, accMetaInfo.ContextHash)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint64(len(mCtx.SubAccounts)), nil
+}
+
 func (sm *StateManager) GetLogicIDs(id identifiers.Identifier, stateHash common.Hash) ([]identifiers.LogicID, error) {
 	obj, err := sm.getStateObject(id, stateHash)
 	if err != nil {
@@ -275,7 +289,7 @@ func (sm *StateManager) getTesseractByHash(
 	), nil
 }
 
-func (sm *StateManager) getMetaContextObject(id identifiers.Identifier, hash common.Hash) (*MetaContextObject, error) {
+func (sm *StateManager) GetMetaContextObject(id identifiers.Identifier, hash common.Hash) (*MetaContextObject, error) {
 	metaData, isAvailable := sm.cache.Get(hash)
 	if isAvailable {
 		metaContextObject, ok := metaData.(*MetaContextObject)
@@ -304,36 +318,44 @@ func (sm *StateManager) getMetaContextObject(id identifiers.Identifier, hash com
 
 func (sm *StateManager) GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 	latestContextHash common.Hash,
-	consensusSet []kramaid.KramaID,
+	consensusNodes []kramaid.KramaID,
+	consensusNodesHash common.Hash,
 	consensusPublicKeys [][]byte,
 	err error,
 ) {
 	latestContextHash, err = sm.GetCommittedContextHash(id)
 	if err != nil {
-		return common.NilHash, nil, nil, err
+		return common.NilHash, nil, common.NilHash, nil, err
 	}
 
-	consensusSet, err = sm.GetConsensusNodes(id, latestContextHash)
+	consensusNodes, consensusNodesHash, err = sm.GetConsensusNodes(id, latestContextHash)
 	if err != nil {
-		return common.NilHash, nil, nil, err
+		return common.NilHash, nil, common.NilHash, nil, err
 	}
 
-	if len(consensusSet) > 0 {
-		consensusPublicKeys, err = sm.GetPublicKeys(context.Background(), consensusSet...)
+	if len(consensusNodes) > 0 {
+		consensusPublicKeys, err = sm.GetPublicKeys(context.Background(), consensusNodes...)
 		if err != nil {
 			sm.logger.Error("failed to retrieve the public key of consensus set", "err", err)
 
-			return common.NilHash, nil, nil, common.ErrPublicKeyNotFound
+			return common.NilHash, nil, common.NilHash, nil, common.ErrPublicKeyNotFound
 		}
 	}
 
-	return latestContextHash, consensusSet, consensusPublicKeys, err
+	return latestContextHash, consensusNodes, consensusNodesHash, consensusPublicKeys, err
 }
 
 func (sm *StateManager) GetCommittedContextHash(id identifiers.Identifier) (common.Hash, error) {
 	accMetaInfo, err := sm.GetAccountMetaInfo(id)
 	if err != nil {
 		return common.NilHash, errors.Wrap(err, "failed to fetch account meta info")
+	}
+
+	if id.IsParticipantVariant() {
+		accMetaInfo, err = sm.GetAccountMetaInfo(accMetaInfo.InheritedAccount)
+		if err != nil {
+			return common.NilHash, errors.Wrap(err, "failed to fetch account meta info of sub account")
+		}
 	}
 
 	return accMetaInfo.ContextHash, nil
@@ -358,14 +380,24 @@ func (sm *StateManager) GetConsensusNodes(
 	hash common.Hash,
 ) (
 	common.NodeList,
+	common.Hash,
 	error,
 ) {
-	metaContextObject, err := sm.getMetaContextObject(id, hash)
-	if err != nil {
-		return nil, errors.Wrap(err, "metaContextObject fetch failed")
+	if id.IsParticipantVariant() {
+		accMetaInfo, err := sm.db.GetAccountMetaInfo(id)
+		if err != nil {
+			return nil, common.NilHash, errors.Wrap(err, "failed to fetch acc meta info")
+		}
+
+		id = accMetaInfo.InheritedAccount
 	}
 
-	return metaContextObject.ConsensusNodes, nil
+	metaContextObject, err := sm.GetMetaContextObject(id, hash)
+	if err != nil {
+		return nil, common.NilHash, errors.Wrap(err, "metaContextObject fetch failed")
+	}
+
+	return metaContextObject.ConsensusNodes, metaContextObject.ConsensusNodesHash, nil
 }
 
 // GetParticipantContextRaw loads the context info of a participant into the given map
@@ -398,7 +430,9 @@ func (sm *StateManager) GetConsensusNodesByHash(
 		return nil, common.ErrEmptyHashAndID
 	}
 
-	return sm.GetConsensusNodes(id, hash)
+	nodes, _, err := sm.GetConsensusNodes(id, hash)
+
+	return nodes, err
 }
 
 func (sm *StateManager) IsInitialTesseract(ts *common.Tesseract, id identifiers.Identifier) (bool, error) {

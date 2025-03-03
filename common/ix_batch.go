@@ -5,19 +5,19 @@ import (
 )
 
 type IxBatch struct {
-	ixs []*Interaction
-	ps  map[identifiers.Identifier]struct{}
+	ixs                []*Interaction
+	consensusNodesHash map[Hash]struct{}
 }
 
 func NewIxnBatch() *IxBatch {
 	return &IxBatch{
-		ixs: make([]*Interaction, 0),
-		ps:  make(map[identifiers.Identifier]struct{}),
+		ixs:                make([]*Interaction, 0),
+		consensusNodesHash: make(map[Hash]struct{}),
 	}
 }
 
-func (ib *IxBatch) Ps() map[identifiers.Identifier]struct{} {
-	return ib.ps
+func (ib *IxBatch) ConsensusNodesHash() map[Hash]struct{} {
+	return ib.consensusNodesHash
 }
 
 func (ib *IxBatch) IxList() []*Interaction {
@@ -30,22 +30,22 @@ func (ib *IxBatch) Interactions() Interactions {
 
 func (ib *IxBatch) Flush() {
 	ib.ixs = nil
-	ib.ps = nil
+	ib.consensusNodesHash = nil
 }
 
 func (ib *IxBatch) IxCount() int {
 	return len(ib.ixs)
 }
 
-func (ib *IxBatch) PsCount() int {
-	return len(ib.ps)
+func (ib *IxBatch) ConsensusNodesHashCount() int {
+	return len(ib.consensusNodesHash)
 }
 
 func (ib *IxBatch) AppendIxns(ixns []*Interaction) {
 	ib.ixs = append(ib.ixs, ixns...)
 }
 
-func (ib *IxBatch) Add(ixn *Interaction) bool {
+func (ib *IxBatch) Add(ixn *Interaction, consensusNodesHashes map[identifiers.Identifier]Hash) bool {
 	if ib.IxCount() > 100 {
 		return false
 	}
@@ -57,7 +57,7 @@ func (ib *IxBatch) Add(ixn *Interaction) bool {
 			continue
 		}
 
-		ib.ps[id] = struct{}{}
+		ib.consensusNodesHash[consensusNodesHashes[id]] = struct{}{}
 	}
 
 	return true

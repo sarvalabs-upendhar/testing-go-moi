@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/state"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/jsonrpc"
 
@@ -103,7 +103,6 @@ func TestPublicCoreAPI_GetAccMetaInfo(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestPublicCoreAPI_GetStateHash(t *testing.T) {
 	id := tests.RandomIdentifier(t)
 	stateHash := tests.RandomHash(t)
@@ -176,17 +175,28 @@ func TestPublicCoreAPI_GetStateHash(t *testing.T) {
 	}
 }
 
-//nolint:dupl
 func TestPublicCoreAPI_GetContextHash(t *testing.T) {
-	id := tests.RandomIdentifier(t)
-	contextHash := tests.RandomHash(t)
+	primaryAccount := tests.RandomIdentifierWithZeroVariant(t)
+	subAccount := tests.RandomSubAccountIdentifier(t, 1)
+
+	contextHashes := tests.GetHashes(t, 3)
 	height := int64(5)
 
-	ts := tests.CreateTesseract(t, &tests.CreateTesseractParams{
-		IDs: []identifiers.Identifier{id},
+	ts1 := tests.CreateTesseract(t, &tests.CreateTesseractParams{
+		IDs: []identifiers.Identifier{primaryAccount},
 		Participants: common.ParticipantsState{
-			id: common.State{
-				LatestContext: contextHash,
+			primaryAccount: common.State{
+				LockedContext: contextHashes[1],
+				Height:        5,
+			},
+		},
+	})
+
+	ts2 := tests.CreateTesseract(t, &tests.CreateTesseractParams{
+		IDs: []identifiers.Identifier{subAccount},
+		Participants: common.ParticipantsState{
+			subAccount: common.State{
+				LockedContext: contextHashes[2],
 				Height:        5,
 			},
 		},
@@ -196,14 +206,29 @@ func TestPublicCoreAPI_GetContextHash(t *testing.T) {
 	stateManager := NewMockStateManager(t)
 	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	chainManager.setTesseractByHash(t, ts)
-	chainManager.SetTesseractHeightEntry(id, ts.Height(id), ts.Hash())
+	chainManager.setTesseractByHash(t, ts1)
+	chainManager.SetTesseractHeightEntry(primaryAccount, ts1.Height(primaryAccount), ts1.Hash())
 
-	accMetaInfo := tests.GetRandomAccMetaInfo(t, 3)
-	stateManager.setAccountMetaInfo(t, accMetaInfo.ID, accMetaInfo)
+	chainManager.setTesseractByHash(t, ts2)
+	chainManager.SetTesseractHeightEntry(subAccount, ts2.Height(subAccount), ts2.Hash())
+
+	stateManager.setAccountMetaInfo(t, primaryAccount, &common.AccountMetaInfo{
+		ID:          primaryAccount,
+		ContextHash: contextHashes[0],
+	})
+
+	stateManager.setAccountMetaInfo(t, subAccount, &common.AccountMetaInfo{
+		InheritedAccount: primaryAccount,
+	})
+
+	stateManager.setAccount(primaryAccount, common.Account{
+		ContextHash: contextHashes[1],
+	})
+
 	testcases := []struct {
 		name                string
 		args                rpcargs.TesseractArgs
+		expectedID          identifiers.Identifier
 		expectedContextHash common.Hash
 		expectedError       error
 	}{
@@ -213,30 +238,54 @@ func TestPublicCoreAPI_GetContextHash(t *testing.T) {
 			expectedError: common.ErrEmptyID,
 		},
 		{
-			name: "fetch latest context hash successfully",
+			name: "fetch latest context hash for primary account successfully",
 			args: rpcargs.TesseractArgs{
-				ID: accMetaInfo.ID,
+				ID: primaryAccount,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &rpcargs.LatestTesseractHeight,
 				},
 			},
-			expectedContextHash: accMetaInfo.ContextHash,
+			expectedID:          primaryAccount,
+			expectedContextHash: contextHashes[0],
 		},
 		{
-			name: "fetch non-latest context hash successfully",
+			name: "fetch context hash by height for primary account successfully",
 			args: rpcargs.TesseractArgs{
-				ID: ts.AnyAccountID(),
+				ID: primaryAccount,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &height,
 				},
 			},
-			expectedContextHash: contextHash,
+			expectedID:          primaryAccount,
+			expectedContextHash: contextHashes[1],
+		},
+		{
+			name: "fetch latest context hash for sub account successfully",
+			args: rpcargs.TesseractArgs{
+				ID: subAccount,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &rpcargs.LatestTesseractHeight,
+				},
+			},
+			expectedID:          primaryAccount,
+			expectedContextHash: contextHashes[0],
+		},
+		{
+			name: "fetch context hash by height for sub account successfully",
+			args: rpcargs.TesseractArgs{
+				ID: subAccount,
+				Options: rpcargs.TesseractNumberOrHash{
+					TesseractNumber: &height,
+				},
+			},
+			expectedID:          primaryAccount,
+			expectedContextHash: contextHashes[2],
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			stateHash, err := coreAPI.getContextHash(&test.args)
+			id, contextHash, err := coreAPI.getContextHash(&test.args)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -244,7 +293,8 @@ func TestPublicCoreAPI_GetContextHash(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedContextHash, stateHash)
+			require.Equal(t, test.expectedID, id)
+			require.Equal(t, test.expectedContextHash, contextHash)
 		})
 	}
 }
@@ -1168,28 +1218,40 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 }
 
 func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
-	ts := tests.CreateTesseracts(t, 2, nil)
-	height := int64(ts[0].Height(ts[0].AnyAccountID()))
+	primaryAccount := tests.RandomIdentifierWithZeroVariant(t)
+	subAccount := tests.RandomSubAccountIdentifier(t, 1)
+
+	contextHashes := tests.GetHashes(t, 3)
 
 	chainManager := NewMockChainManager(t)
 	stateManager := NewMockStateManager(t)
 	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	chainManager.SetTesseractHeightEntry(ts[0].AnyAccountID(), ts[0].Height(ts[0].AnyAccountID()), ts[0].Hash())
-	chainManager.setTesseractByHash(t, ts[0])
-	chainManager.setTesseractByHash(t, ts[1])
+	stateManager.setAccountMetaInfo(t, primaryAccount, &common.AccountMetaInfo{
+		ID:          primaryAccount,
+		ContextHash: contextHashes[0],
+	})
+
+	stateManager.setAccountMetaInfo(t, subAccount, &common.AccountMetaInfo{
+		InheritedAccount: primaryAccount,
+	})
 
 	consensusNodes := tests.RandomKramaIDs(t, 2)
-	stateManager.setConsensusNodes(t, ts[0].AnyAccountID(), consensusNodes)
 
-	tsHash := getTesseractsHashes(t, ts)
-	randomHash := tests.RandomHash(t)
+	subAccounts := map[identifiers.Identifier]identifiers.Identifier{
+		subAccount: tests.RandomIdentifierWithZeroVariant(t),
+	}
+
+	stateManager.setMetaContextObject(contextHashes[0], &state.MetaContextObject{
+		ConsensusNodes: consensusNodes,
+		SubAccounts:    subAccounts,
+	})
 
 	testcases := []struct {
-		name                   string
-		args                   rpcargs.ContextInfoArgs
-		expectedConsensusNodes []kramaid.KramaID
-		expectedError          error
+		name               string
+		args               rpcargs.ContextInfoArgs
+		expectedMctxObject *state.MetaContextObject
+		expectedError      error
 	}{
 		{
 			name: "id cannot be empty",
@@ -1199,40 +1261,36 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 			expectedError: common.ErrEmptyID,
 		},
 		{
-			name: "fetched context info successfully",
+			name: "fetched context info for primary account successfully",
 			args: rpcargs.ContextInfoArgs{
-				ID: ts[0].AnyAccountID(),
+				ID: primaryAccount,
 				Options: rpcargs.TesseractNumberOrHash{
-					TesseractNumber: &height,
+					TesseractNumber: &rpcargs.LatestTesseractHeight,
 				},
 			},
-			expectedConsensusNodes: consensusNodes,
+			expectedMctxObject: &state.MetaContextObject{
+				ConsensusNodes: consensusNodes,
+				SubAccounts:    subAccounts,
+			},
 		},
 		{
-			name: "should return error if tesseract not found",
+			name: "fetched context info for sub account account successfully",
 			args: rpcargs.ContextInfoArgs{
-				ID: tests.RandomIdentifier(t),
+				ID: subAccount,
 				Options: rpcargs.TesseractNumberOrHash{
-					TesseractHash: &randomHash,
+					TesseractNumber: &rpcargs.LatestTesseractHeight,
 				},
 			},
-			expectedError: common.ErrFetchingTesseract,
-		},
-		{
-			name: "should return error if context not found",
-			args: rpcargs.ContextInfoArgs{
-				ID: tests.RandomIdentifier(t),
-				Options: rpcargs.TesseractNumberOrHash{
-					TesseractHash: &tsHash[1],
-				},
+			expectedMctxObject: &state.MetaContextObject{
+				ConsensusNodes:   consensusNodes,
+				InheritedAccount: primaryAccount,
 			},
-			expectedError: common.ErrContextStateNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			consensusNodes, err := coreAPI.ConsensusNodes(&test.args)
+			ctxResponse, err := coreAPI.ContextInfo(&test.args)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1240,11 +1298,21 @@ func TestPublicCoreAPI_GetContextInfo(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, len(test.expectedConsensusNodes), len(consensusNodes.ConsensusNodes))
+			require.Equal(t, len(test.expectedMctxObject.ConsensusNodes), len(ctxResponse.ConsensusNodes))
 
-			for i := 0; i < len(consensusNodes.ConsensusNodes); i++ {
-				require.Equal(t, string(test.expectedConsensusNodes[i]), consensusNodes.ConsensusNodes[i])
+			for i := 0; i < len(ctxResponse.ConsensusNodes); i++ {
+				require.Equal(t, string(test.expectedMctxObject.ConsensusNodes[i]), ctxResponse.ConsensusNodes[i])
 			}
+
+			if !test.args.ID.IsParticipantVariant() {
+				require.Equal(t, subAccount, ctxResponse.SubAccounts[0].SubAccounts[0])
+				require.Equal(t, test.expectedMctxObject.SubAccounts[subAccount],
+					ctxResponse.SubAccounts[0].InheritedAccount)
+
+				return
+			}
+
+			require.Equal(t, test.expectedMctxObject.InheritedAccount, ctxResponse.InheritedAccount)
 		})
 	}
 }

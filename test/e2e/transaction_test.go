@@ -45,7 +45,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 			rawPayload, err = []byte{}, nil
 
 		case common.IxParticipantCreate:
-			id := tests.RandomIdentifier(te.T())
+			id := tests.RandomIdentifierWithZeroVariant(te.T())
 			participantRegisterPayload := &common.ParticipantCreatePayload{
 				ID: id,
 				KeysPayload: []common.KeyAddPayload{
@@ -72,7 +72,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 				Standard: common.MAS0,
 			})
 
-			id := tests.RandomIdentifier(te.T())
+			id := tests.RandomIdentifierWithZeroVariant(te.T())
 
 			createParticipant(te, sender, &common.ParticipantCreatePayload{
 				ID: id,

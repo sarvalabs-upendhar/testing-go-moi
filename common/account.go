@@ -16,6 +16,23 @@ const (
 	RegularAccount
 )
 
+func AccountTypeFromID(id identifiers.Identifier) (AccountType, error) {
+	if id == SargaAccountID {
+		return SargaAccount, nil
+	}
+
+	switch id.Tag().Kind() {
+	case identifiers.KindParticipant:
+		return RegularAccount, nil
+	case identifiers.KindAsset:
+		return AssetAccount, nil
+	case identifiers.KindLogic:
+		return LogicAccount, nil
+	}
+
+	return 0, ErrAccountNotFound
+}
+
 const MinWeight = 1000
 
 type AccountKey struct {
@@ -27,6 +44,20 @@ type AccountKey struct {
 	SequenceID         uint64
 }
 
+func (a *AccountKey) copy() *AccountKey {
+	pk := make([]byte, len(a.PublicKey))
+	copy(pk, a.PublicKey)
+
+	return &AccountKey{
+		ID:                 a.ID,
+		PublicKey:          pk,
+		Weight:             a.Weight,
+		SignatureAlgorithm: a.SignatureAlgorithm,
+		Revoked:            a.Revoked,
+		SequenceID:         a.SequenceID,
+	}
+}
+
 type AccountKeys []*AccountKey
 
 func (a AccountKeys) Hash() (Hash, error) {
@@ -36,7 +67,19 @@ func (a AccountKeys) Hash() (Hash, error) {
 func (a AccountKeys) Copy() AccountKeys {
 	newAccountKeys := make(AccountKeys, len(a))
 
-	copy(newAccountKeys, a)
+	for i, accountKey := range a {
+		newAccountKeys[i] = accountKey.copy()
+	}
+
+	return newAccountKeys
+}
+
+func (a AccountKeys) CopyForInheritAccount() AccountKeys {
+	newAccountKeys := a.Copy()
+
+	for i := 0; i < len(a); i++ {
+		newAccountKeys[i].SequenceID = 0
+	}
 
 	return newAccountKeys
 }
@@ -100,6 +143,7 @@ func (acc *Accounts) Bytes() ([]byte, error) {
 type AccountMetaInfo struct {
 	Type                 AccountType            `json:"type"`
 	ID                   identifiers.Identifier `json:"id"`
+	InheritedAccount     identifiers.Identifier `json:"inherited_account"`
 	Height               uint64                 `json:"height"`
 	TesseractHash        Hash                   `json:"tesseract_hash"`
 	StateHash            Hash                   `json:"state_hash"`

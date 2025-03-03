@@ -49,18 +49,12 @@ type StateManager interface {
 	GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) (common.AccountKeys, error)
 	GetLatestStateObject(identifiers.Identifier) (*state.Object, error)
 	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
-	GetStateObjectByHash(id identifiers.Identifier, hash common.Hash) (*state.Object, error)
 	FetchIxStateObjects(common.Interactions, map[identifiers.Identifier]common.Hash) (*state.Transition, error)
 
 	GetSequenceID(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) (uint64, error)
 	GetAccountState(identifiers.Identifier, common.Hash) (*common.Account, error)
 	GetAccountMetaInfo(identifiers.Identifier) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(identifiers.Identifier) (bool, error)
-	GetConsensusNodesByHash(
-		id identifiers.Identifier,
-		hash common.Hash,
-	) ([]kramaid.KramaID, error)
-
 	GetAssetInfo(identifiers.AssetID, common.Hash) (*common.AssetDescriptor, error)
 	GetBalances(identifiers.Identifier, common.Hash) (common.AssetMap, error)
 	GetBalance(identifiers.Identifier, identifiers.AssetID, common.Hash) (*big.Int, error)
@@ -72,6 +66,8 @@ type StateManager interface {
 	GetLogicManifest(identifiers.LogicID, common.Hash) ([]byte, error)
 	GetPersistentStorageEntry(identifiers.LogicID, []byte, common.Hash) ([]byte, error)
 	GetEphemeralStorageEntry(identifiers.Identifier, identifiers.LogicID, []byte, common.Hash) ([]byte, error)
+	GetSubAccountCount(id identifiers.Identifier) (uint64, error)
+	GetMetaContextObject(id identifiers.Identifier, hash common.Hash) (*state.MetaContextObject, error)
 }
 
 type ExecutionManager interface {

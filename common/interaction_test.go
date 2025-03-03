@@ -42,6 +42,13 @@ func TestNewInteraction(t *testing.T) {
 	}
 	rawLogicPayload, _ := logicPayload.Bytes()
 
+	accountInheritPayload := common.AccountInheritPayload{
+		TargetAccount:   tests.RandomIdentifierWithZeroVariant(t),
+		Amount:          big.NewInt(500),
+		SubAccountIndex: 3,
+	}
+	rawAccountInheritPayload, _ := accountInheritPayload.Bytes()
+
 	signatures := common.Signatures{
 		{
 			ID:        tests.RandomIdentifier(t),
@@ -202,6 +209,17 @@ func TestNewInteraction(t *testing.T) {
 			}),
 		},
 		{
+			name: "inherit account",
+			ixData: tests.CreateIXDataWithTestData(t, func(ixData *common.IxData) {
+				ixData.IxOps = []common.IxOpRaw{
+					{
+						Type:    common.IXAccountInherit,
+						Payload: rawAccountInheritPayload,
+					},
+				}
+			}),
+		},
+		{
 			name: "missing foreign logic account in participants",
 			ixData: tests.CreateIXDataWithTestData(t, func(ixData *common.IxData) {
 				ixData.IxOps = []common.IxOpRaw{
@@ -294,7 +312,8 @@ func TestNewInteraction(t *testing.T) {
 			require.Equal(t, uint64(len(data)+len(rawSig)), size)
 
 			// check for payload
-			checkIxOperations(t, ix, assetCreatePayload, assetActionPayload, assetSupplyPayload, logicPayload)
+			checkIxOperations(t, ix, assetCreatePayload, assetActionPayload, assetSupplyPayload,
+				accountInheritPayload, logicPayload)
 
 			checkForIxParticipants(t, test.ixData, test.ixData.IxOps[0], ix.Participants())
 		})
@@ -307,7 +326,7 @@ func TestUpdateLeaderCandidateAddr(t *testing.T) {
 	require.NoError(t, err)
 
 	// we create a min sender id to test the leader candidate id
-	psID, err := identifiers.GenerateParticipantIDv0(tests.Min24Byte(t), 0)
+	psID, err := identifiers.GenerateParticipantIDv0(tests.Min24Byte(t, 1), 0)
 	require.NoError(t, err)
 
 	regularAccount := psID.AsIdentifier()
@@ -651,92 +670,6 @@ func TestCopyIxData(t *testing.T) {
 	}
 }
 
-func TestAccountType(t *testing.T) {
-	ixns := common.NewInteractionsWithLeaderCheck(false,
-		tests.CreateIX(t, &tests.CreateIxParams{
-			IxDataCallback: func(ix *common.IxData) {
-				ix.IxOps = []common.IxOpRaw{
-					{
-						Type:    common.IxAssetCreate,
-						Payload: tests.CreateRawAssetCreatePayload(t),
-					},
-				}
-			},
-		}),
-		tests.CreateIX(t, &tests.CreateIxParams{
-			IxDataCallback: func(ix *common.IxData) {
-				ix.Sender = common.Sender{
-					ID: tests.RandomIdentifier(t),
-				}
-				ix.IxOps = []common.IxOpRaw{
-					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, identifiers.Nil),
-					},
-					{
-						Type:    common.IxLogicDeploy,
-						Payload: tests.CreateRawLogicPayload(t, identifiers.RandomLogicIDv0()),
-					},
-				}
-			},
-		}),
-	)
-
-	testcases := []struct {
-		name         string
-		id           identifiers.Identifier
-		expectedType common.AccountType
-		expectedErr  error
-	}{
-		{
-			name:         "sender should be a regular account",
-			id:           ixns.IxList()[0].SenderID(),
-			expectedType: common.RegularAccount,
-		},
-		{
-			name:         "payer should be a regular account",
-			id:           ixns.IxList()[1].Payer(),
-			expectedType: common.RegularAccount,
-		},
-		{
-			name:         "target should be an asset account",
-			id:           ixns.IxList()[0].GetIxOp(0).Target(),
-			expectedType: common.AssetAccount,
-		},
-		{
-			name:         "target should be a logic account",
-			id:           ixns.IxList()[1].GetIxOp(1).Target(),
-			expectedType: common.LogicAccount,
-		},
-		{
-			name:         "target should be a regular account",
-			id:           ixns.IxList()[1].GetIxOp(0).Target(),
-			expectedType: common.RegularAccount,
-		},
-		{
-			name:        "account not found",
-			id:          tests.RandomIdentifier(t),
-			expectedErr: common.ErrAccountNotFound,
-		},
-	}
-
-	for _, test := range testcases {
-		t.Run(test.name, func(t *testing.T) {
-			accountType, err := ixns.AccountType(test.id)
-
-			if test.expectedErr != nil {
-				require.Error(t, err)
-				require.Contains(t, test.expectedErr.Error(), err.Error())
-
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, test.expectedType, accountType)
-		})
-	}
-}
-
 func TestPolorizeInteractions(t *testing.T) {
 	ix1 := tests.CreateIX(t, &tests.CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
@@ -785,6 +718,7 @@ func checkIxOperations(
 	assetCreatePayload common.AssetCreatePayload,
 	assetActionPayload common.AssetActionPayload,
 	assetSupplyPayload common.AssetSupplyPayload,
+	accountInheritPayload common.AccountInheritPayload,
 	logicPayload common.LogicPayload,
 ) {
 	t.Helper()
@@ -807,6 +741,12 @@ func checkIxOperations(
 			payload, err := op.GetLogicPayload()
 			require.NoError(t, err)
 			require.Equal(t, logicPayload, *payload)
+		case common.IXAccountInherit:
+			payload, err := op.GetAccountInheritPayload()
+			require.NoError(t, err)
+
+			require.Equal(t, accountInheritPayload, *payload)
+
 		default:
 			t.Fatalf("unsupported ixOp type: %v", op.Type())
 		}
@@ -854,6 +794,18 @@ func checkForIxParticipants(
 		)
 
 		id = logicID.AsIdentifier()
+	}
+
+	if op.Type == common.IXAccountInherit {
+		accInheritPayload := new(common.AccountInheritPayload)
+		if err := accInheritPayload.FromBytes(op.Payload); err != nil {
+			require.NoError(t, err)
+		}
+
+		subAccount, err := ixData.Sender.ID.DeriveVariant(accInheritPayload.SubAccountIndex, nil, nil)
+		require.NoError(t, err)
+
+		id = subAccount
 	}
 
 	if !id.IsNil() {
