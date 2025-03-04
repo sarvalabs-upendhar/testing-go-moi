@@ -32,7 +32,7 @@ func RunLogicEnlist(
 
 	// Create an event stream to emit the events on
 	eventstream := NewEventStream(op.LogicID())
-	fueltank := NewFuelTank(op.FuelLimit())
+	fueltank := NewFuelTank(tank.Level())
 
 	consumption, receiptPayload, err := EnlistLogic(op, ctx, logicacc, invoker, fueltank, eventstream)
 	if err != nil {
@@ -45,11 +45,13 @@ func RunLogicEnlist(
 	}
 
 	// Set the result payload
-	common.SetResultPayload(opResult, *receiptPayload)
+	if receiptPayload != nil {
+		common.SetResultPayload(opResult, *receiptPayload)
 
-	// Set the status of the receipt
-	if receiptPayload.Error != nil {
-		status = common.ResultExceptionRaised
+		// Set the status of the receipt
+		if receiptPayload.Error != nil {
+			status = common.ResultExceptionRaised
+		}
 	}
 
 	// Set the logs in the receipt

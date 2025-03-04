@@ -53,11 +53,13 @@ func RunLogicInvoke(
 	}
 
 	// Set the payload for the op
-	common.SetResultPayload(opResult, *receiptPayload)
+	if receiptPayload != nil {
+		common.SetResultPayload(opResult, *receiptPayload)
 
-	// Set the status of the receipt
-	if receiptPayload.Error != nil {
-		status = common.ResultExceptionRaised
+		// Set the status of the receipt
+		if receiptPayload.Error != nil {
+			status = common.ResultExceptionRaised
+		}
 	}
 
 	// Set the logs in the receipt
