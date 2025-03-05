@@ -254,18 +254,13 @@ func (k *Engine) handleConsensusMessage(msg *types.ICSMSG) {
 	}
 }
 
-func (k *Engine) createPreparedMsg(msg *types.Prepare) (*types.Prepared, error) {
-	viewInfos, err := k.loadViewInfo(msg.Ps)
-	if err != nil {
-		return nil, err
-	}
-
+func (k *Engine) createPreparedMsg(msg *types.Prepare, viewInfos []*common.ViewInfo) (*types.Prepared, error) {
 	responseMsg := &types.Prepared{
 		View:  msg.View,
 		Infos: viewInfos,
 	}
 
-	if err = responseMsg.Sign(k.vault.Sign); err != nil {
+	if err := responseMsg.Sign(k.vault.Sign); err != nil {
 		return nil, err
 	}
 
@@ -293,7 +288,12 @@ func (k *Engine) handlePrepare(
 		return errors.New("invalid view")
 	}
 
-	preparedMsg, err := k.createPreparedMsg(prepare)
+	viewInfos, err := k.loadViewInfo(prepare.Ps)
+	if err != nil {
+		return errors.Wrap(err, "failed to load view infos")
+	}
+
+	preparedMsg, err := k.createPreparedMsg(prepare, viewInfos)
 	if err != nil {
 		return err
 	}

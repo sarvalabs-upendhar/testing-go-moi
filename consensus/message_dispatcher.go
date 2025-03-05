@@ -18,6 +18,7 @@ func (k *Engine) sendPrepareMsg(
 	clusterID common.ClusterID,
 	msg *types.Prepare,
 	nodeset *types.ICSCommittee,
+	viewInfos []*common.ViewInfo,
 ) (int, error) {
 	var (
 		requestTS      = time.Now()
@@ -34,7 +35,7 @@ func (k *Engine) sendPrepareMsg(
 	}
 
 	// Construct the prepared message here to avoid sending the prepare message to the local node (self)
-	preparedMsg, err := k.createPreparedMsg(msg)
+	preparedMsg, err := k.createPreparedMsg(msg, viewInfos)
 	if err != nil {
 		return 0, err
 	}

@@ -84,12 +84,10 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 				}
 
 			case *ktypes.Proposal:
-				if slot.SlotType == ktypes.ValidatorSlot {
-					if err := k.handleProposal(spanCtx, slot.ClusterState(), m); err != nil {
-						k.logger.Error("failed to handle proposal msg", "error", err)
+				if err := k.handleProposal(spanCtx, slot.ClusterState(), m); err != nil {
+					k.logger.Error("failed to handle proposal msg", "error", err)
 
-						return
-					}
+					return
 				}
 
 				slot.Stage.CompareAndSwap(ktypes.PrepareStage, ktypes.PreparedStage)
@@ -459,7 +457,7 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 		ktypes.NewNodeSet(stochasticNodes, publicKeys, uint32(common.StochasticSetSize)),
 	)
 
-	failedCount, err := k.sendPrepareMsg(ctx, cs.ClusterID, prepareMsg, cs.Committee())
+	failedCount, err := k.sendPrepareMsg(ctx, cs.ClusterID, prepareMsg, cs.Committee(), cs.LocalViewInfo())
 	if err != nil {
 		return nil
 	}
@@ -556,18 +554,18 @@ func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID kramaid.K
 
 // updateHighestVI updates the highest view info by validating the peer info view and qc.
 func (k *Engine) updateHighestVI(cs *ktypes.ClusterState, peerInfo common.Views, peerID kramaid.KramaID) error {
-	for i, viewInfo := range cs.HighestViewInfo() {
-		if len(peerInfo) <= i {
-			return nil
-		}
+	if len(peerInfo) != len(cs.HighestViewInfo()) {
+		return errors.New("view count doesn't match")
+	}
 
+	for i, viewInfo := range cs.HighestViewInfo() {
 		// check if peer viewID is greater than our viewID
 		if peerInfo[i].LastView <= viewInfo.LastView {
 			continue
 		}
 
 		if peerInfo[i].ID != viewInfo.ID {
-			return errors.New("View Order doesn't match")
+			return errors.New("view order doesn't match")
 		}
 
 		// verify the bls signature of the QC
