@@ -56,6 +56,7 @@ type Node struct {
 	vault               *crypto.KramaVault
 	consensusSlots      *ktypes.Slots
 	lastActiveTimestamp uint64
+	compressor          common.Compressor
 }
 
 func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
@@ -120,6 +121,10 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 	}
 
 	if err = n.storeTrustedPeersInSenatus(); err != nil {
+		return nil, err
+	}
+
+	if err = n.setupCompressor(); err != nil {
 		return nil, err
 	}
 
@@ -194,10 +199,12 @@ func (n *Node) startJSONRPCServer() {
 func (n *Node) Stop() {
 	n.logger.Info("Gracefully shutting down...!!!!")
 	n.network.Stop()
+	n.kramaEngine.Close()
 	n.ixpool.Close()
 	n.syncer.Close()
 	n.chain.Close()
 	n.senatus.Close()
+	n.compressor.Close()
 	n.stopHandlers()
 	n.stopTelemetry()
 	n.db.Close()

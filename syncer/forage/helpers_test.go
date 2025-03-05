@@ -3,6 +3,7 @@ package forage
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"os"
 	"sort"
@@ -157,6 +158,8 @@ func NewTestSyncerForValidation(
 	logger hclog.Logger,
 	state stateManager,
 ) *Syncer {
+	compressor, _ := common.NewZstdCompressor(logger)
+
 	return &Syncer{
 		ctx:               ctx,
 		network:           node,
@@ -166,6 +169,7 @@ func NewTestSyncerForValidation(
 		state:             state,
 		tesseractRegistry: common.NewHashRegistry(60),
 		mux:               &utils.TypeMux{},
+		compressor:        compressor,
 	}
 }
 
@@ -1932,4 +1936,21 @@ func fetchContextFromLattice(
 	}
 
 	return peers
+}
+
+func compressData(t *testing.T, data []byte) (common.Compressor, []byte) {
+	t.Helper()
+
+	compressor, _ := common.NewZstdCompressor(hclog.NewNullLogger())
+
+	compressedData, err := compressor.Compress(data)
+	require.NoError(t, err)
+
+	// Adding additional 4 bytes to maintain the actual raw data length
+	rawData := make([]byte, len(compressedData)+4)
+
+	binary.BigEndian.PutUint32(rawData[:4], uint32(len(data)))
+	copy(rawData[4:], compressedData)
+
+	return compressor, rawData
 }

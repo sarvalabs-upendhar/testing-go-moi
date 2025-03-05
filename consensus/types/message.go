@@ -22,8 +22,6 @@ const (
 	Success
 )
 
-const minProposalSize = 20 * 1024 // 20 KB
-
 func (rc ICSResponseCode) String() string {
 	switch rc {
 	case SlotsFull:
@@ -86,10 +84,11 @@ func (im *ICSMSG) FromBytes(bytes []byte) error {
 	return nil
 }
 
+// CompressPayload compresses the ICS message payload if it exceeds the compression threshold.
 func (im *ICSMSG) CompressPayload(compressor common.Compressor) error {
 	size := len(im.Payload)
 
-	if size >= minProposalSize {
+	if size >= common.CompressionThreshold {
 		data, err := compressor.Compress(im.Payload)
 		if err != nil {
 			return errors.Wrap(err, "failed to compress ics payload")
@@ -102,6 +101,7 @@ func (im *ICSMSG) CompressPayload(compressor common.Compressor) error {
 	return nil
 }
 
+// DeCompressPayload decompresses the ICS message payload if it was previously compressed.
 func (im *ICSMSG) DeCompressPayload(compressor common.Compressor) error {
 	if im.UnCompressedSize == 0 {
 		return nil

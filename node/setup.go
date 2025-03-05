@@ -212,6 +212,16 @@ func (n *Node) setupChainManagerToSenatus() {
 	n.senatus.Chain = n.chain
 }
 
+// setupCompressor instantiates a new zstd compressor
+func (n *Node) setupCompressor() (err error) {
+	n.compressor, err = common.NewZstdCompressor(n.logger)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // setupKramaEngine instantiates transport and krama engine
 func (n *Node) setupKramaEngine(sm *state.StateManager) (err error) {
 	kramaTransport := transport.NewKramaTransport(
@@ -239,6 +249,7 @@ func (n *Node) setupKramaEngine(sm *state.StateManager) (err error) {
 		n.nodeMetrics.krama,
 		n.consensusSlots,
 		crypto.VerifyAggregateSignature,
+		n.compressor,
 	); err != nil {
 		return err
 	}
@@ -248,7 +259,7 @@ func (n *Node) setupKramaEngine(sm *state.StateManager) (err error) {
 
 // setupSyncer creates a syncer object which includes agora and forage services
 func (n *Node) setupSyncer(sm *state.StateManager) (err error) {
-	agoraInstance, err := agora.NewAgora(n.logger, n.db, n.network, n.nodeMetrics.agora)
+	agoraInstance, err := agora.NewAgora(n.logger, n.db, n.network, n.nodeMetrics.agora, n.compressor)
 	if err != nil {
 		return errors.Wrap(err, "error initiating agora")
 	}
@@ -267,6 +278,7 @@ func (n *Node) setupSyncer(sm *state.StateManager) (err error) {
 		n.lastActiveTimestamp,
 		n.nodeMetrics.syncer,
 		agoraInstance,
+		n.compressor,
 	); err != nil {
 		return err
 	}

@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/storage"
@@ -51,6 +53,7 @@ type Engine struct {
 	ledger              ledger
 	network             net
 	metrics             *Metrics
+	compressor          common.Compressor
 }
 
 func NewEngine(
@@ -62,7 +65,8 @@ func NewEngine(
 	network net,
 	metrics *Metrics,
 	requestQueueSize int,
-) *Engine {
+	compressor common.Compressor,
+) (*Engine, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	e := &Engine{
@@ -78,9 +82,10 @@ func NewEngine(
 		ledger:              ledger,
 		network:             network,
 		metrics:             metrics,
+		compressor:          compressor,
 	}
 
-	return e
+	return e, nil
 }
 
 func (e *Engine) Start() {
@@ -147,6 +152,14 @@ func (e *Engine) nextTask() (*message.Response, error) {
 			if storage.PrefixTag(cID.ContentType()).IsAccountBasedKey() {
 				resp.HaveList.AddBlock(block.NewAccountBlockFromRawData(cID.ContentType(), v))
 			} else {
+				if storage.PrefixTag(cID.ContentType()).IsInteractionKey() ||
+					storage.PrefixTag(cID.ContentType()).IsReceiptKey() {
+					v, err = block.CompressData(v, e.compressor)
+					if err != nil {
+						return nil, err
+					}
+				}
+
 				resp.HaveList.AddBlock(block.NewNonAccountBlockFromRawData(cID, v))
 			}
 		}

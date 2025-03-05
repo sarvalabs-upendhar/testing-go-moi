@@ -1300,6 +1300,9 @@ func TestTesseractValidator(t *testing.T) {
 		IxnsHashes:   tests.GetHashes(t, 1),
 	}
 
+	err = tsMsg.CompressTesseract(s.compressor)
+	require.NoError(t, err)
+
 	rawData, err := tsMsg.Bytes()
 	require.NoError(t, err)
 
@@ -1570,11 +1573,14 @@ func TestFetchReceipts(t *testing.T) {
 	require.NoError(t, err)
 
 	cID := cid.ReceiptsCID(hashes[1])
-	mockSession.setBlock(cID, block.NewBlock(cID, rawReceipts))
+	compressor, rawData := compressData(t, rawReceipts)
+
+	mockSession.setBlock(cID, block.NewBlock(cID, rawData))
 
 	s := Syncer{
-		db:     mockDB,
-		logger: hclog.NewNullLogger(),
+		db:         mockDB,
+		logger:     hclog.NewNullLogger(),
+		compressor: compressor,
 	}
 
 	testcases := []struct {
@@ -1623,11 +1629,14 @@ func TestFetchInteractions(t *testing.T) {
 	require.NoError(t, err)
 
 	cID := cid.InteractionsCID(hashes[1])
-	mockSession.setBlock(cID, block.NewBlock(cID, rawIxns))
+	compressor, rawData := compressData(t, rawIxns)
+
+	mockSession.setBlock(cID, block.NewBlock(cID, rawData))
 
 	s := Syncer{
-		db:     mockDB,
-		logger: hclog.NewNullLogger(),
+		db:         mockDB,
+		logger:     hclog.NewNullLogger(),
+		compressor: compressor,
 	}
 
 	testcases := []struct {

@@ -238,6 +238,7 @@ type Syncer struct {
 	syncPeersPresent    bool
 	IxFetchGrid         map[common.Hash]struct{}
 	IxFetchLock         sync.Mutex
+	compressor          common.Compressor
 }
 
 func NewSyncer(
@@ -254,6 +255,7 @@ func NewSyncer(
 	lastActiveTimeStamp uint64,
 	syncerMetrics *Metrics,
 	blockSync syncer.BlockSync,
+	compressor common.Compressor,
 ) (*Syncer, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Syncer{
@@ -284,6 +286,7 @@ func NewSyncer(
 		tracker:             NewSyncStatusTracker(0),
 		syncPeersPresent:    len(cfg.SyncPeers) > 0,
 		IxFetchGrid:         make(map[common.Hash]struct{}),
+		compressor:          compressor,
 	}
 
 	return s, nil
@@ -1947,7 +1950,15 @@ func (s *Syncer) fetchInteractions(
 		return nil, err
 	}
 
-	err = polo.Depolorize(ixns, blk.GetData())
+	data, err := block.DecompressData(blk.GetData(), s.compressor)
+	if err != nil {
+		return nil, err
+	}
+
+	err = polo.Depolorize(ixns, data)
+	if err != nil {
+		return nil, err
+	}
 
 	return ixns.IxList(), err
 }
@@ -1976,7 +1987,12 @@ func (s *Syncer) fetchReceipts(
 		return nil, err
 	}
 
-	err = receipts.FromBytes(blk.GetData())
+	data, err := block.DecompressData(blk.GetData(), s.compressor)
+	if err != nil {
+		return nil, err
+	}
+
+	err = receipts.FromBytes(data)
 
 	s.logger.Trace("Fetched receipts through agora", "ts-hash", tsHash)
 
@@ -2450,6 +2466,10 @@ func (s *Syncer) TesseractValidator(
 
 	// depolorize tesseract message
 	if err = tsMsg.FromBytes(msg.GetData()); err != nil {
+		return pubsub.ValidationReject, err
+	}
+
+	if err = tsMsg.DecompressTesseract(s.compressor); err != nil {
 		return pubsub.ValidationReject, err
 	}
 

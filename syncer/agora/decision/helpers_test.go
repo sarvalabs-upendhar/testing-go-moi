@@ -34,8 +34,9 @@ func NewTest(t *testing.T,
 	mockLedger := NewMockLedger()
 	mockDB := NewMockDB()
 	mockNetwork := NewMockNetwork()
+	compressor, _ := common.NewZstdCompressor(hclog.NewNullLogger())
 
-	defaultEngine := NewEngine(
+	defaultEngine, _ := NewEngine(
 		hclog.NewNullLogger(),
 		0,
 		0,
@@ -44,6 +45,7 @@ func NewTest(t *testing.T,
 		mockNetwork,
 		NilMetrics(),
 		0,
+		compressor,
 	)
 
 	if dbFn != nil {

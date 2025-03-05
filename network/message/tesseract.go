@@ -8,10 +8,11 @@ import (
 )
 
 type TesseractMsg struct {
-	RawTesseract []byte
-	IxnsHashes   common.Hashes
-	CommitInfo   *common.CommitInfo
-	Extra        map[string][]byte
+	RawTesseract     []byte
+	UnCompressedSize int // UnCompressedSize will be zero, if raw tesseract is not compressed
+	IxnsHashes       common.Hashes
+	CommitInfo       *common.CommitInfo
+	Extra            map[string][]byte
 }
 
 func (m *TesseractMsg) Bytes() ([]byte, error) {
@@ -41,4 +42,37 @@ func (m *TesseractMsg) GetTesseract() (*common.Tesseract, error) {
 	ts.WithIxnAndReceipts(common.Interactions{}, nil, m.CommitInfo)
 
 	return ts, nil
+}
+
+// CompressTesseract compresses the RawTesseract data if it exceeds the compression threshold.
+func (m *TesseractMsg) CompressTesseract(compressor common.Compressor) error {
+	size := len(m.RawTesseract)
+
+	if size >= common.CompressionThreshold {
+		compressedTS, err := compressor.Compress(m.RawTesseract)
+		if err != nil {
+			return err
+		}
+
+		m.UnCompressedSize = len(m.RawTesseract)
+		m.RawTesseract = compressedTS
+	}
+
+	return nil
+}
+
+// DecompressTesseract decompresses the RawTesseract data if it was previously compressed.
+func (m *TesseractMsg) DecompressTesseract(compressor common.Compressor) error {
+	if m.UnCompressedSize == 0 {
+		return nil
+	}
+
+	dst, err := compressor.Decompress(m.RawTesseract, m.UnCompressedSize)
+	if err != nil {
+		return errors.Wrap(err, "failed to decompress tesseract")
+	}
+
+	m.RawTesseract = dst
+
+	return nil
 }

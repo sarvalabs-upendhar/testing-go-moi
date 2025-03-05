@@ -201,6 +201,7 @@ func NewKramaEngine(
 	metrics *Metrics,
 	slots *ktypes.Slots,
 	verifier AggregatedSignatureVerifier,
+	compressor common.Compressor,
 ) (*Engine, error) {
 	wal, err := kbft.NewWAL(logger, cfg.DirectoryPath)
 	if err != nil {
@@ -210,11 +211,6 @@ func NewKramaEngine(
 	operatorSortition, err := NewOperatorSelection(selfID, val, state)
 	if err != nil {
 		return nil, err
-	}
-
-	compressor, err := common.NewZstdWriter()
-	if err != nil {
-		return nil, errors.Wrap(err, "compressor intialization failed")
 	}
 
 	ctx, ctxCancel := context.WithCancel(context.Background())
@@ -823,6 +819,10 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		return err
 	}
 
+	if err = msg.CompressTesseract(k.compressor); err != nil {
+		return err
+	}
+
 	// only operator broadcasts the tesseract and other cluster nodes broadcast it if the tesseract isn't received
 	//  from the operator before expiry time.
 	if tesseract.Operator() == k.selfID {
@@ -1255,7 +1255,8 @@ func (k *Engine) Start() {
 }
 
 func (k *Engine) Close() {
-	k.wal.Close()
+	// TODO: uncomment after WAL fix
+	// k.wal.Close()
 	k.transport.Close()
 
 	defer k.ctxCancel()

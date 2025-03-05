@@ -3,6 +3,8 @@ package agora
 import (
 	"context"
 
+	"github.com/sarvalabs/go-moi/common"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/hashicorp/go-hclog"
@@ -38,6 +40,7 @@ func NewAgora(
 	store db.PersistenceManager,
 	server *p2p.Server,
 	metrics *Metrics,
+	compressor common.Compressor,
 ) (*Agora, error) {
 	interestManager := session.NewInterestManager()
 
@@ -52,7 +55,7 @@ func NewAgora(
 
 	agoraNetwork := network.NewAgoraNetwork(logger, server, metrics.Network)
 
-	engine := decision.NewEngine(
+	engine, err := decision.NewEngine(
 		logger.Named("Agora"),
 		DefaultRequestWorkerCount,
 		DefaultResponseWorkerCount,
@@ -61,7 +64,11 @@ func NewAgora(
 		agoraNetwork,
 		metrics.Engine,
 		decision.MaxQueueSize,
+		compressor,
 	)
+	if err != nil {
+		return nil, err
+	}
 
 	sessionManager := session.NewSessionManager(logger, interestManager, notifier, engine)
 

@@ -53,6 +53,14 @@ func (p PrefixTag) IsAccountBasedKey() bool {
 	return !(p&0x80 == 0x80)
 }
 
+func (p PrefixTag) IsInteractionKey() bool {
+	return p == Interaction
+}
+
+func (p PrefixTag) IsReceiptKey() bool {
+	return p == Receipt
+}
+
 func SenatusPrefix() []byte {
 	return dbKey(identifiers.Nil, Senatus, nil)
 }
