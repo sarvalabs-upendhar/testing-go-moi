@@ -1067,23 +1067,7 @@ func (i *IxPool) validateAccountInherit(ix *common.Interaction, txnID int) error
 		return err
 	}
 
-	if ix.SenderID().IsParticipantVariant() {
-		return common.ErrSenderAccount
-	}
-
-	if payload.TargetAccount.IsNil() {
-		return common.ErrInvalidIdentifier
-	}
-
-	if payload.TargetAccount.Tag().Kind() != identifiers.KindLogic {
-		return common.ErrInvalidTargetAccount
-	}
-
-	if payload.Amount.Sign() <= 0 {
-		return common.ErrInvalidValue
-	}
-
-	return nil
+	return payload.Validate(ix.SenderID())
 }
 
 func (i *IxPool) validateAssetCreate(ix *common.Interaction, txnID int) error {
@@ -1092,19 +1076,7 @@ func (i *IxPool) validateAssetCreate(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	// asset standard should be mas1 or mas2
-	if payload.Standard != common.MAS1 && payload.Standard != common.MAS0 {
-		return common.ErrInvalidAssetStandard
-	}
-
-	// supply should be one if asset standard is mas1
-	if payload.Standard == common.MAS1 {
-		if payload.Supply == nil || payload.Supply.Uint64() != 1 {
-			return common.ErrInvalidAssetSupply
-		}
-	}
-
-	return nil
+	return payload.Validate()
 }
 
 func (i *IxPool) validateParticipantCreate(ix *common.Interaction, txnID int) error {
@@ -1113,23 +1085,7 @@ func (i *IxPool) validateParticipantCreate(ix *common.Interaction, txnID int) er
 		return err
 	}
 
-	if payload.ID.IsNil() || !isValidParticipantID(payload.ID) {
-		return common.ErrInvalidIdentifier
-	}
-
-	if payload.Amount.Sign() <= 0 {
-		return common.ErrInvalidValue
-	}
-
-	if payload.Weight() < common.MinWeight {
-		return common.ErrInvalidWeight
-	}
-
-	if !payload.VerifySignatureAlgorithms() {
-		return common.ErrInvalidSignatureAlgorithm
-	}
-
-	return nil
+	return payload.Validate(ix.SenderID())
 }
 
 func (i *IxPool) validateAccountConfigure(ix *common.Interaction, txnID int) error {
@@ -1138,20 +1094,7 @@ func (i *IxPool) validateAccountConfigure(ix *common.Interaction, txnID int) err
 		return err
 	}
 
-	payloadAddLen := len(payload.Add)
-	payloadRevokeLen := len(payload.Revoke)
-
-	if (payloadAddLen > 0 && payloadRevokeLen > 0) || (payloadAddLen == 0 && payloadRevokeLen == 0) {
-		return common.ErrInvalidAccountConfigure
-	}
-
-	for _, key := range payload.Add {
-		if key.SignatureAlgorithm > 0 {
-			return common.ErrInvalidSignatureAlgorithm
-		}
-	}
-
-	return nil
+	return payload.Validate()
 }
 
 func (i *IxPool) validateAssetApprove(ix *common.Interaction, txnID int) error {
@@ -1160,27 +1103,7 @@ func (i *IxPool) validateAssetApprove(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	if err = validateAssetActionPayload(payload); err != nil {
-		return err
-	}
-
-	if !isValidParticipantID(payload.Beneficiary) && !isValidLogicID(payload.Beneficiary) {
-		return common.ErrInvalidBeneficiary
-	}
-
-	if ix.SenderID() == payload.Beneficiary {
-		return common.ErrInvalidBeneficiary
-	}
-
-	if payload.Amount.Sign() <= 0 {
-		return common.ErrInvalidValue
-	}
-
-	if payload.Timestamp < uint64(time.Now().Unix()) {
-		return common.ErrInvalidTimestamp
-	}
-
-	return nil
+	return payload.ValidateAssetApprove(ix.SenderID())
 }
 
 func (i *IxPool) validateAssetRevoke(ix *common.Interaction, txnID int) error {
@@ -1189,19 +1112,7 @@ func (i *IxPool) validateAssetRevoke(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	if err = validateAssetActionPayload(payload); err != nil {
-		return err
-	}
-
-	if !isValidParticipantID(payload.Beneficiary) && !isValidLogicID(payload.Beneficiary) {
-		return common.ErrInvalidBeneficiary
-	}
-
-	if ix.SenderID() == payload.Beneficiary {
-		return common.ErrInvalidBeneficiary
-	}
-
-	return nil
+	return payload.ValidateAssetRevoke(ix.SenderID())
 }
 
 func (i *IxPool) validateAssetTransfer(ix *common.Interaction, txnID int) error {
@@ -1210,30 +1121,7 @@ func (i *IxPool) validateAssetTransfer(ix *common.Interaction, txnID int) error 
 		return err
 	}
 
-	if err = validateAssetActionPayload(payload); err != nil {
-		return err
-	}
-
-	if payload.Benefactor.IsNil() {
-		if !isValidParticipantID(payload.Beneficiary) || ix.SenderID() == payload.Beneficiary {
-			return common.ErrInvalidBeneficiary
-		}
-	} else {
-		if !isValidParticipantID(payload.Benefactor) || ix.SenderID() == payload.Benefactor {
-			return common.ErrInvalidBenefactor
-		}
-
-		// Reject genesis account interaction
-		if payload.Benefactor == common.SargaAccountID {
-			return common.ErrGenesisAccount
-		}
-	}
-
-	if payload.Amount.Sign() <= 0 {
-		return common.ErrInvalidValue
-	}
-
-	return nil
+	return payload.ValidateAssetTransfer(ix.SenderID())
 }
 
 func (i *IxPool) validateAssetLockup(ix *common.Interaction, txnID int) error {
@@ -1242,23 +1130,7 @@ func (i *IxPool) validateAssetLockup(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	if err = validateAssetActionPayload(payload); err != nil {
-		return err
-	}
-
-	if !isValidParticipantID(payload.Beneficiary) && !isValidLogicID(payload.Beneficiary) {
-		return common.ErrInvalidBeneficiary
-	}
-
-	if ix.SenderID() == payload.Beneficiary {
-		return common.ErrInvalidBeneficiary
-	}
-
-	if payload.Amount.Sign() <= 0 {
-		return common.ErrInvalidValue
-	}
-
-	return nil
+	return payload.ValidateAssetLockup(ix.SenderID())
 }
 
 func (i *IxPool) validateAssetRelease(ix *common.Interaction, txnID int) error {
@@ -1267,32 +1139,7 @@ func (i *IxPool) validateAssetRelease(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	if err = validateAssetActionPayload(payload); err != nil {
-		return err
-	}
-
-	if !isValidParticipantID(payload.Beneficiary) {
-		return common.ErrInvalidBeneficiary
-	}
-
-	if payload.Benefactor.IsNil() {
-		return common.ErrBenefactorMissing
-	}
-
-	if !isValidParticipantID(payload.Benefactor) || ix.SenderID() == payload.Benefactor {
-		return common.ErrInvalidBenefactor
-	}
-
-	// Reject genesis account interaction
-	if payload.Benefactor == common.SargaAccountID {
-		return common.ErrGenesisAccount
-	}
-
-	if payload.Amount.Sign() <= 0 {
-		return common.ErrInvalidValue
-	}
-
-	return nil
+	return payload.ValidateAssetRelease(ix.SenderID())
 }
 
 func (i *IxPool) validateAssetSupply(ix *common.Interaction, txnID int) error {
@@ -1301,20 +1148,7 @@ func (i *IxPool) validateAssetSupply(ix *common.Interaction, txnID int) error {
 		return err
 	}
 
-	if err = payload.AssetID.Validate(); err != nil {
-		return common.ErrInvalidAssetID
-	}
-
-	// can not mint asset standard mas1
-	if common.AssetStandard(payload.AssetID.Standard()) == common.MAS1 {
-		return common.ErrMintOrBurnNonFungibleToken
-	}
-
-	if payload.Amount.Sign() <= 0 {
-		return common.ErrInvalidValue
-	}
-
-	return nil
+	return payload.Validate()
 }
 
 func (i *IxPool) validateLogicDeployPayload(ix *common.Interaction, txnID int) error {
@@ -1324,9 +1158,8 @@ func (i *IxPool) validateLogicDeployPayload(ix *common.Interaction, txnID int) e
 		return err
 	}
 
-	// Manifest cannot be empty for logic deploy
-	if len(payload.Manifest) == 0 {
-		return common.ErrEmptyManifest
+	if err = payload.ValidateLogicDeploy(); err != nil {
+		return err
 	}
 
 	if err = i.exec.ValidateLogicDeploy(ix.GetIxOp(txnID)); err != nil {
@@ -1343,18 +1176,8 @@ func (i *IxPool) validateLogicInteractPayload(ix *common.Interaction, txnID int)
 		return err
 	}
 
-	// Callsite cannot be empty
-	if len(payload.Callsite) == 0 {
-		return common.ErrEmptyCallSite
-	}
-
-	// LogicID cannot be empty
-	if payload.Logic.AsIdentifier().IsNil() {
-		return common.ErrMissingLogicID
-	}
-
-	if err = payload.Logic.Validate(); err != nil {
-		return common.ErrInvalidLogicID
+	if err = payload.ValidateLogicInteract(); err != nil {
+		return err
 	}
 
 	// Check if logic is registered
@@ -1567,20 +1390,6 @@ func (i *IxPool) postPrunedPromotedInteractionEvent(ixns ...*common.Interaction)
 
 // helper functions
 
-// validateAssetActionPayload checks the beneficiary id and asset id in payload.
-func validateAssetActionPayload(payload *common.AssetActionPayload) error {
-	if payload.Beneficiary.IsNil() {
-		return common.ErrBeneficiaryMissing
-	}
-
-	// Reject genesis account interaction
-	if payload.Beneficiary == common.SargaAccountID {
-		return common.ErrGenesisAccount
-	}
-
-	return nil
-}
-
 // getIxsSize aggregates and returns the size of all the interactions.
 func getIxsSize(ixs []*common.Interaction) (uint64, error) {
 	var ixsSize uint64
@@ -1616,20 +1425,4 @@ func getIxParticipants(ix *common.Interaction) map[identifiers.Identifier]struct
 	}
 
 	return participants
-}
-
-func isValidParticipantID(id identifiers.Identifier) bool {
-	if _, err := id.AsParticipantID(); err != nil {
-		return false
-	}
-
-	return true
-}
-
-func isValidLogicID(id identifiers.Identifier) bool {
-	if _, err := id.AsLogicID(); err != nil {
-		return false
-	}
-
-	return true
 }

@@ -2760,6 +2760,13 @@ func TestIxPool_ValidateParticipantRegister(t *testing.T) {
 			expectedErr: common.ErrInvalidIdentifier,
 		},
 		{
+			name: "sender id matches participant id",
+			ix: newTestInteraction(t, common.IxParticipantCreate, common.ParticipantCreatePayload{
+				ID: id,
+			}, 0, id, 0, nil),
+			expectedErr: common.ErrInvalidIdentifier,
+		},
+		{
 			name: "invalid weight",
 			ix: newTestInteraction(t, common.IxParticipantCreate, common.ParticipantCreatePayload{
 				ID: tests.RandomIdentifier(t),

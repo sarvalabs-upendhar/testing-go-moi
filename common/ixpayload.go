@@ -2,6 +2,7 @@ package common
 
 import (
 	"math/big"
+	"time"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -101,6 +102,23 @@ func (ac *AssetCreatePayload) Flags() []identifiers.Flag {
 	return flags
 }
 
+// Validate checks if the AssetCreatePayload is valid.
+func (ac *AssetCreatePayload) Validate() error {
+	// asset standard should be mas1 or mas2
+	if ac.Standard != MAS1 && ac.Standard != MAS0 {
+		return ErrInvalidAssetStandard
+	}
+
+	// supply should be one if asset standard is mas1
+	if ac.Standard == MAS1 {
+		if ac.Supply == nil || ac.Supply.Uint64() != 1 {
+			return ErrInvalidAssetSupply
+		}
+	}
+
+	return nil
+}
+
 // AssetSupplyPayload holds data for minting or burning an asset.
 type AssetSupplyPayload struct {
 	// AssetID is used to specify the AssetID for which to mint/burn
@@ -123,6 +141,24 @@ func (supply *AssetSupplyPayload) Bytes() ([]byte, error) {
 func (supply *AssetSupplyPayload) FromBytes(data []byte) error {
 	if err := polo.Depolorize(supply, data); err != nil {
 		return errors.Wrap(err, "failed to depolorize asset supply payload")
+	}
+
+	return nil
+}
+
+// Validate checks if the AssetSupplyPayload is valid.
+func (supply *AssetSupplyPayload) Validate() error {
+	if err := supply.AssetID.Validate(); err != nil {
+		return ErrInvalidAssetID
+	}
+
+	// can not mint asset standard mas1
+	if AssetStandard(supply.AssetID.Standard()) == MAS1 {
+		return ErrMintOrBurnNonFungibleToken
+	}
+
+	if supply.Amount == nil || supply.Amount.Sign() <= 0 {
+		return ErrInvalidValue
 	}
 
 	return nil
@@ -184,6 +220,27 @@ func (register *ParticipantCreatePayload) FromBytes(data []byte) error {
 	return nil
 }
 
+// Validate checks if the ParticipantCreatePayload is valid.
+func (register *ParticipantCreatePayload) Validate(senderID identifiers.Identifier) error {
+	if register.ID.IsNil() || !isValidParticipantID(register.ID) || senderID == register.ID {
+		return ErrInvalidIdentifier
+	}
+
+	if register.Amount == nil || register.Amount.Sign() <= 0 {
+		return ErrInvalidValue
+	}
+
+	if register.Weight() < MinWeight {
+		return ErrInvalidWeight
+	}
+
+	if !register.VerifySignatureAlgorithms() {
+		return ErrInvalidSignatureAlgorithm
+	}
+
+	return nil
+}
+
 type AccountConfigurePayload struct {
 	Add    []KeyAddPayload
 	Revoke []KeyRevokePayload
@@ -203,6 +260,24 @@ func (configure *AccountConfigurePayload) Bytes() ([]byte, error) {
 func (configure *AccountConfigurePayload) FromBytes(data []byte) error {
 	if err := polo.Depolorize(configure, data); err != nil {
 		return errors.Wrap(err, "failed to depolorize account configure payload")
+	}
+
+	return nil
+}
+
+// Validate checks if the AccountConfigurePayload is valid.
+func (configure *AccountConfigurePayload) Validate() error {
+	payloadAddLen := len(configure.Add)
+	payloadRevokeLen := len(configure.Revoke)
+
+	if (payloadAddLen > 0 && payloadRevokeLen > 0) || (payloadAddLen == 0 && payloadRevokeLen == 0) {
+		return ErrInvalidAccountConfigure
+	}
+
+	for _, key := range configure.Add {
+		if key.SignatureAlgorithm > 0 {
+			return ErrInvalidSignatureAlgorithm
+		}
 	}
 
 	return nil
@@ -228,6 +303,27 @@ func (inherit *AccountInheritPayload) Bytes() ([]byte, error) {
 func (inherit *AccountInheritPayload) FromBytes(data []byte) error {
 	if err := polo.Depolorize(inherit, data); err != nil {
 		return errors.Wrap(err, "failed to depolorize account inherit payload")
+	}
+
+	return nil
+}
+
+// Validate checks if the AccountInheritPayload is valid.
+func (inherit *AccountInheritPayload) Validate(senderID identifiers.Identifier) error {
+	if senderID.IsParticipantVariant() {
+		return ErrSenderAccount
+	}
+
+	if inherit.TargetAccount.IsNil() {
+		return ErrInvalidIdentifier
+	}
+
+	if inherit.TargetAccount.Tag().Kind() != identifiers.KindLogic {
+		return ErrInvalidTargetAccount
+	}
+
+	if inherit.Amount.Sign() <= 0 {
+		return ErrInvalidValue
 	}
 
 	return nil
@@ -261,6 +357,141 @@ func (action *AssetActionPayload) Bytes() ([]byte, error) {
 func (action *AssetActionPayload) FromBytes(data []byte) error {
 	if err := polo.Depolorize(action, data); err != nil {
 		return errors.Wrap(err, "failed to depolorize asset action payload")
+	}
+
+	return nil
+}
+
+// Validate checks if the AssetActionPayload has a valid beneficiary.
+func (action *AssetActionPayload) Validate() error {
+	if action.Beneficiary.IsNil() {
+		return ErrBeneficiaryMissing
+	}
+
+	// Reject genesis account interaction
+	if action.Beneficiary == SargaAccountID {
+		return ErrGenesisAccount
+	}
+
+	return nil
+}
+
+// ValidateAssetApprove checks if the AssetActionPayload payload for approval is valid.
+func (action *AssetActionPayload) ValidateAssetApprove(senderID identifiers.Identifier) error {
+	if err := action.Validate(); err != nil {
+		return err
+	}
+
+	if !isValidParticipantID(action.Beneficiary) && !isValidLogicID(action.Beneficiary) {
+		return ErrInvalidBeneficiary
+	}
+
+	if senderID == action.Beneficiary {
+		return ErrInvalidBeneficiary
+	}
+
+	if action.Amount == nil || action.Amount.Sign() <= 0 {
+		return ErrInvalidValue
+	}
+
+	if action.Timestamp < uint64(time.Now().Unix()) {
+		return ErrInvalidTimestamp
+	}
+
+	return nil
+}
+
+// ValidateAssetRevoke checks if the AssetActionPayload payload for revoke is valid.
+func (action *AssetActionPayload) ValidateAssetRevoke(senderID identifiers.Identifier) error {
+	if err := action.Validate(); err != nil {
+		return err
+	}
+
+	if !isValidParticipantID(action.Beneficiary) && !isValidLogicID(action.Beneficiary) {
+		return ErrInvalidBeneficiary
+	}
+
+	if senderID == action.Beneficiary {
+		return ErrInvalidBeneficiary
+	}
+
+	return nil
+}
+
+// ValidateAssetTransfer checks if the AssetActionPayload payload for transfer is valid.
+func (action *AssetActionPayload) ValidateAssetTransfer(senderID identifiers.Identifier) error {
+	if err := action.Validate(); err != nil {
+		return err
+	}
+
+	if action.Benefactor.IsNil() {
+		if !isValidParticipantID(action.Beneficiary) || senderID == action.Beneficiary {
+			return ErrInvalidBeneficiary
+		}
+	} else {
+		if !isValidParticipantID(action.Benefactor) || senderID == action.Benefactor {
+			return ErrInvalidBenefactor
+		}
+
+		// Reject genesis account interaction
+		if action.Benefactor == SargaAccountID {
+			return ErrGenesisAccount
+		}
+	}
+
+	if action.Amount == nil || action.Amount.Sign() <= 0 {
+		return ErrInvalidValue
+	}
+
+	return nil
+}
+
+// ValidateAssetLockup checks if the AssetActionPayload payload for lockup is valid.
+func (action *AssetActionPayload) ValidateAssetLockup(senderID identifiers.Identifier) error {
+	if err := action.Validate(); err != nil {
+		return err
+	}
+
+	if !isValidParticipantID(action.Beneficiary) && !isValidLogicID(action.Beneficiary) {
+		return ErrInvalidBeneficiary
+	}
+
+	if senderID == action.Beneficiary {
+		return ErrInvalidBeneficiary
+	}
+
+	if action.Amount == nil || action.Amount.Sign() <= 0 {
+		return ErrInvalidValue
+	}
+
+	return nil
+}
+
+// ValidateAssetRelease checks if the AssetActionPayload payload for release is valid.
+func (action *AssetActionPayload) ValidateAssetRelease(senderID identifiers.Identifier) error {
+	if err := action.Validate(); err != nil {
+		return err
+	}
+
+	if !isValidParticipantID(action.Beneficiary) {
+		return ErrInvalidBeneficiary
+	}
+
+	if action.Benefactor.IsNil() {
+		return ErrBenefactorMissing
+	}
+
+	if !isValidParticipantID(action.Benefactor) || senderID == action.Benefactor {
+		return ErrInvalidBenefactor
+	}
+
+	// Reject genesis account interaction
+	if action.Benefactor == SargaAccountID {
+		return ErrGenesisAccount
+	}
+
+	if action.Amount == nil || action.Amount.Sign() <= 0 {
+		return ErrInvalidValue
 	}
 
 	return nil
@@ -320,4 +551,51 @@ func (payload *LogicPayload) Flags() []identifiers.Flag {
 	// flags = append(flags, identifiers.LogicIntrinsic, identifiers.LogicExtrinsic)
 
 	return flags
+}
+
+// ValidateLogicDeploy checks if the LogicPayload for logic deploy is valid.
+func (payload *LogicPayload) ValidateLogicDeploy() error {
+	// Manifest cannot be empty for logic deploy
+	if len(payload.Manifest) == 0 {
+		return ErrEmptyManifest
+	}
+
+	return nil
+}
+
+// ValidateLogicInteract checks if the LogicPayload for logic invoke and enlist is valid.
+func (payload *LogicPayload) ValidateLogicInteract() error {
+	// Callsite cannot be empty
+	if len(payload.Callsite) == 0 {
+		return ErrEmptyCallSite
+	}
+
+	// LogicID cannot be empty
+	if payload.Logic.AsIdentifier().IsNil() {
+		return ErrMissingLogicID
+	}
+
+	if err := payload.Logic.Validate(); err != nil {
+		return ErrInvalidLogicID
+	}
+
+	return nil
+}
+
+// isValidParticipantID checks if the participant id is valid.
+func isValidParticipantID(id identifiers.Identifier) bool {
+	if _, err := id.AsParticipantID(); err != nil {
+		return false
+	}
+
+	return true
+}
+
+// isValidParticipantID checks if the logic id is valid.
+func isValidLogicID(id identifiers.Identifier) bool {
+	if _, err := id.AsLogicID(); err != nil {
+		return false
+	}
+
+	return true
 }
