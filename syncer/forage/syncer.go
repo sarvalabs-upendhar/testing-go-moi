@@ -43,7 +43,7 @@ const (
 	MaxBucketSyncAttempts = 3
 	ChannelBufferSize     = 10
 	MaxPeersToDial        = 8
-	TesseractFetchTimeOut = 15 * time.Second
+	TesseractFetchTimeOut = 8 * time.Second
 	DefaultWorkerWaitTime = 50 * time.Millisecond
 )
 
@@ -1829,17 +1829,6 @@ func (s *Syncer) fetchTesseractState(
 		return err
 	}
 
-	if err = s.fetchAndStoreData(
-		ctx,
-		newSession,
-		cid.DeedsCID(acc.AssetDeeds),
-		cid.AccountKeysCID(acc.KeysHash),
-	); err != nil {
-		s.logger.Error("Error fetching balance data", "err", err)
-
-		return err
-	}
-
 	if err = s.syncContextData(ctx, newSession, cid.ContextCID(acc.ContextHash), object); err != nil {
 		s.logger.Error("Error fetching context data", "err", err)
 
@@ -1856,6 +1845,17 @@ func (s *Syncer) fetchTesseractState(
 
 	if err = s.syncStorageTree(ctx, newSession, acc.StorageRoot, object); err != nil {
 		return errors.Wrap(err, "failed to sync storage tree")
+	}
+
+	if err = s.fetchAndStoreData(
+		ctx,
+		newSession,
+		cid.DeedsCID(acc.AssetDeeds),
+		cid.AccountKeysCID(acc.KeysHash),
+	); err != nil {
+		s.logger.Error("Error fetching balance data", "err", err)
+
+		return err
 	}
 
 	object.SetAccount(*acc)
