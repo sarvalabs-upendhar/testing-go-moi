@@ -5,10 +5,8 @@ import (
 	"math/big"
 	"os"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 const GenesisView = 0
@@ -22,8 +20,8 @@ type GenesisFile struct {
 }
 
 type AssetAccountSetupArgs struct {
-	AssetInfo      *AssetCreationArgs `json:"asset_info"`
-	ConsensusNodes []kramaid.KramaID  `json:"consensus_nodes"`
+	AssetInfo      *AssetCreationArgs    `json:"asset_info"`
+	ConsensusNodes []identifiers.KramaID `json:"consensus_nodes"`
 }
 
 type AssetCreationArgs struct {
@@ -100,7 +98,7 @@ type LogicSetupArgs struct {
 	Calldata hexutil.Bytes `json:"calldata"`
 	Manifest hexutil.Bytes `json:"manifest"`
 
-	ConsensusNodes []kramaid.KramaID `json:"consensus_nodes"`
+	ConsensusNodes []identifiers.KramaID `json:"consensus_nodes"`
 }
 
 type KeyArgs struct {
@@ -114,7 +112,7 @@ type AccountSetupArgs struct {
 	Keys           []KeyArgs              `json:"keys"`
 	AccType        AccountType            `json:"type"`
 	MoiID          string                 `json:"moi-id"`
-	ConsensusNodes []kramaid.KramaID      `json:"consensus_nodes"`
+	ConsensusNodes []identifiers.KramaID  `json:"consensus_nodes"`
 }
 
 func (as *AccountSetupArgs) ContextDelta() ContextDelta {

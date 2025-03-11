@@ -1,7 +1,7 @@
 package bls
 
 import (
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	blst "github.com/supranational/blst/bindings/go"
 
 	"github.com/sarvalabs/go-moi/crypto/common"
@@ -17,7 +17,7 @@ func (blsBlst *BlsWithBlstSignature) Type() common.SigType {
 	return common.BlsBLST
 }
 
-func (blsBlst *BlsWithBlstSignature) Sign(data, signingKey []byte, kid kramaid.KramaID) error {
+func (blsBlst *BlsWithBlstSignature) Sign(data, signingKey []byte, kid identifiers.KramaID) error {
 	// casting into BLST Secret key
 	if len(signingKey) != 32 {
 		return common.ErrInvalidPrivKeyLength
@@ -43,12 +43,13 @@ func (blsBlst *BlsWithBlstSignature) Sign(data, signingKey []byte, kid kramaid.K
 	blsBlst.SigPrefix = sigPrefix
 	blsBlst.Digest = sigBytes
 
-	ver, err := kid.Version()
+	// TODO: FIX ME
+	tag, err := kid.Tag()
 	if err != nil {
 		return err
 	}
 
-	if ver == 1 {
+	if tag.Version() == 0 {
 		blsBlst.Extra = nil
 	} else {
 		// To derive BLS public key from BLS private key

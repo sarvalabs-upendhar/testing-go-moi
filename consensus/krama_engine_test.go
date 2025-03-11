@@ -14,7 +14,7 @@ package consensus
 //
 //	"github.com/pkg/errors"
 //	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-//	"github.com/sarvalabs/go-moi/identifiers"
+//	"github.com/sarvalabs/go-moi/common/identifiers"
 //	"github.com/sarvalabs/go-moi/common/hexutil"
 //	"github.com/sarvalabs/go-moi/state"
 //	"github.com/stretchr/testify/require"

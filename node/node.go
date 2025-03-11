@@ -5,13 +5,13 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/sarvalabs/go-legacy-kramaid"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -150,7 +150,7 @@ func NewNode(logLevel string, cfg *config.Config) (n *Node, err error) {
 	return n, nil
 }
 
-func (n *Node) GetKramaID() kramaid.KramaID {
+func (n *Node) GetKramaID() identifiers.KramaID {
 	return n.network.GetKramaID()
 }
 

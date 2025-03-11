@@ -4,11 +4,12 @@ import (
 	"bufio"
 	"context"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	p2pnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-msgio"
-	id "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 )
@@ -42,7 +43,7 @@ func (cr *clusterRegistry) remove(clusterID common.ClusterID) {
 
 type icsPeer struct {
 	ctx          context.Context
-	kramaID      id.KramaID
+	kramaID      identifiers.KramaID
 	isDirectPeer bool
 	networkID    peer.ID
 	stream       p2pnet.Stream
@@ -54,7 +55,7 @@ type icsPeer struct {
 
 func newICSPeer(
 	ctx context.Context,
-	kramaID id.KramaID,
+	kramaID identifiers.KramaID,
 	stream p2pnet.Stream,
 	logger hclog.Logger,
 	isDirectPeer bool,

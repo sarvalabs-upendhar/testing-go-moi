@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	kdht "github.com/libp2p/go-libp2p-kad-dht"
@@ -23,7 +25,6 @@ import (
 	"github.com/libp2p/go-msgio"
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -40,11 +41,11 @@ type Vault interface {
 }
 
 type Senatus interface {
-	GetNTQ(peerID kramaid.KramaID) (float32, error)
-	GetAddress(key kramaid.KramaID) ([]maddr.Multiaddr, error)
+	GetNTQ(peerID identifiers.KramaID) (float32, error)
+	GetAddress(key identifiers.KramaID) ([]maddr.Multiaddr, error)
 	GetAddressByPeerID(peerID peer.ID) ([]maddr.Multiaddr, error)
 	GetRTTByPeerID(peerID peer.ID) (int64, error)
-	GetKramaIDByPeerID(peerID peer.ID) (kramaid.KramaID, error)
+	GetKramaIDByPeerID(peerID peer.ID) (identifiers.KramaID, error)
 	UpdatePeer(data *senatus.NodeMetaInfo) error
 	AddNewPeerWithPeerID(key peer.ID, data *senatus.NodeMetaInfo) error
 }
@@ -60,7 +61,7 @@ type Server struct {
 	kadDHT   *kdht.IpfsDHT  // libp2p Kad DHT of the node
 	psRouter *pubsub.PubSub // libp2p PubSub router of the node
 
-	id kramaid.KramaID // KramaID of the node
+	id identifiers.KramaID // KramaID of the node
 
 	Peers      *peerSet // peerSet of node
 	peerScores *PeerScores
@@ -92,7 +93,7 @@ type Server struct {
 // Accepts lifecycle context for the node along with a typemux and a config.
 func NewServer(
 	logger hclog.Logger,
-	id kramaid.KramaID,
+	id identifiers.KramaID,
 	mux *utils.TypeMux,
 	config *config.NetworkConfig,
 	vault Vault,
@@ -270,7 +271,7 @@ func (s *Server) getSelfRouting() libp2p.Option {
 }
 
 // GetKramaID returns the KramaID of node
-func (s *Server) GetKramaID() kramaid.KramaID {
+func (s *Server) GetKramaID() identifiers.KramaID {
 	return s.id
 }
 
@@ -304,7 +305,7 @@ func (s *Server) getKdhtOptions() []kdht.Option {
 }
 
 // ConnectPeerByKramaID connects to peer associated with a given KramaID.
-func (s *Server) ConnectPeerByKramaID(ctx context.Context, kramaID kramaid.KramaID) error {
+func (s *Server) ConnectPeerByKramaID(ctx context.Context, kramaID identifiers.KramaID) error {
 	return s.ConnManager.ConnectPeerByKramaID(ctx, kramaID)
 }
 
@@ -353,7 +354,7 @@ func shipMessage(rw *bufio.ReadWriter, data []byte) error {
 }
 
 func generateWireMessage(
-	senderKramaID kramaid.KramaID,
+	senderKramaID identifiers.KramaID,
 	msgType networkmsg.MsgType,
 	msg networkmsg.Payload,
 ) ([]byte, error) {
@@ -436,7 +437,7 @@ func (s *Server) GetVersion() string {
 	return config.ProtocolVersion
 }
 
-func (s *Server) GetPeers() []kramaid.KramaID {
+func (s *Server) GetPeers() []identifiers.KramaID {
 	return s.ConnManager.getPeers()
 }
 

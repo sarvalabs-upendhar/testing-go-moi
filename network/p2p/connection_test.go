@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -361,7 +362,7 @@ func TestConnectPeerByKramaID(t *testing.T) {
 
 	testcases := []struct {
 		name                   string
-		kramaID                kramaid.KramaID
+		kramaID                identifiers.KramaID
 		establishedConnections map[int][]*Server
 		newConnections         map[int][]*Server
 		expectedError          error
@@ -448,7 +449,7 @@ func TestConnectToTrustedNodes(t *testing.T) {
 
 	testcases := []struct {
 		name                   string
-		kramaID                kramaid.KramaID
+		kramaID                identifiers.KramaID
 		establishedConnections map[int][]*Server
 		newConnections         map[int][]*Server
 	}{
@@ -623,13 +624,13 @@ func TestGetPeers(t *testing.T) {
 	testcases := []struct {
 		name         string
 		server       *Server
-		expectedList []kramaid.KramaID
+		expectedList []identifiers.KramaID
 		testFn       func()
 	}{
 		{
 			name:         "Should return an empty list if no Krama ID's in peersList",
 			server:       servers[0],
-			expectedList: make([]kramaid.KramaID, 0),
+			expectedList: make([]identifiers.KramaID, 0),
 		},
 		{
 			name:   "Returns a slice of Krama ID's connected to a client",
@@ -637,7 +638,7 @@ func TestGetPeers(t *testing.T) {
 			testFn: func() {
 				setServerPeers(t, servers[1], servers[2].id, servers[3].id)
 			},
-			expectedList: []kramaid.KramaID{servers[2].id, servers[3].id},
+			expectedList: []identifiers.KramaID{servers[2].id, servers[3].id},
 		},
 	}
 

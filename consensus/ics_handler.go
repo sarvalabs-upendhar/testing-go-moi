@@ -15,7 +15,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/kbft"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
@@ -273,7 +272,7 @@ func (k *Engine) handlePrepared(
 	ctx context.Context,
 	clusterID common.ClusterID,
 	msg *ktypes.Prepared,
-	sender kramaid.KramaID,
+	sender identifiers.KramaID,
 ) error {
 	k.logger.Debug("Handling prepared", "cluster-id", clusterID, "sender", sender)
 
@@ -507,7 +506,7 @@ func (k *Engine) loadViewInfo(ps []identifiers.Identifier) ([]*common.ViewInfo, 
 	return infos, nil
 }
 
-func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID kramaid.KramaID) error {
+func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID identifiers.KramaID) error {
 	k.logger.Debug(
 		"validating peer qc",
 		"peer-id", peerID,
@@ -553,7 +552,7 @@ func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID kramaid.K
 }
 
 // updateHighestVI updates the highest view info by validating the peer info view and qc.
-func (k *Engine) updateHighestVI(cs *ktypes.ClusterState, peerInfo common.Views, peerID kramaid.KramaID) error {
+func (k *Engine) updateHighestVI(cs *ktypes.ClusterState, peerInfo common.Views, peerID identifiers.KramaID) error {
 	if len(peerInfo) != len(cs.HighestViewInfo()) {
 		return errors.New("view count doesn't match")
 	}

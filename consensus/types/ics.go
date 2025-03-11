@@ -8,7 +8,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/mr-tron/base58"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	gtypes "github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-polo"
@@ -16,13 +15,13 @@ import (
 
 type ClusterState struct {
 	mtx                      sync.Mutex
-	selfID                   kramaid.KramaID
+	selfID                   identifiers.KramaID
 	committee                *ICSCommittee
 	voteSet                  *HeightVoteSet
 	ixns                     common.Interactions
 	ClusterID                common.ClusterID
-	Proposer                 kramaid.KramaID
-	operator                 kramaid.KramaID
+	Proposer                 identifiers.KramaID
+	operator                 identifiers.KramaID
 	BinaryHash, IdentityHash common.Hash
 	ICSHash                  common.Hash
 	dirty                    map[common.Hash][]byte
@@ -41,7 +40,7 @@ type ClusterState struct {
 	preparedQc          *PreparedInfo
 	view                uint64
 	viewTimeoutDeadline time.Time
-	TrustedPeers        []kramaid.KramaID
+	TrustedPeers        []identifiers.KramaID
 }
 
 func (cs *ClusterState) SetPrepareQc(prepareQc *PreparedInfo) {
@@ -57,9 +56,9 @@ func (cs *ClusterState) Committee() *ICSCommittee {
 func NewICS(
 	ixs common.Interactions,
 	clusterID common.ClusterID,
-	operator kramaid.KramaID,
+	operator identifiers.KramaID,
 	reqTime time.Time,
-	selfID kramaid.KramaID,
+	selfID identifiers.KramaID,
 	committee *ICSCommittee,
 	participants map[identifiers.Identifier]*common.Participant,
 	viewInfos common.Views,
@@ -91,7 +90,7 @@ func (cs *ClusterState) IxnsHash() common.Hash {
 	return hash
 }
 
-func (cs *ClusterState) SelfKramaID() kramaid.KramaID {
+func (cs *ClusterState) SelfKramaID() identifiers.KramaID {
 	return cs.selfID
 }
 
@@ -150,7 +149,7 @@ func (cs *ClusterState) UpdateNodeSetResponses(nodeSetPosition int, responses *c
 	cs.committee.UpdateSetResponses(nodeSetPosition, responses)
 }
 
-func (cs *ClusterState) Operator() kramaid.KramaID {
+func (cs *ClusterState) Operator() identifiers.KramaID {
 	return cs.operator
 }
 
@@ -221,8 +220,8 @@ func (cs *ClusterState) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 
 func (cs *ClusterState) GetConsensusNodesDelta(
 	nodeSetPosition int,
-	newPeer kramaid.KramaID,
-) (added, replaced kramaid.KramaID) {
+	newPeer identifiers.KramaID,
+) (added, replaced identifiers.KramaID) {
 	for _, info := range cs.committee.Sets[nodeSetPosition].Infos {
 		if newPeer == info.ID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
 			return
@@ -258,7 +257,7 @@ func (cs *ClusterState) IsRandomQuorum() bool {
 	return cs.committee.RandomSet().GetRespCount() >= int(cs.committee.RandomQuorumSize())
 }
 
-func (cs *ClusterState) HasKramaID(kramaID kramaid.KramaID) (int32, []byte, bool) {
+func (cs *ClusterState) HasKramaID(kramaID identifiers.KramaID) (int32, []byte, bool) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
@@ -266,7 +265,7 @@ func (cs *ClusterState) HasKramaID(kramaID kramaid.KramaID) (int32, []byte, bool
 }
 
 // GetByIndex returns the krama id and bls public key of the validator based on the index
-func (cs *ClusterState) GetByIndex(index int32) (kramaid.KramaID, []byte) {
+func (cs *ClusterState) GetByIndex(index int32) (identifiers.KramaID, []byte) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
@@ -285,7 +284,7 @@ func (cs *ClusterState) GetICSVoteset() *common.ArrayOfBits {
 	return cs.committee.GetVoteset()
 }
 
-func (cs *ClusterState) GetRandomNodes() []kramaid.KramaID {
+func (cs *ClusterState) GetRandomNodes() []identifiers.KramaID {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
@@ -474,7 +473,7 @@ func GenerateClusterID() (common.ClusterID, error) {
 }
 
 type ICSOperatorInfo struct {
-	KramaID  kramaid.KramaID
+	KramaID  identifiers.KramaID
 	Priority uint64
 	Attempts uint8
 }

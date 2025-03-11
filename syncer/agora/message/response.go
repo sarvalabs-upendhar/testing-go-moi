@@ -2,7 +2,6 @@ package message
 
 import (
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 
@@ -11,12 +10,12 @@ import (
 )
 
 type Response struct {
-	PeerID    kramaid.KramaID
+	PeerID    identifiers.KramaID
 	SessionID identifiers.Identifier
 	StateHash cid.CID
 	Status    bool
 	HaveList  block.HaveList
-	PeerSet   []kramaid.KramaID
+	PeerSet   []identifiers.KramaID
 }
 
 func (r *Response) GetAgoraMsg() *AgoraResponseMsg {
@@ -32,7 +31,7 @@ type AgoraResponseMsg struct {
 	SessionID identifiers.Identifier
 	Status    bool
 	HaveList  [][]byte
-	PeerSet   []kramaid.KramaID
+	PeerSet   []identifiers.KramaID
 }
 
 func (resp *AgoraResponseMsg) GetBlocks() []block.Block {

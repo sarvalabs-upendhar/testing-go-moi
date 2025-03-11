@@ -4,7 +4,7 @@ import (
 	"errors"
 	"sync"
 
-	id "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 var errAlreadyRegistered = errors.New("peer is already registered")
@@ -13,7 +13,7 @@ var errAlreadyRegistered = errors.New("peer is already registered")
 // It is used to track a set of active participants
 type icsPeerSet struct {
 	// Represents a mapping of peerIDs to their Peers
-	peers map[id.KramaID]*icsPeer
+	peers map[identifiers.KramaID]*icsPeer
 	// Represents a synchronization mutex on the set of peers
 	// A RWMutex allows multiple goroutines to acquire a read
 	// lock but only a single goroutine to acquire write lock.
@@ -24,13 +24,13 @@ type icsPeerSet struct {
 func newICSPeerSet() *icsPeerSet {
 	// Create an empty icsPeerSet and return it
 	return &icsPeerSet{
-		peers: make(map[id.KramaID]*icsPeer),
+		peers: make(map[identifiers.KramaID]*icsPeer),
 		lock:  sync.RWMutex{},
 	}
 }
 
 // Peer is a method of icsPeerSet that returns a peer from the icsPeerSet for a given peer id
-func (ps *icsPeerSet) Peer(peerID id.KramaID) *icsPeer {
+func (ps *icsPeerSet) Peer(peerID identifiers.KramaID) *icsPeer {
 	// Read Lock the icsPeerSet
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
@@ -41,7 +41,7 @@ func (ps *icsPeerSet) Peer(peerID id.KramaID) *icsPeer {
 
 // ContainsPeer is a method of icsPeerSet that checks if peer with the
 // given peer id exists in the set of clusters
-func (ps *icsPeerSet) ContainsPeer(peerID id.KramaID) bool {
+func (ps *icsPeerSet) ContainsPeer(peerID identifiers.KramaID) bool {
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
@@ -62,12 +62,12 @@ func (ps *icsPeerSet) Len() int {
 }
 
 // List returns the list of krama id's from the icsPeerSet
-func (ps *icsPeerSet) List() []id.KramaID {
+func (ps *icsPeerSet) List() []identifiers.KramaID {
 	// Read Lock the icsPeerSet
 	ps.lock.RLock()
 	defer ps.lock.RUnlock()
 
-	peers := make([]id.KramaID, 0, len(ps.peers))
+	peers := make([]identifiers.KramaID, 0, len(ps.peers))
 
 	for kramaID := range ps.peers {
 		peers = append(peers, kramaID)
@@ -94,7 +94,7 @@ func (ps *icsPeerSet) Register(p *icsPeer) error {
 
 // Unregister is a method of icsPeerSet that unregisters a peer by removing it from the working set.
 // Returns an errNotRegistered if the peer is not part of the working set.
-func (ps *icsPeerSet) Unregister(kramaID id.KramaID) {
+func (ps *icsPeerSet) Unregister(kramaID identifiers.KramaID) {
 	ps.lock.Lock()
 	defer ps.lock.Unlock()
 
@@ -114,7 +114,7 @@ func (ps *icsPeerSet) ForEach(fn func(kPeer *icsPeer)) {
 // peerList represents a list of peers.
 type peerList struct {
 	mtx       sync.RWMutex
-	peers     map[id.KramaID]struct{}
+	peers     map[identifiers.KramaID]struct{}
 	updatedAt int64
 }
 
@@ -122,13 +122,13 @@ type peerList struct {
 func newPeerList() *peerList {
 	return &peerList{
 		mtx:       sync.RWMutex{},
-		peers:     make(map[id.KramaID]struct{}),
+		peers:     make(map[identifiers.KramaID]struct{}),
 		updatedAt: time.Now().Unix(),
 	}
 }
 
 // addPeer adds a KramaID to the peerList and updates the updatedAt timestamp.
-func (pl *peerList) addPeer(kramaID id.KramaID) {
+func (pl *peerList) addPeer(kramaID identifiers.KramaID) {
 	pl.mtx.Lock()
 	defer pl.mtx.Unlock()
 
@@ -137,10 +137,10 @@ func (pl *peerList) addPeer(kramaID id.KramaID) {
 }
 
 // getPeers returns the peerList.
-func (pl *peerList) getPeers() []id.KramaID {
+func (pl *peerList) getPeers() []identifiers.KramaID {
 	pl.mtx.RLock()
 	defer pl.mtx.RUnlock()
-	ls := make([]id.KramaID, 0, len(pl.peers))
+	ls := make([]identifiers.KramaID, 0, len(pl.peers))
 
 	for kramaID := range pl.peers {
 		ls = append(ls, kramaID)
@@ -173,7 +173,7 @@ func newTransitPeers() *transitPeers {
 }
 
 // add associates a KramaID with the given cluster ID.
-func (tp *transitPeers) add(clusterID common.ClusterID, kramaID id.KramaID) {
+func (tp *transitPeers) add(clusterID common.ClusterID, kramaID identifiers.KramaID) {
 	tp.mtx.Lock()
 	defer tp.mtx.Unlock()
 

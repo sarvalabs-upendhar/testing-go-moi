@@ -30,7 +30,6 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/crypto"
@@ -719,7 +718,7 @@ func (mc *MockIxPool) setIxs(id identifiers.Identifier, pending, queued []*commo
 }
 
 type MockNetwork struct {
-	peers             []kramaid.KramaID
+	peers             []identifiers.KramaID
 	version           string
 	conns             []network.Conn
 	inboundConnCount  int64
@@ -736,7 +735,7 @@ func NewMockNetwork(t *testing.T) *MockNetwork {
 	t.Helper()
 
 	mn := new(MockNetwork)
-	mn.peers = make([]kramaid.KramaID, 0)
+	mn.peers = make([]identifiers.KramaID, 0)
 	mn.version = ""
 	mn.conns = make([]network.Conn, 0)
 
@@ -751,15 +750,15 @@ func (mn *MockNetwork) GetConns() []network.Conn {
 	return mn.conns
 }
 
-func (mn *MockNetwork) GetKramaID() kramaid.KramaID {
+func (mn *MockNetwork) GetKramaID() identifiers.KramaID {
 	panic("implement me")
 }
 
-func (mn *MockNetwork) setPeers(peersList []kramaid.KramaID) {
+func (mn *MockNetwork) setPeers(peersList []identifiers.KramaID) {
 	mn.peers = peersList
 }
 
-func (mn *MockNetwork) GetPeers() []kramaid.KramaID {
+func (mn *MockNetwork) GetPeers() []identifiers.KramaID {
 	return mn.peers
 }
 

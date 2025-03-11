@@ -10,8 +10,8 @@ import (
 	"github.com/algorand/sortition"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto/vrf"
 	blst "github.com/supranational/blst/bindings/go"
@@ -30,7 +30,7 @@ const MaxEligibleOperators = 1
 
 type ICSOperators []*types.ICSOperatorInfo
 
-func (r ICSOperators) Has(kramaID kramaid.KramaID) bool {
+func (r ICSOperators) Has(kramaID identifiers.KramaID) bool {
 	for _, v := range r {
 		if v.KramaID == kramaID {
 			return true
@@ -96,7 +96,7 @@ func NewLotteryResult(isSelected bool, vrfOutput [32]byte, vrfProof []byte) *Lot
 
 // OperatorSelection handles the lottery process.
 type OperatorSelection struct {
-	selfID      kramaid.KramaID
+	selfID      identifiers.KramaID
 	cache       *lru.Cache
 	vault       vault
 	state       stateManager
@@ -106,7 +106,7 @@ type OperatorSelection struct {
 
 // NewOperatorSelection initializes and returns a new OperatorSelection instance.
 func NewOperatorSelection(
-	selfID kramaid.KramaID,
+	selfID identifiers.KramaID,
 	vault vault,
 	state stateManager,
 ) (*OperatorSelection, error) {
@@ -200,7 +200,7 @@ func (os *OperatorSelection) Select(operatorIncentive uint64, icsOutput [32]byte
 
 // VerifySelection verifies the ICS output and proof for a selected operator
 func (os *OperatorSelection) VerifySelection(
-	operator kramaid.KramaID,
+	operator identifiers.KramaID,
 	icsSeed,
 	icsOutput [32]byte,
 	icsProof []byte,
@@ -232,7 +232,7 @@ func (os *OperatorSelection) VerifySelection(
 	return os.Select(operatorIncentive, icsOutput)
 }
 
-func (os *OperatorSelection) AddICSOperatorInfo(key common.LotteryKey, kramaID kramaid.KramaID, priority uint64) {
+func (os *OperatorSelection) AddICSOperatorInfo(key common.LotteryKey, kramaID identifiers.KramaID, priority uint64) {
 	os.mtx.Lock()
 	defer os.mtx.Unlock()
 
@@ -276,7 +276,7 @@ func (os *OperatorSelection) AddICSOperatorInfo(key common.LotteryKey, kramaID k
 	os.ixOperators.Add(key, list)
 }
 
-func (os *OperatorSelection) IsEligible(key common.LotteryKey, kramaID kramaid.KramaID) bool {
+func (os *OperatorSelection) IsEligible(key common.LotteryKey, kramaID identifiers.KramaID) bool {
 	os.mtx.RLock()
 	defer os.mtx.RUnlock()
 

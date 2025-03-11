@@ -3,6 +3,7 @@ package senatus
 import (
 	"bytes"
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -17,7 +18,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -46,7 +46,7 @@ type chainManager interface {
 }
 
 type ReputationEngine struct {
-	kramaID           kramaid.KramaID
+	kramaID           identifiers.KramaID
 	ctx               context.Context
 	ctxCancel         context.CancelFunc
 	logger            hclog.Logger
@@ -209,7 +209,7 @@ func (r *ReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *NodeMetaIn
 	return nil
 }
 
-func (r *ReputationEngine) UpdateNTQ(kramaID kramaid.KramaID, ntq float32) error {
+func (r *ReputationEngine) UpdateNTQ(kramaID identifiers.KramaID, ntq float32) error {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return common.ErrInvalidKramaID
@@ -246,9 +246,11 @@ func (r *ReputationEngine) UpdateNTQ(kramaID kramaid.KramaID, ntq float32) error
 	return nil
 }
 
-func (r *ReputationEngine) UpdateWalletCount(kramaID kramaid.KramaID, delta int32) error {
+func (r *ReputationEngine) UpdateWalletCount(kramaID identifiers.KramaID, delta int32) error {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
+		log.Println("Invalid peer id", "krama-id", kramaID, "peer-id", peerID)
+
 		return common.ErrInvalidKramaID
 	}
 
@@ -292,7 +294,7 @@ func (r *ReputationEngine) UpdatePeerCount(count uint64) {
 	r.peerCount += count
 }
 
-func (r *ReputationEngine) GetAddress(kramaID kramaid.KramaID) ([]multiaddr.Multiaddr, error) {
+func (r *ReputationEngine) GetAddress(kramaID identifiers.KramaID) ([]multiaddr.Multiaddr, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return nil, common.ErrInvalidKramaID
@@ -324,7 +326,7 @@ func (r *ReputationEngine) GetRTTByPeerID(peerID peer.ID) (int64, error) {
 	return info.RTT, nil
 }
 
-func (r *ReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (kramaid.KramaID, error) {
+func (r *ReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (identifiers.KramaID, error) {
 	info, err := r.nodeMetaInfo(peerID)
 	if err != nil {
 		return "", err
@@ -333,7 +335,7 @@ func (r *ReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (kramaid.KramaID, 
 	return info.KramaID, nil
 }
 
-func (r *ReputationEngine) GetNTQ(kramaID kramaid.KramaID) (float32, error) {
+func (r *ReputationEngine) GetNTQ(kramaID identifiers.KramaID) (float32, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return 0, common.ErrInvalidKramaID
@@ -347,7 +349,7 @@ func (r *ReputationEngine) GetNTQ(kramaID kramaid.KramaID) (float32, error) {
 	return info.GetNTQ(), nil
 }
 
-func (r *ReputationEngine) GetWalletCount(kramaID kramaid.KramaID) (int32, error) {
+func (r *ReputationEngine) GetWalletCount(kramaID identifiers.KramaID) (int32, error) {
 	peerID, err := kramaID.DecodedPeerID()
 	if err != nil {
 		return 0, common.ErrInvalidKramaID
@@ -444,7 +446,7 @@ func (r *ReputationEngine) flushDirtyEntries() error {
 }
 
 // DeletePeers deletes peer ids through batch writer
-func (r *ReputationEngine) DeletePeers(ids []kramaid.KramaID) error {
+func (r *ReputationEngine) DeletePeers(ids []identifiers.KramaID) error {
 	writer := r.db.NewBatchWriter()
 
 	for _, id := range ids {
@@ -468,7 +470,7 @@ func (r *ReputationEngine) isSysAccSynced() bool {
 	return r.sysAccSyncDone
 }
 
-func (r *ReputationEngine) isGuardianRegisterd(kramaID kramaid.KramaID) bool {
+func (r *ReputationEngine) isGuardianRegisterd(kramaID identifiers.KramaID) bool {
 	// Generate the hash of the krama ID
 	kramaIDEncoded, _ := polo.Polorize(kramaID)
 	kramaIDHashed := common.GetHash(kramaIDEncoded)

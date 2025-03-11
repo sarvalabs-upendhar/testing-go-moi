@@ -3,10 +3,8 @@ package state
 import (
 	"math/big"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 type Transition struct {
@@ -89,14 +87,14 @@ func (t *Transition) CreateAsset(
 
 func (t *Transition) CreateContext(
 	id identifiers.Identifier,
-	consensusNodes []kramaid.KramaID,
+	consensusNodes []identifiers.KramaID,
 ) error {
 	return t.objects[id].CreateContext(consensusNodes)
 }
 
 func (t *Transition) UpdateContext(
 	id identifiers.Identifier,
-	consensusNodes []kramaid.KramaID,
+	consensusNodes []identifiers.KramaID,
 ) error {
 	return t.objects[id].UpdateContext(consensusNodes)
 }

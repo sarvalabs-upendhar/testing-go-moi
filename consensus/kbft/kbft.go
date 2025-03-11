@@ -9,11 +9,11 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/consensus/safety"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
-	"github.com/sarvalabs/go-moi/consensus/safety"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudracommon "github.com/sarvalabs/go-moi/crypto/common"
@@ -28,14 +28,14 @@ const (
 
 type vault interface {
 	Sign(data []byte, sigType mudracommon.SigType, signOptions ...crypto.SignOption) ([]byte, error)
-	KramaID() kramaid.KramaID
+	KramaID() identifiers.KramaID
 }
 
 // KBFT is a struct that represents the runner for the Krama Byzantine Fault Tolerant consensus engine
 type KBFT struct {
 	ViewState
 	logger           hclog.Logger
-	id               kramaid.KramaID
+	id               identifiers.KramaID
 	config           *config.ConsensusConfig
 	mx               sync.Mutex
 	inboundMsgChan   chan ktypes.ConsensusMessage
@@ -54,13 +54,13 @@ type KBFT struct {
 	tesseractHandler func(tesseract *common.Tesseract) error
 	safety           *safety.ConsensusSafety
 	exitChan         chan error
-	operator         kramaid.KramaID
+	operator         identifiers.KramaID
 }
 
 // NewKBFTService initializes a new KBFT instance for the ICS, this service holds the core logic for BFT agreement
 func NewKBFTService(
 	ctx context.Context,
-	operator kramaid.KramaID,
+	operator identifiers.KramaID,
 	viewDeadline time.Time,
 	config *config.ConsensusConfig,
 	vault vault,
@@ -510,7 +510,7 @@ func (kbft *KBFT) finalizeCommit(h map[identifiers.Identifier]uint64) {
 	kbft.Close(nil)
 }
 
-func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID kramaid.KramaID) (added bool, err error) {
+func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID identifiers.KramaID) (added bool, err error) {
 	_, span := tracing.Span(ctx, "Krama.KBFT", "addVote")
 	defer span.End()
 
@@ -743,7 +743,7 @@ func (kbft *KBFT) updateConsensusInfoInTesseracts(
 	return nil
 }
 
-func (kbft *KBFT) isLeader(view uint64, kramaID kramaid.KramaID) bool {
+func (kbft *KBFT) isLeader(view uint64, kramaID identifiers.KramaID) bool {
 	return kbft.operator == kramaID
 }
 

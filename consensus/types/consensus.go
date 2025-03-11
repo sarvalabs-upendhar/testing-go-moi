@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 
@@ -84,7 +83,7 @@ func (v *Vote) Validate() error {
 }
 
 type WALMsg struct {
-	PeerID  kramaid.KramaID
+	PeerID  identifiers.KramaID
 	MsgType networkmsgs.MsgType
 	Msg     []byte
 }
@@ -225,8 +224,8 @@ type ConsensusPayload interface {
 // ConsensusMessage is a struct that represents an envelope for a consensus message.
 // Implements the ConsensusPayload interface and wraps another message satisfying this interface.
 type ConsensusMessage struct {
-	PeerID    kramaid.KramaID
-	Recipient kramaid.KramaID
+	PeerID    identifiers.KramaID
+	Recipient identifiers.KramaID
 	// Represents the wrapped message
 	Payload ConsensusPayload
 }
@@ -294,7 +293,7 @@ func (c *ConsensusMessage) Validate() error {
 }
 
 type WantMessage struct {
-	PeerID   kramaid.KramaID
+	PeerID   identifiers.KramaID
 	MsgType  common.ConsensusMsgType
 	MsgIdxs  []int32
 	RespChan chan []*Vote

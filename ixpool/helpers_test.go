@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/hashicorp/go-hclog"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/crypto"
 	"golang.org/x/crypto/blake2b"
@@ -347,10 +347,10 @@ func (ms *MockExecutionManager) ValidateLogicDeploy(op *common.IxOp) error {
 type mockNetwork struct {
 	broadcasted   map[string][]byte
 	subscriptions map[string]struct{}
-	kramaID       kramaid.KramaID
+	kramaID       identifiers.KramaID
 }
 
-func newMockNetwork(kramaID kramaid.KramaID) *mockNetwork {
+func newMockNetwork(kramaID identifiers.KramaID) *mockNetwork {
 	return &mockNetwork{
 		broadcasted:   make(map[string][]byte),
 		subscriptions: make(map[string]struct{}),
@@ -372,7 +372,7 @@ func (m *mockNetwork) Broadcast(topicName string, data []byte) error {
 	return nil
 }
 
-func (m *mockNetwork) GetKramaID() kramaid.KramaID {
+func (m *mockNetwork) GetKramaID() identifiers.KramaID {
 	return m.kramaID
 }
 

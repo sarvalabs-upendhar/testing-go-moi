@@ -39,7 +39,7 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 		{
 			name: "Subscription request without id param",
 			request: Request{
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(`["newTesseractsByAccount"]`),
 			},
 			expectedErr: common.ErrInvalidParams,
@@ -48,7 +48,7 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 			name: "Subscription request without event param",
 			request: Request{
 				ID:     1.0,
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`[{"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 			expectedErr: errors.New("subscribe method  not found"),
@@ -57,7 +57,7 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 			name: "Subscription request with a non-existing event name",
 			request: Request{
 				ID:     2.0,
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["mockEvent", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 			expectedErr: errors.New("subscribe method mockEvent not found"),
@@ -66,14 +66,14 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 			name: "Subscription request with valid ts by account filter params",
 			request: Request{
 				ID:     3.0,
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
 		{
 			name: "Log subscription request without id param",
 			request: Request{
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(`["newLogs"]`),
 			},
 			expectedErr: common.ErrInvalidParams,
@@ -82,7 +82,7 @@ func Test_handleSingleWs_Subscribe(t *testing.T) {
 			name: "Subscription request with valid log filter params",
 			request: Request{
 				ID:     4.0,
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["newLogs", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
@@ -200,7 +200,7 @@ func Test_handleSingleWs_Unsubscribe(t *testing.T) {
 			name: "Unsubscribe request without subscription ID",
 			request: Request{
 				ID:     "1",
-				Method: "moi.unsubscribe",
+				Method: "moi.Unsubscribe",
 				Params: json.RawMessage(`[]`),
 			},
 			expectedErr: common.ErrInvalidParams,
@@ -209,7 +209,7 @@ func Test_handleSingleWs_Unsubscribe(t *testing.T) {
 			name: "Unsubscribe request with a subscription ID that doesn't exist",
 			request: Request{
 				ID:     "2",
-				Method: "moi.unsubscribe",
+				Method: "moi.Unsubscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["%s"]`, uuid.New().String())),
 			},
 			expected: false,
@@ -218,7 +218,7 @@ func Test_handleSingleWs_Unsubscribe(t *testing.T) {
 			name: "Unsubscribe request with valid subscription ID",
 			request: Request{
 				ID:     "3",
-				Method: "moi.unsubscribe",
+				Method: "moi.Unsubscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["%s"]`, mockConnManager.GetFilterID())),
 			},
 			expected: true,
@@ -269,7 +269,7 @@ func Test_handleSingleWs_formatID(t *testing.T) {
 			name: "should not return error, if the request id is of type string",
 			request: Request{
 				ID:     "id123",
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
@@ -277,14 +277,14 @@ func Test_handleSingleWs_formatID(t *testing.T) {
 			name: "should not return error, if the request id is of type float and significand value is 0",
 			request: Request{
 				ID:     2.0,
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
 		{
 			name: "should not return error, if the request id is not sent",
 			request: Request{
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
@@ -292,7 +292,7 @@ func Test_handleSingleWs_formatID(t *testing.T) {
 			name: "should return error, if the request id is of type float and significand value is greater than 0",
 			request: Request{
 				ID:     2.1,
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 			expectedErr: errors.New("invalid json request"),
@@ -301,7 +301,7 @@ func Test_handleSingleWs_formatID(t *testing.T) {
 			name: "should not return error, if the request id is null",
 			request: Request{
 				ID:     nil,
-				Method: "moi.subscribe",
+				Method: "moi.Subscribe",
 				Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 			},
 		},
@@ -525,7 +525,7 @@ func Test_handleWs(t *testing.T) {
 			requestBody: func() []byte {
 				req := Request{
 					ID:     "1",
-					Method: "moi.subscribe",
+					Method: "moi.Subscribe",
 					Params: json.RawMessage(`["newTesseracts"]`),
 				}
 				reqBody, _ := json.Marshal(req)
@@ -539,12 +539,12 @@ func Test_handleWs(t *testing.T) {
 				reqs := []Request{
 					{
 						ID:     "1",
-						Method: "moi.subscribe",
+						Method: "moi.Subscribe",
 						Params: json.RawMessage(`["newTesseracts"]`),
 					},
 					{
 						ID:     "2",
-						Method: "moi.subscribe",
+						Method: "moi.Subscribe",
 						Params: json.RawMessage(`["newTesseracts"]`),
 					},
 				}
@@ -566,7 +566,7 @@ func Test_handleWs(t *testing.T) {
 				for i := range reqs {
 					reqs[i] = Request{
 						ID:     fmt.Sprintf("%d", i),
-						Method: "moi.subscribe",
+						Method: "moi.Subscribe",
 						Params: json.RawMessage(`["newTesseracts"]`),
 					}
 				}

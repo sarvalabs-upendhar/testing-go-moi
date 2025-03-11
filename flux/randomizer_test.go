@@ -5,7 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -89,7 +90,7 @@ func TestRandomizer_GetRandomNodes(t *testing.T) {
 		name          string
 		ctx           context.Context
 		count         int
-		avoidPeers    []kramaid.KramaID
+		avoidPeers    []identifiers.KramaID
 		expectedError error
 	}{
 		{

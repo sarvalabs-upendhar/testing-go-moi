@@ -10,8 +10,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-
-	"github.com/sarvalabs/go-legacy-kramaid"
 )
 
 // MoiNodeRegistry Holds the baseURL of the RPC/HTTP host
@@ -198,6 +196,7 @@ func (mnR *MoiNodeRegistry) UpdateNode(upgradeBool bool,
 	return true, nil
 }
 
+/*
 // GetNodePublicKey used to fetch publicKey of node in MoiNet
 func (mnR *MoiNodeRegistry) GetNodePublicKey(nodeKramaID kramaid.KramaID) ([]byte, error) {
 	userMoiID, err := nodeKramaID.MoiID()
@@ -251,3 +250,4 @@ func (mnR *MoiNodeRegistry) GetNodePublicKey(nodeKramaID kramaid.KramaID) ([]byt
 		return nil, errors.New(string(body))
 	}
 }
+*/

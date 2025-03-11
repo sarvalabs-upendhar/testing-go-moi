@@ -22,7 +22,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -262,7 +261,7 @@ func (m *MockStateManager) GetLatestStateObject(id identifiers.Identifier) (*sta
 
 func (m *MockStateManager) GetConsensusNodesByHash(id identifiers.Identifier,
 	hash common.Hash,
-) ([]kramaid.KramaID, error) {
+) ([]identifiers.KramaID, error) {
 	// TODO implement me
 	panic("implement me")
 }
@@ -576,7 +575,7 @@ func subscribeToNewTesseractEvent(t *testing.T, dispatcher *dispatcher, mockConn
 
 	request := Request{
 		ID:     1.0,
-		Method: "moi.subscribe",
+		Method: "moi.Subscribe",
 		Params: json.RawMessage(fmt.Sprintf(`["newTesseractsByAccount", {"id": "%s"}]`, tests.RandomIdentifier(t))),
 	}
 

@@ -42,7 +42,6 @@ type cryptoParams struct {
 
 // cryptoParams is cryptographic params for node keystore
 type nodeKeystore struct {
-	MoiID       string       `json:"moiID"`
 	NodeAddress string       `json:"address"`
 	KramaID     string       `json:"kramaID"`
 	NodeType    string       `json:"nodeType"`

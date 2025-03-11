@@ -6,8 +6,6 @@ import (
 	"math/big"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/spf13/cobra"
 
 	cmdcommon "github.com/sarvalabs/go-moi/cmd/common"
@@ -97,14 +95,14 @@ func createTestGenesisFile() {
 	}
 
 	// fetch krama ids in round robin manner
-	getKramaIDs := func(count int) []kramaid.KramaID {
-		ids := make([]kramaid.KramaID, 0, count)
+	getKramaIDs := func(count int) []identifiers.KramaID {
+		ids := make([]identifiers.KramaID, 0, count)
 
 		for i := 0; i < count; i++ {
 			kid := kramaIDs[kidTracker]
 			kidTracker = (kidTracker + 1) % totalIDs
 
-			ids = append(ids, kramaid.KramaID(kid))
+			ids = append(ids, identifiers.KramaID(kid))
 		}
 
 		return ids

@@ -12,7 +12,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state/tree"
@@ -1177,7 +1176,7 @@ func (object *Object) IsAccountRegistered(id identifiers.Identifier) (bool, erro
 }
 
 // CreateContext creates a context object with given nodes and returns its hash.
-func (object *Object) CreateContext(consensusNodes []kramaid.KramaID) error {
+func (object *Object) CreateContext(consensusNodes []identifiers.KramaID) error {
 	if len(consensusNodes) < MinimumContextSize {
 		return errors.New("liveliness size not met")
 	}
@@ -1199,7 +1198,7 @@ func (object *Object) CreateContext(consensusNodes []kramaid.KramaID) error {
 }
 
 // UpdateContext updates the context with new nodes and returns the new context hash.
-func (object *Object) UpdateContext(consensusNodes []kramaid.KramaID) error {
+func (object *Object) UpdateContext(consensusNodes []identifiers.KramaID) error {
 	if len(consensusNodes) == 0 || object.Identifier().IsParticipantVariant() {
 		return nil
 	}
@@ -1627,7 +1626,7 @@ func (object *Object) DeductFuel(amount *big.Int) {
 	_ = object.SubBalance(common.KMOITokenAssetID, amount)
 }
 
-func (object *Object) ConsensusNodes() []kramaid.KramaID {
+func (object *Object) ConsensusNodes() []identifiers.KramaID {
 	return object.metaContext.ConsensusNodes
 }
 

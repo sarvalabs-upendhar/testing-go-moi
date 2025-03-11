@@ -19,7 +19,6 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/state/tree"
@@ -318,7 +317,7 @@ func (sm *StateManager) GetMetaContextObject(id identifiers.Identifier, hash com
 
 func (sm *StateManager) GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 	latestContextHash common.Hash,
-	consensusNodes []kramaid.KramaID,
+	consensusNodes []identifiers.KramaID,
 	consensusNodesHash common.Hash,
 	consensusPublicKeys [][]byte,
 	err error,
@@ -425,7 +424,7 @@ func (sm *StateManager) GetParticipantContextRaw(
 func (sm *StateManager) GetConsensusNodesByHash(
 	id identifiers.Identifier,
 	hash common.Hash,
-) ([]kramaid.KramaID, error) {
+) ([]identifiers.KramaID, error) {
 	if id.IsNil() || hash.IsNil() {
 		return nil, common.ErrEmptyHashAndID
 	}
@@ -643,7 +642,7 @@ func (sm *StateManager) GetAccountState(id identifiers.Identifier, stateHash com
 	return accInfo, nil
 }
 
-func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaID) ([][]byte, error) {
+func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...identifiers.KramaID) ([][]byte, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("Empty Ids")
 	}
@@ -666,7 +665,7 @@ func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...kramaid.KramaI
 	return guardianregistry.GetGuardianPublicKeys(storageReader, ids...)
 }
 
-func (sm *StateManager) GetGuardianIncentives(id kramaid.KramaID) (uint64, error) {
+func (sm *StateManager) GetGuardianIncentives(id identifiers.KramaID) (uint64, error) {
 	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
 
 	defer func() {

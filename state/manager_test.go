@@ -12,7 +12,6 @@ import (
 	"github.com/decred/dcrd/crypto/blake256"
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/hashicorp/golang-lru"
-	id "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1866,7 +1865,7 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 		name             string
 		id               identifiers.Identifier
 		ctxHash          common.Hash
-		consensusSet     []id.KramaID
+		consensusSet     []identifiers.KramaID
 		consensusSetHash common.Hash
 		consensusKeys    [][]byte
 		expectedError    error
@@ -3333,7 +3332,7 @@ func TestStateManager_GetPublicKeys(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		kramaIDs      []id.KramaID
+		kramaIDs      []identifiers.KramaID
 		sm            *StateManager
 		expectedError error
 	}{

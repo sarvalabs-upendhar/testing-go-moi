@@ -23,8 +23,8 @@ func FuzzDispatcherWsUnsubscribe(f *testing.F) {
 	mockConnManager := NewMockConnectionManager()
 
 	seeds := []string{
-		`{"method": "moi.unsubscribe", "params": ["12345"]}`,
-		`{"method": "moi.subscribe", "params": ["newTesseracts"]}`,
+		`{"method": "moi.Unsubscribe", "params": ["12345"]}`,
+		`{"method": "moi.Subscribe", "params": ["newTesseracts"]}`,
 	}
 
 	for _, seed := range seeds {

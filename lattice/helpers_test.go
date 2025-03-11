@@ -14,7 +14,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/stretchr/testify/require"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -407,16 +406,16 @@ func (bw *mockBatchWriter) Flush() error {
 }
 
 type MockNetwork struct {
-	kramaID kramaid.KramaID
+	kramaID identifiers.KramaID
 }
 
 // mock network implementation
 
-func (n *MockNetwork) SetKramaID(id kramaid.KramaID) {
+func (n *MockNetwork) SetKramaID(id identifiers.KramaID) {
 	n.kramaID = id
 }
 
-func (n *MockNetwork) GetKramaID() kramaid.KramaID {
+func (n *MockNetwork) GetKramaID() identifiers.KramaID {
 	return n.kramaID
 }
 
@@ -451,11 +450,11 @@ func (i *MockIXPool) RemoveCachedObject(id identifiers.Identifier) {
 }
 
 type MockSenatus struct {
-	WalletCount           map[kramaid.KramaID]int32
+	WalletCount           map[identifiers.KramaID]int32
 	UpdateWalletCountHook func() error
 }
 
-func (s *MockSenatus) UpdateWalletCount(peerID kramaid.KramaID, delta int32) error {
+func (s *MockSenatus) UpdateWalletCount(peerID identifiers.KramaID, delta int32) error {
 	if s.UpdateWalletCountHook != nil {
 		return s.UpdateWalletCountHook()
 	}
@@ -589,7 +588,7 @@ func mockSenatus(t *testing.T) *MockSenatus {
 	t.Helper()
 
 	return &MockSenatus{
-		WalletCount: make(map[kramaid.KramaID]int32),
+		WalletCount: make(map[identifiers.KramaID]int32),
 	}
 }
 

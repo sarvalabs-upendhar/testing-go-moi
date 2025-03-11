@@ -189,7 +189,7 @@ func runRegisterCommand(cmd *cobra.Command, args []string) {
 		InMemory:                 false,
 		MnemonicKeystorePath:     mnemonicKeystorePath,
 		MnemonicKeystorePassword: mnemonicKeystorePassword,
-	}, moinode.MoiFullNode, 1)
+	}, moinode.MoiFullNode, 0)
 	if err != nil {
 		cmdCommon.Err(err)
 	}
@@ -219,10 +219,10 @@ func registerGuardian(vault *crypto.KramaVault) {
 	}
 
 	// Get the operator MOI ID from the vault
-	moiID, err := vault.MoiID()
-	if err != nil {
-		cmdCommon.Err(errors.Wrap(err, "failed to generate moiID"))
-	}
+	// moiID, err := vault.MoiID()
+	// if err != nil {
+	//	 cmdCommon.Err(errors.Wrap(err, "failed to generate moiID"))
+	// }
 
 	fmt.Printf("Krama-ID %s \n", vault.KramaID())
 
@@ -243,9 +243,9 @@ func registerGuardian(vault *crypto.KramaVault) {
 		Calldata: func() polo.Document {
 			// Create a guardian object to register
 			guardian := guardianregistry.Guardian{
-				OperatorID: moiID,
-				KramaID:    string(vault.KramaID()),
-				PublicKey:  vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+				// OperatorID: moiID, TODO[Krama]: Check if this field is required
+				KramaID:   string(vault.KramaID()),
+				PublicKey: vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
 				Incentive: guardianregistry.Incentive{
 					Wallet: sender.AsIdentifier(),
 				},

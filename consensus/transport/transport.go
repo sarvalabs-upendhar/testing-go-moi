@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/network/p2p"
 
 	"github.com/libp2p/go-libp2p/core/connmgr"
@@ -23,7 +25,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/pkg/errors"
-	id "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/consensus/types"
@@ -43,7 +44,7 @@ type Network interface {
 
 // ConnectionManager defines the interface for managing peer connections.
 type ConnectionManager interface {
-	ConnectPeerByKramaID(ctx context.Context, kramaID id.KramaID) error
+	ConnectPeerByKramaID(ctx context.Context, kramaID identifiers.KramaID) error
 	SetupStreamHandler(protocolID protocol.ID, tag string, handle func(p2pnet.Stream))
 	NewStream(ctx context.Context, id peer.ID, protocol protocol.ID, tag string) (p2pnet.Stream, error)
 	GetConnInfo(peerID peer.ID) *connmgr.TagInfo
@@ -106,12 +107,12 @@ func (crs *contextRouters) remove(clusterID common.ClusterID) {
 
 type msg struct {
 	msgType message.MsgType
-	kramaID id.KramaID
+	kramaID identifiers.KramaID
 	msg     []byte
 }
 
 type closePeer struct {
-	kramaID      id.KramaID
+	kramaID      identifiers.KramaID
 	isDirectPeer bool
 }
 
@@ -119,7 +120,7 @@ type closePeer struct {
 type KramaTransport struct {
 	ctx            context.Context
 	ctxCancel      context.CancelFunc
-	selfID         id.KramaID
+	selfID         identifiers.KramaID
 	logger         hclog.Logger
 	metrics        *Metrics
 	network        Network
@@ -138,7 +139,7 @@ type KramaTransport struct {
 
 // NewKramaTransport creates a new instance of KramaTransport.
 func NewKramaTransport(
-	selfID id.KramaID,
+	selfID identifiers.KramaID,
 	logger hclog.Logger,
 	metrics *Metrics,
 	network Network,
@@ -182,7 +183,7 @@ func (kt *KramaTransport) Messages() <-chan *types.ICSMSG {
 
 func (kt *KramaTransport) ConnectToDirectPeer(
 	ctx context.Context,
-	kramaID id.KramaID,
+	kramaID identifiers.KramaID,
 	clusterID common.ClusterID,
 ) error {
 	if kramaID == kt.selfID {
@@ -314,7 +315,7 @@ func (kt *KramaTransport) handleDeadDirectPeer(kPeer *icsPeer) {
 	}
 }
 
-func (kt *KramaTransport) SendMessageTransientPeer(kramaID id.KramaID, m []byte) error {
+func (kt *KramaTransport) SendMessageTransientPeer(kramaID identifiers.KramaID, m []byte) error {
 	timedCtx, cancel := context.WithTimeout(context.Background(), ConnectionTimeout)
 	defer cancel()
 
@@ -465,7 +466,7 @@ func (kt *KramaTransport) handleMeshStream(stream p2pnet.Stream) {
 // RegisterContextRouter creates and registers a ContextRouter for a given cluster ID.
 func (kt *KramaTransport) RegisterContextRouter(
 	ctx context.Context,
-	operator id.KramaID,
+	operator identifiers.KramaID,
 	clusterID common.ClusterID,
 	nodeset *types.ICSCommittee,
 	voteset *types.HeightVoteSet,
@@ -510,9 +511,9 @@ func (kt *KramaTransport) DeregisterContextRouter(clusterID common.ClusterID) {
 	kt.logger.Trace("Context router de-registered", "cluster-id", clusterID)
 }
 
-func (kt *KramaTransport) CleanDirectPeer(clusterID common.ClusterID, peers ...id.KramaID) {
+func (kt *KramaTransport) CleanDirectPeer(clusterID common.ClusterID, peers ...identifiers.KramaID) {
 	for _, kramaID := range peers {
-		func(kramaID id.KramaID) {
+		func(kramaID identifiers.KramaID) {
 			kPeer := kt.directPeerset.Peer(kramaID)
 			if kPeer == nil {
 				return
@@ -541,7 +542,7 @@ func (kt *KramaTransport) CleanDirectPeer(clusterID common.ClusterID, peers ...i
 // SendMessage sends a message to a specific peer identified by peerID.
 func (kt *KramaTransport) SendMessage(
 	ctx context.Context,
-	peerID id.KramaID,
+	peerID identifiers.KramaID,
 	icsMsg *types.ICSMSG,
 ) error {
 	if peerID == kt.selfID {

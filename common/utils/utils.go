@@ -18,11 +18,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
-
 	"github.com/sarvalabs/go-moi/common"
 )
 
@@ -174,7 +174,7 @@ func MultiAddrFromString(maddr ...string) (addrs []multiaddr.Multiaddr) {
 	return
 }
 
-func ContainsKramaID(set []kramaid.KramaID, id kramaid.KramaID) bool {
+func ContainsKramaID(set []identifiers.KramaID, id identifiers.KramaID) bool {
 	for _, v := range set {
 		if v == id {
 			return true
@@ -184,7 +184,7 @@ func ContainsKramaID(set []kramaid.KramaID, id kramaid.KramaID) bool {
 	return false
 }
 
-func GetNetworkID(id kramaid.KramaID) (peer.ID, error) {
+func GetNetworkID(id identifiers.KramaID) (peer.ID, error) {
 	networkID, err := id.PeerID()
 	if err != nil {
 		return "", nil
@@ -221,17 +221,17 @@ func ValidateHash(hash string) (string, error) {
 	return hash, nil
 }
 
-func KramaIDFromString(nodes []string) []kramaid.KramaID {
-	ids := make([]kramaid.KramaID, 0, len(nodes))
+func KramaIDFromString(nodes []string) []identifiers.KramaID {
+	ids := make([]identifiers.KramaID, 0, len(nodes))
 
 	for _, v := range nodes {
-		ids = append(ids, kramaid.KramaID(v))
+		ids = append(ids, identifiers.KramaID(v))
 	}
 
 	return ids
 }
 
-func KramaIDToString(peers []kramaid.KramaID) []string {
+func KramaIDToString(peers []identifiers.KramaID) []string {
 	ids := make([]string, 0, len(peers))
 
 	for _, v := range peers {
@@ -269,8 +269,8 @@ func ResolveAddr(raw string) (*net.TCPAddr, error) {
 	return addr, nil
 }
 
-func ConvertMapToSlice(m map[kramaid.KramaID]struct{}) []kramaid.KramaID {
-	slice := make([]kramaid.KramaID, 0)
+func ConvertMapToSlice(m map[identifiers.KramaID]struct{}) []identifiers.KramaID {
+	slice := make([]identifiers.KramaID, 0)
 
 	for k := range m {
 		slice = append(slice, k)

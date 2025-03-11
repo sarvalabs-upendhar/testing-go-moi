@@ -10,7 +10,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -21,8 +21,8 @@ type PeerManager struct {
 	sessionID      identifiers.Identifier
 	logger         hclog.Logger
 	mtx            sync.Mutex
-	peers          map[kramaid.KramaID]*PeerInfo
-	connectedPeers map[kramaid.KramaID]interface{}
+	peers          map[identifiers.KramaID]*PeerInfo
+	connectedPeers map[identifiers.KramaID]interface{}
 	network        sessionNetwork
 }
 
@@ -36,13 +36,13 @@ func NewSessionPeerManager(id identifiers.Identifier, logger hclog.Logger, netwo
 	return &PeerManager{
 		sessionID:      id,
 		logger:         logger.Named("Peer-Manager"),
-		peers:          make(map[kramaid.KramaID]*PeerInfo),
-		connectedPeers: make(map[kramaid.KramaID]interface{}),
+		peers:          make(map[identifiers.KramaID]*PeerInfo),
+		connectedPeers: make(map[identifiers.KramaID]interface{}),
 		network:        network,
 	}
 }
 
-func (spm *PeerManager) PeerRespChan(peerID kramaid.KramaID) <-chan bool {
+func (spm *PeerManager) PeerRespChan(peerID identifiers.KramaID) <-chan bool {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -54,7 +54,7 @@ func (spm *PeerManager) PeerRespChan(peerID kramaid.KramaID) <-chan bool {
 	return peerInfo.resp
 }
 
-func (spm *PeerManager) peerConnected(peer kramaid.KramaID) {
+func (spm *PeerManager) peerConnected(peer identifiers.KramaID) {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -77,7 +77,7 @@ func (spm *PeerManager) PeerDisconnected(id peer.ID) {
 	}
 }
 
-func (spm *PeerManager) AddPeers(peers ...kramaid.KramaID) {
+func (spm *PeerManager) AddPeers(peers ...identifiers.KramaID) {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -90,7 +90,7 @@ func (spm *PeerManager) AddPeers(peers ...kramaid.KramaID) {
 	}
 }
 
-func (spm *PeerManager) Signal(peerID kramaid.KramaID, status bool) error {
+func (spm *PeerManager) Signal(peerID identifiers.KramaID, status bool) error {
 	spm.mtx.Lock()
 
 	info, ok := spm.peers[peerID]
@@ -107,7 +107,7 @@ func (spm *PeerManager) Signal(peerID kramaid.KramaID, status bool) error {
 	return nil
 }
 
-func (spm *PeerManager) PeerStatus(id kramaid.KramaID) bool {
+func (spm *PeerManager) PeerStatus(id identifiers.KramaID) bool {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -119,7 +119,7 @@ func (spm *PeerManager) PeerStatus(id kramaid.KramaID) bool {
 	return info.isActive
 }
 
-func (spm *PeerManager) UpdatePeerStatus(id kramaid.KramaID, status bool) bool {
+func (spm *PeerManager) UpdatePeerStatus(id identifiers.KramaID, status bool) bool {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -133,7 +133,7 @@ func (spm *PeerManager) UpdatePeerStatus(id kramaid.KramaID, status bool) bool {
 	return true
 }
 
-func (spm *PeerManager) UpdateFailedAttempts(peer kramaid.KramaID, delta int) bool {
+func (spm *PeerManager) UpdateFailedAttempts(peer identifiers.KramaID, delta int) bool {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
@@ -149,13 +149,13 @@ func (spm *PeerManager) UpdateFailedAttempts(peer kramaid.KramaID, delta int) bo
 
 func (spm *PeerManager) chooseBestPeer(
 	ctx context.Context,
-	avoidPeers map[kramaid.KramaID]interface{},
-) (kramaid.KramaID, error) {
+	avoidPeers map[identifiers.KramaID]interface{},
+) (identifiers.KramaID, error) {
 	spm.mtx.Lock()
 	defer spm.mtx.Unlock()
 
 	if count := len(spm.connectedPeers); count > 0 {
-		rejectedPeer := make(map[kramaid.KramaID]bool)
+		rejectedPeer := make(map[identifiers.KramaID]bool)
 		for len(rejectedPeer) < count {
 			select {
 			case <-ctx.Done():
@@ -184,7 +184,7 @@ func (spm *PeerManager) chooseBestPeer(
 	}
 
 	if count := len(spm.peers); count > 0 {
-		rejectedPeer := make(map[kramaid.KramaID]bool)
+		rejectedPeer := make(map[identifiers.KramaID]bool)
 		for len(rejectedPeer) < count {
 			select {
 			case <-ctx.Done():
@@ -214,7 +214,7 @@ func (spm *PeerManager) chooseBestPeer(
 	return "", common.ErrPeerNotAvailable
 }
 
-func (spm *PeerManager) SendWantReq(peer kramaid.KramaID, msg *message.AgoraRequestMsg) error {
+func (spm *PeerManager) SendWantReq(peer identifiers.KramaID, msg *message.AgoraRequestMsg) error {
 	if err := spm.network.SendAgoraMessage(peer, networkmsg.AGORAREQ, msg); err != nil {
 		return err
 	}

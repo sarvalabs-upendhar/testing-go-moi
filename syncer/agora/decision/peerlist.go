@@ -4,8 +4,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
@@ -14,23 +15,23 @@ import (
 type PeerList struct {
 	mtx           sync.RWMutex
 	lastUpdatedAt int64
-	peers         map[kramaid.KramaID]struct{}
+	peers         map[identifiers.KramaID]struct{}
 }
 
 func NewPeerList() *PeerList {
 	p := &PeerList{
 		lastUpdatedAt: 0,
-		peers:         make(map[kramaid.KramaID]struct{}),
+		peers:         make(map[identifiers.KramaID]struct{}),
 	}
 
 	return p
 }
 
-func (plist *PeerList) Peers() []kramaid.KramaID {
+func (plist *PeerList) Peers() []identifiers.KramaID {
 	plist.mtx.RLock()
 	defer plist.mtx.RUnlock()
 
-	ids := make([]kramaid.KramaID, 0, len(plist.peers))
+	ids := make([]identifiers.KramaID, 0, len(plist.peers))
 
 	for k := range plist.peers {
 		ids = append(ids, k)
@@ -46,7 +47,7 @@ func (plist *PeerList) LastUpdatedAt() int64 {
 	return plist.lastUpdatedAt
 }
 
-func (plist *PeerList) AddPeer(peerID kramaid.KramaID) {
+func (plist *PeerList) AddPeer(peerID identifiers.KramaID) {
 	plist.mtx.Lock()
 	defer plist.mtx.Unlock()
 
@@ -81,7 +82,7 @@ func (plist *PeerList) CanonicalPeerList() *CanonicalPeerList {
 }
 
 type CanonicalPeerList struct {
-	Peers         []kramaid.KramaID
+	Peers         []identifiers.KramaID
 	LastUpdatedAt int64
 }
 

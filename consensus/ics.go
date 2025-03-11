@@ -5,13 +5,12 @@ import (
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/state"
 )
 
-func (k *Engine) NodeSet(ids []kramaid.KramaID, setSizeWithoutDelta uint32) (*types.NodeSet, error) {
+func (k *Engine) NodeSet(ids []identifiers.KramaID, setSizeWithoutDelta uint32) (*types.NodeSet, error) {
 	var (
 		publicKeys [][]byte
 		err        error

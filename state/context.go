@@ -2,7 +2,6 @@ package state
 
 import (
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 
@@ -10,7 +9,7 @@ import (
 )
 
 type MetaContextObject struct {
-	ConsensusNodes     []kramaid.KramaID
+	ConsensusNodes     []identifiers.KramaID
 	SubAccounts        map[identifiers.Identifier]identifiers.Identifier
 	InheritedAccount   identifiers.Identifier
 	ConsensusNodesHash common.Hash

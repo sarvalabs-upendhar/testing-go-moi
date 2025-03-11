@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -22,7 +24,6 @@ import (
 	"github.com/libp2p/go-msgio"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 
@@ -48,14 +49,14 @@ type MockVault struct {
 }
 
 type MockReputationEngine struct {
-	ntq      map[kramaid.KramaID]float32
+	ntq      map[identifiers.KramaID]float32
 	peerInfo map[peer.ID]*senatus.NodeMetaInfo
 	mutex    sync.RWMutex
 }
 
 func NewMockReputationEngine() *MockReputationEngine {
 	return &MockReputationEngine{
-		ntq:      make(map[kramaid.KramaID]float32),
+		ntq:      make(map[identifiers.KramaID]float32),
 		peerInfo: make(map[peer.ID]*senatus.NodeMetaInfo),
 	}
 }
@@ -78,7 +79,7 @@ func (m *MockReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *senatu
 	return nil
 }
 
-func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
+func (m *MockReputationEngine) GetNTQ(id identifiers.KramaID) (float32, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -90,14 +91,14 @@ func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
 	return ntq, nil
 }
 
-func (m *MockReputationEngine) SetNTQ(id kramaid.KramaID, val int) {
+func (m *MockReputationEngine) SetNTQ(id identifiers.KramaID, val int) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	m.ntq[id] = float32(val)
 }
 
-func (m *MockReputationEngine) GetAddress(key kramaid.KramaID) ([]multiaddr.Multiaddr, error) {
+func (m *MockReputationEngine) GetAddress(key identifiers.KramaID) ([]multiaddr.Multiaddr, error) {
 	peerID, err := key.DecodedPeerID()
 	if err != nil {
 		return nil, common.ErrInvalidKramaID
@@ -117,7 +118,7 @@ func (m *MockReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.M
 	return nil, common.ErrKramaIDNotFound
 }
 
-func (m *MockReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (kramaid.KramaID, error) {
+func (m *MockReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (identifiers.KramaID, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -247,7 +248,7 @@ func (vault *MockVault) SetNetworkPrivateKey(t *testing.T, privKeyBytes []byte) 
 	vault.networkPrivateKey = networkPrivKey
 }
 
-func setServerPeers(t *testing.T, s *Server, peersList ...kramaid.KramaID) {
+func setServerPeers(t *testing.T, s *Server, peersList ...identifiers.KramaID) {
 	t.Helper()
 
 	for _, kPeer := range peersList {
@@ -799,7 +800,7 @@ func assertNodeMetaInfoInSenatus(t *testing.T, source *Server, peerID peer.ID, s
 	require.Error(t, err)
 }
 
-func validateMessage(t *testing.T, id kramaid.KramaID, msg *networkmsg.Message) {
+func validateMessage(t *testing.T, id identifiers.KramaID, msg *networkmsg.Message) {
 	t.Helper()
 
 	require.Equal(t, networkmsg.HANDSHAKEMSG, msg.MsgType)

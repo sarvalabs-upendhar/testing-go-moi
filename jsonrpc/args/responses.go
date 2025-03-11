@@ -10,7 +10,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/libp2p/go-libp2p/core/protocol"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 )
@@ -281,7 +280,7 @@ type WaitTimeResponse struct {
 // Net RPC Responses
 
 type NodeInfoResponse struct {
-	KramaID kramaid.KramaID `json:"krama_id"`
+	KramaID identifiers.KramaID `json:"krama_id"`
 }
 
 // Debug RPC Responses
@@ -297,10 +296,10 @@ type Connection struct {
 }
 
 type NodeMetaInfoResponse struct {
-	Addrs       []string        `json:"addrs"`
-	KramaID     kramaid.KramaID `json:"krama_id"`
-	RTT         hexutil.Uint64  `json:"rtt"`
-	WalletCount hexutil.Uint    `json:"wallet_count"`
+	Addrs       []string            `json:"addrs"`
+	KramaID     identifiers.KramaID `json:"krama_id"`
+	RTT         hexutil.Uint64      `json:"rtt"`
+	WalletCount hexutil.Uint        `json:"wallet_count"`
 }
 
 type ConnectionsResponse struct {
@@ -311,15 +310,15 @@ type ConnectionsResponse struct {
 }
 
 type SyncJobInfo struct {
-	SyncMode              string            `json:"sync_mode"`
-	SnapDownloaded        bool              `json:"snap_downloaded"`
-	ExpectedHeight        uint64            `json:"expected_height"`
-	CurrentHeight         uint64            `json:"current_height"`
-	JobState              string            `json:"job_state"`
-	LastModifiedAt        time.Time         `json:"last_modified_at"`
-	TesseractQueueLen     uint64            `json:"tesseract_queue_length"`
-	BestPeers             []kramaid.KramaID `json:"best_peers"`
-	LatticeSyncInProgress bool              `json:"lattice_sync_in_progress"`
+	SyncMode              string                `json:"sync_mode"`
+	SnapDownloaded        bool                  `json:"snap_downloaded"`
+	ExpectedHeight        uint64                `json:"expected_height"`
+	CurrentHeight         uint64                `json:"current_height"`
+	JobState              string                `json:"job_state"`
+	LastModifiedAt        time.Time             `json:"last_modified_at"`
+	TesseractQueueLen     uint64                `json:"tesseract_queue_length"`
+	BestPeers             []identifiers.KramaID `json:"best_peers"`
+	LatticeSyncInProgress bool                  `json:"lattice_sync_in_progress"`
 }
 
 type RPCTopicScore struct {
@@ -377,7 +376,7 @@ func (participants RPCParticipantsStates) Sort() {
 }
 
 type RPCPoXtData struct {
-	Proposer     kramaid.KramaID                            `json:"operator"`
+	Proposer     identifiers.KramaID                        `json:"operator"`
 	BinaryHash   common.Hash                                `json:"binary_hash"`
 	IdentityHash common.Hash                                `json:"identity_hash"`
 	View         hexutil.Uint64                             `json:"view"`
@@ -420,12 +419,12 @@ type RPCQc struct {
 }
 
 type RPCCommitInfo struct {
-	QC                        *RPCQc            `json:"commit_qc"`
-	Operator                  kramaid.KramaID   `json:"operator"`
-	ClusterID                 common.ClusterID  `json:"cluster_id"`
-	View                      uint64            `json:"commit_view"`
-	RandomSet                 []kramaid.KramaID `json:"random_set"`
-	RandomSetSizeWithoutDelta uint32            `json:"random_set_size"`
+	QC                        *RPCQc                `json:"commit_qc"`
+	Operator                  identifiers.KramaID   `json:"operator"`
+	ClusterID                 common.ClusterID      `json:"cluster_id"`
+	View                      uint64                `json:"commit_view"`
+	RandomSet                 []identifiers.KramaID `json:"random_set"`
+	RandomSetSizeWithoutDelta uint32                `json:"random_set_size"`
 }
 
 func CreateRPCCommitInfo(info *common.CommitInfo) RPCCommitInfo {

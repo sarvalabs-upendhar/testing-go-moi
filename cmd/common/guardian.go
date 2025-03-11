@@ -9,8 +9,9 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/compute/pisa"
@@ -22,7 +23,7 @@ import (
 	"github.com/sarvalabs/go-polo"
 )
 
-func IsGuardianRegistered(client *moiclient.Client, kramaID kramaid.KramaID) (bool, error) {
+func IsGuardianRegistered(client *moiclient.Client, kramaID identifiers.KramaID) (bool, error) {
 	// Generate the hash of the krama ID
 	kramaIDEncoded, _ := polo.Polorize(kramaID)
 	kramaIDHashed := common.GetHash(kramaIDEncoded)

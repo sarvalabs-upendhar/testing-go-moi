@@ -4,8 +4,6 @@ import (
 	"time"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -35,7 +33,7 @@ type TSTrackerEvent struct {
 type SyncRequestEvent struct {
 	ID       identifiers.Identifier
 	Height   uint64
-	BestPeer kramaid.KramaID
+	BestPeer identifiers.KramaID
 }
 
 // PendingAccountEvent is fired to update the pending accounts variable in SyncStatusTracker

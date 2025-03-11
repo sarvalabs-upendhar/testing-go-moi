@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/moby/locker"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -62,15 +61,15 @@ type kramaTransport interface {
 	Start()
 	Close()
 	Messages() <-chan *ktypes.ICSMSG
-	CleanDirectPeer(clusterID common.ClusterID, peers ...kramaid.KramaID)
+	CleanDirectPeer(clusterID common.ClusterID, peers ...identifiers.KramaID)
 	RegisterContextRouter(
 		ctx context.Context,
-		operator kramaid.KramaID,
+		operator identifiers.KramaID,
 		clusterID common.ClusterID,
 		nodeset *ktypes.ICSCommittee,
 		voteset *ktypes.HeightVoteSet,
 	)
-	ConnectToDirectPeer(ctx context.Context, kramaID kramaid.KramaID, clusterID common.ClusterID) error
+	ConnectToDirectPeer(ctx context.Context, kramaID identifiers.KramaID, clusterID common.ClusterID) error
 	BroadcastTesseract(msg *networkmsg.TesseractMsg) error
 	BroadcastMessage(
 		ctx context.Context,
@@ -79,7 +78,7 @@ type kramaTransport interface {
 	GracefullyCloseContextRouter(clusterID common.ClusterID)
 	SendMessage(
 		ctx context.Context,
-		recipient kramaid.KramaID,
+		recipient identifiers.KramaID,
 		msg *ktypes.ICSMSG,
 	) error
 	StartGossip(clusterID common.ClusterID)
@@ -91,12 +90,12 @@ type stateManager interface {
 	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
 	GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 		latestContextHash common.Hash,
-		consensusSet []kramaid.KramaID,
+		consensusSet []identifiers.KramaID,
 		consensusSetHash common.Hash,
 		randomPublicKeys [][]byte,
 		err error,
 	)
-	GetPublicKeys(context context.Context, ids ...kramaid.KramaID) (keys [][]byte, err error)
+	GetPublicKeys(context context.Context, ids ...identifiers.KramaID) (keys [][]byte, err error)
 	GetICSSeed(id identifiers.Identifier) ([32]byte, error)
 	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(id identifiers.Identifier) (bool, error)
@@ -106,7 +105,7 @@ type stateManager interface {
 	IsSealValid(ts *common.Tesseract) (bool, error)
 	RemoveCachedObject(id identifiers.Identifier)
 	GetRegisteredGuardiansCount() (int, error)
-	GetGuardianIncentives(id kramaid.KramaID) (uint64, error)
+	GetGuardianIncentives(id identifiers.KramaID) (uint64, error)
 	GetTotalIncentives() (uint64, error)
 	GetConsensusNodes(
 		id identifiers.Identifier,
@@ -148,7 +147,7 @@ type store interface {
 type vault interface {
 	GetConsensusPrivateKey() crypto.PrivateKey
 	Sign(data []byte, sigType mudraCommon.SigType, signOptions ...crypto.SignOption) ([]byte, error)
-	KramaID() kramaid.KramaID
+	KramaID() identifiers.KramaID
 }
 
 type Engine struct {
@@ -157,7 +156,7 @@ type Engine struct {
 	cfg                 *config.ConsensusConfig
 	mux                 *utils.TypeMux
 	logger              hclog.Logger
-	selfID              kramaid.KramaID
+	selfID              identifiers.KramaID
 	slots               *ktypes.Slots
 	randomizer          *flux.Randomizer
 	transport           kramaTransport
@@ -190,7 +189,7 @@ func NewKramaEngine(
 	cfg *config.ConsensusConfig,
 	logger hclog.Logger,
 	mux *utils.TypeMux,
-	selfID kramaid.KramaID,
+	selfID identifiers.KramaID,
 	state stateManager,
 	exec execution,
 	ixPool ixPool,
@@ -292,7 +291,7 @@ func (k *Engine) createICS(
 // loadClusterState create a clusterState instance with latest participants state and committee information.
 func (k *Engine) loadClusterState(
 	ctx context.Context,
-	operator kramaid.KramaID,
+	operator identifiers.KramaID,
 	ixns common.Interactions,
 	clusterID common.ClusterID,
 	reqTime time.Time,
@@ -427,7 +426,7 @@ func (k *Engine) fetchParticipantsAndCommittee(
 }
 
 // isOperatorEligible checks if the operator is eligible to propose a tesseract for the given interactions.
-func (k *Engine) isOperatorEligible(peerID kramaid.KramaID, ixns common.Interactions) bool {
+func (k *Engine) isOperatorEligible(peerID identifiers.KramaID, ixns common.Interactions) bool {
 	id := ixns.LeaderCandidateID()
 
 	fmt.Println("Leader candidate info", "id", id, "ixns-size", ixns.Len())
@@ -513,7 +512,7 @@ func (k *Engine) updateContextDelta(cs *ktypes.ClusterState) error {
 func (k *Engine) getConsensusNodes(
 	clusterInfo *ktypes.ClusterState,
 	requiredConsensusNodes int,
-) (consensusNodes []kramaid.KramaID, err error) {
+) (consensusNodes []identifiers.KramaID, err error) {
 	if k.trustedPeersPresent {
 		peers := clusterInfo.TrustedPeers
 
@@ -543,8 +542,8 @@ func (k *Engine) getConsensusNodes(
 func (k *Engine) getStochasticNodes(
 	ctx context.Context,
 	count int,
-	exemptedNodes []kramaid.KramaID,
-) ([]kramaid.KramaID, error) {
+	exemptedNodes []identifiers.KramaID,
+) ([]identifiers.KramaID, error) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "getStochasticNodes")
 	defer span.End()
 
@@ -563,9 +562,9 @@ func (k *Engine) getStochasticNodes(
 	return peers, nil
 }
 
-func (k *Engine) getTrustedPeers(count int) []kramaid.KramaID {
+func (k *Engine) getTrustedPeers(count int) []identifiers.KramaID {
 	randomNumbers := utils.GetRandomNumbers(count, len(k.cfg.TrustedPeers))
-	peers := make([]kramaid.KramaID, 0, count)
+	peers := make([]identifiers.KramaID, 0, count)
 
 	for id, trustedPeer := range k.cfg.TrustedPeers {
 		if _, ok := randomNumbers[id]; ok {
@@ -576,7 +575,7 @@ func (k *Engine) getTrustedPeers(count int) []kramaid.KramaID {
 	return peers
 }
 
-func (k *Engine) createICSForProposal(ctx context.Context, sender kramaid.KramaID, msg *ktypes.Proposal) error {
+func (k *Engine) createICSForProposal(ctx context.Context, sender identifiers.KramaID, msg *ktypes.Proposal) error {
 	k.logger.Debug("Handling proposal message", "cluster-id", msg.ClusterID())
 	ts := msg.Tesseract
 	// TODO: validate ts timestamp
@@ -1114,7 +1113,7 @@ func (k *Engine) isTimely(reqTime time.Time, currentTime time.Time) bool {
 
 // verifyOperatorLottery validates the ICS proof provided by an operator with the computed ICS seed.
 func (k *Engine) verifyOperatorLottery(
-	operator kramaid.KramaID,
+	operator identifiers.KramaID,
 	lk common.LotteryKey,
 	vrfOutput [32]byte,
 	vrfProof []byte,
@@ -1178,7 +1177,7 @@ func (k *Engine) runLottery(key common.LotteryKey) ([32]byte, []byte, error) {
 }
 */
 
-func (k *Engine) getTS(tsHash common.Hash, kramaID kramaid.KramaID) (*common.Tesseract, error) {
+func (k *Engine) getTS(tsHash common.Hash, kramaID identifiers.KramaID) (*common.Tesseract, error) {
 	ts, err := k.lattice.GetTesseract(tsHash, false, true)
 	if err == nil {
 		return ts, nil

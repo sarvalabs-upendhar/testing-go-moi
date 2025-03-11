@@ -5,7 +5,7 @@ import (
 	"log"
 	"strconv"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 const hostIP = "0.0.0.0"
@@ -16,7 +16,7 @@ type Server struct {
 	Node          *Node
 	ClusterConfig *ClusterConfig
 	Config        *ServerConfig
-	KramaID       kramaid.KramaID
+	KramaID       identifiers.KramaID
 }
 
 func NewServer(clusterConfig *ClusterConfig, serverConfig *ServerConfig) *Server {

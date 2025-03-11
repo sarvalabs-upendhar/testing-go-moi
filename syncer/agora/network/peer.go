@@ -11,7 +11,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-msgio"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/network/message"
@@ -61,7 +60,7 @@ func (a *AgoraPeer) updateLastActiveTime() {
 	a.lastActiveTime = time.Now()
 }
 
-func (a *AgoraPeer) sendMessage(senderID kramaid.KramaID, msgType message.MsgType, msg interface{}) error {
+func (a *AgoraPeer) sendMessage(senderID identifiers.KramaID, msgType message.MsgType, msg interface{}) error {
 	// Marshal the proto message into slice of bytes and log and return if an error occurs
 	rawData, err := polo.Polorize(msg)
 	if err != nil {

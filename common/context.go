@@ -1,7 +1,6 @@
 package common
 
 import (
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
@@ -12,9 +11,9 @@ const (
 	StochasticSetSize  = 5
 )
 
-type NodeList []kramaid.KramaID
+type NodeList []identifiers.KramaID
 
-func (nl NodeList) Contains(id kramaid.KramaID) bool {
+func (nl NodeList) Contains(id identifiers.KramaID) bool {
 	for _, kramaID := range nl {
 		if id == kramaID {
 			return true
@@ -45,27 +44,27 @@ func (delta ContextDelta) Copy() ContextDelta {
 }
 
 type DeltaGroup struct {
-	ConsensusNodes []kramaid.KramaID `json:"consensus_nodes"`
-	ReplacedNodes  []kramaid.KramaID `json:"replaced_nodes"`
+	ConsensusNodes []identifiers.KramaID `json:"consensus_nodes"`
+	ReplacedNodes  []identifiers.KramaID `json:"replaced_nodes"`
 }
 
 func (d DeltaGroup) Copy() *DeltaGroup {
 	deltaGroup := &DeltaGroup{}
 
 	if len(d.ConsensusNodes) > 0 {
-		deltaGroup.ConsensusNodes = make([]kramaid.KramaID, len(d.ConsensusNodes))
+		deltaGroup.ConsensusNodes = make([]identifiers.KramaID, len(d.ConsensusNodes))
 		copy(deltaGroup.ConsensusNodes, d.ConsensusNodes)
 	}
 
 	if len(d.ReplacedNodes) > 0 {
-		deltaGroup.ReplacedNodes = make([]kramaid.KramaID, len(d.ReplacedNodes))
+		deltaGroup.ReplacedNodes = make([]identifiers.KramaID, len(d.ReplacedNodes))
 		copy(deltaGroup.ReplacedNodes, d.ReplacedNodes)
 	}
 
 	return deltaGroup
 }
 
-func (d DeltaGroup) NodeIndex(id kramaid.KramaID) int {
+func (d DeltaGroup) NodeIndex(id identifiers.KramaID) int {
 	idx := 0
 
 	for _, node := range d.ConsensusNodes {

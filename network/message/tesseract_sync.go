@@ -2,14 +2,14 @@ package message
 
 import (
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
 )
 
 type TesseractSyncMsg struct {
-	Sender       kramaid.KramaID
+	Sender       identifiers.KramaID
 	RawTesseract []byte
 	Ixns         []byte
 	Receipts     []byte

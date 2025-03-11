@@ -5,13 +5,14 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 )
 
 type NodeInfo struct {
-	ID          kramaid.KramaID
+	ID          identifiers.KramaID
 	PublicKey   []byte
 	Msg         *Prepared
 	VotingPower int64
@@ -27,7 +28,7 @@ type NodeSet struct {
 }
 
 // NewNodeSet creates and returns a new instance of NodeSet
-func NewNodeSet(ids []kramaid.KramaID, keys [][]byte, required uint32) *NodeSet {
+func NewNodeSet(ids []identifiers.KramaID, keys [][]byte, required uint32) *NodeSet {
 	infos := make([]*NodeInfo, len(ids))
 
 	for index, id := range ids {
@@ -58,8 +59,8 @@ func (ns *NodeSet) UpdateViewInfo(index int, msg *Prepared) {
 	ns.Infos[index].Msg = msg
 }
 
-func (ns *NodeSet) KramaIDs() []kramaid.KramaID {
-	ids := make([]kramaid.KramaID, len(ns.Infos))
+func (ns *NodeSet) KramaIDs() []identifiers.KramaID {
+	ids := make([]identifiers.KramaID, len(ns.Infos))
 
 	for k, v := range ns.Infos {
 		ids[k] = v.ID
@@ -180,7 +181,7 @@ func (i *ICSCommittee) ParticipantQuorum(position int) uint32 {
 	return count*2/3 + 1
 }
 
-func (i *ICSCommittee) UpdateNodePreparedMsg(id kramaid.KramaID, msg *Prepared) {
+func (i *ICSCommittee) UpdateNodePreparedMsg(id identifiers.KramaID, msg *Prepared) {
 	for _, set := range i.Sets {
 		if set == nil {
 			continue
@@ -262,7 +263,7 @@ func (i *ICSCommittee) UpdateValidatorResponse(indices []int) ([][]byte, error) 
 func (i *ICSCommittee) GetKramaID(index int32) (
 	slots []int32,
 	slotIndex int,
-	kramaID kramaid.KramaID,
+	kramaID identifiers.KramaID,
 	publicKey []byte,
 ) {
 	if index < 0 || int(index) >= i.totalNodes {
@@ -303,7 +304,7 @@ func (i *ICSCommittee) GetKramaID(index int32) (
 	return nil, -1, "", nil
 }
 
-func (i *ICSCommittee) GetPublicKey(index int32) (kramaID kramaid.KramaID, publicKey []byte) {
+func (i *ICSCommittee) GetPublicKey(index int32) (kramaID identifiers.KramaID, publicKey []byte) {
 	if index < 0 || int(index) >= i.totalNodes {
 		return "", nil
 	}
@@ -326,7 +327,7 @@ func (i *ICSCommittee) GetPublicKey(index int32) (kramaID kramaid.KramaID, publi
 }
 
 // HasKramaID returns the index,public key and vote status of the validator node from ICSNodes based on the krama id
-func (i *ICSCommittee) HasKramaID(peerID kramaid.KramaID) (int32, []byte, bool) {
+func (i *ICSCommittee) HasKramaID(peerID identifiers.KramaID) (int32, []byte, bool) {
 	offset := 0
 
 	for _, set := range i.Sets {
@@ -347,7 +348,7 @@ func (i *ICSCommittee) HasKramaID(peerID kramaid.KramaID) (int32, []byte, bool) 
 }
 
 // GetIndex returns the index of the validator node from ICSNodes based on the krama id
-func (i *ICSCommittee) GetIndex(peerID kramaid.KramaID) (int, int) {
+func (i *ICSCommittee) GetIndex(peerID identifiers.KramaID) (int, int) {
 	for i, set := range i.Sets {
 		if set == nil || set.ExcludedFromICS {
 			continue
@@ -364,9 +365,9 @@ func (i *ICSCommittee) GetIndex(peerID kramaid.KramaID) (int, int) {
 }
 
 // GetNodes returns krama id's of all the nodes from the ICSNodes nodeset
-func (i *ICSCommittee) GetNodes(respondedOnly bool) []kramaid.KramaID {
-	nodes := make(map[kramaid.KramaID]struct{})
-	distinctNodes := make([]kramaid.KramaID, 0)
+func (i *ICSCommittee) GetNodes(respondedOnly bool) []identifiers.KramaID {
+	nodes := make(map[identifiers.KramaID]struct{})
+	distinctNodes := make([]identifiers.KramaID, 0)
 
 	for _, nodeSet := range i.Sets {
 		if nodeSet == nil || nodeSet.ExcludedFromICS {
@@ -391,9 +392,9 @@ func (i *ICSCommittee) GetNodes(respondedOnly bool) []kramaid.KramaID {
 	return distinctNodes
 }
 
-func (i *ICSCommittee) GetInactiveNodes() []kramaid.KramaID {
-	nodes := make(map[kramaid.KramaID]struct{})
-	distinctNodes := make([]kramaid.KramaID, 0)
+func (i *ICSCommittee) GetInactiveNodes() []identifiers.KramaID {
+	nodes := make(map[identifiers.KramaID]struct{})
+	distinctNodes := make([]identifiers.KramaID, 0)
 
 	for _, nodeSet := range i.Sets {
 		if nodeSet == nil || nodeSet.ExcludedFromICS {
@@ -521,8 +522,8 @@ func (i *ICSCommittee) Responses() []*common.ArrayOfBits {
 	return responses
 }
 
-func DistinctNodes(operator kramaid.KramaID, nodeSets []*NodeSet) ([]kramaid.KramaID, int, bool) {
-	nodes := make(map[kramaid.KramaID]struct{})
+func DistinctNodes(operator identifiers.KramaID, nodeSets []*NodeSet) ([]identifiers.KramaID, int, bool) {
+	nodes := make(map[identifiers.KramaID]struct{})
 	isOperatorIncluded := false
 
 	for _, nodeSet := range nodeSets {
@@ -543,7 +544,7 @@ func DistinctNodes(operator kramaid.KramaID, nodeSets []*NodeSet) ([]kramaid.Kra
 		}
 	}
 
-	distinct := make([]kramaid.KramaID, 0, len(nodes))
+	distinct := make([]identifiers.KramaID, 0, len(nodes))
 
 	for kramaID := range nodes {
 		distinct = append(distinct, kramaID)

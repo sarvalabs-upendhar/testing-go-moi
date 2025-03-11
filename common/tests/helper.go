@@ -18,14 +18,11 @@ import (
 
 	"github.com/VictoriaMetrics/fastcache"
 
-	"github.com/btcsuite/btcd/btcutil/hdkeychain"
-	"github.com/btcsuite/btcd/chaincfg"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/crypto"
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
@@ -92,7 +89,7 @@ func RandomHash(t *testing.T) common.Hash {
 	return common.BytesToHash(hash)
 }
 
-func RandomKramaID(t *testing.T, nthValidator uint32) kramaid.KramaID {
+func RandomKramaID(t *testing.T, nthValidator uint32) identifiers.KramaID {
 	t.Helper()
 
 	var signKey [32]byte
@@ -100,25 +97,22 @@ func RandomKramaID(t *testing.T, nthValidator uint32) kramaid.KramaID {
 	_, err := rand.Read(signKey[:])
 	require.NoError(t, err)
 
-	privateKeys, moiPubBytes, err := GetPrivKeysForTest(t, signKey[:])
+	privateKeys, err := identifiers.GetRandomPrivateKeys(signKey)
 	require.NoError(t, err)
 
-	kramaID, err := kramaid.NewKramaID(
-		1,
+	kramaID, err := identifiers.GenerateKramaIDv0(
+		identifiers.NetworkZone0,
 		privateKeys[32:],
-		nthValidator,
-		hex.EncodeToString(moiPubBytes),
-		true,
 	)
 	require.NoError(t, err)
 
 	return kramaID
 }
 
-func RandomKramaIDs(t *testing.T, count int) []kramaid.KramaID {
+func RandomKramaIDs(t *testing.T, count int) []identifiers.KramaID {
 	t.Helper()
 
-	ids := make([]kramaid.KramaID, 0, count)
+	ids := make([]identifiers.KramaID, 0, count)
 
 	for i := 0; i < count; i++ {
 		ids = append(ids, RandomKramaID(t, uint32(i)))
@@ -135,10 +129,10 @@ func RandomPeerID(t *testing.T) peer.ID {
 	_, err := rand.Read(signKey[:])
 	require.NoError(t, err)
 
-	privateKeys, _, err := GetPrivKeysForTest(t, signKey[:])
+	privateKeys, err := identifiers.GetRandomPrivateKeys(signKey)
 	require.NoError(t, err)
 
-	peerID, err := kramaid.GeneratePeerID(privateKeys[32:])
+	peerID, err := identifiers.GeneratePeerID(privateKeys[32:])
 	require.NoError(t, err)
 
 	return peerID
@@ -156,7 +150,7 @@ func RandomPeerIDs(t *testing.T, count int) []peer.ID {
 	return peerIDs
 }
 
-func DecodePeerIDFromKramaID(t *testing.T, kramaID kramaid.KramaID) peer.ID {
+func DecodePeerIDFromKramaID(t *testing.T, kramaID identifiers.KramaID) peer.ID {
 	t.Helper()
 
 	peerID, err := kramaID.DecodedPeerID()
@@ -197,113 +191,6 @@ func RetryUntilTimeout(ctx context.Context, delay time.Duration, f func() (inter
 	res := <-resCh
 
 	return res.data, res.err
-}
-
-func GetPrivKeysForTest(t *testing.T, seed []byte) ([]byte, []byte, error) {
-	t.Helper()
-	// Let's derive 'm' in the path
-	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams) // here key is master key
-	if err != nil {
-		return nil, nil, err
-	}
-
-	// Hardened keys index starts from 2147483648 (2^31)
-	// So.,
-	// 44 = 2147483648 + 44 = 2147483692
-	// 6174 = 2147483648 + 6174 = 2147489822
-	igcParams := [2]uint32{2147483692, 2147489822}
-
-	tempKey := masterKey
-	for _, n := range igcParams {
-		tempKey, err = tempKey.Derive(n)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	// Now tempKey points to extended private key at path: m/44'/6174'
-
-	// Deriving MOI ID at m/44'/6174'/0'/0/0
-	moiIDPrivKey := tempKey
-
-	moiIDPath := new([3]uint32)
-	moiIDPath[0] = kramaid.HardenedStartIndex + 0 // m/44'/6174'/0'
-	moiIDPath[1] = 0                              // m/44'/6174'/0'/0 ie., external
-	moiIDPath[2] = 0                              // m/44'/6174'/0'/0/0
-
-	for _, n := range moiIDPath {
-		moiIDPrivKey, err = moiIDPrivKey.Derive(n)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	moiPubKeyPoint, err := moiIDPrivKey.Neuter()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	moiIDPubInSecp256k1, err := moiPubKeyPoint.ECPubKey()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	moiIDPubBytes := moiIDPubInSecp256k1.SerializeCompressed()
-
-	// to persist consensus and network private keys
-	var aggPrivKey []byte
-	// Let's derive PrivateKey for signing, so load keyPair at path: m/44'/6174'/5020'/0/n
-	validatorPrivKey := tempKey
-
-	var validatorPath [3]uint32
-	validatorPath[0] = kramaid.HardenedStartIndex + 5020 // hardened
-	validatorPath[1] = 0
-	validatorPath[2] = 0
-
-	for _, n := range validatorPath {
-		validatorPrivKey, err = validatorPrivKey.Derive(n)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	// Now validatorPrivKey points to extended private key at path: m/44'/6174'/5020'/0/n
-
-	// Casting to Elliptic curve Private key
-	privKeyInEC, err := validatorPrivKey.ECPrivKey()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	signingPrivKeyInBytes := privKeyInEC.Serialize()
-
-	aggPrivKey = append(aggPrivKey, signingPrivKeyInBytes...)
-
-	// Let's derive PrivateKey for communication, so load keyPair at path: m/44'/6174'/6020'/0/n
-	ntwPrivKey := tempKey
-
-	var networkPath [3]uint32
-	networkPath[0] = kramaid.HardenedStartIndex + 6020 // hardened
-	networkPath[1] = 0
-	networkPath[2] = 0
-
-	for _, n := range networkPath {
-		ntwPrivKey, err = ntwPrivKey.Derive(n)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-	// Now ntwPrivKey points to extended private key at path: m/44'/6174'/6020'/0/n
-
-	// Casting to Elliptic curve Private key
-	nPrivKeyInEC, err := ntwPrivKey.ECPrivKey()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	ntwPrivKeyInBytes := nPrivKeyInEC.Serialize()
-
-	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
-
-	return aggPrivKey, moiIDPubBytes, nil
 }
 
 func GetRandomUpperCaseString(t *testing.T, length int) string {
@@ -490,7 +377,7 @@ func GetTestPublicKeys(t *testing.T, count int) [][]byte {
 	return p
 }
 
-func GetTestKramaIdsWithPublicKeys(t *testing.T, count int) ([]kramaid.KramaID, [][]byte) {
+func GetTestKramaIdsWithPublicKeys(t *testing.T, count int) ([]identifiers.KramaID, [][]byte) {
 	t.Helper()
 
 	return RandomKramaIDs(t, count), GetTestPublicKeys(t, count)
@@ -533,7 +420,7 @@ type TesseractData struct {
 
 	// non canonical fields
 	Seal   []byte
-	SealBy kramaid.KramaID
+	SealBy identifiers.KramaID
 }
 
 func DefaultTesseractData() *TesseractData {
@@ -1283,7 +1170,7 @@ func GetLogicIDs(t *testing.T, count int) []identifiers.LogicID {
 }
 
 // GetKramaIDAndNetworkKey returns kramaID and network key pair
-func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID, []byte) {
+func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (identifiers.KramaID, []byte) {
 	t.Helper()
 
 	var signKey [32]byte
@@ -1292,17 +1179,14 @@ func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID
 	require.NoError(t, err)
 
 	// get private key and public key
-	privKeyBytes, moiPubBytes, err := GetPrivKeysForTest(t, signKey[:])
+	privKeyBytes, err := identifiers.GetRandomPrivateKeys(signKey)
 	require.NoError(t, err)
 
 	networkKey := privKeyBytes[32:]
 
-	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
-		1,
+	kramaID, err := identifiers.GenerateKramaIDv0( // Create kramaID from private key , public key
+		identifiers.NetworkZone0,
 		networkKey,
-		nthValidator,
-		hex.EncodeToString(moiPubBytes),
-		true,
 	)
 	require.NoError(t, err)
 
@@ -1310,7 +1194,7 @@ func GetKramaIDAndNetworkKey(t *testing.T, nthValidator uint32) (kramaid.KramaID
 }
 
 // GetKramaIDAndConsensusKey returns kramaID and consensus key
-func GetKramaIDAndConsensusKey(t *testing.T, nthValidator uint32) (kramaid.KramaID, []byte) {
+func GetKramaIDAndConsensusKey(t *testing.T, nthValidator uint32) (identifiers.KramaID, []byte) {
 	t.Helper()
 
 	var signKey [32]byte
@@ -1319,15 +1203,12 @@ func GetKramaIDAndConsensusKey(t *testing.T, nthValidator uint32) (kramaid.Krama
 	require.NoError(t, err)
 
 	// get private key and public key
-	privKeyBytes, moiPubBytes, err := GetPrivKeysForTest(t, signKey[:])
+	privKeyBytes, err := identifiers.GetRandomPrivateKeys(signKey)
 	require.NoError(t, err)
 
-	kramaID, err := kramaid.NewKramaID( // Create kramaID from private key , public key
-		1,
+	kramaID, err := identifiers.GenerateKramaIDv0( // Create kramaID from private key , public key
+		identifiers.NetworkZone0,
 		privKeyBytes[32:],
-		nthValidator,
-		hex.EncodeToString(moiPubBytes),
-		true,
 	)
 	require.NoError(t, err)
 

@@ -68,7 +68,7 @@ func TestHandleJSONRPCRequest(t *testing.T) {
 
 	request := Request{
 		ID:     "1",
-		Method: "moi.subscribe",
+		Method: "moi.Subscribe",
 		Params: json.RawMessage(`["newTesseracts"]`),
 	}
 
@@ -163,7 +163,7 @@ func TestServer_handleWs_Message(t *testing.T) {
 			args: RequestArgs{
 				MessageType: gorillaWS.TextMessage,
 				Message: []byte(`{
-					"method": "moi.subscribe",
+					"method": "moi.Subscribe",
 					"params": ["newTesseracts"]
 				}`),
 			},
@@ -174,7 +174,7 @@ func TestServer_handleWs_Message(t *testing.T) {
 				MessageType: gorillaWS.TextMessage,
 				Message: []byte(fmt.Sprintf(`{
 					"id": 1,
-					"method": "moi.subscribe",
+					"method": "moi.Subscribe",
 					"params": [
 						"newTesseractsByAccount",
  						{
@@ -190,7 +190,7 @@ func TestServer_handleWs_Message(t *testing.T) {
 				MessageType: gorillaWS.TextMessage,
 				Message: []byte(fmt.Sprintf(`{
 					"id": 1,
-					"method": "moi.subscribe",
+					"method": "moi.Subscribe",
 					"params": [
 						"newLogs",
  						{
@@ -206,7 +206,7 @@ func TestServer_handleWs_Message(t *testing.T) {
 				MessageType: gorillaWS.TextMessage,
 				Message: []byte(`{
 					"id": 1,
-					"method": "moi.subscribe",
+					"method": "moi.Subscribe",
 					"params": ["newPendingInteractions"]
 				}`),
 			},

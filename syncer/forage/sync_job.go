@@ -11,7 +11,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
 )
@@ -168,7 +167,7 @@ type SyncJob struct {
 	lastModifiedAt        time.Time
 	tesseractQueue        *TesseractQueue
 	tesseractSignal       chan struct{}
-	bestPeers             map[kramaid.KramaID]struct{}
+	bestPeers             map[identifiers.KramaID]struct{}
 	latticeSyncInProgress bool
 	selfAccLock           bool
 }
@@ -200,7 +199,7 @@ func SyncJobFromCanonicalInfo(
 		lastModifiedAt:  *modifiedTime,
 		tesseractQueue:  NewTesseractQueue(),
 		tesseractSignal: make(chan struct{}, 1),
-		bestPeers:       make(map[kramaid.KramaID]struct{}),
+		bestPeers:       make(map[identifiers.KramaID]struct{}),
 	}, nil
 }
 
@@ -225,7 +224,7 @@ func (j *SyncJob) bestPeerLen() int {
 	return len(j.bestPeers)
 }
 
-func (j *SyncJob) updateBestPeers(peers []kramaid.KramaID) {
+func (j *SyncJob) updateBestPeers(peers []identifiers.KramaID) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -234,14 +233,14 @@ func (j *SyncJob) updateBestPeers(peers []kramaid.KramaID) {
 	}
 }
 
-func (j *SyncJob) deleteBestPeer(peer kramaid.KramaID) {
+func (j *SyncJob) deleteBestPeer(peer identifiers.KramaID) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
 	delete(j.bestPeers, peer)
 }
 
-func (j *SyncJob) chooseRandomBestPeer() kramaid.KramaID {
+func (j *SyncJob) chooseRandomBestPeer() identifiers.KramaID {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 

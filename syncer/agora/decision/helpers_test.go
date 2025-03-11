@@ -9,7 +9,7 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -142,16 +142,16 @@ func (bw *mockBatchWriter) Flush() error {
 }
 
 type MockLedger struct {
-	peers map[cid.CID][]kramaid.KramaID
+	peers map[cid.CID][]identifiers.KramaID
 }
 
 func NewMockLedger() *MockLedger {
 	return &MockLedger{
-		peers: make(map[cid.CID][]kramaid.KramaID),
+		peers: make(map[cid.CID][]identifiers.KramaID),
 	}
 }
 
-func (mc *MockLedger) GetAssociatedPeers(id identifiers.Identifier, stateHash cid.CID) ([]kramaid.KramaID, error) {
+func (mc *MockLedger) GetAssociatedPeers(id identifiers.Identifier, stateHash cid.CID) ([]identifiers.KramaID, error) {
 	peers, ok := mc.peers[stateHash]
 	if !ok {
 		return nil, common.ErrKeyNotFound
@@ -163,7 +163,7 @@ func (mc *MockLedger) GetAssociatedPeers(id identifiers.Identifier, stateHash ci
 func (mc *MockLedger) UpdateAssociatedPeers(
 	id identifiers.Identifier,
 	stateHash cid.CID,
-	peerID kramaid.KramaID,
+	peerID identifiers.KramaID,
 ) error {
 	peers, ok := mc.peers[stateHash]
 	if ok {
@@ -179,16 +179,16 @@ func (mc *MockLedger) UpdateAssociatedPeers(
 
 type MockNetwork struct {
 	mtx sync.Mutex
-	msg map[kramaid.KramaID]message.Message
+	msg map[identifiers.KramaID]message.Message
 }
 
 func NewMockNetwork() *MockNetwork {
 	return &MockNetwork{
-		msg: make(map[kramaid.KramaID]message.Message),
+		msg: make(map[identifiers.KramaID]message.Message),
 	}
 }
 
-func (mn *MockNetwork) SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
+func (mn *MockNetwork) SendAgoraMessage(id identifiers.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
 	mn.mtx.Lock()
 	defer mn.mtx.Unlock()
 
@@ -208,7 +208,7 @@ func WaitForResponse(ctx context.Context, respChan chan *message.Response) (*mes
 
 func WaitForResponseMsg(
 	ctx context.Context,
-	from kramaid.KramaID,
+	from identifiers.KramaID,
 	network *MockNetwork,
 ) (*message.AgoraResponseMsg, error) {
 	resp, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {

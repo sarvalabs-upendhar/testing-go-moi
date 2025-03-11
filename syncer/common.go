@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/cid"
 )
@@ -20,7 +18,7 @@ type Session interface {
 type BlockSync interface {
 	NewSession(
 		ctx context.Context,
-		contextPeers []kramaid.KramaID,
+		contextPeers []identifiers.KramaID,
 		id identifiers.Identifier,
 		stateHash cid.CID,
 	) (Session, error)

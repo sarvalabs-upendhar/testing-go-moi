@@ -8,7 +8,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -59,8 +58,8 @@ type IxParticipant struct {
 
 // IxConsensusPreference contains preferences related to consensus.
 type IxConsensusPreference struct {
-	MTQ        uint              `json:"mtq"`
-	TrustNodes []kramaid.KramaID `json:"trust_nodes"`
+	MTQ        uint                  `json:"mtq"`
+	TrustNodes []identifiers.KramaID `json:"trust_nodes"`
 }
 
 // Copy creates and returns a deep copy of IxConsensusPreference.
@@ -70,7 +69,7 @@ func (ixConsensusPreference *IxConsensusPreference) Copy() *IxConsensusPreferenc
 	}
 
 	if len(ixConsensusPreference.TrustNodes) > 0 {
-		trust.TrustNodes = make([]kramaid.KramaID, len(ixConsensusPreference.TrustNodes))
+		trust.TrustNodes = make([]identifiers.KramaID, len(ixConsensusPreference.TrustNodes))
 		copy(trust.TrustNodes, ixConsensusPreference.TrustNodes)
 	}
 

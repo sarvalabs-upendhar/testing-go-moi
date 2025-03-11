@@ -8,7 +8,7 @@ package consensus
 //
 //	"github.com/sarvalabs/go-moi/common/config"
 //
-//	"github.com/sarvalabs/go-moi/identifiers"
+//	"github.com/sarvalabs/go-moi/common/identifiers"
 //	"github.com/sarvalabs/go-moi/common"
 //	"github.com/sarvalabs/go-moi/common/tests"
 //	"github.com/stretchr/testify/require"

@@ -2,7 +2,6 @@ package types
 
 import (
 	"github.com/pkg/errors"
-	id "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-moi/crypto"
@@ -49,16 +48,18 @@ type ICSPayload interface {
 }
 
 type ICSMSG struct {
-	Sender           id.KramaID
+	Sender           identifiers.KramaID
 	ClusterID        common.ClusterID
 	MsgType          message.MsgType
 	UnCompressedSize int // UnCompressedSize will be zero, if payload is not compressed
 	Payload          []byte
-	DecodedMsg       interface{} `polo:"-"`
-	ReceivedFrom     id.KramaID  `polo:"-"`
+	DecodedMsg       interface{}         `polo:"-"`
+	ReceivedFrom     identifiers.KramaID `polo:"-"`
 }
 
-func NewICSMsg(sender id.KramaID, clusterID common.ClusterID, msgType message.MsgType, payload []byte) *ICSMSG {
+func NewICSMsg(
+	sender identifiers.KramaID, clusterID common.ClusterID, msgType message.MsgType, payload []byte,
+) *ICSMSG {
 	return &ICSMSG{
 		Sender:    sender,
 		ClusterID: clusterID,

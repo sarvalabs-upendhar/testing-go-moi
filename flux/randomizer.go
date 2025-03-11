@@ -7,10 +7,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/common/utils"
 
 	"github.com/hashicorp/go-hclog"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/senatus"
@@ -27,7 +28,7 @@ type Randomizer struct {
 	ctx         context.Context
 	ctxCancel   context.CancelFunc
 	peers       []*PeerList
-	deletePeers chan []kramaid.KramaID
+	deletePeers chan []identifiers.KramaID
 	server      p2pServer
 	senatus     reputationEngine
 	logger      hclog.Logger
@@ -38,7 +39,7 @@ type PeerList struct {
 	mtx           sync.RWMutex
 	updatePending bool
 	lastRequest   time.Time
-	nonUtilized   map[kramaid.KramaID]int
+	nonUtilized   map[identifiers.KramaID]int
 	pendingCount  int
 }
 
@@ -49,7 +50,7 @@ type p2pServer interface {
 type reputationEngine interface {
 	StreamPeerInfos(ctx context.Context) (chan *senatus.PeerInfo, error)
 	TotalPeerCount() uint64
-	DeletePeers(ids []kramaid.KramaID) error
+	DeletePeers(ids []identifiers.KramaID) error
 }
 
 func NewRandomizer(
@@ -63,7 +64,7 @@ func NewRandomizer(
 		ctx:         ctx,
 		ctxCancel:   ctxCancel,
 		peers:       make([]*PeerList, SLOTCOUNT),
-		deletePeers: make(chan []kramaid.KramaID),
+		deletePeers: make(chan []identifiers.KramaID),
 		server:      server,
 		senatus:     reputationEngine,
 		logger:      logger.Named("Flux-Engine"),
@@ -74,7 +75,7 @@ func NewRandomizer(
 		r.peers[i] = &PeerList{
 			updatePending: true,
 			lastRequest:   time.Now(),
-			nonUtilized:   make(map[kramaid.KramaID]int),
+			nonUtilized:   make(map[identifiers.KramaID]int),
 			pendingCount:  PEERSCOUNT,
 		}
 	}
@@ -84,7 +85,7 @@ func NewRandomizer(
 	return r
 }
 
-func (r *Randomizer) DeletePeers(ids []kramaid.KramaID) {
+func (r *Randomizer) DeletePeers(ids []identifiers.KramaID) {
 	r.deletePeers <- ids
 }
 
@@ -125,7 +126,7 @@ func (r *Randomizer) addPeers(slot int) {
 
 	counter := 0
 	desiredCount := 0
-	nonUtilized := make(map[kramaid.KramaID]int)
+	nonUtilized := make(map[identifiers.KramaID]int)
 
 	// Read values from the channel
 	for peerInfo := range peerInfos {
@@ -213,9 +214,9 @@ func (r *Randomizer) Start() {
 	}()
 }
 
-func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []kramaid.KramaID) []kramaid.KramaID {
+func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []identifiers.KramaID) []identifiers.KramaID {
 	counter := 0
-	list := make([]kramaid.KramaID, 0)
+	list := make([]identifiers.KramaID, 0)
 
 	r.peers[slotNo].mtx.Lock()
 	defer r.peers[slotNo].mtx.Unlock()
@@ -253,8 +254,8 @@ func (r *Randomizer) getPeers(slotNo int, count int, avoidPeers []kramaid.KramaI
 func (r *Randomizer) GetRandomNodes(
 	ctx context.Context,
 	count int,
-	avoidPeers []kramaid.KramaID,
-) (randomPeers []kramaid.KramaID, err error) {
+	avoidPeers []identifiers.KramaID,
+) (randomPeers []identifiers.KramaID, err error) {
 	_, span := tracing.Span(ctx, "Flux.Randomizer", "GetRandomNodes")
 	defer span.End()
 

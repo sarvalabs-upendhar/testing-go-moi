@@ -2,7 +2,7 @@ package kbft
 
 import (
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -25,12 +25,12 @@ func NewEvidenceEngine() *EvidenceEngine {
 
 type Evidence struct {
 	IxHash   common.Hash
-	Operator kramaid.KramaID
+	Operator identifiers.KramaID
 	Votes    []*ktypes.Vote
 	VoteSet  *common.ArrayOfBits
 }
 
-func NewEvidence(ixHash common.Hash, operator kramaid.KramaID, size int) *Evidence {
+func NewEvidence(ixHash common.Hash, operator identifiers.KramaID, size int) *Evidence {
 	evidenceInstance := &Evidence{
 		IxHash:   ixHash,
 		Operator: operator,

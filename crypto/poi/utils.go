@@ -2,7 +2,6 @@ package poi
 
 import (
 	"crypto/ecdsa"
-	hexutil "encoding/hex"
 	"errors"
 	"math/big"
 	"strconv"
@@ -24,16 +23,6 @@ const (
 	// number of bytes in a big.Word
 	wordBytes = wordBits / 8
 )
-
-// trimHexString remove 0x prefix to hex string
-func trimHexString(hexString string) string {
-	strInBytes := []byte(hexString)
-	if string(strInBytes[:2]) == "0x" {
-		return string(strInBytes[2:])
-	} else {
-		return string(strInBytes)
-	}
-}
 
 // getPrivateKeyInBytes is a private function that returns the raw privateKey in bytes
 func serializePrivateKey(prvKey *ecdsa.PrivateKey) []byte {
@@ -117,16 +106,16 @@ func GetPrivateKeyAtPath(mnemonic, hdPath string) ([]byte, []byte, error) {
 // one at path m/44'/6174'/5020'/0/0 for signing
 // one at path m/44'/6174'/6020'/0/0 for network communication
 // in bytes
-func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([]byte, string, error) {
+func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([]byte, error) {
 	// Extract seed from mnemonic
 	seed, err := bip39.NewSeedWithErrorChecking(mnemonic, "")
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	// Let's derive 'm' in the path
 	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	// Now tempKey points to extended private key at path: m/44'/6174'
 
@@ -140,7 +129,7 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	for _, n := range igcParams {
 		tempKey, err = tempKey.Derive(n)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 	}
 	// Now tempKey points to extended private key at path: m/44'/6174'
@@ -158,14 +147,14 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	for _, n := range validatorPath {
 		validatorPrivKey, err = validatorPrivKey.Derive(n)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 	}
 
 	// Casting to Elliptic curve Private key
 	privKeyInEC, err := validatorPrivKey.ECPrivKey()
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	privKeyInECDSA := privKeyInEC.ToECDSA()
@@ -183,14 +172,14 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 	for _, n := range networkPath {
 		ntwPrivKey, err = ntwPrivKey.Derive(n)
 		if err != nil {
-			return nil, "", err
+			return nil, err
 		}
 	}
 
 	// Casting to Elliptic curve Private key
 	nPrivKeyInEC, err := ntwPrivKey.ECPrivKey()
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	nPrivKeyInECDSA := nPrivKeyInEC.ToECDSA()
@@ -198,36 +187,10 @@ func GetPrivateKeysForSigningAndNetwork(mnemonic string, nthValidator uint32) ([
 
 	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
 
-	// Derive MOI ID public Key which is at path m/44'/6174'/0'/0/0
-	moiIDPrivateKey := tempKey
-
-	var moiIDPath [3]uint32
-	moiIDPath[0] = HardenedStartIndex + 0
-	moiIDPath[1] = 0
-	moiIDPath[2] = 0
-
-	for _, n := range moiIDPath {
-		moiIDPrivateKey, err = moiIDPrivateKey.Derive(n)
-		if err != nil {
-			return nil, "", err
-		}
-	}
-
-	moiIDPubKey, err := moiIDPrivateKey.Neuter()
-	if err != nil {
-		return nil, "", err
-	}
-
-	moiIDPubInSecp256k1, err := moiIDPubKey.ECPubKey()
-	if err != nil {
-		return nil, "", err
-	}
-
-	moiIDPubBytes := moiIDPubInSecp256k1.SerializeCompressed()
 	// fmt.Println("Pub: ", moiIDPubBytes)
 	// moiID := getAddressFromPublicBytes(moiIDPubBytes)
 	// fmt.Println("ID: ", moiID)
-	return aggPrivKey, trimHexString(hexutil.EncodeToString(moiIDPubBytes)), nil
+	return aggPrivKey, nil
 }
 
 // ReadBits encodes the absolute value of bigint as big-endian bytes. Callers must ensure

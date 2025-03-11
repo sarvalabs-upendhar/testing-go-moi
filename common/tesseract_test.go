@@ -5,10 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/stretchr/testify/require"
 )
@@ -94,7 +92,7 @@ func TestNewTesseract(t *testing.T) {
 		fuelLimit        uint64
 		consensusInfo    common.PoXtData
 		seal             []byte
-		sealBy           kramaid.KramaID
+		sealBy           identifiers.KramaID
 		ixns             common.Interactions
 		receipts         common.Receipts
 		commitInfo       common.CommitInfo

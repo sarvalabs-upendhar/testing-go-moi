@@ -3,8 +3,9 @@ package crypto
 import (
 	"encoding/hex"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	cryptocommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
@@ -21,9 +22,9 @@ const (
 )
 
 type KramaVault struct {
-	consensusPriv PrivateKey      // Private Key used in consensus for signing etc
-	networkPriv   PrivateKey      // Private key used in p2p communication
-	kramaID       kramaid.KramaID // KramaID of the user or node
+	consensusPriv PrivateKey          // Private Key used in consensus for signing etc
+	networkPriv   PrivateKey          // Private key used in p2p communication
+	kramaID       identifiers.KramaID // KramaID of the user or node
 	mnemonic      poi.Mnemonic
 }
 
@@ -38,8 +39,8 @@ type VaultConfig struct {
 	MnemonicKeystorePassword string // Password to decrypt mnemonic keystore
 }
 
-func loadVault(signingAndNetworkKeys []byte,
-	participantID string,
+func loadVault(
+	signingAndNetworkKeys []byte,
 	nodeIndex uint32,
 	kramaIDVersion int,
 	seed poi.Mnemonic,
@@ -48,12 +49,9 @@ func loadVault(signingAndNetworkKeys []byte,
 	signingKey := signingAndNetworkKeys[:32]
 	networkKey := signingAndNetworkKeys[32:]
 
-	currentKID, err := kramaid.NewKramaID(
-		kramaIDVersion,
+	currentKID, err := identifiers.GenerateKramaIDv0(
+		identifiers.NetworkZone0,
 		networkKey,
-		nodeIndex,
-		participantID,
-		true,
 	)
 	if err != nil {
 		return nil, err
@@ -77,7 +75,6 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 	var (
 		signingAndNetworkKeys []byte
 		nodeIgcPath           uint32
-		moiIDAddress          string
 	)
 
 	mnemonic := poi.Mnemonic{}
@@ -88,7 +85,7 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 			return nil, err
 		}
 
-		signingAndNetworkKeys, moiIDAddress, nodeIgcPath, err = poi.DecryptKeystore(nodeKeystore, cfg.NodePassword)
+		signingAndNetworkKeys, nodeIgcPath, err = poi.DecryptKeystore(nodeKeystore, cfg.NodePassword)
 		if err != nil {
 			return nil, err
 		}
@@ -114,17 +111,14 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 			return nil, cryptocommon.ErrMnemonicKeystorePasswordAndPathMandatory
 		}
 
-		bothSignAndCommPrivBytes, moiID, err := poi.GetPrivateKeysForSigningAndNetwork(mnemonic.String(), cfg.NodeIndex)
+		bothSignAndCommPrivBytes, err := poi.GetPrivateKeysForSigningAndNetwork(mnemonic.String(), cfg.NodeIndex)
 		if err != nil {
 			return nil, err
 		}
 
-		currentKID, err := kramaid.NewKramaID(
-			kramaIDVersion,
+		currentKID, err := identifiers.GenerateKramaIDv0(
+			identifiers.NetworkZone0,
 			bothSignAndCommPrivBytes[32:],
-			cfg.NodeIndex,
-			moiID,
-			true,
 		)
 		if err != nil {
 			return nil, err
@@ -139,11 +133,10 @@ func NewVault(cfg *VaultConfig, validatorType moinode.MoiNodeType, kramaIDVersio
 		}
 
 		signingAndNetworkKeys = bothSignAndCommPrivBytes
-		moiIDAddress = moiID
 		nodeIgcPath = cfg.NodeIndex
 	}
 
-	return loadVault(signingAndNetworkKeys, moiIDAddress, nodeIgcPath, kramaIDVersion, mnemonic)
+	return loadVault(signingAndNetworkKeys, nodeIgcPath, kramaIDVersion, mnemonic)
 }
 
 func (vault *KramaVault) GetConsensusPrivateKey() PrivateKey {
@@ -162,7 +155,7 @@ func (vault *KramaVault) SetNetworkPrivateKey(key PrivateKey) {
 	vault.networkPriv = key
 }
 
-func (vault *KramaVault) KramaID() kramaid.KramaID {
+func (vault *KramaVault) KramaID() identifiers.KramaID {
 	return vault.kramaID
 }
 
@@ -170,26 +163,8 @@ func (vault *KramaVault) GetMnemonic() poi.Mnemonic {
 	return vault.mnemonic
 }
 
-func (vault *KramaVault) SetKramaID(id kramaid.KramaID) {
+func (vault *KramaVault) SetKramaID(id identifiers.KramaID) {
 	vault.kramaID = id
-}
-
-func (vault *KramaVault) MoiID() (string, error) {
-	return vault.kramaID.MoiID()
-}
-
-func (vault *KramaVault) MoiIDPublicKey() ([]byte, error) {
-	moiIDInString, err := vault.kramaID.MoiID()
-	if err != nil {
-		return nil, err
-	}
-
-	moiIDInBytes, err := hex.DecodeString(moiIDInString)
-	if err != nil {
-		return nil, err
-	}
-
-	return moiIDInBytes[1:], nil
 }
 
 func (vault *KramaVault) GetPublicKeyAt(path string) ([]byte, error) {
@@ -373,7 +348,7 @@ func GetSignature(bz []byte, mnemonic string) (string, error) {
 	return hex.EncodeToString(sign), nil
 }
 
-func VerifySignatureUsingKramaID(id kramaid.KramaID, rawData []byte, signature []byte) error {
+func VerifySignatureUsingKramaID(id identifiers.KramaID, rawData []byte, signature []byte) error {
 	peerID, err := id.DecodedPeerID()
 	if err != nil {
 		return errors.Wrapf(err, "failed to get peer id from krama id")

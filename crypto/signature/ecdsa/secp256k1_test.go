@@ -4,8 +4,9 @@ import (
 	"encoding/hex"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/btcsuite/btcd/btcec/v2"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/crypto/common"
@@ -24,9 +25,9 @@ func TestECDSASignWithSecp256k1(t *testing.T) {
 
 	var s256 EcdsaSecp256k1Signature
 
+	// TODO: FIX ME
 	privateKeyBytes, _ := hex.DecodeString(privateKeyInHex)
-	kid := kramaid.KramaID("bvby3pBVU5BEL2jBHJrH23GTb9qe8nL4XHqqKzZVbth7gBZ5c3." +
-		"16Uiu2HAmGZr9gyQ7fDdmdBsRL29EjxR81Y74TEPbemBkyKuk2Ufj")
+	kid := identifiers.KramaID("1116Uiu2HAmGZr9gyQ7fDdmdBsRL29EjxR81Y74TEPbemBkyKuk2Ufj")
 
 	err := s256.Sign(message, privateKeyBytes, kid)
 	if err != nil {

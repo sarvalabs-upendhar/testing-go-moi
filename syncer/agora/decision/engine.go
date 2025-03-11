@@ -12,7 +12,6 @@ import (
 	"github.com/sarvalabs/go-moi/storage"
 
 	"github.com/hashicorp/go-hclog"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	message2 "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/agora/db"
@@ -25,8 +24,8 @@ const (
 )
 
 type ledger interface {
-	GetAssociatedPeers(id identifiers.Identifier, stateHash cid.CID) ([]kramaid.KramaID, error)
-	UpdateAssociatedPeers(id identifiers.Identifier, stateHash cid.CID, peers kramaid.KramaID) error
+	GetAssociatedPeers(id identifiers.Identifier, stateHash cid.CID) ([]identifiers.KramaID, error)
+	UpdateAssociatedPeers(id identifiers.Identifier, stateHash cid.CID, peers identifiers.KramaID) error
 }
 
 type store interface {
@@ -36,7 +35,7 @@ type store interface {
 }
 
 type net interface {
-	SendAgoraMessage(id kramaid.KramaID, msgType message2.MsgType, msg message.Message) error
+	SendAgoraMessage(id identifiers.KramaID, msgType message2.MsgType, msg message.Message) error
 }
 
 type Engine struct {
@@ -224,11 +223,11 @@ func (e *Engine) HandleRequest(req *Request) {
 }
 
 func (e *Engine) sendResponse(
-	id kramaid.KramaID,
+	id identifiers.KramaID,
 	sessionID identifiers.Identifier,
 	stateHash cid.CID,
 	responseStatus bool,
-	peerList []kramaid.KramaID,
+	peerList []identifiers.KramaID,
 ) {
 	select {
 	case e.responses <- &message.Response{

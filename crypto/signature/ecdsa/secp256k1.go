@@ -3,7 +3,7 @@ package ecdsa
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/crypto/common"
@@ -20,7 +20,7 @@ func (s256Sig *EcdsaSecp256k1Signature) Type() common.SigType {
 }
 
 // Sign the data using Secp256k1 curve
-func (s256Sig *EcdsaSecp256k1Signature) Sign(rawMessage []byte, signingKey []byte, kid kramaid.KramaID) error {
+func (s256Sig *EcdsaSecp256k1Signature) Sign(rawMessage []byte, signingKey []byte, kid identifiers.KramaID) error {
 	privateKey, publicKey := btcec.PrivKeyFromBytes(signingKey)
 
 	// Generating blake2b hash for the message
@@ -35,14 +35,15 @@ func (s256Sig *EcdsaSecp256k1Signature) Sign(rawMessage []byte, signingKey []byt
 	s256Sig.SigPrefix = sigPrefix
 	s256Sig.Digest = sigBytes
 
-	ver, err := kid.Version()
+	// TODO: FIX ME
+	tag, err := kid.Tag()
 	if err != nil {
 		return err
 	}
 
 	pubBytes := publicKey.SerializeCompressed()
 
-	if ver == 1 {
+	if tag.Version() == 0 {
 		s256Sig.Extra = pubBytes[:1] // Adding public key's parity prefix
 	} else {
 		s256Sig.Extra = pubBytes

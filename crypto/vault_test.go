@@ -7,9 +7,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/stretchr/testify/require"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
@@ -35,8 +36,7 @@ const (
 	"mnemonicCiphertext":"4100bcf00dbbda70f238ad072940cb5d"}`
 )
 
-var testKramaID = kramaid.KramaID("3WzFwwvSz7ZwiU3cDwk7uZtc9gX4d5h18MhsmXaT1XVqa3Bv16pP" +
-	"." + "16Uiu2HAkzBJTbFo1FXxvLy9qBWeP3z5zP6bkkPheXzk7HVgdW4xR")
+var testKramaID = identifiers.KramaID("1116Uiu2HAkzBJTbFo1FXxvLy9qBWeP3z5zP6bkkPheXzk7HVgdW4xR")
 
 func TestBLSSignAgg(t *testing.T) {
 	// Validator 1 DataDir
@@ -158,7 +158,7 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	datadir, err := os.MkdirTemp("", "moichain")
 	require.NoError(t, err)
 
-	mnemonicKsPath := strings.Join([]string{datadir, "mnemonic.keystore.json"}, "/")
+	mnemonicKsPath := strings.Join([]string{datadir, "keystore.json"}, "/")
 	err = os.WriteFile(mnemonicKsPath, []byte(testMnemonicKeystore), 0o600)
 	require.NoError(t, err)
 
@@ -179,18 +179,6 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 
 	testECDSASignWithOptions(t, vault)
 
-	moiIDStringFromSetup, err := vault.MoiID()
-	require.NoError(t, err)
-	require.Equal(t, moiIDStringFromSetup, testMoiID)
-
-	moiIDPubKey, err := vault.MoiIDPublicKey()
-	require.NoError(t, err)
-
-	_, derivedMoiIDPubKey, err := poi.GetPrivateKeyAtPath(testMnemonic, DefaultMOIIDPath)
-	require.NoError(t, err)
-
-	require.Equal(t, moiIDPubKey, derivedMoiIDPubKey)
-
 	kramaIDFromSetup := vault.KramaID()
 	require.Equal(t, kramaIDFromSetup, testKramaID)
 
@@ -202,12 +190,7 @@ func TestKramaVaultRegisterMode(t *testing.T) {
 	vault1, err := NewVault(config1, moinode.MoiFullNode, 1)
 	require.NoError(t, err)
 
-	moiIDStringFromStart, err := vault1.MoiID()
-	require.NoError(t, err)
-
 	kramaIDFromStart := vault1.KramaID()
-
-	require.Equal(t, moiIDStringFromSetup, moiIDStringFromStart)
 	require.Equal(t, kramaIDFromSetup, kramaIDFromStart)
 
 	testBLSSign(t, vault1)

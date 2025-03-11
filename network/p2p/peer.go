@@ -5,13 +5,14 @@ import (
 	"context"
 	"sync"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	mapset "github.com/deckarep/golang-set"
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-msgio"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
 
 	"github.com/sarvalabs/go-moi/common"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -19,19 +20,19 @@ import (
 
 // Peer is a struct that represents a peer on the network
 type Peer struct {
-	kramaID   kramaid.KramaID  // Represents the KramaID of the peer
-	networkID peer.ID          // Represents the libp2p-peer-id of the peer
-	stream    network.Stream   // Represents peer's stream
-	rtt       int64            // Represents the View trip time of the peer
-	rw        bufio.ReadWriter // Represents the peer's read/write buffer
-	knownIXs  mapset.Set       // Represents the set of interactions known to the peer
+	kramaID   identifiers.KramaID // Represents the KramaID of the peer
+	networkID peer.ID             // Represents the libp2p-peer-id of the peer
+	stream    network.Stream      // Represents peer's stream
+	rtt       int64               // Represents the View trip time of the peer
+	rw        bufio.ReadWriter    // Represents the peer's read/write buffer
+	knownIXs  mapset.Set          // Represents the set of interactions known to the peer
 	logger    hclog.Logger
 	mtxLock   sync.RWMutex
 }
 
 // newPeer is a constructor function that generates and returns a Peer
 // for a given kramaID, libp2p peerID and a read/write io buffer.
-func newPeer(stream network.Stream, kramaID kramaid.KramaID, rtt int64, logger hclog.Logger) *Peer {
+func newPeer(stream network.Stream, kramaID identifiers.KramaID, rtt int64, logger hclog.Logger) *Peer {
 	return &Peer{
 		kramaID:   kramaID,
 		stream:    stream,
@@ -98,7 +99,7 @@ func (p *Peer) decodePeerMessage() (networkmsg.Message, error) {
 	return msg, nil
 }
 
-func (p *Peer) GetKramaID() kramaid.KramaID {
+func (p *Peer) GetKramaID() identifiers.KramaID {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
 
@@ -138,7 +139,7 @@ func (p *Peer) InitHandshake(s *Server) error {
 }
 
 // SendIXs ships the ixn to the peer and marks as know
-func (p *Peer) SendIXs(id kramaid.KramaID, ixs common.Interactions) error {
+func (p *Peer) SendIXs(id identifiers.KramaID, ixs common.Interactions) error {
 	// Mark the given Interactions as 'known'
 	for _, ix := range ixs.IxList() {
 		p.markInteraction(ix.Hash())
@@ -148,7 +149,7 @@ func (p *Peer) SendIXs(id kramaid.KramaID, ixs common.Interactions) error {
 }
 
 // Send bundles the given payload into a network message and ship it to the peer
-func (p *Peer) Send(id kramaid.KramaID, code networkmsg.MsgType, msg networkmsg.Payload) error {
+func (p *Peer) Send(id identifiers.KramaID, code networkmsg.MsgType, msg networkmsg.Payload) error {
 	p.mtxLock.Lock()
 	defer p.mtxLock.Unlock()
 

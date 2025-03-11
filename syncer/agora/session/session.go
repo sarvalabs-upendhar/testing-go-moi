@@ -8,7 +8,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/common"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
@@ -27,8 +27,8 @@ type sessionManager interface {
 }
 
 type sessionNetwork interface {
-	SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error
-	ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Identifier) error
+	SendAgoraMessage(id identifiers.KramaID, msgType networkmsg.MsgType, msg message.Message) error
+	ClosePeerSession(kramaID identifiers.KramaID, sessionID identifiers.Identifier) error
 }
 
 type Session struct {
@@ -52,7 +52,7 @@ func NewSession(
 	notifier notifications.PubSubNotifier,
 	im sessionInterestManager,
 	sm sessionManager,
-	contextPeers []kramaid.KramaID,
+	contextPeers []identifiers.KramaID,
 ) *Session {
 	taggedLogger := logger.With("id", id.Hex()).Named("Session")
 	s := &Session{
@@ -76,7 +76,7 @@ func (s *Session) ID() identifiers.Identifier {
 	return s.id
 }
 
-func (s *Session) HandleMessage(id kramaid.KramaID, msg *message.AgoraResponseMsg) {
+func (s *Session) HandleMessage(id identifiers.KramaID, msg *message.AgoraResponseMsg) {
 	if !msg.Status {
 		s.pm.UpdatePeerStatus(id, false)
 		s.pm.AddPeers(msg.PeerSet...)
@@ -87,11 +87,13 @@ func (s *Session) HandleMessage(id kramaid.KramaID, msg *message.AgoraResponseMs
 	}
 }
 
-func (s *Session) ChooseBestPeer(ctx context.Context, avoid map[kramaid.KramaID]interface{}) (kramaid.KramaID, error) {
+func (s *Session) ChooseBestPeer(
+	ctx context.Context, avoid map[identifiers.KramaID]interface{},
+) (identifiers.KramaID, error) {
 	return s.pm.chooseBestPeer(ctx, avoid)
 }
 
-func (s *Session) sendWantReq(peerID kramaid.KramaID, cid *cid.CIDSet) error {
+func (s *Session) sendWantReq(peerID identifiers.KramaID, cid *cid.CIDSet) error {
 	req := &message.AgoraRequestMsg{
 		SessionID: s.id,
 		StateHash: s.stateHash,
@@ -114,7 +116,7 @@ func (s *Session) GetBlock(ctx context.Context, cID cid.CID) (*block.Block, erro
 
 func (s *Session) getBlocks(
 	ctx context.Context,
-	peerID kramaid.KramaID,
+	peerID identifiers.KramaID,
 	out chan *block.Block,
 	idSet *cid.CIDSet,
 ) error {
@@ -186,7 +188,7 @@ func (s *Session) GetBlocks(ctx context.Context, cids []cid.CID) chan *block.Blo
 		idSet.Add(cid)
 	}
 
-	attemptedPeers := make(map[kramaid.KramaID]interface{})
+	attemptedPeers := make(map[identifiers.KramaID]interface{})
 
 	go func() {
 		defer close(out)

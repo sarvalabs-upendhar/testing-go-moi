@@ -1,7 +1,7 @@
 package schnorr
 
 import (
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/crypto/common"
 )
@@ -16,7 +16,7 @@ func (snrSR25519 *SchnorrSR25519Sig) Type() common.SigType {
 }
 
 // Sign the data using Secp256k1 curve
-func (snrSR25519 *SchnorrSR25519Sig) Sign(data []byte, signingKey []byte, kid kramaid.KramaID) error {
+func (snrSR25519 *SchnorrSR25519Sig) Sign(data []byte, signingKey []byte, kid identifiers.KramaID) error {
 	prvKey := new(Sr25519PrivKey)
 
 	err := prvKey.GenerateFromSecret(signingKey)
@@ -35,12 +35,12 @@ func (snrSR25519 *SchnorrSR25519Sig) Sign(data []byte, signingKey []byte, kid kr
 	snrSR25519.SigPrefix = sigPrefix
 	snrSR25519.Digest = sigBytes
 
-	ver, err := kid.Version()
+	tag, err := kid.Tag()
 	if err != nil {
 		return err
 	}
 
-	if ver == 1 {
+	if tag.Version() == 0 {
 		snrSR25519.Extra = nil // SchnorrSR25519Signature does not need any extra bytes if kramaid version is 1
 	} else {
 		snrSR25519.Extra, err = prvKey.PubKeyInBytes()

@@ -9,7 +9,6 @@ import (
 
 	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -1890,7 +1889,7 @@ func TestCreateContext(t *testing.T) {
 
 	testcases := []struct {
 		name           string
-		consensusNodes []kramaid.KramaID
+		consensusNodes []identifiers.KramaID
 		expectedError  error
 	}{
 		{
@@ -1927,7 +1926,7 @@ func TestUpdateContext(t *testing.T) {
 
 	testcases := []struct {
 		name           string
-		consensusNodes []kramaid.KramaID
+		consensusNodes []identifiers.KramaID
 		metaHash       common.Hash
 		soParams       *createStateObjectParams
 		mCtx           *MetaContextObject

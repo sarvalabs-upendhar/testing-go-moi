@@ -4,15 +4,16 @@ import (
 	"context"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/senatus"
 )
 
-func getTestEntries(t *testing.T, kramaIDs []kramaid.KramaID) map[peer.ID]*senatus.NodeMetaInfo {
+func getTestEntries(t *testing.T, kramaIDs []identifiers.KramaID) map[peer.ID]*senatus.NodeMetaInfo {
 	t.Helper()
 
 	count := len(kramaIDs)
@@ -33,7 +34,7 @@ type MockReputationEngine struct {
 	peerCount uint64
 }
 
-func (re *MockReputationEngine) DeletePeers(ids []kramaid.KramaID) error {
+func (re *MockReputationEngine) DeletePeers(ids []identifiers.KramaID) error {
 	panic("implement me")
 }
 

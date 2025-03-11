@@ -18,7 +18,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/state"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -79,7 +78,7 @@ type p2pServer interface {
 		handler func(msg *pubsub.Message) error,
 	) error
 	Broadcast(topicName string, data []byte) error
-	GetKramaID() kramaid.KramaID
+	GetKramaID() identifiers.KramaID
 }
 
 type IxConfig struct {

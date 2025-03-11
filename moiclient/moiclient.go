@@ -18,7 +18,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/jsonrpc"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
@@ -696,8 +695,8 @@ func (c *Client) WaitTime(ctx context.Context, args *rpcargs.IxPoolArgs) (*rpcar
 }
 
 // Peers returns an array of Krama IDs connected to a client
-func (c *Client) Peers(ctx context.Context, args *rpcargs.NetArgs) ([]kramaid.KramaID, error) {
-	var response []kramaid.KramaID
+func (c *Client) Peers(ctx context.Context, args *rpcargs.NetArgs) ([]identifiers.KramaID, error) {
+	var response []identifiers.KramaID
 
 	err := c.Call(ctx, &response, "net.Peers", args)
 	if err != nil {

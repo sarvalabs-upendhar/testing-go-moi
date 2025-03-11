@@ -7,7 +7,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
@@ -17,7 +16,7 @@ import (
 
 type vault interface {
 	Sign(data []byte, sigType mudracommon.SigType, signOptions ...crypto.SignOption) ([]byte, error)
-	KramaID() kramaid.KramaID
+	KramaID() identifiers.KramaID
 }
 
 type store interface {

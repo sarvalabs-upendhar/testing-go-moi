@@ -1,9 +1,9 @@
 package guardianregistry
 
 import (
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"golang.org/x/crypto/blake2b"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-polo"
@@ -59,7 +59,7 @@ type Incentive struct {
 	ReferralWallet  [32]byte `polo:"ReferralWallet"`
 }
 
-func GetGuardianPublicKeys(storage engineio.StorageReader, ids ...kramaid.KramaID) ([][]byte, error) {
+func GetGuardianPublicKeys(storage engineio.StorageReader, ids ...identifiers.KramaID) ([][]byte, error) {
 	pubkeys := make([][]byte, 0, len(ids))
 
 	for _, id := range ids {
@@ -88,7 +88,7 @@ func GetGuardianPublicKeys(storage engineio.StorageReader, ids ...kramaid.KramaI
 	return pubkeys, nil
 }
 
-func GetGuardianIncentive(storage engineio.StorageReader, id kramaid.KramaID) (uint64, error) {
+func GetGuardianIncentive(storage engineio.StorageReader, id identifiers.KramaID) (uint64, error) {
 	encoded, _ := polo.Polorize(id)
 	hashed := blake2b.Sum256(encoded)
 

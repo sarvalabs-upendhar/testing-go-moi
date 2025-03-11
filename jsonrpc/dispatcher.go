@@ -109,14 +109,14 @@ func (d *dispatcher) handleSingleWs(req Request, conn ConnManager) Response {
 	var response []byte
 
 	switch req.Method {
-	case "moi.subscribe":
+	case "moi.Subscribe":
 		var filterID string
 
-		// if the request method is moi.subscribe we need to create a new filter with ws connection
+		// if the request method is moi.Subscribe we need to create a new filter with ws connection
 		if filterID, err = d.handleSubscribe(req, conn); err == nil {
 			response = []byte(fmt.Sprintf("\"%s\"", filterID))
 		}
-	case "moi.unsubscribe":
+	case "moi.Unsubscribe":
 		var ok bool
 
 		if ok, err = d.handleUnsubscribe(req); err == nil {

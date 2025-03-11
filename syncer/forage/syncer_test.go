@@ -15,7 +15,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/multiformats/go-multiaddr"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -1016,7 +1015,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 		id,
 		uint64(expectedHeight),
 		common.FullSync,
-		[]kramaid.KramaID{servers[0].GetKramaID()},
+		[]identifiers.KramaID{servers[0].GetKramaID()},
 		false,
 	)
 	require.NoError(t, err)
@@ -1192,7 +1191,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 
 	count := 1
 	ids := tests.GetIdentifiers(t, 2)
-	bestPeers := make(map[kramaid.KramaID]struct{})
+	bestPeers := make(map[identifiers.KramaID]struct{})
 	testKramaIDs := tests.RandomKramaIDs(t, 1)
 	bestPeers[testKramaIDs[0]] = struct{}{}
 

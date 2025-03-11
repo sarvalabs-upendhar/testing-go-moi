@@ -8,7 +8,7 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/network/p2p"
 	"github.com/sarvalabs/go-moi/syncer"
 	"github.com/sarvalabs/go-moi/syncer/agora/db"
@@ -87,7 +87,7 @@ func NewAgora(
 
 func (ag *Agora) NewSession(
 	ctx context.Context,
-	contextPeers []kramaid.KramaID,
+	contextPeers []identifiers.KramaID,
 	id identifiers.Identifier,
 	stateHash cid.CID,
 ) (syncer.Session, error) {

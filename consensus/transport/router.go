@@ -5,8 +5,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
-	id "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 )
@@ -171,12 +172,12 @@ func (gp *GossipPeer) setConnectionStatus(connected bool) {
 // GossipPeers keeps track of the gossip peers.
 type GossipPeers struct {
 	mtx   sync.RWMutex
-	peers map[id.KramaID]*GossipPeer
+	peers map[identifiers.KramaID]*GossipPeer
 }
 
 // newGossipPeers creates and returns a new instance of GossipPeers.
 func newGossipPeers() *GossipPeers {
-	peers := make(map[id.KramaID]*GossipPeer)
+	peers := make(map[identifiers.KramaID]*GossipPeer)
 
 	return &GossipPeers{
 		mtx:   sync.RWMutex{},
@@ -185,7 +186,7 @@ func newGossipPeers() *GossipPeers {
 }
 
 // add inserts a new peer with a corresponding PeerVoteSet.
-func (ap *GossipPeers) add(peerID id.KramaID, connected bool) {
+func (ap *GossipPeers) add(peerID identifiers.KramaID, connected bool) {
 	ap.mtx.Lock()
 	defer ap.mtx.Unlock()
 
@@ -193,7 +194,7 @@ func (ap *GossipPeers) add(peerID id.KramaID, connected bool) {
 	ap.peers[peerID].connected = connected
 }
 
-func (ap *GossipPeers) has(peerID id.KramaID) bool {
+func (ap *GossipPeers) has(peerID identifiers.KramaID) bool {
 	ap.mtx.RLock()
 	defer ap.mtx.RUnlock()
 
@@ -203,7 +204,7 @@ func (ap *GossipPeers) has(peerID id.KramaID) bool {
 }
 
 // get retrieves the GossipPeer associated with the given peerID.
-func (ap *GossipPeers) get(peerID id.KramaID) *GossipPeer {
+func (ap *GossipPeers) get(peerID identifiers.KramaID) *GossipPeer {
 	ap.mtx.RLock()
 	defer ap.mtx.RUnlock()
 
@@ -211,11 +212,11 @@ func (ap *GossipPeers) get(peerID id.KramaID) *GossipPeer {
 }
 
 // entries returns a map containing all the peer IDs in the GossipPeers.
-func (ap *GossipPeers) entries() map[id.KramaID]struct{} {
+func (ap *GossipPeers) entries() map[identifiers.KramaID]struct{} {
 	ap.mtx.RLock()
 	defer ap.mtx.RUnlock()
 
-	peers := make(map[id.KramaID]struct{})
+	peers := make(map[identifiers.KramaID]struct{})
 
 	for peerID := range ap.peers {
 		peers[peerID] = struct{}{}
@@ -225,11 +226,11 @@ func (ap *GossipPeers) entries() map[id.KramaID]struct{} {
 }
 
 // list returns a list of all the peer IDs in the GossipPeers
-func (ap *GossipPeers) list() []id.KramaID {
+func (ap *GossipPeers) list() []identifiers.KramaID {
 	ap.mtx.RLock()
 	defer ap.mtx.RUnlock()
 
-	peers := make([]id.KramaID, 0)
+	peers := make([]identifiers.KramaID, 0)
 
 	for peerID := range ap.peers {
 		peers = append(peers, peerID)
@@ -243,7 +244,7 @@ func (ap *GossipPeers) len(connectedOnly bool) int {
 	ap.mtx.RLock()
 	defer ap.mtx.RUnlock()
 
-	peers := make([]id.KramaID, 0)
+	peers := make([]identifiers.KramaID, 0)
 
 	for peerID, peer := range ap.peers {
 		if connectedOnly && !peer.connected {
@@ -257,7 +258,7 @@ func (ap *GossipPeers) len(connectedOnly bool) int {
 }
 
 // remove deletes a peer from the GossipPeers.
-func (ap *GossipPeers) remove(peerID id.KramaID) {
+func (ap *GossipPeers) remove(peerID identifiers.KramaID) {
 	ap.mtx.Lock()
 	defer ap.mtx.Unlock()
 
@@ -271,7 +272,7 @@ type ContextRouter struct {
 	ctx       context.Context
 	ctxCancel context.CancelFunc
 	mtx       sync.RWMutex
-	selfID    id.KramaID
+	selfID    identifiers.KramaID
 	clusterID common.ClusterID
 	logger    hclog.Logger
 	transport *KramaTransport
@@ -280,13 +281,13 @@ type ContextRouter struct {
 	// voteRegistry *VoteRegistry
 	// requestCache *RequestCache
 	expiresAt int64
-	operator  id.KramaID
+	operator  identifiers.KramaID
 }
 
 // NewContextRouter returns a new instance of ContextRouter.
 func NewContextRouter(
 	ctx context.Context,
-	selfID, operator id.KramaID,
+	selfID, operator identifiers.KramaID,
 	clusterID common.ClusterID,
 	logger hclog.Logger,
 	nodeset *types.ICSCommittee,
@@ -334,7 +335,7 @@ func (cr *ContextRouter) close() {
 
 /*
 // sendPendingMessages sends the pending votes to specific peer if exists
-func (cr *ContextRouter) sendPendingMessages(clusterID common.ClusterID, kramaID id.KramaID) {
+func (cr *ContextRouter) sendPendingMessages(clusterID common.ClusterID, kramaID identifiers.KramaID) {
 	gossipPeer := cr.gossipPeers.get(kramaID)
 	if gossipPeer == nil || gossipPeer.pendingVotes.isEmpty() {
 		return
@@ -576,8 +577,8 @@ func (cr *ContextRouter) handleICSWant(msg *types.ICSMSG) error {
 }
 
 // getAvailableNodes returns available peers excluding the self and known peers.
-func (cr *ContextRouter) getAvailableNodes() []id.KramaID {
-	availableNodes := make([]id.KramaID, 0)
+func (cr *ContextRouter) getAvailableNodes() []identifiers.KramaID {
+	availableNodes := make([]identifiers.KramaID, 0)
 
 	for _, kramaID := range cr.committee.getContextNodes(true) {
 		if kramaID == cr.selfID {
@@ -593,7 +594,7 @@ func (cr *ContextRouter) getAvailableNodes() []id.KramaID {
 }
 
 // getRandomNode returns a random node from the committee excluding the node itself and known peers.
-func (cr *ContextRouter) getRandomNode(nodes []id.KramaID) (id.KramaID, error) {
+func (cr *ContextRouter) getRandomNode(nodes []identifiers.KramaID) (identifiers.KramaID, error) {
 	if len(nodes) == 0 {
 		return "", errors.New("no random peer available")
 	}
@@ -605,17 +606,17 @@ func (cr *ContextRouter) getRandomNode(nodes []id.KramaID) (id.KramaID, error) {
 	return nodes[index], nil
 }
 
-func (cr *ContextRouter) getRandomPeers() []id.KramaID {
+func (cr *ContextRouter) getRandomPeers() []identifiers.KramaID {
 	nodes := cr.committee.getContextNodes(false)
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	randomPeers := make([]id.KramaID, 0, cr.transport.minGossipPeers)
+	randomPeers := make([]identifiers.KramaID, 0, cr.transport.minGossipPeers)
 
 	if len(nodes) <= cr.transport.minGossipPeers {
-		return []id.KramaID{}
+		return []identifiers.KramaID{}
 	}
 
-	existingPeer := make(map[id.KramaID]bool)
+	existingPeer := make(map[identifiers.KramaID]bool)
 
 	for i := 0; i < cr.transport.minGossipPeers; i++ {
 		randIndex := r.Intn(len(nodes))
@@ -658,7 +659,7 @@ func (cr *ContextRouter) maintainConnections(connMaintenanceInterval time.Durati
 
 				waitGroup.Add(1)
 
-				go func(kramaID id.KramaID) {
+				go func(kramaID identifiers.KramaID) {
 					defer waitGroup.Done()
 
 					if err := cr.transport.ConnectToMeshPeer(cr.ctx, kramaID, cr.clusterID); err != nil {

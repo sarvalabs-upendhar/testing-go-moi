@@ -10,7 +10,7 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/sarvalabs/go-legacy-kramaid"
+
 	"github.com/sarvalabs/go-moi/syncer/agora/block"
 	"github.com/sarvalabs/go-moi/syncer/agora/decision"
 	"github.com/sarvalabs/go-moi/syncer/agora/message"
@@ -74,7 +74,7 @@ func (s *Manager) NewSession(
 	id identifiers.Identifier,
 	stateHash cid.CID,
 	network *network.AgoraNetwork,
-	contextPeers []kramaid.KramaID,
+	contextPeers []identifiers.KramaID,
 ) (*Session, error) {
 	_, ok := s.activeSessions.Load(id)
 	if !ok {
@@ -87,7 +87,7 @@ func (s *Manager) NewSession(
 	return nil, errors.New("session already exists")
 }
 
-func (s *Manager) HandlePeerMessage(id kramaid.KramaID, msg interface{}) {
+func (s *Manager) HandlePeerMessage(id identifiers.KramaID, msg interface{}) {
 	switch msg := msg.(type) {
 	case *message.AgoraRequestMsg:
 		s.handleAgoraRequestMsg(id, msg)
@@ -98,7 +98,7 @@ func (s *Manager) HandlePeerMessage(id kramaid.KramaID, msg interface{}) {
 	}
 }
 
-func (s *Manager) handleAgoraRequestMsg(id kramaid.KramaID, msg *message.AgoraRequestMsg) {
+func (s *Manager) handleAgoraRequestMsg(id identifiers.KramaID, msg *message.AgoraRequestMsg) {
 	s.engine.HandleRequest(&decision.Request{
 		PeerID:    id,
 		ReqTime:   time.Now(),
@@ -108,7 +108,7 @@ func (s *Manager) handleAgoraRequestMsg(id kramaid.KramaID, msg *message.AgoraRe
 	})
 }
 
-func (s *Manager) handleAgoraResponseMsg(id kramaid.KramaID, msg *message.AgoraResponseMsg) {
+func (s *Manager) handleAgoraResponseMsg(id identifiers.KramaID, msg *message.AgoraResponseMsg) {
 	if !msg.Status {
 		session, err := s.GetSession(msg.SessionID)
 		if err != nil {

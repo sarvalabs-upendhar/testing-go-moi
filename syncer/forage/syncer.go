@@ -17,7 +17,6 @@ import (
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/sync/errgroup"
 
@@ -97,7 +96,7 @@ type stateManager interface {
 	GetConsensusNodesByHash(
 		id identifiers.Identifier,
 		hash common.Hash,
-	) ([]kramaid.KramaID, error)
+	) ([]identifiers.KramaID, error)
 	RemoveCachedObject(id identifiers.Identifier)
 }
 
@@ -158,10 +157,10 @@ type ixpool interface {
 }
 
 type p2pServer interface {
-	GetPeers() []kramaid.KramaID
+	GetPeers() []identifiers.KramaID
 	StartNewRPCServer(protocol protocol.ID, tag string) *rpc.Client
 	RegisterNewRPCService(protocol protocol.ID, serviceName string, service interface{}) error
-	GetKramaID() kramaid.KramaID
+	GetKramaID() identifiers.KramaID
 	Subscribe(
 		ctx context.Context,
 		topicName string,
@@ -318,7 +317,7 @@ func (s *Syncer) NewSyncRequest(
 	id identifiers.Identifier,
 	expectedHeight uint64,
 	syncMode common.SyncMode,
-	bestPeers []kramaid.KramaID,
+	bestPeers []identifiers.KramaID,
 	snapDownloaded bool,
 	tesseracts ...*TesseractInfo,
 ) (err error) {
@@ -334,7 +333,7 @@ func (s *Syncer) NewSyncRequest(
 			jobState:        Pending,
 			snapDownloaded:  snapDownloaded,
 			tesseractSignal: make(chan struct{}, 1),
-			bestPeers:       make(map[kramaid.KramaID]struct{}),
+			bestPeers:       make(map[identifiers.KramaID]struct{}),
 		}
 
 		job.updateBestPeers(bestPeers)
@@ -511,7 +510,7 @@ func (s *Syncer) setBucketSyncDone(val bool) {
 }
 
 func (s *Syncer) RPCGetLatestAccountInfo(
-	bestPeer kramaid.KramaID,
+	bestPeer identifiers.KramaID,
 	id identifiers.Identifier,
 ) (*LatestAccountInfo, error) {
 	resp := new(LatestAccountInfo)
@@ -534,7 +533,7 @@ func (s *Syncer) RPCGetLatestAccountInfo(
 	return resp, nil
 }
 
-func (s *Syncer) chooseBestPeersForInitialSync(id identifiers.Identifier) (uint64, []kramaid.KramaID, error) {
+func (s *Syncer) chooseBestPeersForInitialSync(id identifiers.Identifier) (uint64, []identifiers.KramaID, error) {
 	if s.hasSyncPeers() {
 		for i := 0; i < 3; i++ {
 			bestPeer := s.chooseAnySyncPeer()
@@ -544,7 +543,7 @@ func (s *Syncer) chooseBestPeersForInitialSync(id identifiers.Identifier) (uint6
 				continue
 			}
 
-			return resp.Height, []kramaid.KramaID{bestPeer.ID}, nil
+			return resp.Height, []identifiers.KramaID{bestPeer.ID}, nil
 		}
 
 		return 0, nil, errors.New("unable to fetch latest account info from sync peers")
@@ -558,7 +557,7 @@ func (s *Syncer) chooseBestPeersForInitialSync(id identifiers.Identifier) (uint6
 	return bestHeight, bestPeers, nil
 }
 
-func (s *Syncer) chooseBestPeer(job *SyncJob) (kramaid.KramaID, error) {
+func (s *Syncer) chooseBestPeer(job *SyncJob) (identifiers.KramaID, error) {
 	// If initial sync is not done, then choose best peer from sync peers
 	// to improve probability of success in syncing
 	if !s.isInitialSyncDone() && s.hasSyncPeers() {
@@ -845,7 +844,7 @@ func (s *Syncer) releasePendingJob(job *SyncJob, ts *types.ts) error {
 
 */
 
-func getBestPeers(heightPeersMap map[uint64][]kramaid.KramaID) (uint64, []kramaid.KramaID, error) {
+func getBestPeers(heightPeersMap map[uint64][]identifiers.KramaID) (uint64, []identifiers.KramaID, error) {
 	maxFrequencyHeight := uint64(0)
 	maxFrequencyNodes := 0
 
@@ -865,8 +864,8 @@ func getBestPeers(heightPeersMap map[uint64][]kramaid.KramaID) (uint64, []kramai
 }
 
 // findLatestHeightAndBestPeers returns the height reported from the majority of peers as best height
-func (s *Syncer) findLatestHeightAndBestPeers(id identifiers.Identifier) (uint64, []kramaid.KramaID, error) {
-	heightPeersMap := make(map[uint64][]kramaid.KramaID)
+func (s *Syncer) findLatestHeightAndBestPeers(id identifiers.Identifier) (uint64, []identifiers.KramaID, error) {
+	heightPeersMap := make(map[uint64][]identifiers.KramaID)
 
 	// index tracks the no of peers responded
 	index := 0
@@ -885,7 +884,7 @@ func (s *Syncer) findLatestHeightAndBestPeers(id identifiers.Identifier) (uint64
 
 		nodes, ok := heightPeersMap[resp.Height]
 		if !ok {
-			heightPeersMap[resp.Height] = make([]kramaid.KramaID, 0)
+			heightPeersMap[resp.Height] = make([]identifiers.KramaID, 0)
 		}
 
 		nodes = append(nodes, kramaID)
@@ -895,7 +894,7 @@ func (s *Syncer) findLatestHeightAndBestPeers(id identifiers.Identifier) (uint64
 	return getBestPeers(heightPeersMap)
 }
 
-func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (kramaid.KramaID, error) {
+func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (identifiers.KramaID, error) {
 	if job.mode == common.LatestSync && job.tesseractQueue.Peek() != nil {
 		randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
 		randNumber := randomSource.Intn(len(job.tesseractQueue.Peek().tesseract.CommitInfo().RandomSet))
@@ -922,9 +921,9 @@ func (s *Syncer) chooseAnySyncPeer() config.NodeInfo {
 
 // syncSystemAccount sends a sync request for the specified accountID and waits for it to complete within a given time.
 // If the sync does not complete within the specified time, an error is returned.
-func (s *Syncer) syncSystemAccount(id ...identifiers.Identifier) ([]kramaid.KramaID, error) {
+func (s *Syncer) syncSystemAccount(id ...identifiers.Identifier) ([]identifiers.KramaID, error) {
 	var (
-		bestPeers  []kramaid.KramaID
+		bestPeers  []identifiers.KramaID
 		bestHeight uint64
 		err        error
 	)
@@ -1001,7 +1000,7 @@ func (s *Syncer) initSync() error {
 	return s.syncBucketsWithMaxAttempts(bestPeers, MaxBucketSyncAttempts)
 }
 
-func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []kramaid.KramaID, maxAttempts int) error {
+func (s *Syncer) syncBucketsWithMaxAttempts(bestPeers []identifiers.KramaID, maxAttempts int) error {
 	for i := 1; i < maxAttempts+1; i++ {
 		randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
 		bestPeer := bestPeers[randomNumber.Intn(len(bestPeers))]
@@ -1137,7 +1136,7 @@ func (s *Syncer) loadSyncJobsFromDB() error {
 	return nil
 }
 
-func (s *Syncer) syncBuckets(bestPeer kramaid.KramaID, attempts int) error {
+func (s *Syncer) syncBuckets(bestPeer identifiers.KramaID, attempts int) error {
 	var (
 		argsChan = make(chan *BucketSyncRequest, 1)
 		respChan = make(chan *BucketSyncResponse, ChannelBufferSize)
@@ -1270,7 +1269,7 @@ func (s *Syncer) isSnapSyncRequired(id identifiers.Identifier) bool {
 	return !s.db.IsAccountPrimarySyncDone(id)
 }
 
-func (s *Syncer) fetchAndStoreSnap(bestPeer kramaid.KramaID, job *SyncJob) error {
+func (s *Syncer) fetchAndStoreSnap(bestPeer identifiers.KramaID, job *SyncJob) error {
 	ctx, cancel := context.WithTimeout(
 		context.Background(), // TODO: Need to improve the timeouts
 		time.Duration(5000+(job.getExpectedHeight())*5000)*time.Millisecond,
@@ -1318,7 +1317,7 @@ func (s *Syncer) fetchAndStoreSnap(bestPeer kramaid.KramaID, job *SyncJob) error
 // of the snapshot sent.
 func (s *Syncer) fetchSnapShot(
 	ctx context.Context,
-	peer kramaid.KramaID,
+	peer identifiers.KramaID,
 	id identifiers.Identifier,
 	expectedHeight uint64,
 ) (bool, error) {
@@ -1437,7 +1436,7 @@ func (s *Syncer) syncLattice(
 	ctx context.Context,
 	nextTS *TesseractInfo,
 	job *SyncJob,
-	bestPeer kramaid.KramaID,
+	bestPeer identifiers.KramaID,
 ) error {
 	var (
 		endHeight   = job.getExpectedHeight()
@@ -1810,7 +1809,7 @@ func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesserac
 func (s *Syncer) fetchTesseractState(
 	id identifiers.Identifier,
 	tesseract *common.Tesseract,
-	fetchContext []kramaid.KramaID,
+	fetchContext []identifiers.KramaID,
 	object *state.Object,
 ) error {
 	ctx, cancel := context.WithTimeout(context.Background(), TesseractFetchTimeOut) // TODO:Optimise timeout duration
@@ -2608,7 +2607,7 @@ func (s *Syncer) startSyncEventHandler() {
 				req.ID,
 				req.Height,
 				common.LatestSync,
-				[]kramaid.KramaID{req.BestPeer},
+				[]identifiers.KramaID{req.BestPeer},
 				false,
 			); err != nil {
 				s.logger.Error("Failed to handle sync request from consensus engine", "err", err)
@@ -2735,8 +2734,8 @@ func (s *Syncer) queueHandler() {
 	}
 }
 
-func (s *Syncer) fetchContextForAgora(id identifiers.Identifier, ts common.Tesseract) ([]kramaid.KramaID, error) {
-	peers := make([]kramaid.KramaID, 0)
+func (s *Syncer) fetchContextForAgora(id identifiers.Identifier, ts common.Tesseract) ([]identifiers.KramaID, error) {
+	peers := make([]identifiers.KramaID, 0)
 
 	for {
 		if len(peers) >= 10 {

@@ -3,17 +3,18 @@ package senatus
 import (
 	"sync"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
 )
 
 type NodeMetaInfoMsg struct {
-	KramaID       kramaid.KramaID
+	KramaID       identifiers.KramaID
 	Address       []string
 	NTQ           float32
 	WalletCount   int32
@@ -23,7 +24,7 @@ type NodeMetaInfoMsg struct {
 type NodeMetaInfo struct {
 	mtx           sync.RWMutex
 	Addrs         []string
-	KramaID       kramaid.KramaID
+	KramaID       identifiers.KramaID
 	ContextPower  int
 	NTQ           float32
 	RTT           int64
@@ -46,7 +47,7 @@ func (mi *NodeMetaInfo) UpdateWalletCount(delta int32) {
 	mi.WalletCount += delta
 }
 
-func (mi *NodeMetaInfo) GetKramaID() kramaid.KramaID {
+func (mi *NodeMetaInfo) GetKramaID() identifiers.KramaID {
 	return mi.KramaID
 }
 

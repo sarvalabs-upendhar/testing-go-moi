@@ -19,7 +19,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -528,7 +527,7 @@ func (m *MockLattice) IsInitialTesseract(
 type MockStateManager struct {
 	db               store
 	sealedTesseracts map[common.Hash]bool
-	consensusNodes   map[common.Hash][]kramaid.KramaID
+	consensusNodes   map[common.Hash][]identifiers.KramaID
 }
 
 func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
@@ -540,7 +539,7 @@ func newMockStateManager(db store) *MockStateManager {
 	return &MockStateManager{
 		db:               db,
 		sealedTesseracts: make(map[common.Hash]bool),
-		consensusNodes:   make(map[common.Hash][]kramaid.KramaID),
+		consensusNodes:   make(map[common.Hash][]identifiers.KramaID),
 	}
 }
 
@@ -628,14 +627,14 @@ func (m *MockStateManager) IsSealValid(ts *common.Tesseract) (bool, error) {
 
 func (m *MockStateManager) insertConsensusNodes(
 	ctxHash common.Hash,
-	nodes []kramaid.KramaID,
+	nodes []identifiers.KramaID,
 ) {
 	m.consensusNodes[ctxHash] = nodes
 }
 
 func (m *MockStateManager) GetConsensusNodesByHash(id identifiers.Identifier,
 	hash common.Hash,
-) ([]kramaid.KramaID, error) {
+) ([]identifiers.KramaID, error) {
 	c, ok := m.consensusNodes[hash]
 
 	if !ok {
@@ -680,7 +679,7 @@ func (m *MockAgora) addSession(session *MockSession, stateHash cid.CID) {
 	m.sessions[stateHash] = session
 }
 
-func (m MockAgora) NewSession(ctx context.Context, contextPeers []kramaid.KramaID,
+func (m MockAgora) NewSession(ctx context.Context, contextPeers []identifiers.KramaID,
 	id identifiers.Identifier, stateHash cid.CID,
 ) (syncer.Session, error) {
 	if m.newSession != nil {
@@ -759,14 +758,14 @@ type CreateServerParams struct {
 }
 
 type MockReputationEngine struct {
-	ntq      map[kramaid.KramaID]float32
+	ntq      map[identifiers.KramaID]float32
 	peerInfo map[peer.ID]*senatus.NodeMetaInfo
 	mutex    sync.RWMutex
 }
 
 func NewMockReputationEngine() *MockReputationEngine {
 	return &MockReputationEngine{
-		ntq:      make(map[kramaid.KramaID]float32),
+		ntq:      make(map[identifiers.KramaID]float32),
 		peerInfo: make(map[peer.ID]*senatus.NodeMetaInfo),
 	}
 }
@@ -789,7 +788,7 @@ func (m *MockReputationEngine) AddNewPeerWithPeerID(peerID peer.ID, data *senatu
 	return nil
 }
 
-func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
+func (m *MockReputationEngine) GetNTQ(id identifiers.KramaID) (float32, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -801,14 +800,14 @@ func (m *MockReputationEngine) GetNTQ(id kramaid.KramaID) (float32, error) {
 	return ntq, nil
 }
 
-func (m *MockReputationEngine) SetNTQ(id kramaid.KramaID, val int) {
+func (m *MockReputationEngine) SetNTQ(id identifiers.KramaID, val int) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
 	m.ntq[id] = float32(val)
 }
 
-func (m *MockReputationEngine) GetAddress(key kramaid.KramaID) ([]multiaddr.Multiaddr, error) {
+func (m *MockReputationEngine) GetAddress(key identifiers.KramaID) ([]multiaddr.Multiaddr, error) {
 	peerID, err := key.DecodedPeerID()
 	if err != nil {
 		return nil, common.ErrInvalidKramaID
@@ -828,7 +827,7 @@ func (m *MockReputationEngine) GetAddressByPeerID(peerID peer.ID) ([]multiaddr.M
 	return nil, common.ErrKramaIDNotFound
 }
 
-func (m *MockReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (kramaid.KramaID, error) {
+func (m *MockReputationEngine) GetKramaIDByPeerID(peerID peer.ID) (identifiers.KramaID, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -1229,7 +1228,7 @@ func defaultSyncerConfig() *config.SyncerConfig {
 
 func generateTesseracts(
 	t *testing.T,
-	serverID kramaid.KramaID,
+	serverID identifiers.KramaID,
 	startHeight, endHeight int,
 	prevHash common.Hash,
 	ids ...identifiers.Identifier,
@@ -1292,7 +1291,7 @@ func generateTesseracts(
 			},
 			CommitInfo: &common.CommitInfo{
 				Operator:  tests.RandomKramaID(t, 1),
-				RandomSet: []kramaid.KramaID{serverID},
+				RandomSet: []identifiers.KramaID{serverID},
 			},
 		}
 
@@ -1903,10 +1902,10 @@ func fetchContextFromLattice(
 	id identifiers.Identifier,
 	ts common.Tesseract,
 	s *Syncer,
-) []kramaid.KramaID {
+) []identifiers.KramaID {
 	t.Helper()
 
-	peers := make([]kramaid.KramaID, 0)
+	peers := make([]identifiers.KramaID, 0)
 
 	for {
 		if len(peers) >= 10 {

@@ -4,6 +4,10 @@ import (
 	"context"
 	"testing"
 
+	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/crypto"
+
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -19,8 +23,16 @@ type MockConnectionManager struct {
 }
 
 func NewMockConnectionManager(hostAddr string) *MockConnectionManager {
+	networkKey, _ := identifiers.RandomNetworkKey()
+
+	nPriv := new(crypto.SECP256K1PrivKey)
+	nPriv.UnMarshal(networkKey)
+
+	prvKey, _ := p2pcrypto.UnmarshalSecp256k1PrivateKey(nPriv.Bytes())
+
 	host, _ := libp2p.New(
 		libp2p.ListenAddrStrings(hostAddr),
+		libp2p.Identity(prvKey),
 	)
 
 	return &MockConnectionManager{

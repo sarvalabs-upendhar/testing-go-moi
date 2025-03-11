@@ -2,7 +2,7 @@ package forage
 
 import (
 	"github.com/hashicorp/go-hclog"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 type Option = func(job *SyncJob)
@@ -55,7 +55,7 @@ func WithTesseractQueue(tq *TesseractQueue) func(*SyncJob) {
 	}
 }
 
-func WithBestPeers(m map[kramaid.KramaID]struct{}) func(job *SyncJob) {
+func WithBestPeers(m map[identifiers.KramaID]struct{}) func(job *SyncJob) {
 	return func(job *SyncJob) {
 		job.bestPeers = m
 	}

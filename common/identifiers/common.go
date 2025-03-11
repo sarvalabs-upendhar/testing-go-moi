@@ -5,8 +5,17 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"hash"
 	"strings"
+
+	"github.com/btcsuite/btcd/btcec/v2"
+	"golang.org/x/crypto/sha3"
+
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
 )
+
+const HardenedStartIndex = 2147483648 // 2^31
 
 // Nil is a nil [32]byte value.
 // Can be used to represent any nil identifier.
@@ -19,6 +28,101 @@ func RandomFingerprint() (fingerprint [24]byte) {
 	return fingerprint
 }
 
+func GetRandomPrivateKeys(signingKey [32]byte) ([]byte, error) {
+	// Let's derive 'm' in the path
+	masterKey, err := hdkeychain.NewMaster(signingKey[:], &chaincfg.MainNetParams) // here key is master key
+	if err != nil {
+		return nil, err
+	}
+
+	// Hardened keys index starts from 2147483648 (2^31)
+	// So.,
+	// 44 = 2147483648 + 44 = 2147483692
+	// 6174 = 2147483648 + 6174 = 2147489822
+	igcParams := [2]uint32{2147483692, 2147489822}
+
+	tempKey := masterKey
+	for _, n := range igcParams {
+		tempKey, err = tempKey.Derive(n)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// to persist consensus and network private keys
+	var aggPrivKey []byte
+	// Let's derive PrivateKey for signing, so load keyPair at path: m/44'/6174'/5020'/0/n
+	validatorPrivKey := tempKey
+
+	var validatorPath [3]uint32
+	validatorPath[0] = HardenedStartIndex + 5020 // hardened
+	validatorPath[1] = 0
+	validatorPath[2] = 0
+
+	for _, n := range validatorPath {
+		validatorPrivKey, err = validatorPrivKey.Derive(n)
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Now validatorPrivKey points to extended private key at path: m/44'/6174'/5020'/0/n
+
+	// Casting to Elliptic curve Private key
+	privKeyInEC, err := validatorPrivKey.ECPrivKey()
+	if err != nil {
+		return nil, err
+	}
+
+	signingPrivKeyInBytes := privKeyInEC.Serialize()
+
+	aggPrivKey = append(aggPrivKey, signingPrivKeyInBytes...)
+
+	// Let's derive PrivateKey for communication, so load keyPair at path: m/44'/6174'/6020'/0/n
+	ntwPrivKey := tempKey
+
+	var networkPath [3]uint32
+	networkPath[0] = HardenedStartIndex + 6020 // hardened
+	networkPath[1] = 0
+	networkPath[2] = 0
+
+	for _, n := range networkPath {
+		ntwPrivKey, err = ntwPrivKey.Derive(n)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// Now ntwPrivKey points to extended private key at path: m/44'/6174'/6020'/0/n
+
+	// Casting to Elliptic curve Private key
+	nPrivKeyInEC, err := ntwPrivKey.ECPrivKey()
+	if err != nil {
+		return nil, err
+	}
+
+	ntwPrivKeyInBytes := nPrivKeyInEC.Serialize()
+
+	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
+
+	return aggPrivKey, nil
+}
+
+func RandomNetworkKey() ([]byte, error) {
+	var signKey [32]byte
+
+	_, err := rand.Read(signKey[:])
+	if err != nil {
+		return nil, err
+	}
+
+	privateKeys, err := GetRandomPrivateKeys(signKey)
+	if err != nil {
+		return nil, err
+	}
+
+	return privateKeys[32:], nil
+}
+
 var (
 	prefix0xString = "0x"
 	prefix0xBytes  = []byte(prefix0xString)
@@ -28,6 +132,7 @@ var (
 	ErrMissingHexPrefix = errors.New("missing '0x' prefix")
 	ErrInvalidLength    = errors.New("invalid length")
 
+	ErrUnsupportedTag     = errors.New("unsupported tag")
 	ErrUnsupportedFlag    = errors.New("unsupported flag")
 	ErrUnsupportedVersion = errors.New("unsupported tag version")
 	ErrUnsupportedKind    = errors.New("unsupported tag kind")
@@ -119,4 +224,45 @@ func must[T any](t T, err error) T {
 	}
 
 	return t
+}
+
+func GetAddressFromPublicBytes(pubKey []byte) string {
+	addr := keccak256(pubKey[1:])
+	addr = addr[12:]
+
+	return hex.EncodeToString(addr)
+}
+
+func GetPublicKeyFromPrivateBytes(validatorPrvKey []byte, compressed bool) (pubkey []byte) {
+	_, publicKeyInEC := btcec.PrivKeyFromBytes(validatorPrvKey)
+
+	if compressed {
+		pubkey = publicKeyInEC.SerializeCompressed()
+	} else {
+		pubkey = publicKeyInEC.SerializeUncompressed()
+	}
+
+	return pubkey
+}
+
+func keccak256(data ...[]byte) []byte {
+	b := make([]byte, 32)
+	d, ok := sha3.NewLegacyKeccak256().(interface {
+		hash.Hash
+		Read([]byte) (int, error)
+	})
+
+	if !ok {
+		return b
+	}
+
+	for _, b := range data {
+		d.Write(b)
+	}
+
+	if _, err := d.Read(b); err != nil {
+		return nil
+	}
+
+	return b
 }

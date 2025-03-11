@@ -24,11 +24,9 @@ import (
 	"github.com/manishmeganathan/depgraph"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/sarvalabs/go-legacy-kramaid"
-	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -765,7 +763,7 @@ func storeInSmCache(sm *StateManager, k, v interface{}) {
 	sm.cache.Add(k, v)
 }
 
-func setGuardianPublicKeys(t *testing.T, state *Object, ids []kramaid.KramaID, publicKeys [][]byte) {
+func setGuardianPublicKeys(t *testing.T, state *Object, ids []identifiers.KramaID, publicKeys [][]byte) {
 	t.Helper()
 
 	for i, id := range ids {
@@ -785,7 +783,7 @@ func setGuardianPublicKeys(t *testing.T, state *Object, ids []kramaid.KramaID, p
 	}
 }
 
-func createGuardianLogic(t *testing.T, sm *StateManager, kramaIDs []kramaid.KramaID, publicKeys [][]byte) {
+func createGuardianLogic(t *testing.T, sm *StateManager, kramaIDs []identifiers.KramaID, publicKeys [][]byte) {
 	t.Helper()
 
 	so := sm.CreateStateObject(common.GuardianAccountID, common.RegularAccount, true)
@@ -1903,7 +1901,7 @@ func checkForConsensusNodesUpdate(
 	t *testing.T,
 	sObj *Object,
 	oldMetaObject *MetaContextObject,
-	consensusNodes []kramaid.KramaID,
+	consensusNodes []identifiers.KramaID,
 ) {
 	t.Helper()
 

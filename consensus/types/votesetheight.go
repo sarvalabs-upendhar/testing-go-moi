@@ -8,7 +8,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 )
 
@@ -33,7 +32,7 @@ type HeightVoteSet struct {
 
 	// Represents a mapping of peer IDs to a slice of rounds that the peer is catching up on.
 	// A peer will have at most 2 rounds in its catchup.
-	peerCatchupRounds map[kramaid.KramaID][]uint64
+	peerCatchupRounds map[identifiers.KramaID][]uint64
 
 	// Represents a synchronization mutex for the voteset
 	mtx sync.Mutex
@@ -52,7 +51,7 @@ func NewHeightVoteSet(
 		logger:            logger.Named("Height-VoteSet"),
 		chainIDs:          chainIDs,
 		mtx:               sync.Mutex{},
-		peerCatchupRounds: make(map[kramaid.KramaID][]uint64),
+		peerCatchupRounds: make(map[identifiers.KramaID][]uint64),
 	}
 	// Reset the HVS and return it
 	hvs.Reset(heights, valset)
@@ -95,7 +94,7 @@ func (hvs *HeightVoteSet) PreCommitAggregatedSignature(
 	return aggregatedSignature, tesseractPreCommits.bitarray, err
 }
 
-func (hvs *HeightVoteSet) AddQC(v *Vote, peerID kramaid.KramaID) (bool, error) {
+func (hvs *HeightVoteSet) AddQC(v *Vote, peerID identifiers.KramaID) (bool, error) {
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()
 	hvs.logger.Debug("Adding Qc", "vote-view", v.View, "vote-type", v.Type)
@@ -114,7 +113,7 @@ func (hvs *HeightVoteSet) AddQC(v *Vote, peerID kramaid.KramaID) (bool, error) {
 // AddVote is a method of HeightVoteSet that adds a new vote for a peer id.
 // Adds the vote the voteset that corresponds to the vote view and type.
 // If the peer has more than two catchup rounds, the vote is not added.
-func (hvs *HeightVoteSet) AddVote(v *Vote, peerID kramaid.KramaID) (bool, error) {
+func (hvs *HeightVoteSet) AddVote(v *Vote, peerID identifiers.KramaID) (bool, error) {
 	// Acquire lock
 	hvs.mtx.Lock()
 	defer hvs.mtx.Unlock()

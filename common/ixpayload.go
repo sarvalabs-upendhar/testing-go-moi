@@ -7,7 +7,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -502,7 +501,7 @@ type FilePayload struct {
 	Name  string
 	Hash  string
 	File  []byte
-	Nodes []kramaid.KramaID
+	Nodes []identifiers.KramaID
 }
 
 // LogicPayload holds data for logic execution.

@@ -2,7 +2,7 @@ package message
 
 import (
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -36,7 +36,7 @@ type Payload interface {
 
 type Message struct {
 	MsgType MsgType
-	Sender  kramaid.KramaID
+	Sender  identifiers.KramaID
 	Payload []byte
 }
 

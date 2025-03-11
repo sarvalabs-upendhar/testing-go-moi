@@ -12,7 +12,6 @@ import (
 	p2pnet "github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-msgio"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -24,7 +23,7 @@ import (
 )
 
 type SessionManager interface {
-	HandlePeerMessage(id kramaid.KramaID, msg interface{})
+	HandlePeerMessage(id identifiers.KramaID, msg interface{})
 	PeerDisconnected(sessions []identifiers.Identifier, id peer.ID)
 }
 
@@ -121,7 +120,9 @@ func (an *AgoraNetwork) handlePeerMessages(peer *AgoraPeer) {
 	}
 }
 
-func (an *AgoraNetwork) SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
+func (an *AgoraNetwork) SendAgoraMessage(
+	id identifiers.KramaID, msgType networkmsg.MsgType, msg message.Message,
+) error {
 	peerID, err := utils.GetNetworkID(id)
 	if err != nil {
 		an.logger.Error("Unable to decode peer ID", "err", err)
@@ -219,7 +220,7 @@ func (an *AgoraNetwork) pruneInactivePeers() {
 	}
 }
 
-func (an *AgoraNetwork) ClosePeerSession(kramaID kramaid.KramaID, sessionID identifiers.Identifier) error {
+func (an *AgoraNetwork) ClosePeerSession(kramaID identifiers.KramaID, sessionID identifiers.Identifier) error {
 	peerID, err := utils.GetNetworkID(kramaID)
 	if err != nil {
 		an.logger.Error("Error parsing krama ID", "krama-id", kramaID)

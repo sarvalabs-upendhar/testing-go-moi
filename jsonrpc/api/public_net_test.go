@@ -3,7 +3,8 @@ package api
 import (
 	"testing"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -19,12 +20,12 @@ func TestPublicNetAPI_Peers(t *testing.T) {
 
 	testcases := []struct {
 		name         string
-		expectedList []kramaid.KramaID
+		expectedList []identifiers.KramaID
 		testFn       func()
 	}{
 		{
 			name:         "Should return an empty list if no Krama ID's in peersList",
-			expectedList: make([]kramaid.KramaID, 0),
+			expectedList: make([]identifiers.KramaID, 0),
 		},
 		{
 			name: "Returns a slice of Krama ID's connected to a client",

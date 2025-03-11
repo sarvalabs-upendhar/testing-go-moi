@@ -1,7 +1,6 @@
 package args
 
 import (
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/identifiers"
@@ -114,8 +113,8 @@ type DebugArgs struct {
 }
 
 type NodeMetaInfoArgs struct {
-	KramaID kramaid.KramaID `json:"krama_id"`
-	PeerID  string          `json:"peer_id"`
+	KramaID identifiers.KramaID `json:"krama_id"`
+	PeerID  string              `json:"peer_id"`
 }
 
 type AccountArgs struct{}
@@ -163,8 +162,8 @@ type IxParticipant struct {
 }
 
 type IxConsensusPreference struct {
-	MTQ        hexutil.Uint      `json:"mtq"`
-	TrustNodes []kramaid.KramaID `json:"trust_nodes"`
+	MTQ        hexutil.Uint          `json:"mtq"`
+	TrustNodes []identifiers.KramaID `json:"trust_nodes"`
 }
 
 type IxPreferences struct {

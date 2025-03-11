@@ -5,9 +5,9 @@ import (
 	"net"
 	"time"
 
-	maddr "github.com/multiformats/go-multiaddr"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
+	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/crypto"
 )
@@ -65,7 +65,7 @@ type IxPoolConfig struct {
 }
 
 type NodeInfo struct {
-	ID      kramaid.KramaID
+	ID      identifiers.KramaID
 	Address maddr.Multiaddr
 }
 

@@ -4,7 +4,8 @@ import (
 	"encoding/hex"
 	"testing"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/stretchr/testify/require"
@@ -15,8 +16,8 @@ const (
 	expectedSig = "0460b776cf0407a74559f4e696fedf5990294794915be00e14e81cab41a2ea49bd4d4d5d0f45" +
 		"0aaae872232e38019320f7ad19954814cb53b13b17be262ddf99251af7d4509af52f6f1dcc27b732" +
 		"c0d0216e93f4e057c47fc058f4aa201f80d40b6a"
-	kid = kramaid.KramaID("bvby3pBVU5BEL2jBHJrH23GTb9qe8nL4XHqqKzZVbth7gBZ5c3.16Uiu2HAmGZr9gyQ7fD" +
-		"dmdBsRL29EjxR81Y74TEPbemBkyKuk2Ufj")
+	// TODO: FIX ME
+	kid = identifiers.KramaID("1116Uiu2HAmGZr9gyQ7fDdmdBsRL29EjxR81Y74TEPbemBkyKuk2Ufj")
 )
 
 var (

@@ -6,7 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	id "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
@@ -24,7 +25,7 @@ func (k *Engine) sendPrepareMsg(
 		requestTS      = time.Now()
 		failedReqCount = new(atomic.Int32)
 		waitGroup      = new(sync.WaitGroup)
-		requestedNodes = make(map[id.KramaID]struct{})
+		requestedNodes = make(map[identifiers.KramaID]struct{})
 	)
 
 	defer k.metrics.captureRequestTurnaroundTime(requestTS)
@@ -42,7 +43,7 @@ func (k *Engine) sendPrepareMsg(
 
 	var (
 		mtx              sync.Mutex
-		unRespondedNodes = make([]id.KramaID, 0)
+		unRespondedNodes = make([]identifiers.KramaID, 0)
 	)
 
 	for icsSetType, ns := range nodeset.Sets {
@@ -66,7 +67,7 @@ func (k *Engine) sendPrepareMsg(
 
 			waitGroup.Add(1)
 
-			go func(kramaID id.KramaID, icsSetType int) {
+			go func(kramaID identifiers.KramaID, icsSetType int) {
 				defer waitGroup.Done()
 
 				k.logger.Trace("sending prepare msg", "cluster-id", clusterID, "to", kramaID)

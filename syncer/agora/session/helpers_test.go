@@ -10,7 +10,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/hashicorp/go-hclog"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common/tests"
@@ -29,7 +28,7 @@ func NewTestSession(
 	ctx context.Context,
 	id identifiers.Identifier,
 	stateHash cid.CID,
-	contextPeers ...kramaid.KramaID,
+	contextPeers ...identifiers.KramaID,
 ) (*Session, *InterestManager, notifications.PubSubNotifier) {
 	interestManager := NewInterestManager()
 	notifier := notifications.NewNotifier()
@@ -215,22 +214,22 @@ func (msm *mockSessionManager) CloseSession(id identifiers.Identifier) {
 }
 
 type mockNetwork struct {
-	msg map[kramaid.KramaID]message.Message
+	msg map[identifiers.KramaID]message.Message
 }
 
 func NewMockNetwork() *mockNetwork {
 	return &mockNetwork{
-		msg: make(map[kramaid.KramaID]message.Message),
+		msg: make(map[identifiers.KramaID]message.Message),
 	}
 }
 
-func (mn *mockNetwork) SendAgoraMessage(id kramaid.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
+func (mn *mockNetwork) SendAgoraMessage(id identifiers.KramaID, msgType networkmsg.MsgType, msg message.Message) error {
 	mn.msg[id] = msg
 
 	return nil
 }
 
-func (mn *mockNetwork) ClosePeerSession(id kramaid.KramaID, sessionID identifiers.Identifier) error {
+func (mn *mockNetwork) ClosePeerSession(id identifiers.KramaID, sessionID identifiers.Identifier) error {
 	return nil
 }
 

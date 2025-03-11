@@ -10,7 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/btcsuite/btcutil/base58"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -19,7 +20,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -41,10 +41,10 @@ type ctxTracker struct {
 }
 
 type senatusMock struct {
-	AddrMap map[kramaid.KramaID][]multiaddr.Multiaddr
+	AddrMap map[identifiers.KramaID][]multiaddr.Multiaddr
 }
 
-func (sm senatusMock) GetAddress(key kramaid.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
+func (sm senatusMock) GetAddress(key identifiers.KramaID) (multiAddrs []multiaddr.Multiaddr, err error) {
 	v, ok := sm.AddrMap[key]
 	if !ok {
 		return nil, common.ErrKeyDoNotExist
@@ -53,9 +53,9 @@ func (sm senatusMock) GetAddress(key kramaid.KramaID) (multiAddrs []multiaddr.Mu
 	return v, nil
 }
 
-func (sm *senatusMock) SetAddress(key kramaid.KramaID, mAddrs []multiaddr.Multiaddr) error {
+func (sm *senatusMock) SetAddress(key identifiers.KramaID, mAddrs []multiaddr.Multiaddr) error {
 	if len(sm.AddrMap) == 0 {
-		sm.AddrMap = make(map[kramaid.KramaID][]multiaddr.Multiaddr)
+		sm.AddrMap = make(map[identifiers.KramaID][]multiaddr.Multiaddr)
 	}
 
 	sm.AddrMap[key] = mAddrs
@@ -253,7 +253,7 @@ func testCall(t *testing.T, serverCM, clientCM *MockConnectionManager, dest peer
 
 	var q Quotient
 
-	err = c.MoiCall(context.Background(), kramaid.KramaID(getKramaID(dest)), "Arith", "Divide", &Args{20, 6}, &q, 0)
+	err = c.MoiCall(context.Background(), getKramaID(dest), "Arith", "Divide", &Args{20, 6}, &q, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		kramaid.KramaID(getKramaID(dest)),
+		getKramaID(dest),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -297,7 +297,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		kramaid.KramaID(getKramaID(dest)),
+		getKramaID(dest),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -314,7 +314,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		kramaid.KramaID(getKramaID(dest)),
+		getKramaID(dest),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -331,7 +331,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		kramaid.KramaID(getKramaID(dest)),
+		getKramaID(dest),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -350,7 +350,7 @@ func testRPCCallToSameDestinationMultipleSource(t *testing.T, serverCM, clientCM
 
 	err = c.MoiCall(
 		context.Background(),
-		kramaid.KramaID(getKramaID(dest)),
+		getKramaID(dest),
 		"Arith",
 		"Divide",
 		&Args{20, 6},
@@ -373,7 +373,7 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 
 	sm := senatusMock{}
 
-	err := sm.SetAddress(kramaid.KramaID(getKramaID(dest)), serverCM.host.Addrs())
+	err := sm.SetAddress(getKramaID(dest), serverCM.host.Addrs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 
 	err = c.MoiCall(
 		context.Background(),
-		kramaid.KramaID(getKramaID(dest)),
+		getKramaID(dest),
 		"Arith",
 		"Divide",
 
@@ -412,7 +412,7 @@ func testCallWithSenatus(t *testing.T, serverCM, clientCM *MockConnectionManager
 func testValidKramaID(t *testing.T, dest peer.ID) {
 	t.Helper()
 
-	kID := kramaid.KramaID(getKramaID(dest))
+	kID := getKramaID(dest)
 	_, err := kID.PeerID()
 	assert.NoError(t, err)
 }
@@ -420,18 +420,18 @@ func testValidKramaID(t *testing.T, dest peer.ID) {
 func testInValidKramaID(t *testing.T, dest peer.ID) {
 	t.Helper()
 
-	kID := kramaid.KramaID(getInValidKramaID(dest))
+	kID := identifiers.KramaID(getInValidKramaID(dest))
 	_, err := kID.PeerID()
 	assert.Error(t, err)
 }
 
-func getKramaID(dest peer.ID) string {
-	moiIDAddr := "232fe27479B226B6d7AEe26f4Fcd70F55f3EC453"
-	data := []byte(moiIDAddr)
-	encoded := base58.Encode(data)
-	kramaID := encoded + "." + dest.String()
-
-	return kramaID
+func getKramaID(dest peer.ID) identifiers.KramaID {
+	return identifiers.NewKramaIDFromPeerID(
+		identifiers.KindGuardian,
+		identifiers.KramaIDV0,
+		identifiers.NetworkZone0,
+		dest,
+	)
 }
 
 func getInValidKramaID(dest peer.ID) string {
@@ -1159,7 +1159,7 @@ func TestAuthorization(t *testing.T) {
 	// Authorization should not impact while accessing methods locally.
 	// All methods should be allowed locally.
 	t.Run("local", func(t *testing.T) {
-		testCall(t, cm[0], cm[1], "")
+		testCall(t, cm[0], cm[1], cm[1].host.ID())
 	})
 }
 

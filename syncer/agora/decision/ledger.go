@@ -11,7 +11,6 @@ import (
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/syncer/agora/db"
 	"github.com/sarvalabs/go-moi/syncer/cid"
@@ -77,7 +76,7 @@ func NewLedger(logger hclog.Logger, workersCount int, db ledgerStore) (*Ledger, 
 	return l, err
 }
 
-func (l *Ledger) GetAssociatedPeers(id identifiers.Identifier, stateHash cid.CID) ([]kramaid.KramaID, error) {
+func (l *Ledger) GetAssociatedPeers(id identifiers.Identifier, stateHash cid.CID) ([]identifiers.KramaID, error) {
 	key := GetAgoraKey(stateHash.Key())
 
 	peerList, cacheErr := l.fetchFromCache(key)
@@ -129,7 +128,9 @@ func (l *Ledger) fetchFromDB(id identifiers.Identifier, stateHash cid.CID) (*Pee
 	return plist.PeerList(), nil
 }
 
-func (l *Ledger) UpdateAssociatedPeers(id identifiers.Identifier, state cid.CID, peerID kramaid.KramaID) (err error) {
+func (l *Ledger) UpdateAssociatedPeers(
+	id identifiers.Identifier, state cid.CID, peerID identifiers.KramaID,
+) (err error) {
 	peerList, cacheErr := l.fetchFromCache(GetAgoraKey(state.Key()))
 	if errors.Is(cacheErr, common.ErrKeyNotFound) {
 		peerList, err = l.fetchFromDB(id, state)

@@ -9,7 +9,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-polo"
 	"golang.org/x/crypto/blake2b"
 )
@@ -58,7 +57,7 @@ func (p ParticipantsState) IsExcluded(id identifiers.Identifier) bool {
 }
 
 type PoXtData struct {
-	Proposer     kramaid.KramaID                     `json:"proposer"`
+	Proposer     identifiers.KramaID                 `json:"proposer"`
 	BinaryHash   Hash                                `json:"binary_hash"`
 	IdentityHash Hash                                `json:"identity_hash"`
 	View         uint64                              `json:"view"`
@@ -70,12 +69,12 @@ type PoXtData struct {
 }
 
 type CommitInfo struct {
-	QC                        *Qc               `json:"commit_qc"`
-	Operator                  kramaid.KramaID   `json:"operator"`
-	ClusterID                 ClusterID         `json:"cluster_id"`
-	View                      uint64            `json:"commit_view"`
-	RandomSet                 []kramaid.KramaID `json:"random_set"`
-	RandomSetSizeWithoutDelta uint32            `json:"random_set_size"`
+	QC                        *Qc                   `json:"commit_qc"`
+	Operator                  identifiers.KramaID   `json:"operator"`
+	ClusterID                 ClusterID             `json:"cluster_id"`
+	View                      uint64                `json:"commit_view"`
+	RandomSet                 []identifiers.KramaID `json:"random_set"`
+	RandomSetSizeWithoutDelta uint32                `json:"random_set_size"`
 }
 
 func (ci *CommitInfo) FromBytes(raw []byte) error {
@@ -105,7 +104,7 @@ type Tesseract struct {
 	consensusInfo    PoXtData
 
 	seal   []byte
-	sealBy kramaid.KramaID
+	sealBy identifiers.KramaID
 
 	// derived fields, these fields are not available in the encoded data
 	hash     atomic.Value
@@ -124,7 +123,7 @@ func NewTesseract(
 	fuelUsed, fuelLimit uint64,
 	consensusInfo PoXtData,
 	seal []byte,
-	sealBy kramaid.KramaID,
+	sealBy identifiers.KramaID,
 	ixns Interactions,
 	receipts Receipts,
 	commitInfo *CommitInfo,
@@ -289,7 +288,7 @@ func (t *Tesseract) Timestamp() uint64 {
 	return t.timestamp
 }
 
-func (t *Tesseract) Operator() kramaid.KramaID {
+func (t *Tesseract) Operator() identifiers.KramaID {
 	return t.consensusInfo.Proposer
 }
 
@@ -323,7 +322,7 @@ func (t *Tesseract) Seal() []byte {
 	return t.seal
 }
 
-func (t *Tesseract) SealBy() kramaid.KramaID {
+func (t *Tesseract) SealBy() identifiers.KramaID {
 	return t.sealBy
 }
 
@@ -431,7 +430,7 @@ func (t *Tesseract) SetSeal(seal []byte) {
 	t.seal = seal
 }
 
-func (t *Tesseract) SetSealBy(sealBy kramaid.KramaID) {
+func (t *Tesseract) SetSealBy(sealBy identifiers.KramaID) {
 	t.sealBy = sealBy
 }
 
@@ -543,7 +542,7 @@ func (t *Tesseract) Depolorize(depolorizer *polo.Depolorizer) (err error) {
 		return err
 	}
 
-	t.sealBy = kramaid.KramaID(sealer)
+	t.sealBy = identifiers.KramaID(sealer)
 	t.participants = ps
 	t.consensusInfo = *consensusInfo
 

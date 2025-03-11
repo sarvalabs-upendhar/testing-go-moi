@@ -13,8 +13,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/pkg/errors"
-
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/state"
@@ -58,11 +56,11 @@ type store interface {
 }
 
 type reputationEngine interface {
-	UpdateWalletCount(peerID kramaid.KramaID, delta int32) error
+	UpdateWalletCount(peerID identifiers.KramaID, delta int32) error
 }
 
 type server interface {
-	GetKramaID() kramaid.KramaID
+	GetKramaID() identifiers.KramaID
 	Broadcast(topic string, data []byte) error
 }
 

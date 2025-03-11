@@ -8,7 +8,6 @@ require (
 	github.com/btcsuite/btcd v0.23.0
 	github.com/btcsuite/btcd/btcec/v2 v2.3.2
 	github.com/btcsuite/btcd/btcutil v1.1.3
-	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/cskr/pubsub v1.0.2
 	github.com/deckarep/golang-set v1.8.0
 	github.com/decred/dcrd/crypto/blake256 v1.0.1
@@ -45,7 +44,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.16.0
 	github.com/sarvalabs/battleground v0.3.1
-	github.com/sarvalabs/go-legacy-kramaid v0.1.0
 	github.com/sarvalabs/go-pisa v0.3.3-provisional
 	github.com/sarvalabs/go-polo v0.4.9
 	github.com/spf13/cobra v1.7.0

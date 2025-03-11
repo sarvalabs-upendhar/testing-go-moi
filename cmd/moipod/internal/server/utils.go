@@ -11,9 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	maddr "github.com/multiformats/go-multiaddr"
 	"github.com/pkg/errors"
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/spf13/cobra"
 
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
@@ -79,7 +80,7 @@ func (p *Params) assignNetworkTrustedNodes() error {
 		}
 
 		p.NetworkTrustedPeers = append(p.NetworkTrustedPeers, config.NodeInfo{
-			ID:      kramaid.KramaID(trustedNode.ID),
+			ID:      identifiers.KramaID(trustedNode.ID),
 			Address: addr,
 		})
 	}
@@ -95,7 +96,7 @@ func (p *Params) assignNetworkStaticNodes() error {
 		}
 
 		p.StaticPeers = append(p.StaticPeers, config.NodeInfo{
-			ID:      kramaid.KramaID(staticNode.ID),
+			ID:      identifiers.KramaID(staticNode.ID),
 			Address: addr,
 		})
 	}
@@ -111,7 +112,7 @@ func (p *Params) assignSyncerPeers() error {
 		}
 
 		p.SyncerPeers = append(p.SyncerPeers, config.NodeInfo{
-			ID:      kramaid.KramaID(syncPeer.ID),
+			ID:      identifiers.KramaID(syncPeer.ID),
 			Address: addr,
 		})
 	}
@@ -127,7 +128,7 @@ func (p *Params) assignTrustedPeers() error {
 		}
 
 		p.TrustedPeers = append(p.TrustedPeers, config.NodeInfo{
-			ID:      kramaid.KramaID(trustedPeer.ID),
+			ID:      identifiers.KramaID(trustedPeer.ID),
 			Address: addr,
 		})
 	}

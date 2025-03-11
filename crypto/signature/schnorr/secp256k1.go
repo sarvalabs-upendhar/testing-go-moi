@@ -3,7 +3,7 @@ package schnorr
 import (
 	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/crypto/common"
 )
@@ -18,7 +18,7 @@ func (sch *SchnorrSignature) Type() common.SigType {
 }
 
 // Sign the data using Secp256k1 curve and schnorr signature
-func (sch *SchnorrSignature) Sign(data []byte, signingKey []byte, kid kramaid.KramaID) error {
+func (sch *SchnorrSignature) Sign(data []byte, signingKey []byte, kid identifiers.KramaID) error {
 	privKey, pubKey := btcec.PrivKeyFromBytes(signingKey)
 	keccakOfMessage := common.GetKeccak256Hash(data)
 
@@ -35,12 +35,13 @@ func (sch *SchnorrSignature) Sign(data []byte, signingKey []byte, kid kramaid.Kr
 	sch.SigPrefix = sigPrefix
 	sch.Digest = sigBytes
 
-	ver, err := kid.Version()
+	// TODO: FIX ME
+	tag, err := kid.Tag()
 	if err != nil {
 		return err
 	}
 
-	if ver == 1 {
+	if tag.Version() == 0 {
 		sch.Extra = nil // SchnorrSignature does not need any extra bytes if kramaid version is 1
 	} else {
 		sch.Extra = pubKey.SerializeCompressed()

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
@@ -447,7 +447,7 @@ func validateTesseract(t *testing.T, expectedTS *common.Tesseract, ts *common.Te
 	}
 
 	if !withCommitInfo {
-		require.Equal(t, kramaid.KramaID(""), ts.CommitInfo().Operator)
+		require.Equal(t, identifiers.KramaID(""), ts.CommitInfo().Operator)
 	} else {
 		require.Equal(t, expectedTS.CommitInfo(), ts.CommitInfo())
 	}

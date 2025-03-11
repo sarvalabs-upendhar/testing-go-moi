@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	kramaid "github.com/sarvalabs/go-legacy-kramaid"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -74,7 +75,7 @@ func NewTracerProvider(
 	ctx context.Context,
 	enableTracing bool,
 	otlpAddress, token, networkID string,
-	kramaID kramaid.KramaID,
+	kramaID identifiers.KramaID,
 ) (shutdownTracerProvider, error) {
 	if !enableTracing {
 		return &noopShutdownTracerProvider{TracerProvider: traceapi.NewNoopTracerProvider()}, nil

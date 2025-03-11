@@ -11,7 +11,6 @@ import (
 
 	"github.com/libp2p/go-libp2p/core/network"
 
-	"github.com/sarvalabs/go-legacy-kramaid"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/state"
@@ -86,9 +85,9 @@ type Syncer interface {
 
 type Network interface {
 	GetVersion() string
-	GetKramaID() kramaid.KramaID
+	GetKramaID() identifiers.KramaID
 	GetConns() []network.Conn
-	GetPeers() []kramaid.KramaID
+	GetPeers() []identifiers.KramaID
 	GetInboundConnCount() int64
 	GetOutboundConnCount() int64
 	GetSubscribedTopics() map[string]int
