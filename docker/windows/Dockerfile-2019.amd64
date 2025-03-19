@@ -1,0 +1,73 @@
+# FROM golang:1.22.8-windowsservercore AS build
+FROM mcr.microsoft.com/dotnet/framework/runtime:4.8-windowsservercore-ltsc2019 AS build
+
+SHELL ["powershell", "-Command"]
+
+
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; \
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; \
+    Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
+
+# Refresh environment variables
+RUN $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine')
+
+# Install MinGW (GCC)
+RUN choco install -y git mingw
+RUN choco install -y golang --version=1.22
+# Refresh environment variables again
+RUN $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine')
+
+# Verify installation
+RUN git --version
+RUN gcc --version
+RUN go version
+# importing private go-packages
+RUN go env -w GOPRIVATE=github.com/sarvalabs/go-pisa
+RUN go env -w GOPRIVATE=github.com/sarvalabs/battleground
+
+# Set ARG variables
+ARG GIT_COMMIT
+ARG ACCESS_TOKEN
+
+# Assign ARG to ENV explicitly
+ENV GIT_COMMIT=$GIT_COMMIT
+ENV ACCESS_TOKEN=$ACCESS_TOKEN
+
+ENV GOOS=windows
+ENV GOARCH=amd64
+ENV CGO_ENABLED=1
+ENV GO111MODULE=auto
+ENV CGO_CFLAGS=-"O -D__BLST_PORTABLE__"
+
+RUN git config --global url."https://sarvalabs:$env:ACCESS_TOKEN@github.com".insteadOf "https://github.com"
+
+
+RUN echo "machine github.com login sarvalabs password $env:ACCESS_TOKEN" > ~/.netrc
+
+
+WORKDIR C:/go/src/github/sarvalabs/moichain
+COPY go.mod C:/go/src/github/sarvalabs/moichain
+COPY go.sum C:/go/src/github/sarvalabs/moichain
+
+#Print Go environment variables
+RUN go env
+
+RUN go mod download -x
+COPY . C:/go/src/github/sarvalabs/moichain
+RUN go build -trimpath -ldflags "-extldflags=-static" -o C:/bin/moipod.exe ./cmd/moipod/
+
+# Second stage (Windows-based runtime)
+FROM mcr.microsoft.com/windows/servercore:ltsc2019
+
+SHELL ["powershell", "-Command"]
+VOLUME C:/data
+ARG GIT_COMMIT
+ENV GIT_COMMIT=$GIT_COMMIT
+RUN Write-Host "GIT_COMMIT_1=$env:GIT_COMMIT"
+# Copy binary from build stage
+RUN certutil -generateSSTFromWU C:\Windows\Temp\certs.sst
+RUN certutil -addstore -f root C:\Windows\Temp\certs.sst
+COPY --from=build C:/bin/moipod.exe C:/bin/moipod.exe
+# Ensure binary is executable
+RUN icacls C:\bin\moipod.exe /grant Everyone:F
+ENTRYPOINT ["powershell", "-Command", "Write-Host 'Starting moipod.exe...'; C:\\bin\\moipod.exe"]
