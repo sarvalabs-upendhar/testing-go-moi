@@ -174,10 +174,9 @@ func (kbft *KBFT) handler(maxSteps int) error {
 }
 
 func (kbft *KBFT) handleTimeout(ti timeoutInfo, r ViewState) {
-	if !areHeightsEqual(ti.Height, r.Heights) || r.View > ti.View || (ti.View == r.View && ti.Step < r.Step) {
+	if r.View > ti.View || (ti.View == r.View && ti.Step < r.Step) {
 		kbft.logger.Debug(
 			"Returning from time out",
-			"timeout-height", ti.Height,
 			"view-height", r.Heights,
 			"timeout-view", ti.View,
 			"view-number", r.View,
@@ -192,7 +191,7 @@ func (kbft *KBFT) handleTimeout(ti timeoutInfo, r ViewState) {
 	defer kbft.mx.Unlock()
 
 	if ti.Step == ViewStepNewHeight {
-		kbft.enterNewView(ti.Height, ti.View)
+		kbft.enterNewView(ti.View)
 	}
 }
 
@@ -229,14 +228,13 @@ func (kbft *KBFT) handleMsg(msg ktypes.ConsensusMessage) error {
 	return nil
 }
 
-func (kbft *KBFT) enterNewView(heights map[identifiers.Identifier]uint64, view uint64) {
-	if !areHeightsEqual(kbft.Heights, heights) ||
-		view < kbft.View ||
+func (kbft *KBFT) enterNewView(view uint64) {
+	if view < kbft.View ||
 		(kbft.View == view && kbft.Step != ViewStepNewHeight) {
 		return
 	}
 
-	kbft.logger.Trace("Entering new view", "view", view, "heights", heights)
+	kbft.logger.Trace("Entering new view", "view", view)
 	kbft.updateViewStep(view, ViewStepNewView)
 	//	kbft.scheduleTimeout(kbft.viewTimeout(view), heights, view, ViewStepNewView)
 
@@ -256,7 +254,7 @@ func (kbft *KBFT) enterNewView(heights map[identifiers.Identifier]uint64, view u
 	}
 
 	// Now ready to enter propose
-	kbft.enterPropose(heights, view)
+	kbft.enterPropose(view)
 }
 
 func (kbft *KBFT) isProposalReceived() bool {
@@ -267,9 +265,8 @@ func (kbft *KBFT) isProposalReceived() bool {
 	return true
 }
 
-func (kbft *KBFT) enterPropose(heights map[identifiers.Identifier]uint64, view uint64) {
-	if !areHeightsEqual(kbft.Heights, heights) ||
-		kbft.View > view ||
+func (kbft *KBFT) enterPropose(view uint64) {
+	if kbft.View > view ||
 		(kbft.View == view && kbft.Step >= ViewStepPropose) {
 		return
 	}
@@ -279,7 +276,7 @@ func (kbft *KBFT) enterPropose(heights map[identifiers.Identifier]uint64, view u
 		kbft.stepChange()
 
 		if kbft.isProposalReceived() {
-			kbft.enterPrevote(heights, kbft.View)
+			kbft.enterPrevote(kbft.View)
 		}
 	}()
 
@@ -299,14 +296,14 @@ func (kbft *KBFT) enterPropose(heights map[identifiers.Identifier]uint64, view u
 		return
 	}
 
-	if err := kbft.createProposal(heights, view); err != nil {
+	if err := kbft.createProposal(view); err != nil {
 		kbft.Close(err)
 	}
 }
 
 // createProposal will create a proposal message for the given height,view and tesseract
-func (kbft *KBFT) createProposal(heights map[identifiers.Identifier]uint64, view uint64) error {
-	kbft.logger.Info("Creating proposal", "heights", heights, "view", view)
+func (kbft *KBFT) createProposal(view uint64) error {
+	kbft.logger.Info("Creating proposal", "view", view)
 
 	proposal := ktypes.NewProposal(kbft.ics.PrepareQc(), kbft.ics.Tesseract())
 
@@ -347,16 +344,16 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 	}
 
 	if kbft.Step <= ViewStepPropose && kbft.isProposalReceived() {
-		kbft.enterPrevote(kbft.Heights, kbft.View)
+		kbft.enterPrevote(kbft.View)
 	}
 
 	return nil
 }
 
-func (kbft *KBFT) enterPrevote(h map[identifiers.Identifier]uint64, view uint64) {
+func (kbft *KBFT) enterPrevote(view uint64) {
 	kbft.logger.Trace("Entered pre-vote")
 
-	if !areHeightsEqual(kbft.Heights, h) || kbft.View > view || (kbft.View == view && kbft.Step >= ViewStepPrevote) {
+	if kbft.View > view || (kbft.View == view && kbft.Step >= ViewStepPrevote) {
 		return
 	}
 
@@ -375,11 +372,10 @@ func (kbft *KBFT) enterPrevote(h map[identifiers.Identifier]uint64, view uint64)
 	kbft.sendVote(common.PREVOTE, kbft.ProposalTS.Hash(), kbft.isLeader(view, kbft.id))
 }
 
-func (kbft *KBFT) enterPreCommit(heights map[identifiers.Identifier]uint64, view uint64) {
+func (kbft *KBFT) enterPreCommit(view uint64) {
 	kbft.logger.Trace("Entered pre-commit", "view", view)
 
-	if !areHeightsEqual(kbft.Heights, heights) ||
-		kbft.View > view ||
+	if kbft.View > view ||
 		(view == kbft.View && kbft.Step >= ViewStepPrecommit) {
 		return
 	}
@@ -431,8 +427,8 @@ func (kbft *KBFT) enterPreCommit(heights map[identifiers.Identifier]uint64, view
 	kbft.sendVote(common.PRECOMMIT, tsHash, kbft.isLeader(view, kbft.id))
 }
 
-func (kbft *KBFT) enterCommit(heights map[identifiers.Identifier]uint64, view uint64) {
-	if !areHeightsEqual(kbft.Heights, heights) || ViewStepCommit <= kbft.Step {
+func (kbft *KBFT) enterCommit(view uint64) {
+	if ViewStepCommit <= kbft.Step {
 		return
 	}
 
@@ -442,7 +438,7 @@ func (kbft *KBFT) enterCommit(heights map[identifiers.Identifier]uint64, view ui
 		kbft.CommitTime = time.Now()
 
 		kbft.stepChange()
-		kbft.finalizeCommit(heights)
+		kbft.finalizeCommit()
 	}()
 
 	tsHash, ok := kbft.Votes.Precommits(view).SuperMajority()
@@ -469,11 +465,7 @@ func (kbft *KBFT) enterCommit(heights map[identifiers.Identifier]uint64, view ui
 	}
 }
 
-func (kbft *KBFT) finalizeCommit(h map[identifiers.Identifier]uint64) {
-	if !areHeightsEqual(kbft.Heights, h) {
-		panic("unmatched heights")
-	}
-
+func (kbft *KBFT) finalizeCommit() {
 	tsHash, ok := kbft.Votes.Precommits(kbft.CommitView).SuperMajority()
 	if !ok || tsHash.IsNil() {
 		kbft.logger.Trace("Majority is not available")
@@ -487,7 +479,7 @@ func (kbft *KBFT) finalizeCommit(h map[identifiers.Identifier]uint64) {
 		return
 	}
 
-	if !areHeightsEqual(kbft.Heights, h) || kbft.Step != ViewStepCommit {
+	if kbft.Step != ViewStepCommit {
 		return
 	}
 
@@ -514,16 +506,20 @@ func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID identifier
 	_, span := tracing.Span(ctx, "Krama.KBFT", "addVote")
 	defer span.End()
 
-	if !ktypes.AreVoteHeightsEqual(v.Heights, kbft.Heights) {
-		kbft.logger.Trace("Invalid vote BFT height", "local-heights", kbft.Heights, "msg-heights", v.Heights)
+	if kbft.ProposalTS == nil {
+		kbft.evidence.AddVote(v)
+		kbft.logger.Trace("Proposal tesseract not found", "ts-hash", v.TSHash)
 
 		return added, err
 	}
 
-	height := kbft.Heights
-
-	if kbft.ProposalTS != nil && v.TSHash != kbft.ProposalTS.Hash() {
+	if kbft.ProposalTS.Hash() != v.TSHash {
 		kbft.evidence.AddVote(v)
+		kbft.logger.Trace(
+			"Invalid tesseract hash", "proposal-ts-hash", kbft.ProposalTS.Hash(), "msg-ts-hash", v.TSHash,
+		)
+
+		return added, err
 	}
 
 	if v.IsQC {
@@ -564,7 +560,7 @@ func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID identifier
 		case kbft.View == v.View && kbft.Step >= ViewStepPrevote:
 			tsHash, ok := preVotes.SuperMajority()
 			if ok && (kbft.isProposalReceived() || !tsHash.IsNil()) {
-				kbft.enterPreCommit(height, v.View)
+				kbft.enterPreCommit(v.View)
 			}
 
 		default:
@@ -577,7 +573,7 @@ func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID identifier
 		tsHash, ok := preCommits.SuperMajority()
 		if ok && kbft.isProposalReceived() {
 			if !tsHash.IsNil() { // kbft.enterNewView(height, v.View) // kbft.enterPreCommit(height, v.View)
-				kbft.enterCommit(height, v.View)
+				kbft.enterCommit(v.View)
 			}
 		} else if kbft.View <= v.View && preCommits.HasMajorityAny() {
 			kbft.logger.Error(
@@ -608,11 +604,10 @@ func (kbft *KBFT) sendQc(msgType common.ConsensusMsgType, tsHash common.Hash) *k
 	}
 
 	vote := &ktypes.Vote{
-		Type:    msgType,
-		View:    kbft.View,
-		Heights: kbft.Heights,
-		TSHash:  tsHash,
-		IsQC:    true,
+		Type:   msgType,
+		View:   kbft.View,
+		TSHash: tsHash,
+		IsQC:   true,
 	}
 
 	switch msgType {
@@ -677,7 +672,6 @@ func (kbft *KBFT) signVote(msgType common.ConsensusMsgType, tsHash common.Hash) 
 
 	v := &ktypes.Vote{
 		SignerIndex: valIndex,
-		Heights:     kbft.Heights,
 		TSHash:      tsHash,
 		View:        kbft.View,
 		Type:        msgType,
@@ -752,7 +746,7 @@ func (kbft *KBFT) scheduleTimeout(d time.Duration, heights map[identifiers.Ident
 	view uint64, step ViewStepType,
 ) {
 	kbft.logger.Debug("Scheduling timeout", "step", step, "duration", d, "heights", heights)
-	kbft.toTicker.ScheduleTimeout(timeoutInfo{d, heights, view, step})
+	kbft.toTicker.ScheduleTimeout(timeoutInfo{d, view, step})
 }
 
 // updateViewStep
@@ -844,27 +838,6 @@ func areHeightsEqual(
 	}
 
 	// Heights match, return true
-	return true
-}
-
-// areHeightsGreater is a function that checks if the second set of heights is greater than the first.
-func areHeightsGreater(
-	systemHeights, newHeights map[identifiers.Identifier]uint64,
-) bool {
-	if len(systemHeights) != len(newHeights) {
-		return false
-	}
-
-	// Iterate over system heights
-	for systemID, systemHeight := range systemHeights {
-		newHeight, ok := newHeights[systemID]
-		if !ok || systemHeight <= newHeight {
-			// if system address not found or system heights less than or equal to new height, return false
-			return false
-		}
-	}
-
-	// All heights are greater, return true
 	return true
 }
 

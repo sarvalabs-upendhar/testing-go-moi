@@ -175,8 +175,6 @@ type IxArgs struct {
 	Sender common.Sender          `json:"sender"`
 	Payer  identifiers.Identifier `json:"payer"`
 
-	SequenceID hexutil.Uint64 `json:"sequence_id"`
-
 	FuelPrice *hexutil.Big   `json:"fuel_price"`
 	FuelLimit hexutil.Uint64 `json:"fuel_limit"`
 

@@ -180,9 +180,9 @@ func (vs *VoteSet) AddVote(v *Vote) (added bool, err error) {
 		return false, errors.New("invalid validator details ")
 	}
 
-	// Check that heights and view match for the vote and voteset
-	if !AreVoteHeightsEqual(v.Heights, vs.heights) || (v.View != vs.view) || (v.Type != vs.votetype) {
-		return false, errors.New("invalid view and height details")
+	// Check if the ts hash and view match for the vote and voteset
+	if (v.View != vs.view) || (v.Type != vs.votetype) {
+		return false, errors.New("invalid view and ts hash details")
 	}
 
 	// Retrieve the validator from the validator set

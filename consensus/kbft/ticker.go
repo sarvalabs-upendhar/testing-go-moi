@@ -3,8 +3,6 @@ package kbft
 import (
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
 	"github.com/hashicorp/go-hclog"
 )
 
@@ -12,8 +10,6 @@ import (
 type timeoutInfo struct {
 	// Represents the duration of the timeout
 	Duration time.Duration `json:"duration"`
-	// Represents the height that the timeout applies for
-	Height map[identifiers.Identifier]uint64 `json:"height"`
 	// Represents the view that the timout applies for
 	View uint64 `json:"view"`
 	// Represents the view step type that the timout applies for
@@ -104,19 +100,14 @@ func (t *Ticker) timeoutRoutine() {
 	for {
 		select {
 		case newTimeoutInfo := <-t.tick:
-			// Skip scheduling if current timeout is still running AND new timeout height is greater than current
-			if len(info.Height) > 0 && areHeightsGreater(info.Height, newTimeoutInfo.Height) {
+			// Skip scheduling if new timeout view is less than current
+			if newTimeoutInfo.View < info.View {
 				continue
-			} else if len(info.Height) > 0 && areHeightsEqual(newTimeoutInfo.Height, info.Height) {
-				// Skip scheduling if new timeout view is less than current
-				if newTimeoutInfo.View < info.View {
+			} else if newTimeoutInfo.View == info.View {
+				// For same rounds, skip scheduling if current timeout has a running view
+				// AND new timeout step is less than current
+				if info.Step > 0 && newTimeoutInfo.Step <= info.Step {
 					continue
-				} else if newTimeoutInfo.View == info.View {
-					// For same rounds, skip scheduling if current timeout has a running view
-					// AND new timeout step is less than current
-					if info.Step > 0 && newTimeoutInfo.Step <= info.Step {
-						continue
-					}
 				}
 			}
 
