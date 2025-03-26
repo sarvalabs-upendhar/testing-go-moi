@@ -504,7 +504,7 @@ func (c *ChainManager) Close() {
 	c.logger.Info("Closing ChainManager.")
 }
 
-func (c *ChainManager) getInteractionsByTSHash(tsHash common.Hash) ([]*common.Interaction, error) {
+func (c *ChainManager) GetInteractionsByTSHash(tsHash common.Hash) ([]*common.Interaction, error) {
 	interactions := make([]*common.Interaction, 0)
 
 	buf, err := c.db.GetInteractions(tsHash)

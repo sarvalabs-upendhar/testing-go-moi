@@ -2,7 +2,6 @@ package ixpool
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 	"sort"
 	"sync"
@@ -258,19 +257,22 @@ func (i *IxPool) GetPendingIx(ixHash common.Hash) (*common.Interaction, bool) {
 	return i.allIxs.get(ixHash)
 }
 
-func (i *IxPool) GetIxns(ixHashes common.Hashes) ([]*common.Interaction, error) {
-	ixns := make([]*common.Interaction, 0, len(ixHashes))
+func (i *IxPool) GetIxns(ixHashes common.Hashes) ([]*common.Interaction, []common.Hash) {
+	ixns := make([]*common.Interaction, 0)
+	missingIxnHashes := make([]common.Hash, 0)
 
 	for _, ixHash := range ixHashes {
 		ix, found := i.allIxs.get(ixHash)
 		if !found {
-			return nil, errors.New(fmt.Sprintf("ixn not found in ixpool %s", ixHash))
+			missingIxnHashes = append(missingIxnHashes, ixHash)
+
+			continue
 		}
 
 		ixns = append(ixns, ix)
 	}
 
-	return ixns, nil
+	return ixns, missingIxnHashes
 }
 
 func (i *IxPool) signalPruning() {

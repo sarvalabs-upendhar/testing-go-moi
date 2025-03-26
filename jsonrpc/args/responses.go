@@ -192,6 +192,7 @@ type AccSyncStatus struct {
 type NodeSyncStatus struct {
 	TotalPendingAccounts  hexutil.Uint64           `json:"total_pending_accounts"`
 	PendingAccounts       []identifiers.Identifier `json:"pending_accounts"`
+	PendingTesseractHash  []common.Hash            `json:"pending_tesseract_hash"`
 	IsPrincipalSyncDone   bool                     `json:"is_principal_sync_done"`
 	PrincipalSyncDoneTime hexutil.Uint64           `json:"principal_sync_done_time"`
 	IsInitialSyncDone     bool                     `json:"is_initial_sync_done"`

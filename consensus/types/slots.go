@@ -165,42 +165,52 @@ func (s *Slots) addActiveAccount(id identifiers.Identifier, lockInfo *LockInfo) 
 	s.activeAccounts[id] = append(s.activeAccounts[id], lockInfo)
 }
 
-func (s *Slots) AddActiveAccount(id identifiers.Identifier, lockType common.LockType, clusterID common.ClusterID) bool {
+func (s *Slots) AddActiveAccounts(
+	lockType common.LockType, clusterID common.ClusterID, ids ...identifiers.Identifier,
+) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	m := map[identifiers.Identifier]common.LockType{id: lockType}
+	m := make(map[identifiers.Identifier]common.LockType)
+
+	for _, id := range ids {
+		m[id] = lockType
+	}
 
 	if s.areAccountsActive(m) {
 		return false
 	}
 
-	s.addActiveAccount(id, &LockInfo{lockType: lockType, clusterID: clusterID})
+	for _, id := range ids {
+		s.addActiveAccount(id, &LockInfo{lockType: lockType, clusterID: clusterID})
+	}
 
 	return true
 }
 
-func (s *Slots) ClearActiveAccount(id identifiers.Identifier, clusterID common.ClusterID) {
+func (s *Slots) ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	if len(s.activeAccounts[id]) == 0 {
-		return
-	}
-
-	if len(s.activeAccounts[id]) == 1 {
-		delete(s.activeAccounts, id)
-	}
-
-	infos := s.activeAccounts[id]
-
-	for i := 0; i < len(infos); i++ {
-		if infos[i].clusterID != clusterID {
+	for _, id := range ids {
+		if len(s.activeAccounts[id]) == 0 {
 			continue
 		}
 
-		infos[i] = infos[len(infos)-1]
-		infos = infos[:len(infos)-1]
+		if len(s.activeAccounts[id]) == 1 {
+			delete(s.activeAccounts, id)
+		}
+
+		infos := s.activeAccounts[id]
+
+		for i := 0; i < len(infos); i++ {
+			if infos[i].clusterID != clusterID {
+				continue
+			}
+
+			infos[i] = infos[len(infos)-1]
+			infos = infos[:len(infos)-1]
+		}
 	}
 }
 

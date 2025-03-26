@@ -1217,7 +1217,7 @@ func TestGetInteractionsByTSHash(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			ixns, err := c.getInteractionsByTSHash(test.tsHash)
+			ixns, err := c.GetInteractionsByTSHash(test.tsHash)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())

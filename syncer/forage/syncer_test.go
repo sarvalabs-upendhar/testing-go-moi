@@ -9,14 +9,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
 	"github.com/hashicorp/go-hclog"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	pb "github.com/libp2p/go-libp2p-pubsub/pb"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/common/utils"
 	"github.com/sarvalabs/go-moi/consensus/types"
@@ -700,6 +699,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 		servers[0],
 		&utils.TypeMux{},
 		&MockAgora{
+			sessions: make(map[cid.CID]syncer.Session),
 			newSession: func(id identifiers.Identifier) (syncer.Session, error) {
 				return newMockSession(id), nil
 			},
@@ -731,6 +731,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 	err := serverSyncer.Start(1)
 	require.NoError(t, err)
 
+	clientSyncer.agora = newMockAgora()
 	err = clientSyncer.Start(1)
 	require.NoError(t, err)
 
@@ -743,8 +744,11 @@ func TestSync_ThroughExecution(t *testing.T) {
 		ids[2]: 4,
 	}
 
-	newTesseracts := generateTesseractsGridByMap(t, accountsToSync)
-	broadcastTesseracts(t, clientSyncer, serverSyncer, newTesseracts...)
+	newTesseracts := generateTesseractsGridByMap(t, serverSyncer.network.GetKramaID(), accountsToSync)
+
+	storeTesseractsInSession(t, clientSyncer, newTesseracts...)
+	storeTesseractsInDB(t, serverSyncer, newTesseracts...)
+	broadcastTesseracts(t, clientSyncer, serverSyncer, newTesseracts[4:]...)
 
 	expectedEvents := SyncEvents{
 		bucketSync:    0,
@@ -753,12 +757,19 @@ func TestSync_ThroughExecution(t *testing.T) {
 	}
 
 	for id, height := range accountsToSync {
-		expectedEvents.accounts[id] = newAccountSpecificEvents(0, 0, 0, height)
+		expectedEvents.accounts[id] = AccountSpecificEvents{
+			latticeSync: 1,
+			endHeight:   height,
+			JobDone:     1,
+		}
 	}
 
 	SubscribeAndListenForSyncEvents(t, ctx, testingLogger(t.Name()), clientSyncer.mux, expectedEvents)
-	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, true, newTesseracts...)
-	checkJobQueue(t, clientSyncer, serverSyncer)
+
+	// ensure first 4 tesseracts synced through agora and the last one through execution
+	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, false, newTesseracts[:4]...)
+	checkIfTesseractsSynced(t, clientSyncer, accountsToSync, true, newTesseracts[4:]...)
+	checkTSQueue(t, clientSyncer, serverSyncer)
 }
 
 // TestFullSync_RemoveBestPeer, makes sure that the client syncs to the highest heights for all accounts,
@@ -797,8 +808,8 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 	serverSyncers := make([]*Syncer, 2)
 
 	mux := &utils.TypeMux{}
-	jq := &JobQueue{
-		jobs:  make(map[identifiers.Identifier]*SyncJob),
+	jq := &AccountJobQueue{
+		jobs:  make(map[identifiers.Identifier]*AccountSyncJob),
 		mux:   mux,
 		krama: NewMockKramaEngine(nil, nil),
 	}
@@ -817,7 +828,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 		types.NewSlots(2, 3),
 		"CLIENT",
 		func(s *Syncer) {
-			s.jobQueue = jq
+			s.accountJobQueue = jq
 		},
 	)
 
@@ -1017,6 +1028,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 		common.FullSync,
 		[]identifiers.KramaID{servers[0].GetKramaID()},
 		false,
+		nil,
 	)
 	require.NoError(t, err)
 
@@ -1062,7 +1074,7 @@ func TestSyncJobFromCanonicalInfo(t *testing.T) {
 	accountSyncInfos, err := pm.GetAccountsSyncStatus()
 	require.NoError(t, err)
 
-	syncJob, err := SyncJobFromCanonicalInfo(hclog.NewNullLogger(), pm, accountSyncInfos[0])
+	syncJob, err := AccountSyncJobFromCanonicalInfo(hclog.NewNullLogger(), pm, accountSyncInfos[0])
 	require.NoError(t, err)
 
 	checkIfSyncJobMatches(t, jobs[0], syncJob)
@@ -1090,7 +1102,7 @@ func TestPendingAccounts_AddJob(t *testing.T) {
 		WithJobState(Done),
 	)
 
-	jobQueue := NewJobQueue(&mux, NewMockKramaEngine(nil, nil))
+	jobQueue := NewAccountJobQueue(&mux, NewMockKramaEngine(nil, nil))
 
 	for i := 0; i < count; i++ {
 		err := jobQueue.AddJob(jobs[i])
@@ -1103,7 +1115,7 @@ func TestPendingAccounts_AddJob(t *testing.T) {
 			return nil, true
 		}
 
-		pendingAddrs := jobQueue.GetPendingAccounts()
+		pendingAddrs := jobQueue.getPendingAccounts()
 
 		sortIDs(ids)
 		sortIDs(pendingAddrs)
@@ -1124,7 +1136,7 @@ func TestPendingAccounts_RemoveJob(t *testing.T) {
 	mux := utils.TypeMux{}
 	sub := mux.Subscribe(utils.PendingAccountEvent{})
 
-	jobQueue := NewJobQueue(&mux, NewMockKramaEngine(nil, nil))
+	jobQueue := NewAccountJobQueue(&mux, NewMockKramaEngine(nil, nil))
 
 	syncStatusTracker := NewSyncStatusTracker(0)
 	go syncStatusTracker.StartSyncStatusTracker(ctx, sub)
@@ -1172,7 +1184,7 @@ func TestPendingAccounts_RemoveJob(t *testing.T) {
 			return nil, true
 		}
 
-		pendingAddrs := jobQueue.GetPendingAccounts()
+		pendingAddrs := jobQueue.getPendingAccounts()
 		if len(pendingAddrs) != 0 {
 			return nil, true
 		}
@@ -1208,7 +1220,7 @@ func TestGetSyncJobInfo(t *testing.T) {
 		WithBestPeers(bestPeers),
 	)
 
-	err := s.jobQueue.AddJob(jobs[0])
+	err := s.accountJobQueue.AddJob(jobs[0])
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -1411,12 +1423,6 @@ func TestTesseractValidator(t *testing.T) {
 }
 
 func TestIsAnyOtherParticipantStored(t *testing.T) {
-	mockDB := NewMockDB()
-	s := Syncer{
-		db:     mockDB,
-		logger: hclog.NewNullLogger(),
-	}
-
 	ids := tests.GetIdentifiers(t, 3)
 	heights := []uint64{99, 33, 21}
 
@@ -1434,45 +1440,43 @@ func TestIsAnyOtherParticipantStored(t *testing.T) {
 		},
 	})
 
-	for i := 0; i < 2; i++ {
-		mockDB.setAccMetaInfoAt(ids[i], heights[i])
-	}
-
 	testcases := []struct {
 		name          string
-		msg           *TesseractInfo
-		expectedValue bool
+		psToBeStored  int
+		storageStatus StorageStatus
 	}{
 		{
-			name: "this participant is already stored",
-			msg: &TesseractInfo{
-				accountID: ids[0],
-				tesseract: ts,
-			},
-			expectedValue: false,
+			name:          "all the participants are stored",
+			psToBeStored:  3,
+			storageStatus: FullyStored,
 		},
 		{
-			name: "this participant is not stored and other participants stored",
-			msg: &TesseractInfo{
-				accountID: ids[2],
-				tesseract: ts,
-			},
-			expectedValue: true,
+			name:          "few participants are stored",
+			psToBeStored:  2,
+			storageStatus: PartiallyStored,
 		},
 		{
-			name: "all participants are not stored",
-			msg: &TesseractInfo{
-				accountID: ids[0],
-				tesseract: tests.CreateTesseract(t, nil),
-			},
-			expectedValue: false,
+			name:          "all the participants are not stored",
+			psToBeStored:  0,
+			storageStatus: NotStored,
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			isStored := s.isAnyOtherParticipantStored(test.msg)
-			require.Equal(t, test.expectedValue, isStored)
+			mockDB := NewMockDB()
+
+			s := Syncer{
+				db:     mockDB,
+				logger: hclog.NewNullLogger(),
+			}
+
+			for i := 0; i < test.psToBeStored; i++ {
+				mockDB.setAccMetaInfoAt(ids[i], heights[i])
+			}
+
+			storageStatus := s.getParticipantStorageStatus(ts)
+			require.Equal(t, test.storageStatus, storageStatus)
 		})
 	}
 }

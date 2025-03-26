@@ -39,22 +39,22 @@ const (
 	Done
 )
 
-type JobQueue struct {
+type AccountJobQueue struct {
 	mtx   sync.RWMutex
 	mux   *utils.TypeMux
 	krama kramaEngine
-	jobs  map[identifiers.Identifier]*SyncJob
+	jobs  map[identifiers.Identifier]*AccountSyncJob
 }
 
-func NewJobQueue(mux *utils.TypeMux, krama kramaEngine) *JobQueue {
-	return &JobQueue{
-		jobs:  make(map[identifiers.Identifier]*SyncJob),
+func NewAccountJobQueue(mux *utils.TypeMux, krama kramaEngine) *AccountJobQueue {
+	return &AccountJobQueue{
+		jobs:  make(map[identifiers.Identifier]*AccountSyncJob),
 		mux:   mux,
 		krama: krama,
 	}
 }
 
-func (jq *JobQueue) len() int {
+func (jq *AccountJobQueue) len() int {
 	jq.mtx.RLock()
 	defer func() {
 		jq.mtx.RUnlock()
@@ -63,7 +63,7 @@ func (jq *JobQueue) len() int {
 	return len(jq.jobs)
 }
 
-func (jq *JobQueue) getJob(id identifiers.Identifier) (*SyncJob, bool) {
+func (jq *AccountJobQueue) getJob(id identifiers.Identifier) (*AccountSyncJob, bool) {
 	jq.mtx.RLock()
 	defer func() {
 		jq.mtx.RUnlock()
@@ -74,7 +74,7 @@ func (jq *JobQueue) getJob(id identifiers.Identifier) (*SyncJob, bool) {
 	return job, ok
 }
 
-func (jq *JobQueue) AddJob(job *SyncJob) error {
+func (jq *AccountJobQueue) AddJob(job *AccountSyncJob) error {
 	jq.mtx.Lock()
 
 	defer func() {
@@ -94,7 +94,9 @@ func (jq *JobQueue) AddJob(job *SyncJob) error {
 	return nil
 }
 
-func (jq *JobQueue) NextJob(updateJob func(jq *JobQueue, jb *SyncJob) *SyncJob) *SyncJob {
+func (jq *AccountJobQueue) NextJob(
+	updateJob func(jq *AccountJobQueue, jb *AccountSyncJob) *AccountSyncJob,
+) *AccountSyncJob {
 	jq.mtx.Lock()
 	defer func() {
 		jq.mtx.Unlock()
@@ -109,15 +111,18 @@ func (jq *JobQueue) NextJob(updateJob func(jq *JobQueue, jb *SyncJob) *SyncJob) 
 	return nil
 }
 
-func (jq *JobQueue) RemoveJob(job *SyncJob) error {
+func (jq *AccountJobQueue) RemoveJob(job *AccountSyncJob) error {
 	if err := job.done(); err != nil {
 		return err
 	}
 
 	delete(jq.jobs, job.id)
 
-	// unlock the account as it is synced
-	jq.krama.ClearActiveAccount(job.id, "syncer")
+	// If the account sync is triggered by tesseract worker, tesseract worker should clear active accounts
+	if job.tsWorkerSignal == nil {
+		// unlock the account as it is synced
+		jq.krama.ClearActiveAccounts(accountWorker, job.id)
+	}
 
 	if err := jq.mux.Post(utils.PendingAccountEvent{ID: job.id, Count: -1}); err != nil {
 		log.Println("Error sending pending account event", "err", err)
@@ -130,7 +135,7 @@ func (jq *JobQueue) RemoveJob(job *SyncJob) error {
 	return nil
 }
 
-func (jq *JobQueue) GetPendingAccounts() []identifiers.Identifier {
+func (jq *AccountJobQueue) getPendingAccounts() []identifiers.Identifier {
 	jq.mtx.RLock()
 	defer func() {
 		jq.mtx.RUnlock()
@@ -145,15 +150,15 @@ func (jq *JobQueue) GetPendingAccounts() []identifiers.Identifier {
 	return pendingAccounts
 }
 
-func (jq *JobQueue) post(ev interface{}) error {
+func (jq *AccountJobQueue) post(ev interface{}) error {
 	return jq.mux.Post(ev)
 }
 
-func (jq *JobQueue) publishEventJobDone(state eventDataJobState) error {
+func (jq *AccountJobQueue) publishEventJobDone(state eventDataJobState) error {
 	return jq.post(eventJobDone{state})
 }
 
-type SyncJob struct {
+type AccountSyncJob struct {
 	mtx                   sync.RWMutex
 	logger                hclog.Logger
 	db                    store
@@ -170,13 +175,14 @@ type SyncJob struct {
 	bestPeers             map[identifiers.KramaID]struct{}
 	latticeSyncInProgress bool
 	selfAccLock           bool
+	tsWorkerSignal        chan struct{}
 }
 
-func SyncJobFromCanonicalInfo(
+func AccountSyncJobFromCanonicalInfo(
 	logger hclog.Logger,
 	db store,
 	data *common.AccountSyncStatus,
-) (*SyncJob, error) {
+) (*AccountSyncJob, error) {
 	modifiedTime := new(time.Time)
 
 	err := modifiedTime.UnmarshalText(data.LastModifiedAt)
@@ -187,7 +193,7 @@ func SyncJobFromCanonicalInfo(
 	// Ensure the job state is set to 'pending' to allow proper creation and progress tracking.
 	// If the state is mistakenly stored as 'active',
 	// workers may misinterpret its status and the job won't make progress.
-	return &SyncJob{
+	return &AccountSyncJob{
 		db:              db,
 		logger:          logger.Named("Sync-Job"),
 		id:              data.ID,
@@ -203,28 +209,28 @@ func SyncJobFromCanonicalInfo(
 	}, nil
 }
 
-func (j *SyncJob) isLatticeSyncInProgress() bool {
+func (j *AccountSyncJob) isLatticeSyncInProgress() bool {
 	j.mtx.RLock()
 	defer j.mtx.RUnlock()
 
 	return j.latticeSyncInProgress
 }
 
-func (j *SyncJob) setLatticeSyncInProgress(val bool) {
+func (j *AccountSyncJob) setLatticeSyncInProgress(val bool) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
 	j.latticeSyncInProgress = val
 }
 
-func (j *SyncJob) bestPeerLen() int {
+func (j *AccountSyncJob) bestPeerLen() int {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
 	return len(j.bestPeers)
 }
 
-func (j *SyncJob) updateBestPeers(peers []identifiers.KramaID) {
+func (j *AccountSyncJob) updateBestPeers(peers []identifiers.KramaID) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -233,14 +239,14 @@ func (j *SyncJob) updateBestPeers(peers []identifiers.KramaID) {
 	}
 }
 
-func (j *SyncJob) deleteBestPeer(peer identifiers.KramaID) {
+func (j *AccountSyncJob) deleteBestPeer(peer identifiers.KramaID) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
 	delete(j.bestPeers, peer)
 }
 
-func (j *SyncJob) chooseRandomBestPeer() identifiers.KramaID {
+func (j *AccountSyncJob) chooseRandomBestPeer() identifiers.KramaID {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -258,21 +264,21 @@ func (j *SyncJob) chooseRandomBestPeer() identifiers.KramaID {
 	return ""
 }
 
-func (j *SyncJob) getJobState() JobState {
+func (j *AccountSyncJob) getJobState() JobState {
 	j.mtx.RLock()
 	defer j.mtx.RUnlock()
 
 	return j.jobState
 }
 
-func (j *SyncJob) getExpectedHeight() uint64 {
+func (j *AccountSyncJob) getExpectedHeight() uint64 {
 	j.mtx.RLock()
 	defer j.mtx.RUnlock()
 
 	return j.expectedHeight
 }
 
-func (j *SyncJob) updateSnap(snapReceived bool) error {
+func (j *AccountSyncJob) updateSnap(snapReceived bool) error {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -286,7 +292,7 @@ func (j *SyncJob) updateSnap(snapReceived bool) error {
 	return j.db.SetAccountSyncStatus(j.id, canonicalJob)
 }
 
-func (j *SyncJob) done() error {
+func (j *AccountSyncJob) done() error {
 	if err := j.db.CleanupAccountSyncStatus(j.id); err != nil {
 		return errors.Wrap(err, "failed to delete entry in db")
 	}
@@ -294,21 +300,21 @@ func (j *SyncJob) done() error {
 	return nil
 }
 
-func (j *SyncJob) getCurrentHeight() uint64 {
+func (j *AccountSyncJob) getCurrentHeight() uint64 {
 	j.mtx.RLock()
 	defer j.mtx.RUnlock()
 
 	return j.currentHeight
 }
 
-func (j *SyncJob) updateCurrentHeight(h uint64) {
+func (j *AccountSyncJob) updateCurrentHeight(h uint64) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
 	j.currentHeight = h
 }
 
-func (j *SyncJob) updateJobState(newState JobState) {
+func (j *AccountSyncJob) updateJobState(newState JobState) {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -318,7 +324,7 @@ func (j *SyncJob) updateJobState(newState JobState) {
 	j.lastModifiedAt = time.Now()
 }
 
-func (j *SyncJob) updateExpectedHeight(newHeight uint64) error {
+func (j *AccountSyncJob) updateExpectedHeight(newHeight uint64) error {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -332,7 +338,7 @@ func (j *SyncJob) updateExpectedHeight(newHeight uint64) error {
 	return j.db.SetAccountSyncStatus(j.id, canonicalJob)
 }
 
-func (j *SyncJob) commitJob() error {
+func (j *AccountSyncJob) commitJob() error {
 	j.mtx.Lock()
 	defer j.mtx.Unlock()
 
@@ -344,7 +350,7 @@ func (j *SyncJob) commitJob() error {
 	return j.db.SetAccountSyncStatus(j.id, canonicalJob)
 }
 
-func (j *SyncJob) canonicalJob() (*common.AccountSyncStatus, error) {
+func (j *AccountSyncJob) canonicalJob() (*common.AccountSyncStatus, error) {
 	rawTime, err := j.lastModifiedAt.MarshalText()
 	if err != nil {
 		return nil, err
@@ -360,7 +366,7 @@ func (j *SyncJob) canonicalJob() (*common.AccountSyncStatus, error) {
 	}, nil
 }
 
-func (j *SyncJob) signalNewTesseract() {
+func (j *AccountSyncJob) signalNewTesseract() {
 	select {
 	case j.tesseractSignal <- struct{}{}:
 	default:
@@ -370,7 +376,7 @@ func (j *SyncJob) signalNewTesseract() {
 	}
 }
 
-func (j *SyncJob) jobStateEvent() eventDataJobState {
+func (j *AccountSyncJob) jobStateEvent() eventDataJobState {
 	return eventDataJobState{
 		id:     j.id,
 		height: j.getCurrentHeight(),

@@ -14,6 +14,7 @@ type Metrics struct {
 	TotalJobs         metrics.Gauge
 	JobProcessingTime metrics.Histogram
 	JobTimeInQueue    metrics.Histogram
+	TSTimeInQueue     metrics.Histogram
 	BucketSyncTime    metrics.Histogram
 	IxMissCount       metrics.Counter
 }
@@ -52,6 +53,13 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Help:      "Time spent by job in the queue",
 			Buckets:   []float64{100, 250, 500, 700, 850, 1000, 2000, 3000, 4000, 5000},
 		}, labels).With(labelsWithValues...),
+		TSTimeInQueue: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "syncer",
+			Name:      "TS_time_in_queue",
+			Help:      "Time spent by tesseract in the queue",
+			Buckets:   []float64{100, 250, 500, 700, 850, 1000, 2000, 3000, 4000, 5000},
+		}, labels).With(labelsWithValues...),
 		BucketSyncTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
 			Namespace: namespace,
 			Subsystem: "syncer",
@@ -74,6 +82,7 @@ func NilMetrics() *Metrics {
 		TotalJobs:         discard.NewGauge(),
 		JobProcessingTime: discard.NewHistogram(),
 		JobTimeInQueue:    discard.NewHistogram(),
+		TSTimeInQueue:     discard.NewHistogram(),
 		BucketSyncTime:    discard.NewHistogram(),
 		IxMissCount:       discard.NewCounter(),
 	}
@@ -93,6 +102,10 @@ func (metrics *Metrics) captureJobProcessingTime(requestTime time.Time) {
 
 func (metrics *Metrics) captureJobTimeInQueue(requestTime time.Time) {
 	metrics.JobTimeInQueue.Observe(float64(time.Since(requestTime).Milliseconds()))
+}
+
+func (metrics *Metrics) captureTSTimeInQueue(requestTime time.Time) {
+	metrics.TSTimeInQueue.Observe(float64(time.Since(requestTime).Milliseconds()))
 }
 
 func (metrics *Metrics) captureBucketSyncTime(requestTime time.Time) {

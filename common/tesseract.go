@@ -566,16 +566,6 @@ func (t *Tesseract) FromBytes(data []byte) error {
 	return nil
 }
 
-func (t *Tesseract) ValidateAllParticipantsState() bool {
-	for _, state := range t.participants {
-		if state.StateHash == NilHash {
-			return false
-		}
-	}
-
-	return true
-}
-
 func (t *Tesseract) WithIxnAndReceipts(ixs Interactions, receipts Receipts, commitInfo *CommitInfo) {
 	t.ixns = ixs
 	t.receipts = receipts

@@ -149,6 +149,12 @@ func (i *ICSCommittee) UpdateNodeset(consensusNodesHash common.Hash, consensusSe
 	}
 }
 
+func (i *ICSCommittee) HasConsensusNodesHash(hash common.Hash) bool {
+	_, ok := i.ConsensusNodesHash[hash]
+
+	return ok
+}
+
 func (i *ICSCommittee) GetNodesetPosition(hash common.Hash) (int, bool) {
 	data, ok := i.ConsensusNodesHash[hash]
 	if !ok {

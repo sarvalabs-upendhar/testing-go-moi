@@ -42,14 +42,12 @@ func (k *Engine) GetICSCommittee(
 			continue
 		}
 
-		consensusNodes, consensusNodesHash, err := k.fetchParticipantContextByHash(id, ps[id].LockedContext)
+		consensusNodes, consensusNodesHash, err := k.fetchParticipantContextByHash(ics, id, ps[id].LockedContext)
 		if err != nil {
 			return nil, err
 		}
 
-		if consensusNodes != nil {
-			ics.UpdateNodeset(consensusNodesHash, consensusNodes, ps[id])
-		}
+		ics.UpdateNodeset(consensusNodesHash, consensusNodes, ps[id])
 	}
 
 	randomSet, err := k.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
@@ -122,7 +120,7 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 
 // fetchParticipantContextByHash fetches the context info based on the give hash
 // and returns a NodeSet which holds the kramaIDs and public keys
-func (k *Engine) fetchParticipantContextByHash(id identifiers.Identifier, hash common.Hash) (
+func (k *Engine) fetchParticipantContextByHash(ics *types.ICSCommittee, id identifiers.Identifier, hash common.Hash) (
 	consensusSet *types.NodeSet,
 	consensusNodesHash common.Hash,
 	err error,
@@ -134,16 +132,18 @@ func (k *Engine) fetchParticipantContextByHash(id identifiers.Identifier, hash c
 		return nil, common.NilHash, err
 	}
 
-	if len(consensusNodes) > 0 {
-		publicKeys, err := k.state.GetPublicKeys(context.Background(), consensusNodes...)
-		if err != nil {
-			k.logger.Error("failed to retrieve the public key of consensus nodes", "err", err)
-
-			return nil, common.NilHash, common.ErrPublicKeyNotFound
-		}
-
-		consensusSet = types.NewNodeSet(consensusNodes, publicKeys, uint32(len(consensusNodes)))
+	if ics.HasConsensusNodesHash(consensusNodesHash) {
+		return nil, consensusNodesHash, nil
 	}
+
+	publicKeys, err := k.state.GetPublicKeys(context.Background(), consensusNodes...)
+	if err != nil {
+		k.logger.Error("failed to retrieve the public key of consensus nodes", "err", err)
+
+		return nil, common.NilHash, common.ErrPublicKeyNotFound
+	}
+
+	consensusSet = types.NewNodeSet(consensusNodes, publicKeys, uint32(len(consensusNodes)))
 
 	return consensusSet, consensusNodesHash, nil
 }

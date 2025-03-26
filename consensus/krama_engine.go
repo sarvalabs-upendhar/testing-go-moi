@@ -933,6 +933,10 @@ func (k *Engine) verifyTransitions(
 			continue
 		}
 
+		if ts.StateHash(id).IsNil() {
+			continue
+		}
+
 		lockType, ok := ts.ConsensusInfo().AccountLocks[id]
 		if ok && lockType > common.MutateLock {
 			continue
@@ -1034,7 +1038,7 @@ func (k *Engine) ValidateTesseract(
 	ics *ktypes.ICSCommittee,
 	allParticipants bool,
 ) error {
-	if k.db.HasAccMetaInfoAt(id, ts.Height(id)) {
+	if !allParticipants && k.db.HasAccMetaInfoAt(id, ts.Height(id)) {
 		return common.ErrAlreadyKnown
 	}
 
@@ -1085,18 +1089,18 @@ func (k *Engine) ExecuteAndValidate(
 	return nil
 }
 
-func (k *Engine) AddActiveAccount(
-	id identifiers.Identifier,
+func (k *Engine) AddActiveAccounts(
 	lockType common.LockType,
 	clusterID common.ClusterID,
+	ids ...identifiers.Identifier,
 ) bool {
-	return k.slots.AddActiveAccount(id, lockType, clusterID)
+	return k.slots.AddActiveAccounts(lockType, clusterID, ids...)
 }
 
-func (k *Engine) ClearActiveAccount(id identifiers.Identifier, clusterID common.ClusterID) {
-	k.slots.ClearActiveAccount(id, clusterID)
+func (k *Engine) ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier) {
+	k.slots.ClearActiveAccounts(clusterID, ids...)
 
-	k.logger.Trace("removed from active accounts", "id", id)
+	k.logger.Trace("removed from active accounts", "ids", ids)
 }
 
 /*

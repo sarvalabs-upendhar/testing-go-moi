@@ -44,9 +44,20 @@ const (
 	MaxPeersToDial        = 8
 	TesseractFetchTimeOut = 8 * time.Second
 	DefaultWorkerWaitTime = 50 * time.Millisecond
+	accountWorker         = "account-worker"
+	tsWorker              = "ts-worker"
+	workerCount           = 10
 )
 
 var DefaultMinConnectedPeers = 6
+
+type StorageStatus int
+
+const (
+	NotStored       StorageStatus = iota // 0: No participant is stored
+	PartiallyStored                      // 1: Some participants are stored, some are not
+	FullyStored                          // 2: All participants are stored
+)
 
 type lattice interface {
 	AddTesseractWithState(
@@ -64,6 +75,7 @@ type lattice interface {
 		withCommitInfo bool,
 	) (*common.Tesseract, error)
 	GetTesseractHeightEntry(id identifiers.Identifier, height uint64) (common.Hash, error)
+	GetInteractionsByTSHash(tsHash common.Hash) ([]*common.Interaction, error)
 }
 
 type stateManager interface {
@@ -153,7 +165,7 @@ type store interface {
 }
 
 type ixpool interface {
-	GetIxns(ixHashes common.Hashes) ([]*common.Interaction, error)
+	GetIxns(ixHashes common.Hashes) ([]*common.Interaction, []common.Hash)
 }
 
 type p2pServer interface {
@@ -194,8 +206,8 @@ type kramaEngine interface {
 		rawContext map[string][]byte,
 		info *common.CommitInfo,
 	) (*ktypes.ICSCommittee, error)
-	AddActiveAccount(id identifiers.Identifier, lockType common.LockType, clusterID common.ClusterID) bool
-	ClearActiveAccount(id identifiers.Identifier, clusterID common.ClusterID)
+	AddActiveAccounts(lockType common.LockType, clusterID common.ClusterID, ids ...identifiers.Identifier) bool
+	ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier)
 }
 
 type Syncer struct {
@@ -205,26 +217,28 @@ type Syncer struct {
 	ctxCancel           context.CancelFunc
 	network             p2pServer
 	mux                 *utils.TypeMux
-	execLock            sync.RWMutex
 	agora               syncer.BlockSync
 	db                  store
 	tesseractRegistry   *common.HashRegistry
-	jobQueue            *JobQueue
+	tsJobQueue          *TesseractJobQueue
+	tsWorkerSignal      chan struct{}
+	tsWorkerCount       uint32
+	tsWorkerLock        sync.Mutex
+	accountJobQueue     *AccountJobQueue
 	rpcClient           *rpc.Client
 	consensus           kramaEngine
 	lattice             lattice
 	state               stateManager
 	ixpool              ixpool
 	logger              hclog.Logger
-	workerLock          sync.Mutex
-	jobWorkerCount      uint32
-	workerSignal        chan struct{}
+	accountWorkerLock   sync.Mutex
+	accountWorkerCount  uint32
+	accountWorkerSignal chan struct{}
 	isPrincipalSyncDone bool
 	bucketSyncDone      bool
 	pendingAccounts     uint64
 	consensusSlots      *ktypes.Slots
 	lastActiveTimeStamp uint64
-	accountsLock        sync.RWMutex
 	lockedAccounts      map[identifiers.Identifier]struct{}
 	metrics             *Metrics
 	initialSyncDone     bool
@@ -269,11 +283,14 @@ func NewSyncer(
 		lattice:             lattice,
 		state:               sm,
 		ixpool:              ixpool,
-		jobWorkerCount:      10,
+		tsJobQueue:          NewTesseractJobQueue(syncerMetrics),
+		tsWorkerCount:       workerCount,
+		tsWorkerSignal:      make(chan struct{}),
+		accountWorkerCount:  workerCount,
 		workerWaitTime:      DefaultWorkerWaitTime,
-		jobQueue:            NewJobQueue(mux, krama),
+		accountJobQueue:     NewAccountJobQueue(mux, krama),
 		logger:              logger.Named("Syncer"),
-		workerSignal:        make(chan struct{}),
+		accountWorkerSignal: make(chan struct{}),
 		tesseractRegistry:   common.NewHashRegistry(60),
 		consensusSlots:      slots,
 		lastActiveTimeStamp: lastActiveTimeStamp,
@@ -319,11 +336,12 @@ func (s *Syncer) NewSyncRequest(
 	syncMode common.SyncMode,
 	bestPeers []identifiers.KramaID,
 	snapDownloaded bool,
+	tsWorkerSignal chan struct{},
 	tesseracts ...*TesseractInfo,
 ) (err error) {
-	job, ok := s.jobQueue.getJob(id)
+	job, ok := s.accountJobQueue.getJob(id)
 	if job == nil {
-		job = &SyncJob{
+		job = &AccountSyncJob{
 			db:              s.db,
 			logger:          s.logger,
 			id:              id,
@@ -334,6 +352,7 @@ func (s *Syncer) NewSyncRequest(
 			snapDownloaded:  snapDownloaded,
 			tesseractSignal: make(chan struct{}, 1),
 			bestPeers:       make(map[identifiers.KramaID]struct{}),
+			tsWorkerSignal:  tsWorkerSignal,
 		}
 
 		job.updateBestPeers(bestPeers)
@@ -396,24 +415,207 @@ func (s *Syncer) NewSyncRequest(
 	}
 
 	if !ok {
-		if err = s.jobQueue.AddJob(job); err != nil {
+		if err = s.accountJobQueue.AddJob(job); err != nil {
 			return err
 		}
 
-		s.metrics.captureTotalJobs(float64(len(s.jobQueue.jobs)))
+		s.metrics.captureTotalJobs(float64(len(s.accountJobQueue.jobs)))
 
 		if err = job.commitJob(); err != nil {
 			return errors.Wrap(err, "failed to commit job")
 		}
 
-		s.signalNewJob()
+		s.signalNewAccountJob()
 	}
 
 	return nil
 }
 
-func updateJobHandler(s *Syncer) func(jq *JobQueue, jb *SyncJob) *SyncJob {
-	return func(jq *JobQueue, jb *SyncJob) *SyncJob {
+func (s *Syncer) addTSThroughExecution(msg *TesseractInfo) error {
+	err := s.consensus.ValidateTesseract(
+		identifiers.Nil,
+		msg.tesseract,
+		msg.committee,
+		true,
+	)
+	if err != nil {
+		return errors.Wrap(err, "failed to validate tesseract in execution phase")
+	}
+
+	if err = s.executeAndAdd(extractDirtyEntries(msg.delta), msg.tesseract); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SyncAccountState sync's the state of participants till previous tesseract or latest state based on flag
+func (s *Syncer) SyncAccountState(ts *common.Tesseract, syncUpToPrevTesseract bool) {
+	var (
+		ch               = make(chan struct{})
+		accountSyncCount = 0
+	)
+
+	for id, ps := range ts.Participants() {
+		if syncUpToPrevTesseract && ps.Height == 0 {
+			continue
+		}
+
+		height := ps.Height
+
+		// If participant state hash is nil then sync till current height as it is excluded
+		if syncUpToPrevTesseract && !ps.StateHash.IsNil() {
+			height--
+		}
+
+		lockInfo, ok := ts.ConsensusInfo().AccountLocks[id]
+		if ok && lockInfo > common.MutateLock {
+			height--
+		}
+
+		if s.db.HasAccMetaInfoAt(id, height) {
+			continue
+		}
+
+		err := s.NewSyncRequest(id, height, common.LatestSync, ts.CommitInfo().RandomSet, false, ch)
+		if err != nil {
+			s.logger.Error("failed to create account sync request",
+				"id", id, "height", height, "err", err)
+
+			continue
+		}
+
+		accountSyncCount++
+	}
+
+	if accountSyncCount == 0 {
+		return
+	}
+
+	s.logger.Debug("trying to sync the accounts for", ts.Hash())
+
+	defer close(ch)
+
+	for range ch {
+		accountSyncCount--
+
+		if accountSyncCount == 0 {
+			s.logger.Debug("synced the accounts successfully for", ts.Hash())
+
+			return
+		}
+	}
+}
+
+// getStorageStatus checks the storage status of participants in the Tesseract.
+func (s *Syncer) getParticipantStorageStatus(ts *common.Tesseract) StorageStatus {
+	hasStored, hasNotStored := false, false
+
+	for id, participant := range ts.Participants() {
+		if participant.StateHash == common.NilHash {
+			continue
+		}
+
+		if lockInfo, exists := ts.ConsensusInfo().AccountLocks[id]; exists && lockInfo > common.MutateLock {
+			continue
+		}
+
+		if s.db.HasAccMetaInfoAt(id, participant.Height) {
+			hasStored = true
+		} else {
+			hasNotStored = true
+		}
+
+		// Short-circuit if we find both cases
+		if hasStored && hasNotStored {
+			return PartiallyStored
+		}
+	}
+
+	if hasStored {
+		return FullyStored
+	}
+
+	return NotStored
+}
+
+func (s *Syncer) processTesseract(tsInfo *TesseractInfo) {
+	defer s.consensus.ClearActiveAccounts(tsWorker, tsInfo.tesseract.AccountIDs()...)
+
+	switch s.getParticipantStorageStatus(tsInfo.tesseract) {
+	case FullyStored:
+		s.tsJobQueue.delete(tsInfo.tesseract)
+
+		return
+	case PartiallyStored:
+		s.SyncAccountState(tsInfo.tesseract, false)
+		s.tsJobQueue.delete(tsInfo.tesseract)
+
+		return
+	case NotStored:
+		s.SyncAccountState(tsInfo.tesseract, true)
+	}
+
+	if err := s.fillTSWithIxnsAndReceipts(tsInfo); err != nil {
+		s.logger.Trace("failed to fetch ixns and receipts ", "err", err)
+
+		return
+	}
+
+	if tsInfo.committee == nil && !tsInfo.extractICSNodeset(s) {
+		return
+	}
+
+	if err := s.addTSThroughExecution(tsInfo); err != nil {
+		s.logger.Error("failed to add tesseract ", "ts-hash", tsInfo.tesseract.Hash(), "error", err)
+	}
+
+	s.tsJobQueue.delete(tsInfo.tesseract)
+}
+
+func (s *Syncer) tesseractWorker() {
+	defer func() {
+		s.tsWorkerLock.Lock()
+		s.tsWorkerCount--
+		s.tsWorkerLock.Unlock()
+		s.logger.Debug("Closing tesseract worker")
+	}()
+
+	for {
+		select {
+		case <-s.tsWorkerSignal:
+		case <-time.After(s.workerWaitTime):
+		case <-s.ctx.Done():
+			return
+		}
+
+		lockAccounts := func(ts *common.Tesseract) bool {
+			if !s.consensus.AddActiveAccounts(common.MutateLock, tsWorker, ts.AccountIDs()...) {
+				s.logger.Debug("accounts are active, tesseract is ignored", "ts-hash", ts.Hash())
+
+				return false
+			}
+
+			return true
+		}
+
+		tsInfo := s.tsJobQueue.nextTesseractInfo(lockAccounts)
+		if tsInfo == nil {
+			continue
+		}
+
+		s.processTesseract(tsInfo)
+	}
+}
+
+func (s *Syncer) startTesseractWorkers() {
+	for i := uint32(0); i < s.tsWorkerCount; i++ {
+		go s.tesseractWorker()
+	}
+}
+
+func updateJobHandler(s *Syncer) func(jq *AccountJobQueue, jb *AccountSyncJob) *AccountSyncJob {
+	return func(jq *AccountJobQueue, jb *AccountSyncJob) *AccountSyncJob {
 		if jb.getJobState() == Pending ||
 			(jb.getJobState() == Sleep && time.Since(jb.lastModifiedAt) > time.Millisecond*20) {
 			jb.updateJobState(Active)
@@ -426,6 +628,10 @@ func updateJobHandler(s *Syncer) func(jq *JobQueue, jb *SyncJob) *SyncJob {
 				log.Panicln(err)
 			}
 
+			if jb.tsWorkerSignal != nil {
+				jb.tsWorkerSignal <- struct{}{} // Send a signal
+			}
+
 			s.metrics.captureJobTimeInQueue(jb.creationTime)
 		}
 
@@ -433,25 +639,25 @@ func updateJobHandler(s *Syncer) func(jq *JobQueue, jb *SyncJob) *SyncJob {
 	}
 }
 
-func (s *Syncer) worker() {
+func (s *Syncer) accountWorker() {
 	defer func() {
-		s.workerLock.Lock()
-		s.jobWorkerCount--
-		s.workerLock.Unlock()
-		s.logger.Debug("Closing syncer worker")
+		s.accountWorkerLock.Lock()
+		s.accountWorkerCount--
+		s.accountWorkerLock.Unlock()
+		s.logger.Debug("Closing syncer account worker")
 	}()
 
 	for {
 		select {
-		case <-s.workerSignal:
+		case <-s.accountWorkerSignal:
 		case <-time.After(s.workerWaitTime):
 		case <-s.ctx.Done():
 			return
 		}
 
-		job := s.jobQueue.NextJob(updateJobHandler(s))
+		job := s.accountJobQueue.NextJob(updateJobHandler(s))
 
-		s.metrics.captureTotalJobs(float64(s.jobQueue.len()))
+		s.metrics.captureTotalJobs(float64(s.accountJobQueue.len()))
 
 		if job == nil {
 			continue
@@ -471,7 +677,7 @@ func (s *Syncer) hasSyncPeers() bool {
 	return s.syncPeersPresent
 }
 
-func (s *Syncer) jobClosure(job *SyncJob) error {
+func (s *Syncer) jobClosure(job *AccountSyncJob) error {
 	if currentState := job.getJobState(); currentState == Sleep || currentState == Done {
 		return nil
 	}
@@ -525,7 +731,34 @@ func (s *Syncer) RPCGetLatestAccountInfo(
 		5*time.Second,
 	); err != nil {
 		s.logger.Error("failed to fetch account latest status",
-			"RPC-error", err, "consensus-accountID", bestPeer, "accountID", id)
+			"RPC-error", err, "peer-id", bestPeer, "accountID", id)
+
+		return nil, err
+	}
+
+	return resp, nil
+}
+
+func (s *Syncer) RPCGetIxns(
+	peerID identifiers.KramaID,
+	tsHash common.Hash,
+	ixnHashes []common.Hash,
+) (*IxnsResponse, error) {
+	resp := new(IxnsResponse)
+
+	if err := s.rpcClient.MoiCall(
+		context.Background(),
+		peerID,
+		"SYNCRPC",
+		"GetIxns",
+		IxnsRequest{
+			TSHash:    tsHash,
+			IxnHashes: ixnHashes,
+		},
+		resp,
+		5*time.Second,
+	); err != nil {
+		s.logger.Error("failed to fetch ixns", "RPC-error", err, "peer-id", peerID)
 
 		return nil, err
 	}
@@ -557,7 +790,7 @@ func (s *Syncer) chooseBestPeersForInitialSync(id identifiers.Identifier) (uint6
 	return bestHeight, bestPeers, nil
 }
 
-func (s *Syncer) chooseBestPeer(job *SyncJob) (identifiers.KramaID, error) {
+func (s *Syncer) chooseBestPeer(job *AccountSyncJob) (identifiers.KramaID, error) {
 	// If initial sync is not done, then choose best peer from sync peers
 	// to improve probability of success in syncing
 	if !s.isInitialSyncDone() && s.hasSyncPeers() {
@@ -573,7 +806,7 @@ func (s *Syncer) chooseBestPeer(job *SyncJob) (identifiers.KramaID, error) {
 	return s.chooseBestSyncPeer(job)
 }
 
-func (s *Syncer) jobProcessor(job *SyncJob) error {
+func (s *Syncer) jobProcessor(job *AccountSyncJob) error {
 	var (
 		err      error
 		jobState = job.getJobState()
@@ -592,19 +825,21 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 		}
 	}()
 
-	// Attempt to lock the account for synchronization also make sure that account is not locked by syncer.
-	if !s.consensus.AddActiveAccount(job.id, common.MutateLock, "syncer") && !job.selfAccLock {
-		s.logger.Debug("Account is active, job state set to sleep", "addr", job.id)
-		job.updateJobState(Sleep)
+	if job.tsWorkerSignal == nil {
+		// Attempt to lock the account for synchronization also make sure that account is not locked by this job.
+		if !s.consensus.AddActiveAccounts(common.MutateLock, accountWorker, job.id) && !job.selfAccLock {
+			s.logger.Debug("Account is active, job state set to sleep", "addr", job.id)
+			job.updateJobState(Sleep)
 
-		return nil
-	}
+			return nil
+		}
 
-	// self acc lock indicates if the account is locked by syncer or consensus
-	if !job.selfAccLock {
-		job.selfAccLock = true
-		s.logger.Trace("added to active accounts", "id", job.id,
-			"current-height", job.getCurrentHeight(), "expected-height", job.getExpectedHeight())
+		// self acc lock indicates if the account is locked by syncer or consensus
+		if !job.selfAccLock {
+			job.selfAccLock = true
+			s.logger.Trace("added to active accounts", "id", job.id,
+				"current-height", job.getCurrentHeight(), "expected-height", job.getExpectedHeight())
+		}
 	}
 
 	s.metrics.captureActiveJobs(1)
@@ -746,7 +981,7 @@ func (s *Syncer) jobProcessor(job *SyncJob) error {
 }
 
 // postAdditionHook updates the status flags in the database after successful completion of the job
-func (s *Syncer) postAdditionHook(job *SyncJob, newHeight uint64) (bool, error) {
+func (s *Syncer) postAdditionHook(job *AccountSyncJob, newHeight uint64) (bool, error) {
 	if job.getCurrentHeight() < newHeight {
 		job.updateCurrentHeight(newHeight)
 	}
@@ -768,9 +1003,9 @@ func (s *Syncer) postAdditionHook(job *SyncJob, newHeight uint64) (bool, error) 
 	return true, nil
 }
 
-func (s *Syncer) signalNewJob() {
+func (s *Syncer) signalNewAccountJob() {
 	select {
-	case s.workerSignal <- struct{}{}:
+	case s.accountWorkerSignal <- struct{}{}:
 	default:
 		s.logger.Error("failed to signal new job")
 	}
@@ -795,7 +1030,7 @@ func (s *Syncer) updatePrincipalSyncStatus() error {
 }
 
 /*
-func (s *Syncer) cleanGridAndReleasePendingJobs(tsInfo *TesseractInfo, job *SyncJob) error {
+func (s *Syncer) cleanGridAndReleasePendingJobs(tsInfo *TesseractInfo, job *AccountSyncJob) error {
 	if tsInfo.tesseract.GridLength() == 1 {
 		return nil
 	}
@@ -810,7 +1045,7 @@ func (s *Syncer) cleanGridAndReleasePendingJobs(tsInfo *TesseractInfo, job *Sync
 			continue
 		}
 
-		pendingJob, ok := s.jobQueue.getJob(ts.Identifier())
+		pendingJob, ok := s.accountJobQueue.getJob(ts.Identifier())
 		if !ok {
 			return fmt.Errorf(" %s job not found", ts.Identifier())
 		}
@@ -826,7 +1061,7 @@ func (s *Syncer) cleanGridAndReleasePendingJobs(tsInfo *TesseractInfo, job *Sync
 }
 
 // releasePendingJob pops the added tesseract and updates the job state
-func (s *Syncer) releasePendingJob(job *SyncJob, ts *types.ts) error {
+func (s *Syncer) releasePendingJob(job *AccountSyncJob, ts *types.ts) error {
 	queuedTSInfo := job.tesseractQueue.Pop()
 	if queuedTSInfo.tesseract.Height() != ts.Height() {
 		return common.ErrHeightMismatch
@@ -894,7 +1129,7 @@ func (s *Syncer) findLatestHeightAndBestPeers(id identifiers.Identifier) (uint64
 	return getBestPeers(heightPeersMap)
 }
 
-func (s *Syncer) chooseBestSyncPeer(job *SyncJob) (identifiers.KramaID, error) {
+func (s *Syncer) chooseBestSyncPeer(job *AccountSyncJob) (identifiers.KramaID, error) {
 	if job.mode == common.LatestSync && job.tesseractQueue.Peek() != nil {
 		randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
 		randNumber := randomSource.Intn(len(job.tesseractQueue.Peek().tesseract.CommitInfo().RandomSet))
@@ -934,7 +1169,8 @@ func (s *Syncer) syncSystemAccount(id ...identifiers.Identifier) ([]identifiers.
 			return nil, errors.Wrap(err, "failed to fetch best peers and height")
 		}
 
-		if err = s.NewSyncRequest(id, bestHeight, common.FullSync, bestPeers, false); err != nil {
+		if err = s.NewSyncRequest(id, bestHeight, common.FullSync, bestPeers,
+			false, nil); err != nil {
 			return nil, err
 		}
 
@@ -1128,6 +1364,7 @@ func (s *Syncer) loadSyncJobsFromDB() error {
 			v.Mode,
 			nil,
 			v.SnapshotDownloaded,
+			nil,
 		); err != nil {
 			s.logger.Error("Failed to create sync request for job", "error", err, "accountID", v.ID)
 		}
@@ -1240,7 +1477,7 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) 
 		}
 
 		atomic.AddUint64(&s.pendingAccounts, 1)
-		// TODO: Should improve this, jobQueue will consume most of the memory, if job processor is slow
+		// TODO: Should improve this, accountJobQueue will consume most of the memory, if job processor is slow
 
 		if err = s.NewSyncRequest(
 			acc.ID,
@@ -1248,6 +1485,7 @@ func (s *Syncer) handleAccountMetaInfo(data [][]byte, syncMode common.SyncMode) 
 			syncMode,
 			nil,
 			false,
+			nil,
 		); err != nil {
 			s.logger.Error(
 				"Failed to add new sync request",
@@ -1269,7 +1507,7 @@ func (s *Syncer) isSnapSyncRequired(id identifiers.Identifier) bool {
 	return !s.db.IsAccountPrimarySyncDone(id)
 }
 
-func (s *Syncer) fetchAndStoreSnap(bestPeer identifiers.KramaID, job *SyncJob) error {
+func (s *Syncer) fetchAndStoreSnap(bestPeer identifiers.KramaID, job *AccountSyncJob) error {
 	ctx, cancel := context.WithTimeout(
 		context.Background(), // TODO: Need to improve the timeouts
 		time.Duration(5000+(job.getExpectedHeight())*5000)*time.Millisecond,
@@ -1435,7 +1673,7 @@ func (s *Syncer) fromGenesis(id identifiers.Identifier, currentHeight uint64) bo
 func (s *Syncer) syncLattice(
 	ctx context.Context,
 	nextTS *TesseractInfo,
-	job *SyncJob,
+	job *AccountSyncJob,
 	bestPeer identifiers.KramaID,
 ) error {
 	var (
@@ -1596,29 +1834,6 @@ func extractDirtyEntries(delta map[string][]byte) map[common.Hash][]byte {
 	return dirty
 }
 
-func (s *Syncer) isAnyOtherParticipantStored(msg *TesseractInfo) bool {
-	if s.db.HasAccMetaInfoAt(msg.id(), msg.height()) {
-		return false
-	}
-
-	for id, participant := range msg.tesseract.Participants() {
-		if participant.StateHash == common.NilHash {
-			continue
-		}
-
-		lockInfo, ok := msg.tesseract.ConsensusInfo().AccountLocks[id]
-		if ok && lockInfo > common.MutateLock {
-			continue
-		}
-
-		if s.db.HasAccMetaInfoAt(id, participant.Height) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 	var err error
 
@@ -1690,93 +1905,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 		return true, nil
 	}
 
-	if !msg.shouldExecute {
-		return syncTSThroughAgora()
-	}
-
-	s.execLock.Lock()
-
-	if _, execInProgress := s.execGrid[msg.tesseract.Hash()]; execInProgress {
-		s.execLock.Unlock()
-
-		return false, nil
-	}
-
-	// if execution is not in progress and
-	// this participant is not added but other participants are added through agora to DB
-	// then sync this tesseract through agora
-	if s.isAnyOtherParticipantStored(msg) {
-		s.execLock.Unlock()
-
-		return syncTSThroughAgora()
-	}
-
-	s.execGrid[msg.tesseract.Hash()] = struct{}{}
-	s.execLock.Unlock()
-
-	defer func() {
-		s.execLock.Lock()
-		delete(s.execGrid, msg.tesseract.Hash())
-		s.execLock.Unlock()
-	}()
-
-	// TODO is it okay to just check height for genesis identification ?
-	// send job to sleep state, if any one of the transitive link is absent
-	for id, participantState := range msg.tesseract.Participants() {
-		if !s.db.HasTesseract(participantState.TransitiveLink) && participantState.Height != 0 {
-			s.logger.Trace("Missing transitive links", "accountID", id)
-
-			return false, nil
-		}
-	}
-
-	// In case if another job already executed, added tesseracts, then remove this tesseract from job and
-	// update job's current height
-	if s.db.HasAccMetaInfoAt(msg.id(), msg.height()) {
-		return true, nil
-	}
-
-	err = s.consensus.ValidateTesseract(
-		msg.id(),
-		msg.tesseract,
-		msg.committee,
-		msg.tesseract.ValidateAllParticipantsState(),
-	)
-	if err != nil {
-		return false, errors.Wrap(err, "failed to validate tesseract in execution phase")
-	}
-
-	s.accountsLock.Lock()
-
-	ids := msg.tesseract.AccountIDs()
-
-	for _, id := range ids {
-		if _, ok := s.lockedAccounts[id]; ok {
-			s.accountsLock.Unlock()
-
-			return false, nil
-		}
-	}
-
-	for _, id := range ids {
-		s.lockedAccounts[id] = struct{}{}
-	}
-
-	s.accountsLock.Unlock()
-
-	defer func() {
-		s.accountsLock.Lock()
-		for _, id := range ids {
-			delete(s.lockedAccounts, id)
-		}
-		s.accountsLock.Unlock()
-	}()
-
-	if err = s.executeAndAdd(extractDirtyEntries(msg.delta), msg.tesseract); err != nil {
-		return false, err
-	}
-
-	return true, nil
+	return syncTSThroughAgora()
 }
 
 func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesseract) error {
@@ -2251,6 +2380,62 @@ func (s *Syncer) syncLogicTree(
 	return s.state.SyncLogicTree(metaLogicRoot, object)
 }
 
+func mergeIxns(ixHashes []common.Hash, ixns, nodeIxns []*common.Interaction) ([]*common.Interaction, error) {
+	result := make([]*common.Interaction, 0, len(ixHashes))
+
+	i, j := 0, 0
+
+	for _, ixHash := range ixHashes {
+		switch {
+		case i < len(ixns) && ixns[i].Hash() == ixHash:
+			result = append(result, ixns[i])
+			i++
+		case j < len(nodeIxns) && nodeIxns[j].Hash() == ixHash:
+			result = append(result, nodeIxns[j])
+			j++
+		default:
+			return nil, errors.New(fmt.Sprintf("ix-hash %v not found in node ixns", ixHash))
+		}
+	}
+
+	return result, nil
+}
+
+func (s *Syncer) FetchIxns(tsInfo *TesseractInfo) ([]*common.Interaction, error) {
+	ixns, missingIXHashes := s.ixpool.GetIxns(tsInfo.ixnsHashes)
+	if len(missingIXHashes) == 0 {
+		return ixns, nil
+	}
+
+	s.logger.Trace("Ixns not found in ixpool", "ixns-hashes", missingIXHashes)
+	s.metrics.AddIxMissCount(float64(len(missingIXHashes)))
+
+	ts := tsInfo.tesseract
+
+	randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
+	peerID := ts.CommitInfo().RandomSet[randomNumber.Intn(len(ts.CommitInfo().RandomSet))]
+
+	resp, err := s.RPCGetIxns(peerID, ts.Hash(), missingIXHashes)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.Trace("fetched Ixns through rpc", "ixns-hashes", missingIXHashes, "peer-id", peerID)
+
+	fetchedIxns := new(common.Interactions)
+
+	if err := fetchedIxns.FromBytes(resp.Ixns); err != nil {
+		return nil, err
+	}
+
+	if len(missingIXHashes) != len(fetchedIxns.IxList()) {
+		return nil, errors.New(fmt.Sprintf("fetched ixn hash count doesn't match the "+
+			"requested count expected: %v, actual %v", len(missingIXHashes), len(fetchedIxns.IxList())))
+	}
+
+	return mergeIxns(tsInfo.ixnsHashes, ixns, fetchedIxns.IxList())
+}
+
 func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 	var (
 		ixns []*common.Interaction
@@ -2287,40 +2472,8 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 
 	// retrieve ixns if they are not available
 	if fetchIxns {
-		ixns, err = s.ixpool.GetIxns(tsInfo.ixnsHashes)
-		if err != nil {
-			s.logger.Trace("Ixns not found in ixpool",
-				"ixns-hashes", tsInfo.ixnsHashes, "accountID", tsInfo.id())
-			s.metrics.AddIxMissCount(1)
-
-			err = func() error {
-				ctx, cancel := context.WithTimeout(context.Background(), TesseractFetchTimeOut) // TODO:Optimise timeout duration
-				defer cancel()
-
-				newSession, err := s.agora.NewSession(
-					ctx,
-					tsInfo.tesseract.CommitInfo().RandomSet,
-					tsInfo.id(),
-					cid.AccountCID(ts.StateHash(tsInfo.id())),
-				)
-				if err != nil {
-					return errors.Wrap(err, "unable to create session")
-				}
-				defer newSession.Close()
-
-				ixns, err = s.fetchInteractions(ctx, newSession, ts.Hash())
-				if err != nil {
-					return errors.Wrap(err, "unable to fetch interactions through agora")
-				}
-
-				s.logger.Trace("fetched Ixns through agora",
-					"ixns-hashes", tsInfo.ixnsHashes, "accountID", tsInfo.id())
-
-				return nil
-			}()
-			if err != nil {
-				return err
-			}
+		if ixns, err = s.FetchIxns(tsInfo); err != nil {
+			return err
 		}
 
 		ts.SetIxns(common.NewInteractionsWithLeaderCheck(true, ixns...))
@@ -2360,6 +2513,47 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 	return nil
 }
 
+func (s *Syncer) closePendingMsgChan() {
+	s.init.Do(func() {
+		close(s.pendingMsgChan)
+	})
+}
+
+func (s *Syncer) handleTSInfo(tsInfo *TesseractInfo) {
+	if s.cfg.ShouldExecute {
+		s.tsJobQueue.push(tsInfo.CreateTSInfoWithAddr(tsInfo.tesseract.AnyAccountID()))
+
+		return
+	}
+
+	for id, ps := range tsInfo.tesseract.Participants() {
+		info := tsInfo.CreateTSInfoWithAddr(id)
+
+		if ps.StateHash.IsNil() {
+			continue
+		}
+
+		lockType, ok := tsInfo.tesseract.ConsensusInfo().AccountLocks[id]
+		if ok && (lockType > common.MutateLock) {
+			continue
+		}
+
+		s.logger.Debug("need to sync ", "id", info.id(), "height", info.height())
+
+		if err := s.NewSyncRequest(
+			info.id(),
+			info.height(),
+			common.LatestSync,
+			info.tesseract.CommitInfo().RandomSet,
+			false,
+			nil,
+			info,
+		); err != nil {
+			s.logger.Error("Error adding sync request", "err", err)
+		}
+	}
+}
+
 func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 	if msg.ValidatorData == nil {
 		return errors.New("tesseract info not found")
@@ -2382,35 +2576,9 @@ func (s *Syncer) msgHandler(msg *pubsub.Message) error {
 			return nil
 		}
 
-		for id, ps := range tsInfo.tesseract.Participants() {
-			if ps.StateHash == common.NilHash {
-				continue
-			}
+		defer s.closePendingMsgChan()
 
-			lockType, ok := tsInfo.tesseract.ConsensusInfo().AccountLocks[id]
-			if ok && (lockType > common.MutateLock) {
-				continue
-			}
-
-			info := tsInfo.CreateTSInfoWithAddr(id)
-
-			s.logger.Debug("need to sync ", "id", info.id(), "height", info.height())
-
-			if err := s.NewSyncRequest(
-				info.id(),
-				info.height(),
-				common.LatestSync,
-				info.tesseract.CommitInfo().RandomSet,
-				false,
-				info,
-			); err != nil {
-				s.logger.Error("Error adding sync request", "err", err)
-			}
-		}
-
-		s.init.Do(func() {
-			close(s.pendingMsgChan)
-		})
+		s.handleTSInfo(tsInfo)
 	}
 
 	return nil
@@ -2552,9 +2720,10 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 		time.Sleep(1 * time.Second)
 	}
 
-	s.logger.Info("Connected to minimum number of required peers")
+	s.logger.Info("Connected to minimum number of required peers", "count", minConnectedPeers)
 
-	s.startWorkers()
+	s.startAccountWorkers()
+	s.startTesseractWorkers()
 
 	go func() {
 		if err := s.initSync(); err != nil {
@@ -2571,10 +2740,10 @@ func (s *Syncer) Start(minConnectedPeers int) error {
 				return
 
 			case <-time.After(500 * time.Millisecond):
-				s.logger.Debug("Sync in progress", "pending jobs", s.jobQueue.len())
+				s.logger.Debug("Sync in progress", "pending jobs", s.accountJobQueue.len())
 			}
 
-			if s.jobQueue.len() == 0 {
+			if s.accountJobQueue.len() == 0 {
 				s.setInitialSyncDone(true)
 				s.logger.Info("Initial sync successful")
 
@@ -2609,6 +2778,7 @@ func (s *Syncer) startSyncEventHandler() {
 				common.LatestSync,
 				[]identifiers.KramaID{req.BestPeer},
 				false,
+				nil,
 			); err != nil {
 				s.logger.Error("Failed to handle sync request from consensus engine", "err", err)
 			}
@@ -2620,7 +2790,7 @@ func (s *Syncer) startSyncEventHandler() {
 func (s *Syncer) GetAccountSyncStatus(id identifiers.Identifier) (*args.AccSyncStatus, error) {
 	var currentHeight, expectedHeight uint64
 
-	job, ok := s.jobQueue.getJob(id)
+	job, ok := s.accountJobQueue.getJob(id)
 	if !ok {
 		accountInfo, err := s.db.GetAccountMetaInfo(id)
 		if err != nil {
@@ -2649,7 +2819,7 @@ func (s *Syncer) GetSyncJobInfo(id identifiers.Identifier) (*args.SyncJobInfo, e
 		return nil, common.ErrInvalidIdentifier
 	}
 
-	job, ok := s.jobQueue.getJob(id)
+	job, ok := s.accountJobQueue.getJob(id)
 	if !ok {
 		return nil, common.ErrSyncJobNotFound
 	}
@@ -2682,16 +2852,17 @@ func (s *Syncer) GetNodeSyncStatus(includePendingAccounts bool) *args.NodeSyncSt
 	}
 
 	if includePendingAccounts {
-		nodeSyncStatus.PendingAccounts = s.jobQueue.GetPendingAccounts()
+		nodeSyncStatus.PendingAccounts = s.accountJobQueue.getPendingAccounts()
+		nodeSyncStatus.PendingTesseractHash = s.tsJobQueue.getPendingTesseractHashes()
 	}
 
 	return nodeSyncStatus
 }
 
-// startWorkers will start the sync job workers
-func (s *Syncer) startWorkers() {
-	for i := uint32(0); i < s.jobWorkerCount; i++ {
-		go s.worker()
+// startAccountWorkers will start the sync job workers
+func (s *Syncer) startAccountWorkers() {
+	for i := uint32(0); i < s.accountWorkerCount; i++ {
+		go s.accountWorker()
 	}
 }
 
@@ -2710,18 +2881,7 @@ func (s *Syncer) queueHandler() {
 		case msg, ok := <-s.pendingMsgChan:
 			if !ok {
 				for _, tsInfo := range s.pendingMsgQueue {
-					for id := range tsInfo.tesseract.Participants() {
-						info := tsInfo.CreateTSInfoWithAddr(id)
-						if err := s.NewSyncRequest(
-							info.id(),
-							info.height(),
-							common.LatestSync,
-							info.tesseract.CommitInfo().RandomSet,
-							false,
-							info); err != nil {
-							s.logger.Error("Error adding sync request", "err", err)
-						}
-					}
+					s.handleTSInfo(tsInfo)
 				}
 
 				s.pendingMsgQueue = nil

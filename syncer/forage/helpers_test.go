@@ -103,33 +103,36 @@ func NewTestSyncer(
 	krama := NewMockKramaEngine(db, logger)
 
 	s := &Syncer{
-		ctx:            ctx,
-		network:        node,
-		cfg:            cfg,
-		mux:            mux,
-		agora:          agora,
-		db:             db,
-		consensus:      krama,
-		lattice:        newMockLattice(db, logger),
-		state:          newMockStateManager(db),
-		jobWorkerCount: 5,
-		jobQueue: &JobQueue{
-			jobs:  make(map[identifiers.Identifier]*SyncJob),
+		ctx:                ctx,
+		network:            node,
+		cfg:                cfg,
+		mux:                mux,
+		agora:              agora,
+		db:                 db,
+		consensus:          krama,
+		lattice:            newMockLattice(db, logger),
+		state:              newMockStateManager(db),
+		accountWorkerCount: 5,
+		accountJobQueue: &AccountJobQueue{
+			jobs:  make(map[identifiers.Identifier]*AccountSyncJob),
 			mux:   mux,
 			krama: krama,
 		},
-		logger:            logger,
-		workerSignal:      make(chan struct{}),
-		tesseractRegistry: common.NewHashRegistry(60),
-		consensusSlots:    slots,
-		lockedAccounts:    make(map[identifiers.Identifier]struct{}),
-		metrics:           NilMetrics(),
-		pendingMsgQueue:   make([]*TesseractInfo, 0),
-		pendingMsgChan:    make(chan *TesseractInfo, 10),
-		execGrid:          make(map[common.Hash]struct{}),
-		tracker:           NewSyncStatusTracker(0),
-		workerWaitTime:    10 * time.Millisecond,
-		syncPeersPresent:  len(cfg.SyncPeers) > 0,
+		tsJobQueue:          NewTesseractJobQueue(NilMetrics()),
+		tsWorkerCount:       5,
+		tsWorkerSignal:      make(chan struct{}),
+		logger:              logger,
+		accountWorkerSignal: make(chan struct{}),
+		tesseractRegistry:   common.NewHashRegistry(60),
+		consensusSlots:      slots,
+		lockedAccounts:      make(map[identifiers.Identifier]struct{}),
+		metrics:             NilMetrics(),
+		pendingMsgQueue:     make([]*TesseractInfo, 0),
+		pendingMsgChan:      make(chan *TesseractInfo, 10),
+		execGrid:            make(map[common.Hash]struct{}),
+		tracker:             NewSyncStatusTracker(0),
+		workerWaitTime:      10 * time.Millisecond,
+		syncPeersPresent:    len(cfg.SyncPeers) > 0,
 	}
 
 	if callback != nil {
@@ -142,8 +145,8 @@ func NewTestSyncer(
 func NewTestSyncerWithJobQueue(ctx context.Context, mux *utils.TypeMux) *Syncer {
 	return &Syncer{
 		ctx: ctx,
-		jobQueue: &JobQueue{
-			jobs: make(map[identifiers.Identifier]*SyncJob),
+		accountJobQueue: &AccountJobQueue{
+			jobs: make(map[identifiers.Identifier]*AccountSyncJob),
 			mux:  mux,
 		},
 	}
@@ -206,26 +209,32 @@ func (m *MockKramaEngine) GetICSCommitteeFromRawContext(ts *common.Tesseract,
 	panic("implement me")
 }
 
-func (m *MockKramaEngine) AddActiveAccount(id identifiers.Identifier,
-	lockType common.LockType, clusterID common.ClusterID,
+func (m *MockKramaEngine) AddActiveAccounts(
+	lockType common.LockType, clusterID common.ClusterID, ids ...identifiers.Identifier,
 ) bool {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	if _, ok := m.activeAccounts[id]; ok {
-		return false
+	for _, id := range ids {
+		if _, ok := m.activeAccounts[id]; ok {
+			return false
+		}
 	}
 
-	m.activeAccounts[id] = struct{}{}
+	for _, id := range ids {
+		m.activeAccounts[id] = struct{}{}
+	}
 
 	return true
 }
 
-func (m *MockKramaEngine) ClearActiveAccount(id identifiers.Identifier, clusterID common.ClusterID) {
+func (m *MockKramaEngine) ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier) {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	delete(m.activeAccounts, id)
+	for _, id := range ids {
+		delete(m.activeAccounts, id)
+	}
 }
 
 func (m *MockKramaEngine) ValidateTesseract(
@@ -279,6 +288,10 @@ type MockLattice struct {
 	tesseractHash      map[string]common.Hash
 	db                 store
 	executedTesseracts map[string]*common.Tesseract
+}
+
+func (m *MockLattice) GetInteractionsByTSHash(tsHash common.Hash) ([]*common.Interaction, error) {
+	panic("implement me")
 }
 
 func newMockLattice(db store, logger hclog.Logger) *MockLattice {
@@ -1305,7 +1318,9 @@ func generateTesseracts(
 	return tesseracts
 }
 
-func generateTesseractsGridByMap(t *testing.T, addrHeights map[identifiers.Identifier]int) []*common.Tesseract {
+func generateTesseractsGridByMap(t *testing.T,
+	serverID identifiers.KramaID, addrHeights map[identifiers.Identifier]int,
+) []*common.Tesseract {
 	t.Helper()
 
 	height := 0
@@ -1322,7 +1337,7 @@ func generateTesseractsGridByMap(t *testing.T, addrHeights map[identifiers.Ident
 		ids = append(ids, id)
 	}
 
-	tesseracts := generateTesseracts(t, "", 0, height, common.NilHash, ids...)
+	tesseracts := generateTesseracts(t, serverID, 0, height, common.NilHash, ids...)
 
 	return tesseracts
 }
@@ -1359,7 +1374,7 @@ func createPersistenceManager(t *testing.T, ctx context.Context) (*storage.Persi
 	return db, dir
 }
 
-func checkIfSyncJobMatches(t *testing.T, expectedJob *SyncJob, syncJob *SyncJob) {
+func checkIfSyncJobMatches(t *testing.T, expectedJob *AccountSyncJob, syncJob *AccountSyncJob) {
 	t.Helper()
 
 	require.Equal(t, expectedJob.db, syncJob.db)
@@ -1381,13 +1396,13 @@ func sortIDs(ids []identifiers.Identifier) {
 	})
 }
 
-func createSyncJobs(t *testing.T, count int, ids []identifiers.Identifier, opts ...Option) []*SyncJob {
+func createSyncJobs(t *testing.T, count int, ids []identifiers.Identifier, opts ...Option) []*AccountSyncJob {
 	t.Helper()
 
-	jobs := make([]*SyncJob, count)
+	jobs := make([]*AccountSyncJob, count)
 
 	for i := 0; i < count; i++ {
-		job := &SyncJob{
+		job := &AccountSyncJob{
 			id:             ids[i],
 			creationTime:   time.Now(),
 			mode:           common.LatestSync,
@@ -1549,6 +1564,27 @@ func checkJobQueue(t *testing.T, nodes ...*Syncer) {
 	t.Helper()
 
 	for _, n := range nodes {
+		status := n.GetNodeSyncStatus(true)
+		require.Equal(t, uint64(0), status.TotalPendingAccounts.ToUint64(), status.PendingAccounts)
+	}
+}
+
+func checkTSQueue(t *testing.T, nodes ...*Syncer) {
+	t.Helper()
+
+	for _, n := range nodes {
+		func() {
+			ctx, cancel := context.WithTimeout(context.Background(), maxTimeout)
+			defer cancel()
+
+			_, err := tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
+				status := n.GetNodeSyncStatus(true)
+
+				return nil, len(status.PendingTesseractHash) != 0
+			})
+			require.NoError(t, err)
+		}()
+
 		status := n.GetNodeSyncStatus(true)
 		require.Equal(t, uint64(0), status.TotalPendingAccounts.ToUint64(), status.PendingAccounts)
 	}

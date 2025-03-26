@@ -5,58 +5,58 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
-type Option = func(job *SyncJob)
+type Option = func(job *AccountSyncJob)
 
-func WithLogger(logger hclog.Logger) func(*SyncJob) {
-	return func(job *SyncJob) {
+func WithLogger(logger hclog.Logger) func(*AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.logger = logger
 	}
 }
 
-func WithDB(db store) func(*SyncJob) {
-	return func(job *SyncJob) {
+func WithDB(db store) func(*AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.db = db
 	}
 }
 
-func WithJobState(jobState JobState) func(*SyncJob) {
-	return func(job *SyncJob) {
+func WithJobState(jobState JobState) func(*AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.jobState = jobState
 	}
 }
 
-func WithSnapDownloaded(snapDownloaded bool) func(*SyncJob) {
-	return func(job *SyncJob) {
+func WithSnapDownloaded(snapDownloaded bool) func(*AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.snapDownloaded = snapDownloaded
 	}
 }
 
-func WithCurrentHeight(currentHeight uint64) func(*SyncJob) {
-	return func(job *SyncJob) {
+func WithCurrentHeight(currentHeight uint64) func(*AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.currentHeight = currentHeight
 	}
 }
 
-func WithExpectedHeight(expectedHeight uint64) func(*SyncJob) {
-	return func(job *SyncJob) {
+func WithExpectedHeight(expectedHeight uint64) func(*AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.expectedHeight = expectedHeight
 	}
 }
 
-func WithLatticeSyncInProgress(latticeSyncInProgress bool) func(*SyncJob) {
-	return func(job *SyncJob) {
+func WithLatticeSyncInProgress(latticeSyncInProgress bool) func(*AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.latticeSyncInProgress = latticeSyncInProgress
 	}
 }
 
-func WithTesseractQueue(tq *TesseractQueue) func(*SyncJob) {
-	return func(job *SyncJob) {
+func WithTesseractQueue(tq *TesseractQueue) func(*AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.tesseractQueue = tq
 	}
 }
 
-func WithBestPeers(m map[identifiers.KramaID]struct{}) func(job *SyncJob) {
-	return func(job *SyncJob) {
+func WithBestPeers(m map[identifiers.KramaID]struct{}) func(job *AccountSyncJob) {
+	return func(job *AccountSyncJob) {
 		job.bestPeers = m
 	}
 }

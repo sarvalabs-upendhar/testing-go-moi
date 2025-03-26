@@ -32,19 +32,16 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 	executor.Interactions = ixs
 	executor.execContext = ctx
 
-	checkpoint := executor.transition.Snapshot()
-
 	for _, ix := range executor.Interactions.IxList() {
+		checkpoint := executor.transition.Snapshot()
+
 		// Execute the interaction using the transition state
-		if err := executor.executeInteraction(ix, ctx); err != nil {
+		if err := executor.executeInteraction(ix, ctx, checkpoint); err != nil {
 			executor.transition.UpdateSnapshot(checkpoint)
 			executor.metrics.captureNumOfExecutionFailure(1)
 
 			return errors.Wrap(err, "execution failed")
 		}
-
-		// After successful execution, update the executor checkpoint
-		checkpoint = executor.transition.Snapshot()
 	}
 
 	// Update the context for participants
@@ -63,10 +60,9 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 func (executor *IxExecutor) executeInteraction(
 	ix *common.Interaction,
 	ctx *common.ExecutionContext,
+	snapshot *state.Transition,
 ) error {
 	// Run the interaction
-	snapshot := executor.transition.Snapshot()
-
 	receipt, err := executor.mgr.runInteraction(ix, ctx, executor.transition, true)
 	if err != nil {
 		return err

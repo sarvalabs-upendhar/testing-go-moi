@@ -1,6 +1,7 @@
 package forage
 
 import (
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
@@ -24,4 +25,13 @@ type LatticeRequest struct {
 	AccountID   identifiers.Identifier
 	StartHeight uint64
 	EndHeight   uint64
+}
+
+type IxnsRequest struct {
+	TSHash    common.Hash
+	IxnHashes []common.Hash
+}
+
+type IxnsResponse struct {
+	Ixns []byte
 }

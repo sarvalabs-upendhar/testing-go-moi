@@ -196,6 +196,55 @@ func (service *SYNCRPCService) GetLatestAccountInfo(
 	return nil
 }
 
+func (service *SYNCRPCService) GetIxns(
+	ctx context.Context,
+	req IxnsRequest,
+	resp *IxnsResponse,
+) error {
+	if req.TSHash.IsNil() {
+		ixns, _ := service.syncer.ixpool.GetIxns(req.IxnHashes)
+
+		data, err := common.NewInteractionsWithLeaderCheck(false, ixns...).Bytes()
+		if err != nil {
+			return err
+		}
+
+		resp.Ixns = data
+
+		return nil
+	}
+
+	ixns, err := service.syncer.lattice.GetInteractionsByTSHash(req.TSHash)
+	if err != nil {
+		service.syncer.logger.Error("failed to fetch ixns", "tsHash", req.TSHash, "err", err)
+
+		return errors.New("failed to fetch ixns")
+	}
+
+	result := make([]*common.Interaction, 0, len(req.IxnHashes))
+
+	var (
+		j         = 0 // Index for ixnHashes
+		ixnHashes = req.IxnHashes
+	)
+
+	for i := 0; i < len(ixns) && j < len(ixnHashes); i++ {
+		if ixns[i].Hash() == ixnHashes[j] {
+			result = append(result, ixns[i])
+			j++
+		}
+	}
+
+	data, err := common.NewInteractionsWithLeaderCheck(false, result...).Bytes()
+	if err != nil {
+		return err
+	}
+
+	resp.Ixns = data
+
+	return nil
+}
+
 func (service *SYNCRPCService) SyncLattice(
 	ctx context.Context,
 	reqChan <-chan *LatticeRequest,
