@@ -61,7 +61,7 @@ jobs:
           port: ${{ secrets.BABYLON_NETWORK_UPGRADE_PORT }}
           script: |
             echo "Starting playbook execution..."
-            cd /home/go-moi
+            cd /home/github/go-moi
             echo ${{ github.ref_name }}
             echo "Pulling latest changes from branch: ${{ github.ref_name }}"
             git checkout ${{ github.ref_name }}
@@ -75,5 +75,5 @@ jobs:
             cat /tmp/node.yml
             # Run the Ansible playbook with extra vars
             ansible-playbook -i /tmp/node.yml ansible-babylon/network-upgrade.yaml -f 10 \
-            --extra-vars "ansible_ssh_private_key_file=/root/.ssh/id_rsa" \
+            --extra-vars "ansible_ssh_private_key_file=/home/github/.ssh/id_rsa" \
             -e "config_template_path=/tmp/config_template.json.j2 AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} image_tag=${{ github.event.inputs.image_tag }} SUDO_PASSWORD="" deployment_option=${{ env.DEPLOYMENT_OPTION }}" 
