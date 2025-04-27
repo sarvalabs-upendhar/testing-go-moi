@@ -25,8 +25,8 @@ import (
 )
 
 const (
-	genesisURL      = "https://moichain-pub.s3.amazonaws.com/genesis.json"
-	trustedPeersURL = "https://moichain-pub.s3.amazonaws.com/trusted_peers.json"
+	genesisURL      = "https://cdn.moipod.moi.technology/genesis.json"
+	trustedPeersURL = "https://cdn.moipod.moi.technology/trusted_peers.json"
 )
 
 // Params holds raw config and also custom types which will be extracted from raw config
