@@ -68,6 +68,7 @@ jobs:
           username: ${{ secrets.TELEPORT_USER }}
           key: ${{ secrets.TELEPORT_PRIVATE_KEY }}
           port: ${{ secrets.TELEPORT_PORT }}
+          command_timeout: 120m          
           script: |
             echo "Starting playbook execution..."
             cd /home/github/go-moi

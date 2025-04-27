@@ -53,9 +53,7 @@
       owner: root
       group: root
       mode: '0755'
-    when: 
-    - ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == '24.04'
-
+      
   - name: Backup all directories into a single tar file
     command: >
       tar czf {{ backup_dir }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz

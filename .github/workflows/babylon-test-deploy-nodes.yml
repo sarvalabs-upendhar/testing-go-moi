@@ -59,6 +59,7 @@ jobs:
           username: ${{ secrets.BABYLON_NETWORK_UPGRADE_USER }}
           key: ${{ secrets.BABYLON_NETWORK_UPGRADE_PRIVATE_KEY }}
           port: ${{ secrets.BABYLON_NETWORK_UPGRADE_PORT }}
+          command_timeout: 120m
           script: |
             echo "Starting playbook execution..."
             cd /home/github/go-moi
