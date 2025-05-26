@@ -1,0 +1,14 @@
+- name: Copy restart script on Servers
+  template:
+    src: "{{ playbook_dir }}/scripts/{{ file_name }}"
+    dest: "/home/{{ app_user }}/{{ file_name }}"
+    owner: "{{ owner }}"
+    group: "{{ group }}"
+    mode: "{{ mode }}"
+  become_user: "{{ become_user }}"
+
+- name: Run restart script on servers
+  shell: "./{{ file_name }}"
+  args:
+    chdir: "/home/{{ app_user }}"
+  become_user: "{{ become_user }}"

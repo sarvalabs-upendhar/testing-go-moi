@@ -1,0 +1,10 @@
+[
+{% for item in merged_instances_raw %}
+        {
+                "krama_id": "{{ item.krama_id }}",
+                "rpc_url": "{{ item.rpc_url }}",
+                "consensus_key": "{{ item.consensus_key }}"
+        }{% if not loop.last %},{% endif %}
+
+{% endfor %}
+]
