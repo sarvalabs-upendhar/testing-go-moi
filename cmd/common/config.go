@@ -243,66 +243,6 @@ func DefaultBabylonConfig(path string) *Config {
 					ID:      "3WwEExxNSpGiS2yyX2zw5Twcijw3kTLrwdiJm5TsCXoUG9Ekoxfh.16Uiu2HAmEdNKRMze4nbA6KVodXyXH5VCTWfva7eYymAUfaqUM37V",
 					Address: "/ip4/95.217.216.148/udp/6000/quic-v1/p2p/16Uiu2HAmEdNKRMze4nbA6KVodXyXH5VCTWfva7eYymAUfaqUM37V",
 				},
-				{
-					ID:      "3WxbHSqfdwkmiCo6b32tW1Mheb7w9FiM7atK9tWTG82fi2txXZMy.16Uiu2HAmGtoo76vPa3ks3yeqb8kP4iB1M8ZB4B6mKHgeaY6nRugE",
-					Address: "/ip4/65.21.250.156/udp/6000/quic-v1/p2p/16Uiu2HAmGtoo76vPa3ks3yeqb8kP4iB1M8ZB4B6mKHgeaY6nRugE",
-				},
-				{
-					ID:      "3Wz4xNH5oKvSFhPnVH8arazRNLLP4F4ipBoRmUYeSiaYjzo9ucVV.16Uiu2HAmHeJwX2CAuD274yFmt7UyMQUCsW2Q4r5XteKTBbSYiYTr",
-					Address: "/ip4/95.217.176.222/udp/6000/quic-v1/p2p/16Uiu2HAmHeJwX2CAuD274yFmt7UyMQUCsW2Q4r5XteKTBbSYiYTr",
-				},
-				{
-					ID:      "3WxZdAWK9sfSw3EcAztE54gDeVgfapo7tn4uBxqED6jkitgxy6sh.16Uiu2HAmC3xD7oGBiTDMoNMqjeAHhzKYZLo8saXPhbfdnpdeS4qS",
-					Address: "/ip4/65.109.160.208/udp/6000/quic-v1/p2p/16Uiu2HAmC3xD7oGBiTDMoNMqjeAHhzKYZLo8saXPhbfdnpdeS4qS",
-				},
-				{
-					ID:      "3Wwk4ez7q3JMDs78q3gTDdQBZ7c3An4YciubsdcEnSpTu6W7RXFV.16Uiu2HAmESwTUEArJKduBgWVECxQCKzYRGSV4mJVV4hYCqTxaq9i",
-					Address: "/ip4/65.21.186.91/udp/6000/quic-v1/p2p/16Uiu2HAmESwTUEArJKduBgWVECxQCKzYRGSV4mJVV4hYCqTxaq9i",
-				},
-				{
-					ID:      "3WyjewqNMCqxZ9Pam8eB2ZjAusbrd3EHBq59WdojenZDLfhZwsoV.16Uiu2HAmN3qFV8JWF338g571CH7FSR4cy2EMt6WhVTX56Gvv9egz",
-					Address: "/ip4/95.216.222.229/udp/6000/quic-v1/p2p/16Uiu2HAmN3qFV8JWF338g571CH7FSR4cy2EMt6WhVTX56Gvv9egz",
-				},
-				{
-					ID:      "3Ww5Uvpv1qPyZu1LpZK88Hn88Ufn4YYvB5JVtmB7rtH9hWrsZCLf.16Uiu2HAmUEmob9gwKe9f6ephymDgQzCjn4b6Xi8NkRtmyGVPxpUR",
-					Address: "/ip4/37.27.17.0/udp/6000/quic-v1/p2p/16Uiu2HAmUEmob9gwKe9f6ephymDgQzCjn4b6Xi8NkRtmyGVPxpUR",
-				},
-				{
-					ID:      "3WxYJ6DuCYueHkhaqewwKDeaqXJG9pJ1AZYEFhFhESFrHTGbHeFZ.16Uiu2HAmJ8ZBRshqTuZPxGH2mgbuopa9borcTS2JHdxZ4ZcdmRCi",
-					Address: "/ip4/95.216.190.174/udp/6000/quic-v1/p2p/16Uiu2HAmJ8ZBRshqTuZPxGH2mgbuopa9borcTS2JHdxZ4ZcdmRCi",
-				},
-				{
-					ID:      "3Wz9smfiMrYUmN57D666GzeiMhWbhVVeTydD84Y3dbqDPtNA2uPV.16Uiu2HAmQmTMwAffMEg2Km1bSH8QSNmswsiBe14ju5vF2Q2UXEKh",
-					Address: "/ip4/65.109.162.0/udp/6000/quic-v1/p2p/16Uiu2HAmQmTMwAffMEg2Km1bSH8QSNmswsiBe14ju5vF2Q2UXEKh",
-				},
-				{
-					ID:      "3Wwg75ZYJ3TRCPHqx7LYDKrJMjnbjaTRPsnuT5hdu6isjivWoEHm.16Uiu2HAmNRvdrA72pr2H9rFDhkAEQkfj3PmzaLxbSy9BNcF3VaNL",
-					Address: "/ip4/65.108.57.198/udp/6000/quic-v1/p2p/16Uiu2HAmNRvdrA72pr2H9rFDhkAEQkfj3PmzaLxbSy9BNcF3VaNL",
-				},
-				{
-					ID:      "3WwMS8ASAdxGqe7owcZEKQ48L6wRemDnheLbr8MxohNi4yKBj6Fq.16Uiu2HAm6BCaZQ8pgQyxQs39Ys4dqXGVD9sxpdjVQ7Uxw34sXQkg",
-					Address: "/ip4/5.78.105.3/udp/6000/quic-v1/p2p/16Uiu2HAm6BCaZQ8pgQyxQs39Ys4dqXGVD9sxpdjVQ7Uxw34sXQkg",
-				},
-				{
-					ID:      "3Wx2E5L9fT1821TGsfX6Ju7NmBWmSMqByNuBiDqsrBp4q6ENgRyh.16Uiu2HAmBKCp84Nfyq9cJ88hGpgjuxMDJXWrtWnKX6UqCDef1Pxj",
-					Address: "/ip4/5.78.65.177/udp/6000/quic-v1/p2p/16Uiu2HAmBKCp84Nfyq9cJ88hGpgjuxMDJXWrtWnKX6UqCDef1Pxj",
-				},
-				{
-					ID:      "3WzUkWfKjER1LJn9g7bBuvPg9ho4z3WTUDpkwXE99VNoYitpKz87.16Uiu2HAkyFGMHVedU7kMFRGYtovtmDuABy7CfK1XnVodEVZtWxx6",
-					Address: "/ip4/5.78.65.64/udp/6000/quic-v1/p2p/16Uiu2HAkyFGMHVedU7kMFRGYtovtmDuABy7CfK1XnVodEVZtWxx6",
-				},
-				{
-					ID:      "3WwpJCMQz5X4LU1EKZ6waE4Z442ck3gV2dwzaKXKtRDNzMP5L1Vq.16Uiu2HAkybuawfwYfb2wfAV6SJmE4Nx2XD2qTPZz7FzjfWqi1Bx3",
-					Address: "/ip4/5.78.71.107/udp/6000/quic-v1/p2p/16Uiu2HAkybuawfwYfb2wfAV6SJmE4Nx2XD2qTPZz7FzjfWqi1Bx3",
-				},
-				{
-					ID:      "3WxEh4HqnHPm7d7CYHHa1SVWywZEWXBKfqW443GNKPWTT7fnDJp7.16Uiu2HAm9s1ks61UGemeZ2RpAT9uKmFmjyBsuQdMT6TPpNaC9NPv",
-					Address: "/ip4/5.78.88.32/udp/6000/quic-v1/p2p/16Uiu2HAm9s1ks61UGemeZ2RpAT9uKmFmjyBsuQdMT6TPpNaC9NPv",
-				},
-				{
-					ID:      "3WxbRi4GZ4Jbc6ZPdZCUDVhTQVs2zEpvyfffVJkYKsLVpJPU8djd.16Uiu2HAmGR7rfUquYukB3SNNcSphanXQhysajrhmEAY5wrwZxLzp",
-					Address: "/ip4/5.78.93.48/udp/6000/quic-v1/p2p/16Uiu2HAmGR7rfUquYukB3SNNcSphanXQhysajrhmEAY5wrwZxLzp",
-				},
 			},
 			SyncMode:       int(config.DefaultSyncMode),
 			EnableSnapSync: true,
