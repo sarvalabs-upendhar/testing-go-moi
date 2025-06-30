@@ -19,7 +19,7 @@ func Test_ValidateAssetCreate(t *testing.T) {
 	assetID := tests.GetRandomAssetID(t, assetAcc.Identifier())
 
 	insertTestAssetObject(
-		t, assetID, operator, state.NewAssetObject(big.NewInt(5000), nil),
+		t, operator, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 
 	testcases := []struct {
@@ -75,7 +75,7 @@ func Test_CreateAsset(t *testing.T) {
 				Standard: common.MAS0,
 			},
 			preTestFn: func(assetID identifiers.AssetID, creatorAcc *state.Object, payload *common.AssetCreatePayload) {
-				insertTestAssetObject(t, assetID, creatorAcc, state.NewAssetObject(payload.Supply, nil))
+				insertTestAssetObject(t, creatorAcc, assetID, state.NewAssetObject(payload.Supply, nil))
 			},
 			expectedError: common.ErrAssetAlreadyRegistered,
 		},
@@ -87,7 +87,7 @@ func Test_CreateAsset(t *testing.T) {
 				Standard: common.MAS0,
 			},
 			preTestFn: func(assetID identifiers.AssetID, creatorAcc *state.Object, payload *common.AssetCreatePayload) {
-				insertTestAssetObject(t, assetID, creatorAcc, state.NewAssetObject(payload.Supply, nil))
+				insertTestAssetObject(t, creatorAcc, assetID, state.NewAssetObject(payload.Supply, nil))
 			},
 			expectedError: common.ErrAssetAlreadyRegistered,
 		},
@@ -136,7 +136,7 @@ func Test_ValidateAssetTransfer(t *testing.T) {
 	sarga := createTestSargaStateObject(t)
 
 	insertTestAssetObject(
-		t, assetID, sender, state.NewAssetObject(big.NewInt(5000), nil),
+		t, sender, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 
 	testcases := []struct {
@@ -258,7 +258,7 @@ func Test_TransferAsset(t *testing.T) {
 				Amount:  big.NewInt(1000),
 			},
 			preTestFn: func(assetID identifiers.AssetID, target *state.Object) {
-				insertTestAssetObject(t, assetID, target, state.NewAssetObject(big.NewInt(500), nil))
+				insertTestAssetObject(t, target, assetID, state.NewAssetObject(big.NewInt(500), nil))
 			},
 			expectedSenderBalance: big.NewInt(4000),
 			expectedTargetBalance: big.NewInt(1500),
@@ -335,7 +335,7 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			},
 			preTestFn: func(target, benefactor *state.Object) {
 				insertTestAssetObject(
-					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 				registerParticipant(t, sarga, target.Identifier())
 			},
@@ -353,7 +353,7 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			preTestFn: func(target, benefactor *state.Object) {
 				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
-					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 			},
 			expectedError: common.ErrMandateNotFound,
@@ -370,7 +370,7 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			preTestFn: func(target, benefactor *state.Object) {
 				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
-					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 				createTestMandate(
 					t, benefactor, sender, assetID, big.NewInt(2500), uint64(time.Now().Add(-1*time.Hour).Unix()),
@@ -390,7 +390,7 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			preTestFn: func(target, benefactor *state.Object) {
 				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
-					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 				createTestMandate(
 					t, benefactor, sender, assetID, big.NewInt(1000), uint64(time.Now().Add(1*time.Hour).Unix()),
@@ -410,7 +410,7 @@ func Test_ValidateMandateConsume(t *testing.T) {
 			preTestFn: func(target, benefactor *state.Object) {
 				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
-					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 				createTestMandate(
 					t, benefactor, sender, assetID, big.NewInt(4000), uint64(time.Now().Add(1*time.Hour).Unix()),
@@ -481,7 +481,7 @@ func Test_ConsumeMandate(t *testing.T) {
 			},
 			preTestFn: func(target, benefactor *state.Object) {
 				insertTestAssetObject(
-					t, assetID1, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID1, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 				createTestMandate(t, benefactor, sender1, assetID1, big.NewInt(2000), uint64(time.Now().Unix()))
 			},
@@ -500,10 +500,10 @@ func Test_ConsumeMandate(t *testing.T) {
 			},
 			preTestFn: func(target, benefactor *state.Object) {
 				insertTestAssetObject(
-					t, assetID0, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID0, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 				insertTestAssetObject(
-					t, assetID0, target, state.NewAssetObject(big.NewInt(3000), nil),
+					t, target, assetID0, state.NewAssetObject(big.NewInt(3000), nil),
 				)
 				createTestMandate(t, benefactor, sender0, assetID0, big.NewInt(2000), uint64(time.Now().Unix()))
 			},
@@ -546,7 +546,7 @@ func Test_ValidateAssetMint(t *testing.T) {
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 
 	insertTestAssetObject(
-		t, assetID, operator, state.NewAssetObject(big.NewInt(5000), nil),
+		t, operator, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 	setupAssetAccount(t, operator, assetAcc, assetID)
 
@@ -649,7 +649,7 @@ func Test_ValidateAssetBurn(t *testing.T) {
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 
 	insertTestAssetObject(
-		t, assetID, operator, state.NewAssetObject(big.NewInt(5000), nil),
+		t, operator, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 	setupAssetAccount(t, operator, assetAcc, assetID)
 
@@ -769,7 +769,7 @@ func Test_ValidateAssetApprove(t *testing.T) {
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 
 	insertTestAssetObject(
-		t, assetID, sender, state.NewAssetObject(big.NewInt(5000), nil),
+		t, sender, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 
 	testcases := []struct {
@@ -878,7 +878,7 @@ func Test_ValidateAssetRevoke(t *testing.T) {
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	sarga := createTestSargaStateObject(t)
 	insertTestAssetObject(
-		t, assetID, sender, state.NewAssetObject(big.NewInt(5000), nil),
+		t, sender, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 
 	testcases := []struct {
@@ -1003,7 +1003,7 @@ func Test_ValidateAssetLockup(t *testing.T) {
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 
 	insertTestAssetObject(
-		t, assetID, sender, state.NewAssetObject(big.NewInt(10000), nil),
+		t, sender, assetID, state.NewAssetObject(big.NewInt(10000), nil),
 	)
 
 	testcases := []struct {
@@ -1032,19 +1032,6 @@ func Test_ValidateAssetLockup(t *testing.T) {
 				Amount:      big.NewInt(12000),
 			},
 			expectedError: common.ErrInsufficientFunds,
-		},
-		{
-			name:   "lockup already exists",
-			sender: sender,
-			payload: &common.AssetActionPayload{
-				Beneficiary: tests.RandomIdentifier(t),
-				AssetID:     assetID,
-				Amount:      big.NewInt(4000),
-			},
-			preTestFn: func(target *state.Object) {
-				createLockup(t, sender, target, assetID, big.NewInt(5000))
-			},
-			expectedError: common.ErrLockupAlreadyExists,
 		},
 		{
 			name:   "valid asset lockup operation",
@@ -1165,7 +1152,7 @@ func Test_ValidateAssetRelease(t *testing.T) {
 			preTestFn: func(target, benefactor *state.Object) {
 				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
-					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 				createLockup(t, benefactor, sender, assetID, big.NewInt(2000))
 			},
@@ -1239,7 +1226,7 @@ func Test_AssetRelease(t *testing.T) {
 			preTestFn: func(target, benefactor *state.Object) {
 				registerParticipant(t, sarga, target.Identifier())
 				insertTestAssetObject(
-					t, assetID, benefactor, state.NewAssetObject(big.NewInt(5000), nil),
+					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 				createLockup(t, benefactor, sender, assetID, big.NewInt(2500))
 			},

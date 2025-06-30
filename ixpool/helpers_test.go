@@ -155,7 +155,7 @@ func (ms *MockStateManager) GetLatestStateObject(id identifiers.Identifier) (*st
 	return s, nil
 }
 
-func (ms *MockStateManager) RemoveCachedObject(id identifiers.Identifier) {
+func (ms *MockStateManager) RefreshCachedObject(id identifiers.Identifier, systemObject *state.SystemObject) {
 	ms.removedCacheStateObjects[id] = struct{}{}
 }
 

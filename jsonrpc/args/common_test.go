@@ -197,7 +197,7 @@ func TestCreateRPCTesseract(t *testing.T) {
 				Operator:                  tests.RandomKramaID(t, 1),
 				ClusterID:                 "12342",
 				View:                      9,
-				RandomSet:                 tests.RandomKramaIDs(t, 2),
+				RandomSet:                 []common.ValidatorIndex{0, 1},
 				RandomSetSizeWithoutDelta: 3,
 			},
 		}

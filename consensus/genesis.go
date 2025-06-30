@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"sort"
+	"time"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -18,9 +18,9 @@ import (
 )
 
 func (k *Engine) SetupGenesis() error {
-	transition := make(state.ObjectMap)
+	objs := make(state.ObjectMap)
 
-	sargaAccount, genesisAccounts, assetAccounts, logics, err := k.parseGenesisFile()
+	sargaAccount, systemAccount, genesisAccounts, assetAccounts, logics, err := k.parseGenesisFile()
 	if err != nil {
 		return errors.Wrap(err, "failed to parse genesis file")
 	}
@@ -34,54 +34,41 @@ func (k *Engine) SetupGenesis() error {
 		return errors.Wrap(err, "failed to setup sarga account")
 	}
 
-	transition[sargaObject.Identifier()] = sargaObject
+	objs[sargaObject.Identifier()] = sargaObject
 
 	for _, v := range genesisAccounts {
-		if transition[v.ID], err = k.setupNewAccount(v); err != nil {
+		if objs[v.ID], err = k.setupNewAccount(v); err != nil {
 			return errors.Wrap(err, "failed to setup genesis account")
 		}
 
-		accountKeys := make(common.AccountKeys, len(v.Keys))
-
-		for i, key := range v.Keys {
-			accountKeys[i] = &common.AccountKey{
-				ID:                 uint64(i),
-				PublicKey:          key.PublicKey,
-				Weight:             key.Weight.ToUint64(),
-				SignatureAlgorithm: key.SignatureAlgorithm.ToUint64(),
-				Revoked:            false,
-				SequenceID:         0,
-			}
-		}
-
-		transition[v.ID].UpdateKeys(accountKeys)
+		objs[v.ID].UpdateKeys(getKeys(v.Keys))
 	}
 
-	if _, err = k.setupGenesisLogics(transition, logics); err != nil {
+	if _, err = k.setupGenesisLogics(objs, logics); err != nil {
 		return errors.Wrap(err, "failed to setup genesis logic")
 	}
 
-	if err = k.setupAssetAccounts(transition, assetAccounts); err != nil {
+	if err = k.setupAssetAccounts(objs, assetAccounts); err != nil {
 		return errors.Wrap(err, "failed to setup asset accounts")
 	}
 
-	count := len(transition)
-	ids := make([]identifiers.Identifier, 0, count)
-	stateHashes := make([]common.Hash, 0, count)
-	contextHashes := make([]common.Hash, 0, count)
-
-	for _, stateObject := range transition {
-		stateHash, err := stateObject.Commit()
-		if err != nil {
-			return err
-		}
-
-		ids = append(ids, stateObject.Identifier())
-		stateHashes = append(stateHashes, stateHash)
-		contextHashes = append(contextHashes, stateObject.ContextHash())
+	systemObject, err := k.setupSystemAccount(systemAccount)
+	if err != nil {
+		return errors.Wrap(err, "failed to setup system account")
 	}
 
-	if err = k.addGenesisTesseract(ids, stateHashes, contextHashes, transition); err != nil {
+	transition := state.NewTransition(systemObject, objs, nil)
+
+	if err = k.updateValidatorStakes(transition); err != nil {
+		return errors.Wrap(err, "failed to update validator stakes")
+	}
+
+	commitHashes, err := transition.Commit()
+	if err != nil {
+		return err
+	}
+
+	if err = k.addGenesisTesseract(commitHashes, transition); err != nil {
 		return err
 	}
 
@@ -89,34 +76,25 @@ func (k *Engine) SetupGenesis() error {
 }
 
 func createGenesisTesseract(
-	ids []identifiers.Identifier,
-	stateHashes, contextHashes []common.Hash,
+	commitHashes common.AccountStateHashes,
 	timestamp uint64, icsSeed, icsProof string,
-	transition state.ObjectMap,
+	transition *state.Transition,
 ) *common.Tesseract {
 	var (
-		ixHashString = "Genesis"
+		ixHashString = "Genesis_ixns"
 		participants = make(common.ParticipantsState)
 	)
 
-	for i, id := range ids {
+	for id, info := range commitHashes {
 		participants[id] = common.State{
 			Height:         0,
 			TransitiveLink: common.NilHash,
 			LockedContext:  common.NilHash,
-			StateHash:      stateHashes[i],
+			StateHash:      info.StateHash,
 			ContextDelta: &common.DeltaGroup{
-				ConsensusNodes: transition.GetObject(id).ConsensusNodes(),
+				ConsensusNodes: transition.GetConsensusNodes(id),
 			},
 		}
-	}
-
-	sort.Slice(stateHashes, func(i, j int) bool {
-		return stateHashes[i].Hex() < stateHashes[j].Hex()
-	})
-
-	for i := 0; i < len(stateHashes); i++ {
-		ixHashString += stateHashes[i].Hex()
 	}
 
 	interactionsHash := common.GetHash([]byte(ixHashString))
@@ -153,15 +131,9 @@ func createGenesisTesseract(
 	return ts
 }
 
-func (k *Engine) addGenesisTesseract(
-	ids []identifiers.Identifier,
-	stateHashes, contextHashes []common.Hash,
-	transition state.ObjectMap,
-) error {
+func (k *Engine) addGenesisTesseract(commitHashes common.AccountStateHashes, transition *state.Transition) error {
 	tesseract := createGenesisTesseract(
-		ids,
-		stateHashes,
-		contextHashes,
+		commitHashes,
 		k.cfg.GenesisTimestamp,
 		k.cfg.GenesisSeed,
 		k.cfg.GenesisProof,
@@ -172,7 +144,7 @@ func (k *Engine) addGenesisTesseract(
 		true,
 		identifiers.Nil,
 		tesseract,
-		state.NewTransition(transition, nil),
+		transition,
 		true,
 	); err != nil {
 		return errors.Wrap(err, "error adding genesis tesseract")
@@ -237,16 +209,56 @@ func (k *Engine) setupSargaAccount(
 	return stateObject, nil
 }
 
-func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, error) {
-	stateObject := k.state.CreateStateObject(info.ID, info.AccType, true)
+func (k *Engine) setupSystemAccount(systemAcc *common.SystemAccountSetupArgs) (*state.SystemObject, error) {
+	systemObject := k.state.CreateSystemObject(systemAcc.ID)
 
-	if err := stateObject.CreateContext(info.ConsensusNodes); err != nil {
+	if err := systemObject.CreateContext(systemAcc.ConsensusNodes); err != nil {
 		return nil, errors.Wrap(err, "context initiation failed in genesis")
 	}
 
-	accountKeys := make(common.AccountKeys, len(info.Keys))
+	if err := systemObject.CreateStorageTreeForLogic(common.SystemLogicID); err != nil {
+		return nil, errors.Wrap(err, "failed to create storage tree")
+	}
 
-	for i, key := range info.Keys {
+	if err := systemObject.SetGenesisTime(time.Unix(0, int64(k.cfg.GenesisTimestamp))); err != nil {
+		return nil, errors.Wrap(err, "failed to set genesis time")
+	}
+
+	if err := systemObject.SetValidators(systemAcc.Validators); err != nil {
+		return nil, errors.Wrap(err, "failed to set validators")
+	}
+
+	return systemObject, nil
+}
+
+func (k *Engine) updateValidatorStakes(transition *state.Transition) error {
+	systemObj := transition.GetSystemObject()
+	if systemObj == nil {
+		return errors.New("system object is nil")
+	}
+
+	for index, val := range systemObj.Validators() {
+		obj := transition.GetObject(val.WalletAddress)
+		if obj == nil {
+			return errors.Errorf("no object for validator %d", index)
+		}
+
+		if err := obj.CreateLockup(
+			common.KMOITokenAssetID,
+			common.GuardianLogicID.AsIdentifier(),
+			val.ActiveStake,
+		); err != nil {
+			return errors.Wrap(err, "failed to create lockup")
+		}
+	}
+
+	return nil
+}
+
+func getKeys(keys []common.KeyArgs) common.AccountKeys {
+	accountKeys := make(common.AccountKeys, len(keys))
+
+	for i, key := range keys {
 		accountKeys[i] = &common.AccountKey{
 			ID:                 uint64(i),
 			PublicKey:          key.PublicKey.Bytes(),
@@ -257,7 +269,17 @@ func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, e
 		}
 	}
 
-	stateObject.UpdateKeys(accountKeys)
+	return accountKeys
+}
+
+func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, error) {
+	stateObject := k.state.CreateStateObject(info.ID, info.AccType, true)
+
+	if err := stateObject.CreateContext(info.ConsensusNodes); err != nil {
+		return nil, errors.Wrap(err, "context initiation failed in genesis")
+	}
+
+	stateObject.UpdateKeys(getKeys(info.Keys))
 
 	return stateObject, nil
 }
@@ -452,9 +474,17 @@ func (k *Engine) validateAccountCreationInfo(accs ...common.AccountSetupArgs) er
 	return nil
 }
 
-func (k *Engine) validateSargaAccountCreationInfo(acc common.AccountSetupArgs) error {
+func (k *Engine) validateSargaAccountCreationArgs(acc common.AccountSetupArgs) error {
 	if acc.ID != common.SargaAccountID {
 		return common.ErrInvalidIdentifier
+	}
+
+	return nil
+}
+
+func (k *Engine) validateSystemAccountCreationArgs(acc common.SystemAccountSetupArgs) error {
+	if acc.ID != common.SystemAccountID {
+		return errors.New("system account id mismatch")
 	}
 
 	return nil
@@ -482,6 +512,7 @@ func (k *Engine) validateLogicCreationArgs(logicAccounts ...common.LogicSetupArg
 
 func (k *Engine) parseGenesisFile() (
 	*common.AccountSetupArgs,
+	*common.SystemAccountSetupArgs,
 	[]common.AccountSetupArgs,
 	[]common.AssetAccountSetupArgs,
 	[]common.LogicSetupArgs,
@@ -491,30 +522,36 @@ func (k *Engine) parseGenesisFile() (
 
 	data, err := os.ReadFile(k.cfg.GenesisFilePath)
 	if err != nil {
-		return nil, nil, nil, nil, errors.Wrap(err, "failed to open genesis file")
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to open genesis file")
 	}
 
 	if err = json.Unmarshal(data, genesisData); err != nil {
-		return nil, nil, nil, nil, errors.Wrap(err, "failed to parse genesis file")
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "failed to parse genesis file")
 	}
 
-	err = k.validateSargaAccountCreationInfo(genesisData.SargaAccount)
+	err = k.validateSargaAccountCreationArgs(genesisData.SargaAccount)
 	if err != nil {
-		return nil, nil, nil, nil, errors.Wrap(err, "invalid sarga account info")
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "invalid sarga account info")
+	}
+
+	err = k.validateSystemAccountCreationArgs(genesisData.SystemAccount)
+	if err != nil {
+		return nil, nil, nil, nil, nil, errors.Wrap(err, "invalid system account info")
 	}
 
 	err = k.validateAccountCreationInfo(genesisData.Accounts...)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	if err = k.validateAssetAccountCreationArgs(genesisData.AssetAccounts...); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
 	if err = k.validateLogicCreationArgs(genesisData.Logics...); err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
-	return &genesisData.SargaAccount, genesisData.Accounts, genesisData.AssetAccounts, genesisData.Logics, nil
+	return &genesisData.SargaAccount, &genesisData.SystemAccount, genesisData.Accounts,
+		genesisData.AssetAccounts, genesisData.Logics, nil
 }

@@ -13,6 +13,7 @@ import (
 // IxOpPayload holds the data for asset, file, or logic ops.
 type IxOpPayload struct {
 	participant *ParticipantPayload
+	guardian    *GuardianPayload
 	asset       *AssetPayload
 	file        *FilePayload  //nolint:unused
 	logic       *LogicPayload //nolint:unused
@@ -491,6 +492,124 @@ func (action *AssetActionPayload) ValidateAssetRelease(senderID identifiers.Iden
 
 	if action.Amount == nil || action.Amount.Sign() <= 0 {
 		return ErrInvalidValue
+	}
+
+	return nil
+}
+
+// GuardianRegisterPayload contains information required to register a new guardian node.
+type GuardianRegisterPayload struct {
+	KramaID      identifiers.KramaID
+	WalletID     identifiers.Identifier
+	ConsensusKey []byte
+	KYCProof     []byte
+	Amount       *big.Int
+}
+
+// Bytes serializes GuardianRegisterPayload to bytes.
+func (register *GuardianRegisterPayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(register)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize guardian register payload")
+	}
+
+	return data, nil
+}
+
+// FromBytes deserializes GuardianRegisterPayload from bytes.
+func (register *GuardianRegisterPayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(register, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize guardian register payload")
+	}
+
+	return nil
+}
+
+// Validate checks if the GuardianRegisterPayload is valid.
+func (register *GuardianRegisterPayload) Validate() error {
+	if err := register.KramaID.Validate(); err != nil {
+		return ErrInvalidKramaID
+	}
+
+	if register.WalletID.IsNil() {
+		return ErrInvalidIdentifier
+	}
+
+	if register.ConsensusKey == nil {
+		return errors.New("invalid consensus key")
+	}
+
+	if register.KYCProof == nil {
+		return errors.New("invalid kyc proof")
+	}
+
+	if register.Amount == nil || register.Amount.Sign() <= 0 {
+		return ErrInvalidValue
+	}
+
+	return nil
+}
+
+// GuardianActionPayload holds data for performing guardian actions like staking, unstaking, withdrawing,
+// or claiming rewards.
+type GuardianActionPayload struct {
+	KramaID identifiers.KramaID
+	Amount  *big.Int
+}
+
+// Bytes serializes GuardianActionPayload to bytes.
+func (action *GuardianActionPayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(action)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize guardian action payload")
+	}
+
+	return data, nil
+}
+
+// FromBytes deserializes GuardianActionPayload from bytes.
+func (action *GuardianActionPayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(action, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize guardian action payload")
+	}
+
+	return nil
+}
+
+// Validate checks if the GuardianActionPayload is valid.
+func (action *GuardianActionPayload) Validate() error {
+	if err := action.KramaID.Validate(); err != nil {
+		return ErrInvalidKramaID
+	}
+
+	if action.Amount == nil || action.Amount.Sign() <= 0 {
+		return ErrInvalidValue
+	}
+
+	return nil
+}
+
+// GuardianPayload represents data related to guardian actions such as registration, staking, unstaking,
+// withdrawing, or claiming rewards.
+type GuardianPayload struct {
+	Register *GuardianRegisterPayload
+	Action   *GuardianActionPayload
+}
+
+// Bytes serializes GuardianPayload to bytes.
+func (gp *GuardianPayload) Bytes() ([]byte, error) {
+	data, err := polo.Polorize(gp)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to polorize guardian payload")
+	}
+
+	return data, nil
+}
+
+// FromBytes deserializes GuardianPayload from bytes.
+func (gp *GuardianPayload) FromBytes(data []byte) error {
+	if err := polo.Depolorize(gp, data); err != nil {
+		return errors.Wrap(err, "failed to depolorize guardian payload")
 	}
 
 	return nil

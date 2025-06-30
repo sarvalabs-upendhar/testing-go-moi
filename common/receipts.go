@@ -61,9 +61,9 @@ type StateAndContextHash struct {
 	ContextHash Hash `json:"context_hash"`
 }
 
-type AccStateHashes map[identifiers.Identifier]*StateAndContextHash
+type AccountStateHashes map[identifiers.Identifier]*StateAndContextHash
 
-func (h AccStateHashes) SetContextHash(id identifiers.Identifier, contextHash Hash) {
+func (h AccountStateHashes) SetContextHash(id identifiers.Identifier, contextHash Hash) {
 	hashes, ok := h[id]
 	if !ok {
 		h[id] = &StateAndContextHash{ContextHash: contextHash}
@@ -74,7 +74,7 @@ func (h AccStateHashes) SetContextHash(id identifiers.Identifier, contextHash Ha
 	hashes.ContextHash = contextHash
 }
 
-func (h AccStateHashes) SetStateHash(id identifiers.Identifier, stateHash Hash) {
+func (h AccountStateHashes) SetStateHash(id identifiers.Identifier, stateHash Hash) {
 	hashes, ok := h[id]
 
 	if !ok {
@@ -86,7 +86,7 @@ func (h AccStateHashes) SetStateHash(id identifiers.Identifier, stateHash Hash) 
 	hashes.StateHash = stateHash
 }
 
-func (h AccStateHashes) ContextHash(id identifiers.Identifier) Hash {
+func (h AccountStateHashes) ContextHash(id identifiers.Identifier) Hash {
 	hashes, ok := h[id]
 	if !ok {
 		return NilHash
@@ -95,7 +95,7 @@ func (h AccStateHashes) ContextHash(id identifiers.Identifier) Hash {
 	return hashes.ContextHash
 }
 
-func (h AccStateHashes) StateHash(id identifiers.Identifier) Hash {
+func (h AccountStateHashes) StateHash(id identifiers.Identifier) Hash {
 	hashes, ok := h[id]
 	if !ok {
 		return NilHash
@@ -104,12 +104,12 @@ func (h AccStateHashes) StateHash(id identifiers.Identifier) Hash {
 	return hashes.StateHash
 }
 
-func (h AccStateHashes) Copy() AccStateHashes {
+func (h AccountStateHashes) Copy() AccountStateHashes {
 	if len(h) == 0 {
 		return nil
 	}
 
-	hashmap := make(AccStateHashes)
+	hashmap := make(AccountStateHashes)
 
 	for key, value := range h {
 		hashmap[key] = &StateAndContextHash{
@@ -121,7 +121,7 @@ func (h AccStateHashes) Copy() AccStateHashes {
 	return hashmap
 }
 
-func (h AccStateHashes) ExcludedAccounts() IdentifierList {
+func (h AccountStateHashes) ExcludedAccounts() IdentifierList {
 	ids := make(IdentifierList, 0, len(h))
 
 	for id, hashes := range h {

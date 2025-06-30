@@ -86,16 +86,17 @@ type kramaTransport interface {
 
 type stateManager interface {
 	GetPublicKey(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) ([]byte, error)
-	LoadTransitionObjects(ps map[identifiers.Identifier]common.ParticipantInfo) (*state.Transition, error)
+	LoadTransitionObjects(
+		ps map[identifiers.Identifier]common.ParticipantInfo, psState common.ParticipantsState,
+	) (*state.Transition, error)
 	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
 	GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 		latestContextHash common.Hash,
-		consensusSet []identifiers.KramaID,
-		consensusSetHash common.Hash,
-		randomPublicKeys [][]byte,
+		consensusNodesHash common.Hash,
+		vals []*common.ValidatorInfo,
 		err error,
 	)
-	GetPublicKeys(context context.Context, ids ...identifiers.KramaID) (keys [][]byte, err error)
+	GetPublicKeys(ids ...identifiers.KramaID) ([][]byte, error)
 	GetICSSeed(id identifiers.Identifier) ([32]byte, error)
 	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
 	IsAccountRegistered(id identifiers.Identifier) (bool, error)
@@ -103,8 +104,7 @@ type stateManager interface {
 	GetSequenceID(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) (uint64, error)
 	IsInitialTesseract(ts *common.Tesseract, id identifiers.Identifier) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
-	RemoveCachedObject(id identifiers.Identifier)
-	GetRegisteredGuardiansCount() (int, error)
+	RefreshCachedObject(id identifiers.Identifier, sysObj *state.SystemObject)
 	GetGuardianIncentives(id identifiers.KramaID) (uint64, error)
 	GetTotalIncentives() (uint64, error)
 	GetConsensusNodes(
@@ -115,6 +115,8 @@ type stateManager interface {
 		common.Hash,
 		error,
 	)
+	GetSystemObject() *state.SystemObject
+	CreateSystemObject(id identifiers.Identifier) *state.SystemObject
 }
 
 type ixPool interface {
@@ -127,7 +129,9 @@ type ixPool interface {
 }
 
 type execution interface {
-	ExecuteInteractions(*state.Transition, common.Interactions, *common.ExecutionContext) (common.AccStateHashes, error)
+	ExecuteInteractions(
+		*state.Transition, common.Interactions, *common.ExecutionContext,
+	) (common.AccountStateHashes, error)
 }
 
 type store interface {
@@ -182,6 +186,7 @@ type Engine struct {
 	trustedPeersPresent bool
 	futureMsg           []*ktypes.ICSMSG
 	compressor          common.Compressor
+	minimumStake        *big.Int
 }
 
 func NewKramaEngine(
@@ -242,6 +247,8 @@ func NewKramaEngine(
 		safety:              safety.NewConsensusSafety(db, val),
 		futureMsg:           make([]*ktypes.ICSMSG, 0, 30),
 		compressor:          compressor,
+		// TODO: Update after the staking flow is implemented
+		minimumStake: big.NewInt(0),
 	}
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
@@ -323,6 +330,7 @@ func (k *Engine) loadClusterState(
 		reqTime,
 		k.selfID,
 		committee,
+		k.state.GetSystemObject(),
 		participants,
 		viewInfos,
 		k.view.Load(),
@@ -395,7 +403,7 @@ func (k *Engine) fetchParticipantsAndCommittee(
 			continue
 		}
 
-		contextHash, consensusSet, consensusNodesHash, consensusPublicKeys, err := k.state.GetLatestContextAndPublicKeys(id)
+		contextHash, consensusNodesHash, vals, err := k.state.GetLatestContextAndPublicKeys(id)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -413,7 +421,8 @@ func (k *Engine) fetchParticipantsAndCommittee(
 		}
 
 		committee.AppendNodeSet(consensusNodesHash,
-			ktypes.NewNodeSet(consensusSet, consensusPublicKeys, uint32(len(consensusSet))))
+			ktypes.NewNodeSet(vals, uint32(len(vals))),
+		)
 
 		participants[id].NodeSetPosition = position
 		participants[id].ConsensusQuorum = committee.ParticipantQuorum(position)
@@ -526,7 +535,7 @@ func (k *Engine) getConsensusNodes(
 	for index, info := range set.Infos {
 		if set.Responses.GetIndex(index) {
 			if len(consensusNodes) != requiredConsensusNodes {
-				consensusNodes = append(consensusNodes, info.ID)
+				consensusNodes = append(consensusNodes, info.KramaID)
 				count++
 			}
 		}
@@ -541,25 +550,23 @@ func (k *Engine) getConsensusNodes(
 
 func (k *Engine) getStochasticNodes(
 	ctx context.Context,
+	cs *ktypes.ClusterState,
 	count int,
-	exemptedNodes []identifiers.KramaID,
-) ([]identifiers.KramaID, error) {
+	exemptedNodes map[common.ValidatorIndex]struct{},
+) ([]common.ValidatorIndex, error) {
 	_, span := tracing.Span(ctx, "Krama.KramaEngine", "getStochasticNodes")
 	defer span.End()
 
-	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 	queryInitTime := time.Now()
 
-	defer cancel()
-
-	peers, err := k.randomizer.GetRandomNodes(ctx, count, exemptedNodes)
+	indices, err := k.ShuffledList(cs, exemptedNodes)
 	if err != nil {
 		return nil, err
 	}
 
 	k.metrics.captureRandomNodesQueryTime(queryInitTime)
 
-	return peers, nil
+	return indices, nil
 }
 
 func (k *Engine) getTrustedPeers(count int) []identifiers.KramaID {
@@ -606,17 +613,14 @@ func (k *Engine) createICSForProposal(ctx context.Context, sender identifiers.Kr
 
 	cs.ExcludeParticipantsFromICS(ts.ExcludedAccounts())
 
-	pk, err := k.state.GetPublicKeys(ctx, ts.CommitInfo().RandomSet...)
+	vals, err := cs.SystemObject.GetValidators(ts.CommitInfo().RandomSet...)
 	if err != nil {
 		return err
 	}
 
-	cs.Committee().AppendNodeSet(common.NilHash, ktypes.NewNodeSet(
-		ts.CommitInfo().RandomSet,
-		pk,
+	cs.Committee().AppendNodeSet(common.NilHash, ktypes.NewNodeSet(vals,
 		ts.CommitInfo().RandomSetSizeWithoutDelta,
-	),
-	)
+	))
 
 	voteset := ktypes.NewHeightVoteSet(
 		make([]string, 0),
@@ -645,7 +649,7 @@ func (k *Engine) createICSForProposal(ctx context.Context, sender identifiers.Kr
 func generateTesseract(
 	cs *ktypes.ClusterState,
 	poxt common.PoXtData,
-	hs common.AccStateHashes,
+	hs common.AccountStateHashes,
 ) (*common.Tesseract, error) {
 	participants := participantStates(cs, hs)
 
@@ -687,8 +691,8 @@ func generateTesseract(
 	return ts, nil
 }
 
-func (k *Engine) executionInteractions(cs *ktypes.ClusterState) (common.AccStateHashes, error) {
-	transition, err := k.state.LoadTransitionObjects(cs.Ixns().Participants())
+func (k *Engine) executionInteractions(cs *ktypes.ClusterState) (common.AccountStateHashes, error) {
+	transition, err := k.state.LoadTransitionObjects(cs.Ixns().Participants(), nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to load state transition objects")
 	}
@@ -839,7 +843,7 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 	}
 
 	for _, id := range tesseract.AccountIDs() {
-		k.state.RemoveCachedObject(id)
+		k.state.RefreshCachedObject(id, cs.Transition.GetSystemObject())
 	}
 
 	return nil
@@ -1265,7 +1269,7 @@ func (k *Engine) Close() {
 	defer k.ctxCancel()
 }
 
-func areStateHashesValid(ts *common.Tesseract, postExecState common.AccStateHashes) bool {
+func areStateHashesValid(ts *common.Tesseract, postExecState common.AccountStateHashes) bool {
 	for id, participantState := range ts.Participants() {
 		if postExecState.StateHash(id) != participantState.StateHash {
 			return false
@@ -1288,7 +1292,7 @@ func isReceiptsHashValid(ts *common.Tesseract, receipts common.Receipts) bool {
 	return true
 }
 
-func participantStates(cs *ktypes.ClusterState, ps common.AccStateHashes) common.ParticipantsState {
+func participantStates(cs *ktypes.ClusterState, ps common.AccountStateHashes) common.ParticipantsState {
 	participants := make(common.ParticipantsState, len(cs.Participants))
 
 	for id, p := range cs.Participants {

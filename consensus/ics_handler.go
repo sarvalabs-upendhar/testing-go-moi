@@ -248,7 +248,7 @@ func (k *Engine) handleProposal(ctx context.Context, cs *ktypes.ClusterState, pr
 	}
 
 	// create a transition object with latest participant objects
-	transition, err := k.state.LoadTransitionObjects(proposal.Ixs().Participants())
+	transition, err := k.state.LoadTransitionObjects(proposal.Ixs().Participants(), nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to load transition objects")
 	}
@@ -441,19 +441,18 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 	// choose the stochastic nodes using flux
 	contextNodes, _, _ := ktypes.DistinctNodes(k.selfID, cs.Committee().Sets)
 
-	stochasticNodes, err := k.getStochasticNodes(ctx, common.StochasticSetSize, contextNodes)
+	stochasticNodes, err := k.getStochasticNodes(ctx, cs, common.StochasticSetSize, contextNodes)
 	if err != nil {
 		return errors.Wrap(err, "unable to retrieve random nodes")
 	}
 
-	publicKeys, err := k.state.GetPublicKeys(context.Background(), stochasticNodes...)
+	vals, err := cs.SystemObject.GetValidators(stochasticNodes...)
 	if err != nil {
-		return errors.Wrap(err, "failed to fetch the public key of random nodes.")
+		return err
 	}
-
 	// update the committee with the stochastic node set
 	cs.AppendNodeSet(
-		ktypes.NewNodeSet(stochasticNodes, publicKeys, uint32(common.StochasticSetSize)),
+		ktypes.NewNodeSet(vals, uint32(common.StochasticSetSize)),
 	)
 
 	failedCount, err := k.sendPrepareMsg(ctx, cs.ClusterID, prepareMsg, cs.Committee(), cs.LocalViewInfo())
@@ -533,7 +532,9 @@ func (k *Engine) validatePeerHighestQc(remote *common.ViewInfo, peerID identifie
 			return err
 		}
 
-		ics, err := k.GetICSCommittee(ts, ts.CommitInfo())
+		cs := k.slots.GetSlot(ts.ClusterID()).ClusterState()
+
+		ics, err := k.GetICSCommittee(ts, ts.CommitInfo(), cs.SystemObject)
 		if err != nil {
 			return err
 		}
@@ -586,7 +587,10 @@ func (k *Engine) createPrepareQc(
 	initTime := time.Now()
 	defer k.metrics.capturePrepareQCSigAggregationTime(initTime)
 
-	infos, signatures := cs.Committee().ViewInfosAndSignatures()
+	infos, signatures, err := cs.Committee().ViewInfosAndSignatures()
+	if err != nil {
+		return nil, err
+	}
 
 	aggSign, err := crypto.AggregateSignatures(signatures)
 	if err != nil {

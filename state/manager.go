@@ -59,6 +59,8 @@ type StateManager struct {
 	cfg    *config.StateConfig
 	logger hclog.Logger
 
+	systemRegistry *SystemRegistry
+
 	cache       *lru.Cache
 	objectCache *lru.Cache
 	treeCache   *fastcache.Cache
@@ -86,8 +88,9 @@ func NewStateManager(
 		objectLocks: locker.New(),
 		sysLocks:    locker.New(),
 
-		logger:  logger.Named("State-Manager"),
-		metrics: metrics,
+		systemRegistry: NewSystemObjectRegistry(),
+		logger:         logger.Named("State-Manager"),
+		metrics:        metrics,
 	}
 
 	if cacheStateObjects {
@@ -113,6 +116,61 @@ func (sm *StateManager) CreateStateObject(
 	return stateObject
 }
 
+func (sm *StateManager) CreateSystemObject(id identifiers.Identifier) *SystemObject {
+	systemObject := NewSystemObject(sm.CreateStateObject(id, common.SystemAccount, true))
+
+	sm.systemRegistry.SetSystemObject(systemObject)
+
+	return systemObject
+}
+
+func (sm *StateManager) initSystemStateObject(id identifiers.Identifier) (*SystemObject, error) {
+	stateObject, err := sm.GetLatestStateObject(id)
+	if err != nil {
+		stateObject = sm.CreateStateObject(id, common.SystemAccount, true)
+	}
+
+	systemObject := NewSystemObject(stateObject)
+
+	if err = systemObject.Init(); err != nil {
+		return nil, err
+	}
+
+	sm.systemRegistry.SetSystemObject(systemObject)
+
+	return systemObject, nil
+}
+
+func (sm *StateManager) GetSystemObject() *SystemObject {
+	systemObject := sm.systemRegistry.GetSystemObject()
+	if systemObject != nil {
+		return systemObject
+	}
+
+	systemObject, err := sm.initSystemStateObject(common.SystemAccountID)
+	if err != nil {
+		panic(err)
+	}
+
+	return systemObject
+}
+
+func (sm *StateManager) GetConsensusNodes(
+	id identifiers.Identifier, hash common.Hash,
+) (common.NodeList, common.Hash, error) {
+	consensusNodes, consensusHash, err := sm.GetConsensusNodeIDs(id, hash)
+	if err != nil {
+		return nil, common.NilHash, err
+	}
+
+	validators, err := sm.systemRegistry.GetSystemObject().GetValidatorsByKramaID(consensusNodes)
+	if err != nil {
+		return nil, common.NilHash, err
+	}
+
+	return validators, consensusHash, nil
+}
+
 func (sm *StateManager) HasParticipantStateAt(id identifiers.Identifier, stateHash common.Hash) bool {
 	if _, err := sm.db.GetAccount(id, stateHash); err != nil {
 		return false
@@ -129,8 +187,8 @@ func (sm *StateManager) getStateObject(id identifiers.Identifier, stateHash comm
 	return sm.GetStateObjectByHash(id, stateHash)
 }
 
-func (sm *StateManager) RemoveCachedObject(id identifiers.Identifier) {
-	sm.logger.Trace("removing cached state object", id)
+func (sm *StateManager) RefreshCachedObject(id identifiers.Identifier, sysObj *SystemObject) {
+	sm.logger.Trace("updating cached system object", id)
 	sm.objectLocks.Lock(id.Hex())
 
 	defer func() {
@@ -140,6 +198,10 @@ func (sm *StateManager) RemoveCachedObject(id identifiers.Identifier) {
 	}()
 
 	sm.objectCache.Remove(id)
+
+	if sysObj != nil && sysObj.id == id {
+		sm.systemRegistry.SetSystemObject(sysObj)
+	}
 }
 
 func (sm *StateManager) GetLatestStateObject(id identifiers.Identifier) (*Object, error) {
@@ -317,31 +379,21 @@ func (sm *StateManager) GetMetaContextObject(id identifiers.Identifier, hash com
 
 func (sm *StateManager) GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 	latestContextHash common.Hash,
-	consensusNodes []identifiers.KramaID,
 	consensusNodesHash common.Hash,
-	consensusPublicKeys [][]byte,
+	vals []*common.ValidatorInfo,
 	err error,
 ) {
 	latestContextHash, err = sm.GetCommittedContextHash(id)
 	if err != nil {
-		return common.NilHash, nil, common.NilHash, nil, err
+		return common.NilHash, common.NilHash, nil, err
 	}
 
-	consensusNodes, consensusNodesHash, err = sm.GetConsensusNodes(id, latestContextHash)
+	consensusNodes, consensusNodesHash, err := sm.GetConsensusNodes(id, latestContextHash)
 	if err != nil {
-		return common.NilHash, nil, common.NilHash, nil, err
+		return common.NilHash, common.NilHash, nil, err
 	}
 
-	if len(consensusNodes) > 0 {
-		consensusPublicKeys, err = sm.GetPublicKeys(context.Background(), consensusNodes...)
-		if err != nil {
-			sm.logger.Error("failed to retrieve the public key of consensus set", "err", err)
-
-			return common.NilHash, nil, common.NilHash, nil, common.ErrPublicKeyNotFound
-		}
-	}
-
-	return latestContextHash, consensusNodes, consensusNodesHash, consensusPublicKeys, err
+	return latestContextHash, consensusNodesHash, consensusNodes, nil
 }
 
 func (sm *StateManager) GetCommittedContextHash(id identifiers.Identifier) (common.Hash, error) {
@@ -374,11 +426,11 @@ func (sm *StateManager) GetICSSeed(id identifiers.Identifier) ([32]byte, error) 
 	return ts.ICSSeed(), nil
 }
 
-func (sm *StateManager) GetConsensusNodes(
+func (sm *StateManager) GetConsensusNodeIDs(
 	id identifiers.Identifier,
 	hash common.Hash,
 ) (
-	common.NodeList,
+	[]identifiers.KramaID,
 	common.Hash,
 	error,
 ) {
@@ -429,9 +481,12 @@ func (sm *StateManager) GetConsensusNodesByHash(
 		return nil, common.ErrEmptyHashAndID
 	}
 
-	nodes, _, err := sm.GetConsensusNodes(id, hash)
+	nodes, _, err := sm.GetConsensusNodeIDs(id, hash)
+	if err != nil {
+		return nil, err
+	}
 
-	return nodes, err
+	return nodes, nil
 }
 
 func (sm *StateManager) IsInitialTesseract(ts *common.Tesseract, id identifiers.Identifier) (bool, error) {
@@ -642,27 +697,25 @@ func (sm *StateManager) GetAccountState(id identifiers.Identifier, stateHash com
 	return accInfo, nil
 }
 
-func (sm *StateManager) GetPublicKeys(ctx context.Context, ids ...identifiers.KramaID) ([][]byte, error) {
+func (sm *StateManager) GetPublicKeys(ids ...identifiers.KramaID) ([][]byte, error) {
 	if len(ids) == 0 {
 		return nil, errors.New("Empty Ids")
 	}
 
-	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
+	sm.sysLocks.Lock(common.SystemAccountID.Hex())
 
 	defer func() {
-		if err := sm.sysLocks.Unlock(common.GuardianAccountID.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "id", common.GuardianAccountID)
+		if err := sm.sysLocks.Unlock(common.SystemAccountID.Hex()); err != nil {
+			sm.logger.Error("failed to unlock object", "err", err, "id", common.SystemAccountID)
 		}
 	}()
 
-	object, err := sm.getStateObject(common.GuardianAccountID, common.NilHash)
+	pubkeys, err := sm.GetSystemObject().GetValidatorPublicKeys(ids)
 	if err != nil {
 		return nil, err
 	}
 
-	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
-
-	return guardianregistry.GetGuardianPublicKeys(storageReader, ids...)
+	return pubkeys, nil
 }
 
 func (sm *StateManager) GetGuardianIncentives(id identifiers.KramaID) (uint64, error) {
@@ -682,25 +735,6 @@ func (sm *StateManager) GetGuardianIncentives(id identifiers.KramaID) (uint64, e
 	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
 
 	return guardianregistry.GetGuardianIncentive(storageReader, id)
-}
-
-func (sm *StateManager) GetRegisteredGuardiansCount() (int, error) {
-	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
-
-	defer func() {
-		if err := sm.sysLocks.Unlock(common.GuardianAccountID.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "id", common.GuardianAccountID)
-		}
-	}()
-
-	object, err := sm.getStateObject(common.GuardianAccountID, common.NilHash)
-	if err != nil {
-		return 0, err
-	}
-
-	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
-
-	return guardianregistry.GetGuardiansCount(storageReader)
 }
 
 func (sm *StateManager) GetTotalIncentives() (uint64, error) {
@@ -924,23 +958,58 @@ func (sm *StateManager) getAuxiliaryStateObjects() (ObjectMap, error) {
 
 func (sm *StateManager) LoadTransitionObjects(
 	ixps map[identifiers.Identifier]common.ParticipantInfo,
+	psState common.ParticipantsState,
 ) (*Transition, error) {
+	var (
+		sysObj *SystemObject
+		obj    *Object
+		err    error
+	)
+
 	// Create a new objects map
 	objects := make(ObjectMap)
 
 	for id, p := range ixps {
+		// we should only include the system object in the transition if it is part of the ics
+		if id == common.SystemAccountID {
+			sysObj = sm.GetSystemObject().Copy()
+
+			continue
+		}
+
 		if p.IsGenesis {
 			objects[id] = sm.CreateStateObject(id, p.AccType, true)
 
 			continue
 		}
 
-		obj, err := sm.GetLatestStateObject(id)
+		// if psState is not passed or is nil, we fetch the latest state object
+		if psState == nil {
+			obj, err = sm.GetLatestStateObject(id)
+			if err != nil {
+				return nil, errors.Wrap(err, "state object fetch failed")
+			}
+
+			// copy inorder to avoid modifications to cached object
+			objects[id] = obj.Copy()
+
+			continue
+		}
+
+		state, ok := psState[id]
+		if !ok {
+			return nil, errors.Wrap(err, "participant state not found")
+		}
+
+		ts, err := sm.getTesseractByHash(state.TransitiveLink, false, false)
+		if err != nil {
+			return nil, errors.Wrap(err, "tesseract fetch failed")
+		}
+
+		obj, err = sm.GetStateObjectByHash(id, ts.StateHash(id))
 		if err != nil {
 			return nil, errors.Wrap(err, "state object fetch failed")
 		}
-
-		// copy inorder to avoid modifications to cached object
 
 		objects[id] = obj.Copy()
 	}
@@ -950,7 +1019,7 @@ func (sm *StateManager) LoadTransitionObjects(
 		return nil, err
 	}
 
-	return NewTransition(objects, auxiliaryObjects), nil
+	return NewTransition(sysObj, objects, auxiliaryObjects), nil
 }
 
 func (sm *StateManager) FetchIxStateObjects(
@@ -959,7 +1028,10 @@ func (sm *StateManager) FetchIxStateObjects(
 ) (
 	*Transition, error,
 ) {
-	var err error
+	var (
+		sysObj *SystemObject
+		err    error
+	)
 
 	ps := ixns.Participants()
 
@@ -967,6 +1039,13 @@ func (sm *StateManager) FetchIxStateObjects(
 	objects := make(ObjectMap)
 
 	for id, p := range ps {
+		// we should only include the system object in the transition if it is part of the ics
+		if id == common.SystemAccountID {
+			sysObj = sm.GetSystemObject()
+
+			continue
+		}
+
 		if p.IsGenesis {
 			objects[id] = sm.CreateStateObject(id, p.AccType, true)
 
@@ -987,11 +1066,11 @@ func (sm *StateManager) FetchIxStateObjects(
 		return nil, err
 	}
 
-	return NewTransition(objects, auxiliaryObjects), nil
+	return NewTransition(sysObj, objects, auxiliaryObjects), nil
 }
 
 func (sm *StateManager) IsSealValid(ts *common.Tesseract) (bool, error) {
-	publicKey, err := sm.GetPublicKeys(context.Background(), ts.SealBy())
+	publicKey, err := sm.GetPublicKeys([]identifiers.KramaID{ts.SealBy()}...)
 	if err != nil {
 		sm.logger.Error("Error fetching the public key", "err", err)
 

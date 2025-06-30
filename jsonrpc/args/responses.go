@@ -420,12 +420,12 @@ type RPCQc struct {
 }
 
 type RPCCommitInfo struct {
-	QC                        *RPCQc                `json:"commit_qc"`
-	Operator                  identifiers.KramaID   `json:"operator"`
-	ClusterID                 common.ClusterID      `json:"cluster_id"`
-	View                      uint64                `json:"commit_view"`
-	RandomSet                 []identifiers.KramaID `json:"random_set"`
-	RandomSetSizeWithoutDelta uint32                `json:"random_set_size"`
+	QC                        *RPCQc                  `json:"commit_qc"`
+	Operator                  identifiers.KramaID     `json:"operator"`
+	ClusterID                 common.ClusterID        `json:"cluster_id"`
+	View                      uint64                  `json:"commit_view"`
+	RandomSet                 []common.ValidatorIndex `json:"random_set"`
+	RandomSetSizeWithoutDelta uint32                  `json:"random_set_size"`
 }
 
 func CreateRPCCommitInfo(info *common.CommitInfo) RPCCommitInfo {

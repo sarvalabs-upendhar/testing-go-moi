@@ -24,6 +24,21 @@ func createTestStateObject(t *testing.T) *state.Object {
 	)
 }
 
+func createTestSystemObject(t *testing.T) *state.SystemObject {
+	t.Helper()
+
+	return state.NewSystemObject(createTestStateObject(t))
+}
+
+func createTestGuardianStateObject(t *testing.T) *state.Object {
+	t.Helper()
+
+	return state.NewStateObject(
+		common.GuardianAccountID, nil, tests.NewTestTreeCache(),
+		nil, common.Account{}, state.NilMetrics(), false,
+	)
+}
+
 func createTestAsset(t *testing.T, supply *big.Int) (*state.Object, *state.Object, identifiers.AssetID) {
 	t.Helper()
 
@@ -170,16 +185,27 @@ func createTestAssetID(
 func createMandate(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
 	t.Helper()
 
-	assert.NoError(t, sender.CreateMandate(payload.AssetID, payload.Beneficiary, payload.Amount, payload.Timestamp))
+	err := sender.CreateMandate(payload.AssetID, payload.Beneficiary, payload.Amount, payload.Timestamp)
+	assert.NoError(t, err)
 }
 
 func insertTestAssetObject(
-	t *testing.T, assetID identifiers.AssetID,
-	creatorAcc *state.Object, assetObject *state.AssetObject,
+	t *testing.T, creatorAcc *state.Object,
+	assetID identifiers.AssetID, assetObject *state.AssetObject,
 ) {
 	t.Helper()
 
-	assert.NoError(t, creatorAcc.InsertNewAssetObject(assetID, assetObject))
+	err := creatorAcc.InsertNewAssetObject(assetID, assetObject)
+	assert.NoError(t, err)
+}
+
+func insertGuardianEntry(
+	t *testing.T, system *state.SystemObject, validator *common.Validator,
+) {
+	t.Helper()
+
+	err := system.SetValidators([]*common.Validator{validator})
+	require.NoError(t, err)
 }
 
 func createTestDeedsEntry(
@@ -196,7 +222,9 @@ func createTestDeedsEntry(
 	)
 
 	require.NoError(t, err)
-	assert.NoError(t, creatorAcc.CreateDeedsEntry(assetID.AsIdentifier()))
+
+	err = creatorAcc.CreateDeedsEntry(assetID.AsIdentifier())
+	assert.NoError(t, err)
 }
 
 func createTestSargaStateObject(t *testing.T) *state.Object {
@@ -215,7 +243,8 @@ func createTestSargaStateObject(t *testing.T) *state.Object {
 func registerParticipant(t *testing.T, sarga *state.Object, id identifiers.Identifier) {
 	t.Helper()
 
-	assert.NoError(t, sarga.SetStorageEntry(common.SargaLogicID, id.Bytes(), id.Bytes()))
+	err := sarga.SetStorageEntry(common.SargaLogicID, id.Bytes(), id.Bytes())
+	assert.NoError(t, err)
 }
 
 func createTestMandate(
@@ -224,12 +253,13 @@ func createTestMandate(
 ) {
 	t.Helper()
 
-	assert.NoError(t, approveAsset(sender, &common.AssetActionPayload{
+	err := approveAsset(sender, &common.AssetActionPayload{
 		Beneficiary: beneficiary.Identifier(),
 		AssetID:     assetID,
 		Amount:      amount,
 		Timestamp:   timestamp,
-	}))
+	})
+	assert.NoError(t, err)
 }
 
 func createLockup(
@@ -238,25 +268,99 @@ func createLockup(
 ) {
 	t.Helper()
 
-	assert.NoError(t, lockupAsset(sender, &common.AssetActionPayload{
+	err := lockupAsset(sender, &common.AssetActionPayload{
 		Beneficiary: beneficiary.Identifier(),
 		AssetID:     assetID,
 		Amount:      amount,
-	}))
+	})
+	assert.NoError(t, err)
 }
 
 func setupAssetAccount(t *testing.T, operator, assetAcc *state.Object, assetID identifiers.AssetID) {
 	t.Helper()
 
 	insertTestAssetObject(
-		t, assetID, assetAcc, state.NewAssetObject(big.NewInt(5000), nil),
+		t, assetAcc, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 
-	assert.NoError(
-		t,
-		assetAcc.SetState(
-			assetID,
-			common.NewAssetDescriptor(operator.Identifier(), common.AssetCreatePayload{}),
-		),
+	err := assetAcc.SetState(
+		assetID,
+		common.NewAssetDescriptor(operator.Identifier(), common.AssetCreatePayload{}),
 	)
+
+	assert.NoError(t, err)
+}
+
+func checkGuardianRegister(t *testing.T, system *state.SystemObject, payload *common.GuardianRegisterPayload) {
+	t.Helper()
+
+	validator, err := system.ValidatorByKramaID(payload.KramaID)
+	require.NoError(t, err)
+
+	require.NotNil(t, validator)
+	require.Equal(t, payload.KramaID, validator.KramaID)
+	require.Equal(t, payload.Amount, validator.PendingStakeAdditions)
+	require.Equal(t, payload.WalletID, validator.WalletAddress)
+	require.Equal(t, payload.ConsensusKey, validator.ConsensusPubKey)
+	require.Equal(t, payload.KYCProof, validator.KYCProof)
+}
+
+func checkStakeGuardian(t *testing.T, system *state.SystemObject, payload *common.GuardianActionPayload) {
+	t.Helper()
+
+	validator, err := system.ValidatorByKramaID(payload.KramaID)
+	require.NoError(t, err)
+
+	require.NotNil(t, validator)
+	require.Equal(t, payload.KramaID, validator.KramaID)
+	require.Equal(t, payload.Amount, validator.PendingStakeAdditions)
+}
+
+func checkUnstakeGuardian(t *testing.T, system *state.SystemObject, payload *common.GuardianActionPayload) {
+	t.Helper()
+
+	validator, err := system.ValidatorByKramaID(payload.KramaID)
+	require.NoError(t, err)
+
+	require.NotNil(t, validator)
+	require.Equal(t, payload.KramaID, validator.KramaID)
+	require.Equal(t, payload.Amount, validator.PendingStakeRemovals[common.Epoch(0)])
+}
+
+func checkGuardianWithdraw(
+	t *testing.T, sender *state.Object, system *state.SystemObject,
+	payload *common.GuardianActionPayload, expectedStake *big.Int, expectedBalance *big.Int,
+) {
+	t.Helper()
+
+	validator, err := system.ValidatorByKramaID(payload.KramaID)
+	require.NoError(t, err)
+
+	require.NotNil(t, validator)
+	require.Equal(t, payload.KramaID, validator.KramaID)
+	require.True(t, expectedStake.Cmp(validator.InactiveStake) == 0)
+
+	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
+	require.NoError(t, err)
+
+	require.True(t, expectedBalance.Cmp(assetObject.Balance) == 0)
+}
+
+func checkGuardianClaim(
+	t *testing.T, sender *state.Object, system *state.SystemObject,
+	payload *common.GuardianActionPayload, expectedBalance *big.Int,
+) {
+	t.Helper()
+
+	validator, err := system.ValidatorByKramaID(payload.KramaID)
+	require.NoError(t, err)
+
+	require.NotNil(t, validator)
+	require.Equal(t, payload.KramaID, validator.KramaID)
+	require.True(t, validator.Rewards.Cmp(big.NewInt(0)) == 0)
+
+	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
+	require.NoError(t, err)
+
+	require.True(t, expectedBalance.Cmp(assetObject.Balance) == 0)
 }

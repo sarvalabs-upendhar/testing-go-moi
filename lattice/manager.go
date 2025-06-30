@@ -66,7 +66,7 @@ type server interface {
 
 type ixpool interface {
 	ResetWithHeaders(ts *common.Tesseract)
-	RemoveCachedObject(id identifiers.Identifier)
+	RefreshCachedObject(id identifiers.Identifier, systemObject *state.SystemObject)
 }
 
 type ChainManager struct {
@@ -315,7 +315,7 @@ func (c *ChainManager) addParticipant(id identifiers.Identifier, tsHash common.H
 		return errors.Wrap(err, "account meta info update failed")
 	}
 
-	c.ixpool.RemoveCachedObject(id)
+	c.ixpool.RefreshCachedObject(id, transition.GetSystemObject())
 
 	return nil
 }

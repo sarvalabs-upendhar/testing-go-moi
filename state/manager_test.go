@@ -476,6 +476,9 @@ func TestStateManager_GetConsensusNodes(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, 1)
 
 	smParams := &createStateManagerParams{
+		smCallBack: func(sm *StateManager) {
+			createAndStoreValidators(t, sm, mObj[0].ConsensusNodes, tests.GetTestPublicKeys(t, 2))
+		},
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj...)
 		},
@@ -510,7 +513,7 @@ func TestStateManager_GetConsensusNodes(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, common.NodeList(mObj[0].ConsensusNodes), consensusNodes)
+			require.Equal(t, mObj[0].ConsensusNodes, consensusNodes.KramaIDs())
 			require.Equal(t, mObj[0].ConsensusNodesHash, hash)
 		})
 	}
@@ -926,14 +929,14 @@ func TestStateManager_FetchParticipantContextByHash(t *testing.T) {
 			hash:          mHash[1],
 			expectedError: common.ErrPublicKeyNotFound,
 			preTestFn: func(sm *StateManager) {
-				createGuardianLogic(t, sm, kramaIDs[4:6], pk[4:6])
+				createAndStoreValidators(t, sm, kramaIDs[4:6], pk[4:6])
 			},
 		},
 		{
 			name: "valid hash and public keys",
 			hash: mHash[0],
 			preTestFn: func(sm *StateManager) {
-				createGuardianLogic(t, sm, kramaIDs, pk)
+				createAndStoreValidators(t, sm, kramaIDs, pk)
 			},
 		},
 	}
@@ -1691,7 +1694,7 @@ func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 
 	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
-			createGuardianLogic(t, sm, kramaIDs, pk)
+			createAndStoreValidators(t, sm, kramaIDs, pk)
 		},
 	}
 
@@ -1847,7 +1850,7 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 
 	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
-			createGuardianLogic(t, sm, mObj[0].ConsensusNodes, pk)
+			createAndStoreValidators(t, sm, mObj[0].ConsensusNodes, pk)
 		},
 		dbCallback: func(db *MockDB) {
 			insertMetaContextsInDB(t, db, mObj[:2]...)
@@ -1861,13 +1864,13 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 	}
 
 	sm := createTestStateManager(t, smParams)
+
 	testcases := []struct {
 		name             string
 		id               identifiers.Identifier
 		ctxHash          common.Hash
-		consensusSet     []identifiers.KramaID
 		consensusSetHash common.Hash
-		consensusKeys    [][]byte
+		consensusNodes   []identifiers.KramaID
 		expectedError    error
 	}{
 		{
@@ -1876,12 +1879,7 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 			expectedError: errors.New("failed to fetch account meta info"),
 		},
 		{
-			name:          "consensus Nodes doesn't have public keys",
-			id:            ids[1],
-			expectedError: common.ErrPublicKeyNotFound,
-		},
-		{
-			name:          "consensus Nodes not found",
+			name:          "consensus nodes not found",
 			id:            ids[2],
 			expectedError: errors.New("metaContextObject fetch failed"),
 		},
@@ -1889,15 +1887,14 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 			name:             "valid hash and public keys",
 			id:               ids[0],
 			ctxHash:          mHash[0],
-			consensusSet:     mObj[0].ConsensusNodes,
+			consensusNodes:   mObj[0].ConsensusNodes,
 			consensusSetHash: mObj[0].ConsensusNodesHash,
-			consensusKeys:    pk[:2],
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			hash, consensusSet, consensusSetHash, consensusKeys, err := sm.GetLatestContextAndPublicKeys(test.id)
+			hash, consensusSetHash, validators, err := sm.GetLatestContextAndPublicKeys(test.id)
 
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1907,8 +1904,7 @@ func TestStateManager_FetchLatestParticipantContext(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.ctxHash, hash)
-			require.Equal(t, test.consensusSet, consensusSet)
-			require.Equal(t, test.consensusKeys, consensusKeys)
+			require.Equal(t, test.consensusNodes, common.NodeList(validators).KramaIDs())
 			require.Equal(t, test.consensusSetHash, consensusSetHash)
 		})
 	}
@@ -2771,7 +2767,7 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 		},
 		smCallBack: func(sm *StateManager) {
 			storeTesseractHashInCache(t, sm.cache, ts...)
-			createGuardianLogic(t, sm, kramaIDs[:8], pk[:8])
+			createAndStoreValidators(t, sm, kramaIDs[:8], pk[:8])
 		},
 	}
 
@@ -3294,7 +3290,7 @@ func TestStateManager_LoadTransitionObjects(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			transition, err := sm.LoadTransitionObjects(test.participants)
+			transition, err := sm.LoadTransitionObjects(test.participants, nil)
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
@@ -3317,7 +3313,7 @@ func TestStateManager_GetPublicKeys(t *testing.T) {
 
 	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
-			createGuardianLogic(t, sm, kramaIDs, pk)
+			createAndStoreValidators(t, sm, kramaIDs, pk)
 		},
 		dbCallback: func(db *MockDB) {
 			for i := 0; i < 3; i++ {
@@ -3342,16 +3338,14 @@ func TestStateManager_GetPublicKeys(t *testing.T) {
 			expectedError: errors.New("Empty Ids"),
 		},
 		{
-			name:          "guardian logic state doesn't exist",
-			kramaIDs:      kramaIDs,
-			sm:            createTestStateManager(t, nil),
-			expectedError: common.ErrKeyNotFound,
-		},
-		{
-			name:          "non existing krama ids",
-			kramaIDs:      tests.RandomKramaIDs(t, 4),
-			sm:            sm,
-			expectedError: common.ErrLogicStorageTreeNotFound,
+			name:     "guardian doesn't exist",
+			kramaIDs: kramaIDs,
+			sm: createTestStateManager(t, &createStateManagerParams{
+				smCallBack: func(sm *StateManager) {
+					createAndStoreValidators(t, sm, tests.RandomKramaIDs(t, 2), tests.GetTestPublicKeys(t, 2))
+				},
+			}),
+			expectedError: common.ErrKramaIDNotFound,
 		},
 		{
 			name:     "valid krama ids",
@@ -3362,7 +3356,7 @@ func TestStateManager_GetPublicKeys(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			publicKeys, err := test.sm.GetPublicKeys(context.Background(), test.kramaIDs...)
+			publicKeys, err := test.sm.GetPublicKeys(test.kramaIDs...)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -3384,7 +3378,7 @@ func TestStateManager_IsSealValid(t *testing.T) {
 
 	smParams := &createStateManagerParams{
 		smCallBack: func(sm *StateManager) {
-			createGuardianLogic(t, sm, kramaIDs, pks)
+			createAndStoreValidators(t, sm, kramaIDs, pks)
 		},
 		dbCallback: func(db *MockDB) {
 			for i := 0; i < 1; i++ {
@@ -3414,7 +3408,7 @@ func TestStateManager_IsSealValid(t *testing.T) {
 			isValid: true,
 		},
 		{
-			name: "sealer logic tree not found",
+			name: "krama id not found",
 			tesseract: func() *common.Tesseract {
 				ts := tests.CreateTesseract(t, nil)
 				ts.SetSealBy(tests.RandomKramaID(t, 0))
@@ -3422,7 +3416,7 @@ func TestStateManager_IsSealValid(t *testing.T) {
 				return ts
 			}(),
 			isValid:     false,
-			expectedErr: common.ErrLogicStorageTreeNotFound,
+			expectedErr: common.ErrKramaIDNotFound,
 		},
 		{
 			name:      "seal is invalid",

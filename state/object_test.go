@@ -198,12 +198,30 @@ func TestCreateLockup(t *testing.T) {
 		expectedError        error
 	}{
 		{
-			name:                 "creates a new lockup and updates balance",
+			name:                 "creates a new lockup",
 			assetID:              assetIDs[0],
 			id:                   tests.RandomIdentifier(t),
 			amount:               big.NewInt(5000),
 			expectedBalance:      big.NewInt(45000),
 			expectedLockupAmount: big.NewInt(5000),
+		},
+		{
+			name:    "increments existing lockup balance",
+			assetID: assetIDs[1],
+			id:      tests.RandomIdentifier(t),
+			amount:  big.NewInt(5000),
+			preTestFn: func(id identifiers.Identifier) {
+				assert.NoError(
+					t,
+					sObj.CreateLockup(
+						assetIDs[1],
+						id,
+						big.NewInt(3000),
+					),
+				)
+			},
+			expectedBalance:      big.NewInt(42000),
+			expectedLockupAmount: big.NewInt(8000),
 		},
 		{
 			name:          "should return error if asset not found",

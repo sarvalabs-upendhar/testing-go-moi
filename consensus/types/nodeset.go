@@ -11,16 +11,9 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-type NodeInfo struct {
-	ID          identifiers.KramaID
-	PublicKey   []byte
-	Msg         *Prepared
-	VotingPower int64
-}
-
 type NodeSet struct {
 	mtx                 sync.RWMutex
-	Infos               []*NodeInfo
+	Infos               []*common.ValidatorInfo
 	Responses           *common.ArrayOfBits
 	ExcludedFromICS     bool
 	RespCount           atomic.Int32
@@ -28,20 +21,11 @@ type NodeSet struct {
 }
 
 // NewNodeSet creates and returns a new instance of NodeSet
-func NewNodeSet(ids []identifiers.KramaID, keys [][]byte, required uint32) *NodeSet {
-	infos := make([]*NodeInfo, len(ids))
-
-	for index, id := range ids {
-		infos[index] = &NodeInfo{
-			ID:        id,
-			PublicKey: keys[index],
-		}
-	}
-
+func NewNodeSet(vals []*common.ValidatorInfo, required uint32) *NodeSet {
 	return &NodeSet{
 		mtx:                 sync.RWMutex{},
-		Infos:               infos,
-		Responses:           common.NewArrayOfBits(len(ids)),
+		Infos:               vals,
+		Responses:           common.NewArrayOfBits(len(vals)),
 		SetSizeWithOutDelta: required,
 	}
 }
@@ -59,11 +43,21 @@ func (ns *NodeSet) UpdateViewInfo(index int, msg *Prepared) {
 	ns.Infos[index].Msg = msg
 }
 
+func (ns *NodeSet) ValidatorIndices() []common.ValidatorIndex {
+	indices := make([]common.ValidatorIndex, len(ns.Infos))
+
+	for k, info := range ns.Infos {
+		indices[k] = info.ID
+	}
+
+	return indices
+}
+
 func (ns *NodeSet) KramaIDs() []identifiers.KramaID {
 	ids := make([]identifiers.KramaID, len(ns.Infos))
 
 	for k, v := range ns.Infos {
-		ids[k] = v.ID
+		ids[k] = v.KramaID
 	}
 
 	return ids
@@ -194,7 +188,7 @@ func (i *ICSCommittee) UpdateNodePreparedMsg(id identifiers.KramaID, msg *Prepar
 		}
 
 		for index, info := range set.Infos {
-			if info.ID == id {
+			if info.KramaID == id {
 				set.UpdateResponse(index, true)
 				set.UpdateViewInfo(index, msg)
 			}
@@ -202,7 +196,7 @@ func (i *ICSCommittee) UpdateNodePreparedMsg(id identifiers.KramaID, msg *Prepar
 	}
 }
 
-func (i *ICSCommittee) ViewInfosAndSignatures() ([]common.Views, [][]byte) {
+func (i *ICSCommittee) ViewInfosAndSignatures() ([]common.Views, [][]byte, error) {
 	views := make([]common.Views, i.totalNodes)
 	signs := make([][]byte, 0, i.totalNodes)
 	offset := 0
@@ -217,14 +211,19 @@ func (i *ICSCommittee) ViewInfosAndSignatures() ([]common.Views, [][]byte) {
 				continue
 			}
 
-			views[offset+j] = info.Msg.Infos
-			signs = append(signs, info.Msg.Signature)
+			prepareMsg, err := getPrepareMsg(info)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			views[offset+j] = prepareMsg.Infos
+			signs = append(signs, prepareMsg.Signature)
 		}
 
 		offset += len(set.Infos)
 	}
 
-	return views, signs
+	return views, signs, nil
 }
 
 func (i *ICSCommittee) UpdateSetResponses(position int, responses *common.ArrayOfBits) {
@@ -298,13 +297,13 @@ func (i *ICSCommittee) GetKramaID(index int32) (
 			}
 			// check for krama ID on not empty set
 			for _, kID := range i.Sets[j].Infos {
-				if kID.ID == set.Infos[index].ID {
+				if kID.KramaID == set.Infos[index].KramaID {
 					slots = append(slots, int32(j))
 				}
 			}
 		}
 
-		return slots, int(index), set.Infos[index].ID, set.Infos[index].PublicKey
+		return slots, int(index), set.Infos[index].KramaID, set.Infos[index].PublicKey
 	}
 
 	return nil, -1, "", nil
@@ -326,7 +325,7 @@ func (i *ICSCommittee) GetPublicKey(index int32) (kramaID identifiers.KramaID, p
 			continue
 		}
 
-		return set.Infos[index].ID, set.Infos[index].PublicKey
+		return set.Infos[index].KramaID, set.Infos[index].PublicKey
 	}
 
 	return "", nil
@@ -342,7 +341,7 @@ func (i *ICSCommittee) HasKramaID(peerID identifiers.KramaID) (int32, []byte, bo
 		}
 
 		for j, info := range set.Infos {
-			if info.ID == peerID {
+			if info.KramaID == peerID {
 				return int32(offset + j), info.PublicKey, set.Responses.GetIndex(j)
 			}
 		}
@@ -361,7 +360,7 @@ func (i *ICSCommittee) GetIndex(peerID identifiers.KramaID) (int, int) {
 		}
 
 		for j, info := range set.Infos {
-			if info.ID == peerID {
+			if info.KramaID == peerID {
 				return i, j
 			}
 		}
@@ -385,13 +384,13 @@ func (i *ICSCommittee) GetNodes(respondedOnly bool) []identifiers.KramaID {
 				continue
 			}
 
-			if _, ok := nodes[info.ID]; ok {
+			if _, ok := nodes[info.KramaID]; ok {
 				continue
 			}
 
-			nodes[info.ID] = struct{}{}
+			nodes[info.KramaID] = struct{}{}
 
-			distinctNodes = append(distinctNodes, info.ID)
+			distinctNodes = append(distinctNodes, info.KramaID)
 		}
 	}
 
@@ -412,13 +411,13 @@ func (i *ICSCommittee) GetInactiveNodes() []identifiers.KramaID {
 				continue
 			}
 
-			if _, ok := nodes[info.ID]; ok {
+			if _, ok := nodes[info.KramaID]; ok {
 				continue
 			}
 
-			nodes[info.ID] = struct{}{}
+			nodes[info.KramaID] = struct{}{}
 
-			distinctNodes = append(distinctNodes, info.ID)
+			distinctNodes = append(distinctNodes, info.KramaID)
 		}
 	}
 
@@ -528,8 +527,16 @@ func (i *ICSCommittee) Responses() []*common.ArrayOfBits {
 	return responses
 }
 
-func DistinctNodes(operator identifiers.KramaID, nodeSets []*NodeSet) ([]identifiers.KramaID, int, bool) {
-	nodes := make(map[identifiers.KramaID]struct{})
+func getPrepareMsg(valInfo *common.ValidatorInfo) (*Prepared, error) {
+	if prepared, ok := valInfo.Msg.(*Prepared); ok {
+		return prepared, nil
+	}
+
+	return nil, errors.New("invalid prepare message type")
+}
+
+func DistinctNodes(operator identifiers.KramaID, nodeSets []*NodeSet) (map[common.ValidatorIndex]struct{}, int, bool) {
+	nodes := make(map[common.ValidatorIndex]struct{})
 	isOperatorIncluded := false
 
 	for _, nodeSet := range nodeSets {
@@ -542,7 +549,7 @@ func DistinctNodes(operator identifiers.KramaID, nodeSets []*NodeSet) ([]identif
 				continue
 			}
 
-			if info.ID == operator {
+			if info.KramaID == operator {
 				isOperatorIncluded = true
 			}
 
@@ -550,11 +557,5 @@ func DistinctNodes(operator identifiers.KramaID, nodeSets []*NodeSet) ([]identif
 		}
 	}
 
-	distinct := make([]identifiers.KramaID, 0, len(nodes))
-
-	for kramaID := range nodes {
-		distinct = append(distinct, kramaID)
-	}
-
-	return distinct, len(distinct), isOperatorIncluded
+	return nodes, len(nodes), isOperatorIncluded
 }

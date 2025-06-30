@@ -79,7 +79,10 @@ type lattice interface {
 }
 
 type stateManager interface {
-	LoadTransitionObjects(ps map[identifiers.Identifier]common.ParticipantInfo) (*state.Transition, error)
+	LoadTransitionObjects(
+		ps map[identifiers.Identifier]common.ParticipantInfo,
+		psState common.ParticipantsState,
+	) (*state.Transition, error)
 	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
 	GetLatestStateObject(id identifiers.Identifier) (*state.Object, error)
 	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
@@ -109,7 +112,8 @@ type stateManager interface {
 		id identifiers.Identifier,
 		hash common.Hash,
 	) ([]identifiers.KramaID, error)
-	RemoveCachedObject(id identifiers.Identifier)
+	RefreshCachedObject(id identifiers.Identifier, sysObj *state.SystemObject)
+	GetSystemObject() *state.SystemObject
 }
 
 type store interface {
@@ -200,11 +204,13 @@ type kramaEngine interface {
 	GetICSCommittee(
 		ts *common.Tesseract,
 		info *common.CommitInfo,
+		systemObject *state.SystemObject,
 	) (*ktypes.ICSCommittee, error)
 	GetICSCommitteeFromRawContext(
 		ts *common.Tesseract,
 		rawContext map[string][]byte,
 		info *common.CommitInfo,
+		systemObject *state.SystemObject,
 	) (*ktypes.ICSCommittee, error)
 	AddActiveAccounts(lockType common.LockType, clusterID common.ClusterID, ids ...identifiers.Identifier) bool
 	ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier)
@@ -477,7 +483,15 @@ func (s *Syncer) SyncAccountState(ts *common.Tesseract, syncUpToPrevTesseract bo
 			continue
 		}
 
-		err := s.NewSyncRequest(id, height, common.LatestSync, ts.CommitInfo().RandomSet, false, ch)
+		peers, err := s.state.GetSystemObject().GetValidatorKramaIDs(ts.CommitInfo().RandomSet)
+		if err != nil {
+			s.logger.Error("failed to retrieve random set krama ids",
+				"id", id, "height", height, "err", err)
+
+			continue
+		}
+
+		err = s.NewSyncRequest(id, height, common.LatestSync, peers, false, ch)
 		if err != nil {
 			s.logger.Error("failed to create account sync request",
 				"id", id, "height", height, "err", err)
@@ -1134,7 +1148,14 @@ func (s *Syncer) chooseBestSyncPeer(job *AccountSyncJob) (identifiers.KramaID, e
 		randomSource := rand.New(rand.NewSource(time.Now().UnixNano()))
 		randNumber := randomSource.Intn(len(job.tesseractQueue.Peek().tesseract.CommitInfo().RandomSet))
 
-		return job.tesseractQueue.Peek().tesseract.CommitInfo().RandomSet[randNumber], nil
+		validator, err := s.state.GetSystemObject().Validator(
+			uint64(job.tesseractQueue.Peek().tesseract.CommitInfo().RandomSet[randNumber]),
+		)
+		if err != nil {
+			return "", err
+		}
+
+		return validator.KramaID, nil
 	}
 
 	_, bestPeers, err := s.findLatestHeightAndBestPeers(job.id)
@@ -1214,7 +1235,7 @@ func (s *Syncer) initSync() error {
 	}
 
 	// Sync all system accounts
-	bestPeers, err := s.syncSystemAccount(common.GuardianAccountID, common.SargaAccountID)
+	bestPeers, err := s.syncSystemAccount(common.SystemAccountID, common.SargaAccountID)
 	if err != nil {
 		s.logger.Error("failed to sync system account", "err", err)
 
@@ -1865,7 +1886,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			IsGenesis: msg.tesseract.TransitiveLink(msg.id()).IsNil(),
 		}
 
-		transition, err := s.state.LoadTransitionObjects(ps)
+		transition, err := s.state.LoadTransitionObjects(ps, nil)
 		if err != nil {
 			return false, err
 		}
@@ -1900,16 +1921,63 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 		}
 
 		// Clear the cache because the account state has changed
-		s.state.RemoveCachedObject(msg.id())
+		s.state.RefreshCachedObject(msg.id(), nil)
 
 		return true, nil
+	}
+
+	syncTSThroughExecution := func() (bool, error) {
+		err := s.consensus.ValidateTesseract(
+			identifiers.Nil,
+			msg.tesseract,
+			msg.committee,
+			true,
+		)
+		if err != nil {
+			return false, errors.Wrap(err, "failed to validate tesseract")
+		}
+
+		transition, err := s.state.LoadTransitionObjects(
+			msg.tesseract.Interactions().Participants(),
+			msg.tesseract.Participants(),
+		)
+		if err != nil {
+			return false, errors.Wrap(err, "failed to load transition objects")
+		}
+
+		if err = s.consensus.ExecuteAndValidate(msg.tesseract, transition); err != nil {
+			return false, err
+		}
+
+		if err = s.lattice.AddTesseractWithState(
+			msg.id(),
+			extractDirtyEntries(msg.delta),
+			msg.tesseract,
+			transition,
+			false,
+		); err != nil {
+			return false, err
+		}
+
+		if err = s.publishEventTesseractSync(msg.id(), msg.height()); err != nil {
+			s.logger.Error("Failed to publish event lattice sync", "err", err)
+		}
+
+		// Update the cache because the account state has changed
+		s.state.RefreshCachedObject(msg.id(), transition.GetSystemObject())
+
+		return true, nil
+	}
+
+	if msg.id() == common.SystemAccountID {
+		return syncTSThroughExecution()
 	}
 
 	return syncTSThroughAgora()
 }
 
 func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesseract) error {
-	transition, err := s.state.LoadTransitionObjects(ts.Interactions().Participants())
+	transition, err := s.state.LoadTransitionObjects(ts.Interactions().Participants(), nil)
 	if err != nil {
 		return errors.Wrap(err, "failed to load transition objects")
 	}
@@ -1928,7 +1996,7 @@ func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesserac
 		}
 
 		// Clear the cache because the account state has changed
-		s.state.RemoveCachedObject(id)
+		s.state.RefreshCachedObject(id, transition.GetSystemObject())
 	}
 
 	return nil
@@ -2413,14 +2481,20 @@ func (s *Syncer) FetchIxns(tsInfo *TesseractInfo) ([]*common.Interaction, error)
 	ts := tsInfo.tesseract
 
 	randomNumber := rand.New(rand.NewSource(time.Now().UnixNano()))
-	peerID := ts.CommitInfo().RandomSet[randomNumber.Intn(len(ts.CommitInfo().RandomSet))]
 
-	resp, err := s.RPCGetIxns(peerID, ts.Hash(), missingIXHashes)
+	validator, err := s.state.GetSystemObject().Validator(
+		uint64(ts.CommitInfo().RandomSet[randomNumber.Intn(len(ts.CommitInfo().RandomSet))]),
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	s.logger.Trace("fetched Ixns through rpc", "ixns-hashes", missingIXHashes, "peer-id", peerID)
+	resp, err := s.RPCGetIxns(validator.KramaID, ts.Hash(), missingIXHashes)
+	if err != nil {
+		return nil, err
+	}
+
+	s.logger.Trace("fetched Ixns through rpc", "ixns-hashes", missingIXHashes, "peer-id", validator.KramaID)
 
 	fetchedIxns := new(common.Interactions)
 
@@ -2485,9 +2559,14 @@ func (s *Syncer) fillTSWithIxnsAndReceipts(tsInfo *TesseractInfo) error {
 			ctx, cancel := context.WithTimeout(context.Background(), TesseractFetchTimeOut) // TODO:Optimise timeout duration
 			defer cancel()
 
+			peers, err := s.state.GetSystemObject().GetValidatorKramaIDs(tsInfo.tesseract.CommitInfo().RandomSet)
+			if err != nil {
+				return errors.Wrap(err, "failed to retrieve random set krama ids")
+			}
+
 			newSession, err := s.agora.NewSession(
 				ctx,
-				tsInfo.tesseract.CommitInfo().RandomSet,
+				peers,
 				tsInfo.id(),
 				cid.AccountCID(ts.StateHash(tsInfo.id())),
 			)
@@ -2540,11 +2619,20 @@ func (s *Syncer) handleTSInfo(tsInfo *TesseractInfo) {
 
 		s.logger.Debug("need to sync ", "id", info.id(), "height", info.height())
 
+		peers, err := s.state.GetSystemObject().GetValidatorKramaIDs(info.tesseract.CommitInfo().RandomSet)
+		if err != nil {
+			log.Println("Failed to find peers", info.tesseract.CommitInfo().RandomSet)
+			s.logger.Error("failed to retrieve random set krama ids",
+				"id", id, "err", err)
+
+			continue
+		}
+
 		if err := s.NewSyncRequest(
 			info.id(),
 			info.height(),
 			common.LatestSync,
-			info.tesseract.CommitInfo().RandomSet,
+			peers,
 			false,
 			nil,
 			info,

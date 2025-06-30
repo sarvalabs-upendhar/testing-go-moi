@@ -39,7 +39,7 @@ func (manager *Manager) SpawnExecutor(transition *state.Transition) *IxExecutor 
 		mgr:          manager,
 		transition:   transition,
 		metrics:      manager.metrics,
-		commitHashes: make(common.AccStateHashes),
+		commitHashes: make(common.AccountStateHashes),
 	}
 }
 
@@ -50,7 +50,7 @@ func (manager *Manager) ExecuteInteractions(
 	ixs common.Interactions,
 	ctx *common.ExecutionContext,
 ) (
-	common.AccStateHashes, error,
+	common.AccountStateHashes, error,
 ) {
 	// Spawn a new IxExecutor instance
 	executor := manager.SpawnExecutor(transition)

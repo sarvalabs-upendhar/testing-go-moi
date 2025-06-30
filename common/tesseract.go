@@ -69,12 +69,12 @@ type PoXtData struct {
 }
 
 type CommitInfo struct {
-	QC                        *Qc                   `json:"commit_qc"`
-	Operator                  identifiers.KramaID   `json:"operator"`
-	ClusterID                 ClusterID             `json:"cluster_id"`
-	View                      uint64                `json:"commit_view"`
-	RandomSet                 []identifiers.KramaID `json:"random_set"`
-	RandomSetSizeWithoutDelta uint32                `json:"random_set_size"`
+	QC                        *Qc                 `json:"commit_qc"`
+	Operator                  identifiers.KramaID `json:"operator"`
+	ClusterID                 ClusterID           `json:"cluster_id"`
+	View                      uint64              `json:"commit_view"`
+	RandomSet                 []ValidatorIndex    `json:"random_set"`
+	RandomSetSizeWithoutDelta uint32              `json:"random_set_size"`
 }
 
 func (ci *CommitInfo) FromBytes(raw []byte) error {

@@ -47,14 +47,18 @@ func (ti *TesseractInfo) extractICSNodeset(s *Syncer) bool {
 		}
 
 		if _, ok := ti.delta[contextHash.String()]; !ok {
-			ti.committee, err = s.consensus.GetICSCommittee(ti.tesseract, ti.tesseract.CommitInfo())
+			ti.committee, err = s.consensus.GetICSCommittee(
+				ti.tesseract, ti.tesseract.CommitInfo(), s.state.GetSystemObject(),
+			)
 			if err != nil {
 				s.logger.Error("failed to fetch node set", "err", err)
 
 				return false
 			}
 		} else {
-			ti.committee, err = s.consensus.GetICSCommitteeFromRawContext(ti.tesseract, ti.delta, ti.tesseract.CommitInfo())
+			ti.committee, err = s.consensus.GetICSCommitteeFromRawContext(
+				ti.tesseract, ti.delta, ti.tesseract.CommitInfo(), s.state.GetSystemObject(),
+			)
 			if err != nil {
 				s.logger.Error("failed to fetch node set", "err", err)
 

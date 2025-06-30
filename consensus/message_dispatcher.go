@@ -52,18 +52,18 @@ func (k *Engine) sendPrepareMsg(
 		}
 
 		for index, info := range ns.Infos {
-			if k.selfID == info.ID {
+			if k.selfID == info.KramaID {
 				ns.UpdateViewInfo(index, preparedMsg)
 				ns.UpdateResponse(index, true)
 
 				continue
 			}
 
-			if _, ok := requestedNodes[info.ID]; ok {
+			if _, ok := requestedNodes[info.KramaID]; ok {
 				continue
 			}
 
-			requestedNodes[info.ID] = struct{}{}
+			requestedNodes[info.KramaID] = struct{}{}
 
 			waitGroup.Add(1)
 
@@ -98,7 +98,7 @@ func (k *Engine) sendPrepareMsg(
 
 					k.logger.Error("failed to send ics message", "krama-id", kramaID, "err", err)
 				}
-			}(info.ID, icsSetType)
+			}(info.KramaID, icsSetType)
 		}
 	}
 

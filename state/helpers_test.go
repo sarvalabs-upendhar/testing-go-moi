@@ -7,25 +7,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/decred/dcrd/crypto/blake256"
+	iradix "github.com/hashicorp/go-immutable-radix"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	"golang.org/x/crypto/blake2b"
-
-	"github.com/sarvalabs/go-moi/compute/pisa"
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 
 	"github.com/sarvalabs/go-moi/common/config"
 
-	"github.com/decred/dcrd/crypto/blake256"
 	"github.com/hashicorp/go-hclog"
-	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p-pubsub"
 	"github.com/manishmeganathan/depgraph"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -763,6 +759,7 @@ func storeInSmCache(sm *StateManager, k, v interface{}) {
 	sm.cache.Add(k, v)
 }
 
+/*
 func setGuardianPublicKeys(t *testing.T, state *Object, ids []identifiers.KramaID, publicKeys [][]byte) {
 	t.Helper()
 
@@ -782,14 +779,34 @@ func setGuardianPublicKeys(t *testing.T, state *Object, ids []identifiers.KramaI
 		require.NoError(t, err)
 	}
 }
+*/
 
-func createGuardianLogic(t *testing.T, sm *StateManager, kramaIDs []identifiers.KramaID, publicKeys [][]byte) {
+func createAndStoreValidators(t *testing.T, sm *StateManager, kramaIDs []identifiers.KramaID, publicKeys [][]byte) {
 	t.Helper()
 
-	so := sm.CreateStateObject(common.GuardianAccountID, common.RegularAccount, true)
-	so.storageTreeTxns[common.GuardianLogicID] = iradix.New().Txn()
-	sm.objectCache.Add(common.GuardianAccountID, so)
-	setGuardianPublicKeys(t, so, kramaIDs, publicKeys)
+	so := sm.CreateSystemObject(common.SystemAccountID)
+	so.storageTreeTxns[common.SystemLogicID] = iradix.New().Txn()
+
+	sm.objectCache.Add(common.SystemAccountID, so)
+
+	err := so.CreateContext(kramaIDs)
+	require.NoError(t, err)
+
+	err = so.SetGenesisTime(time.Unix(0, int64(0)))
+	require.NoError(t, err)
+
+	validators := make([]*common.Validator, len(kramaIDs))
+
+	for i, kramaID := range kramaIDs {
+		validators[i] = &common.Validator{
+			ID:              common.ValidatorIndex(i),
+			KramaID:         kramaID,
+			ConsensusPubKey: publicKeys[i],
+		}
+	}
+
+	err = so.SetValidators(validators)
+	require.NoError(t, err)
 }
 
 type createStateObjectParams struct {

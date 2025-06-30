@@ -635,10 +635,6 @@ func validateAssetLockup(sender *state.Object, payload *common.AssetActionPayloa
 		return common.ErrInsufficientFunds
 	}
 
-	if _, ok := assetObject.Lockup[payload.Beneficiary]; ok {
-		return common.ErrLockupAlreadyExists
-	}
-
 	return nil
 }
 

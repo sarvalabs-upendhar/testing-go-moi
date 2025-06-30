@@ -34,6 +34,7 @@ type ClusterState struct {
 	Transition               *gtypes.Transition
 	IsObserver               bool
 	quorum                   []uint32
+	SystemObject             *gtypes.SystemObject
 	// TODO: Load following view infos appropriately
 	localViewInfo       common.Views
 	highestViewInfo     common.Views
@@ -41,6 +42,11 @@ type ClusterState struct {
 	view                uint64
 	viewTimeoutDeadline time.Time
 	TrustedPeers        []identifiers.KramaID
+}
+
+func (cs *ClusterState) GetSeed() [32]byte {
+	// TODO: Implement this function
+	return [32]byte{}
 }
 
 func (cs *ClusterState) SetPrepareQc(prepareQc *PreparedInfo) {
@@ -60,6 +66,7 @@ func NewICS(
 	reqTime time.Time,
 	selfID identifiers.KramaID,
 	committee *ICSCommittee,
+	systemObject *gtypes.SystemObject,
 	participants map[identifiers.Identifier]*common.Participant,
 	viewInfos common.Views,
 	currentView uint64,
@@ -76,7 +83,8 @@ func NewICS(
 		ICSRespCount:        0,
 		Participants:        participants,
 		committee:           committee,
-		Transition:          gtypes.NewTransition(nil, nil),
+		SystemObject:        systemObject,
+		Transition:          gtypes.NewTransition(nil, nil, nil),
 		localViewInfo:       viewInfos.Copy(),
 		highestViewInfo:     viewInfos.Copy(),
 		view:                currentView,
@@ -223,13 +231,13 @@ func (cs *ClusterState) GetConsensusNodesDelta(
 	newPeer identifiers.KramaID,
 ) (added, replaced identifiers.KramaID) {
 	for _, info := range cs.committee.Sets[nodeSetPosition].Infos {
-		if newPeer == info.ID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
+		if newPeer == info.KramaID { // cs.ICS.Nodes[setType].Responses.GetIndex(index)
 			return
 		}
 	}
 
 	if len(cs.committee.Sets[nodeSetPosition].Infos) >= common.ConsensusNodesSize {
-		replaced = cs.committee.Sets[nodeSetPosition].Infos[0].ID
+		replaced = cs.committee.Sets[nodeSetPosition].Infos[0].KramaID
 	}
 
 	return newPeer, replaced
@@ -284,11 +292,11 @@ func (cs *ClusterState) GetICSVoteset() *common.ArrayOfBits {
 	return cs.committee.GetVoteset()
 }
 
-func (cs *ClusterState) GetRandomNodes() []identifiers.KramaID {
+func (cs *ClusterState) GetRandomNodes() []common.ValidatorIndex {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.committee.RandomSet().KramaIDs()
+	return cs.committee.RandomSet().ValidatorIndices()
 }
 
 func (cs *ClusterState) GetQuorum() []uint32 {

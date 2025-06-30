@@ -57,7 +57,7 @@ type stateManager interface {
 	GetBalance(id identifiers.Identifier, assetID identifiers.AssetID, stateHash common.Hash) (*big.Int, error)
 	GetAssetInfo(assetID identifiers.AssetID, hash common.Hash) (*common.AssetDescriptor, error)
 	GetLatestStateObject(id identifiers.Identifier) (*state.Object, error)
-	RemoveCachedObject(id identifiers.Identifier)
+	RefreshCachedObject(id identifiers.Identifier, sysObj *state.SystemObject)
 	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
 	GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) (common.AccountKeys, error)
 }
@@ -504,11 +504,11 @@ func (i *IxPool) handlePromoteRequest(account *accountQueue) {
 	}
 }
 
-func (i *IxPool) RemoveCachedObject(id identifiers.Identifier) {
+func (i *IxPool) RefreshCachedObject(id identifiers.Identifier, sysObj *state.SystemObject) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
 
-	i.sm.RemoveCachedObject(id) // invalidate cache
+	i.sm.RefreshCachedObject(id, sysObj) // invalidate cache
 }
 
 func (i *IxPool) ResetWithHeaders(ts *common.Tesseract) {
@@ -1048,6 +1048,11 @@ func (i *IxPool) validateOperations(ix *common.Interaction) error {
 			return i.validateAssetRelease(ix, idx)
 		case common.IxAssetMint, common.IxAssetBurn:
 			return i.validateAssetSupply(ix, idx)
+		case common.IxGuardianRegister:
+			return i.validateGuardianRegister(ix, idx)
+		case common.IxGuardianStake, common.IxGuardianUnstake,
+			common.IxGuardianWithdraw, common.IxGuardianClaim:
+			return i.validateGuardianAction(ix, idx)
 		case common.IxLogicDeploy:
 			return i.validateLogicDeployPayload(ix, idx)
 		case common.IxLogicInvoke:
@@ -1145,6 +1150,24 @@ func (i *IxPool) validateAssetRelease(ix *common.Interaction, txnID int) error {
 
 func (i *IxPool) validateAssetSupply(ix *common.Interaction, txnID int) error {
 	payload, err := ix.GetIxOp(txnID).GetAssetSupplyPayload()
+	if err != nil {
+		return err
+	}
+
+	return payload.Validate()
+}
+
+func (i *IxPool) validateGuardianRegister(ix *common.Interaction, txnID int) error {
+	payload, err := ix.GetIxOp(txnID).GetGuardianRegisterPayload()
+	if err != nil {
+		return err
+	}
+
+	return payload.Validate()
+}
+
+func (i *IxPool) validateGuardianAction(ix *common.Interaction, txnID int) error {
+	payload, err := ix.GetIxOp(txnID).GetGuardianActionPayload()
 	if err != nil {
 		return err
 	}

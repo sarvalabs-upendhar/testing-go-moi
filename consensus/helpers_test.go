@@ -173,7 +173,7 @@ func (ms *MockStateManager) GetLatestContextAndPublicKeys(id identifiers.Identif
 	panic("implement me")
 }
 
-func (ms *MockStateManager) GetConsensusNodes(id identifiers.Identifier,
+func (ms *MockStateManager) GetConsensusNodeIDs(id identifiers.Identifier,
 hash common.Hash) (common.NodeList, common.NodeList, error) {
 	// TODO implement me
 	panic("implement me")

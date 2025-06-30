@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/sarvalabs/go-moi/state"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/hashicorp/go-hclog"
@@ -445,7 +447,7 @@ type MockIXPool struct {
 	removedObjects map[identifiers.Identifier]struct{}
 }
 
-func (i *MockIXPool) RemoveCachedObject(id identifiers.Identifier) {
+func (i *MockIXPool) RefreshCachedObject(id identifiers.Identifier, sysObj *state.SystemObject) {
 	i.removedObjects[id] = struct{}{}
 }
 

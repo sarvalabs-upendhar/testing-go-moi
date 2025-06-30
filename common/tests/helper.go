@@ -77,6 +77,28 @@ func RandomIDWithMnemonic(t *testing.T) (identifiers.Identifier, string) {
 	return identifiers.RandomParticipantIDv0().AsIdentifier(), poi.GenerateRandMnemonic().String()
 }
 
+func RandomValidatorInfo(t *testing.T, idx common.ValidatorIndex, pubkey []byte) *common.ValidatorInfo {
+	t.Helper()
+
+	return &common.ValidatorInfo{
+		ID:        idx,
+		KramaID:   RandomKramaID(t, 0),
+		PublicKey: pubkey,
+	}
+}
+
+func RandomValidatorsInfo(t *testing.T, pubkeys [][]byte) common.NodeList {
+	t.Helper()
+
+	nodelist := make(common.NodeList, len(pubkeys))
+
+	for i, pubkey := range pubkeys {
+		nodelist[i] = RandomValidatorInfo(t, common.ValidatorIndex(i), pubkey)
+	}
+
+	return nodelist
+}
+
 func RandomHash(t *testing.T) common.Hash {
 	t.Helper()
 
@@ -1091,7 +1113,7 @@ func CreateCommitInfoWithTestData(t *testing.T) common.CommitInfo {
 		Operator:                  RandomKramaID(t, 1),
 		ClusterID:                 "cluster-1",
 		View:                      5,
-		RandomSet:                 RandomKramaIDs(t, 2),
+		RandomSet:                 []common.ValidatorIndex{0, 1},
 		RandomSetSizeWithoutDelta: 4,
 	}
 }

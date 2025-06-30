@@ -428,17 +428,10 @@ func (r *ReputationEngine) flushDirtyEntries() error {
 	}
 
 	for peerID, nodeMetaInfo := range r.dirtyEntries {
-		if !nodeMetaInfo.Registered {
-			if r.isGuardianRegisterd(nodeMetaInfo.GetKramaID()) {
-				if err := setBytesToDBWriter(peerID, nodeMetaInfo, writer); err != nil {
-					return err
-				}
-			}
-		} else {
-			// For node self info and static peers in network config
-			if err := setBytesToDBWriter(peerID, nodeMetaInfo, writer); err != nil {
-				return err
-			}
+		// TODO: The condition which was there previously which is no more required,
+		// check and confirm once (if r.isGuardianRegisterd(nodeMetaInfo.GetKramaID()))
+		if err := setBytesToDBWriter(peerID, nodeMetaInfo, writer); err != nil {
+			return err
 		}
 	}
 

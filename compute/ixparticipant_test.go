@@ -15,7 +15,7 @@ func Test_ValidateParticipantCreate(t *testing.T) {
 	sarga := createTestSargaStateObject(t)
 
 	insertTestAssetObject(
-		t, common.KMOITokenAssetID, sender, state.NewAssetObject(big.NewInt(5000), nil),
+		t, sender, common.KMOITokenAssetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 
 	testcases := []struct {
@@ -94,10 +94,10 @@ func Test_ParticipantCreate(t *testing.T) {
 	sender1 := createTestStateObject(t)
 
 	insertTestAssetObject(
-		t, common.KMOITokenAssetID, sender0, state.NewAssetObject(big.NewInt(2000), nil),
+		t, sender0, common.KMOITokenAssetID, state.NewAssetObject(big.NewInt(2000), nil),
 	)
 	insertTestAssetObject(
-		t, common.KMOITokenAssetID, sender1, state.NewAssetObject(big.NewInt(5000), nil),
+		t, sender1, common.KMOITokenAssetID, state.NewAssetObject(big.NewInt(5000), nil),
 	)
 
 	testcases := []struct {
@@ -127,7 +127,7 @@ func Test_ParticipantCreate(t *testing.T) {
 			},
 			preTestFn: func(target *state.Object) {
 				insertTestAssetObject(
-					t, common.KMOITokenAssetID, target, state.NewAssetObject(big.NewInt(5000), nil),
+					t, target, common.KMOITokenAssetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
 			},
 			expectedError: common.ErrAssetAlreadyRegistered,

@@ -192,18 +192,23 @@ func NewMockKramaEngine(db store, logger hclog.Logger) *MockKramaEngine {
 	}
 }
 
-func (m *MockKramaEngine) GetICSCommittee(ts *common.Tesseract, info *common.CommitInfo) (*ktypes.ICSCommittee, error) {
+func (m *MockKramaEngine) GetICSCommittee(
+	ts *common.Tesseract, info *common.CommitInfo, systemObject *state.SystemObject,
+) (*ktypes.ICSCommittee, error) {
 	return &ktypes.ICSCommittee{
 		Sets: []*ktypes.NodeSet{
 			{
-				Infos: []*ktypes.NodeInfo{{ID: "k1"}, {ID: "k2"}, {ID: "k3"}},
+				Infos: []*common.ValidatorInfo{{KramaID: "k1"}, {KramaID: "k2"}, {KramaID: "k3"}},
 			},
 		},
 	}, nil
 }
 
-func (m *MockKramaEngine) GetICSCommitteeFromRawContext(ts *common.Tesseract,
-	rawContext map[string][]byte, info *common.CommitInfo,
+func (m *MockKramaEngine) GetICSCommitteeFromRawContext(
+	ts *common.Tesseract,
+	rawContext map[string][]byte,
+	info *common.CommitInfo,
+	systemObject *state.SystemObject,
 ) (*ktypes.ICSCommittee, error) {
 	// TODO implement me
 	panic("implement me")
@@ -541,11 +546,7 @@ type MockStateManager struct {
 	db               store
 	sealedTesseracts map[common.Hash]bool
 	consensusNodes   map[common.Hash][]identifiers.KramaID
-}
-
-func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
-	// TODO implement me
-	panic("implement me")
+	systemObject     *state.SystemObject
 }
 
 func newMockStateManager(db store) *MockStateManager {
@@ -553,14 +554,29 @@ func newMockStateManager(db store) *MockStateManager {
 		db:               db,
 		sealedTesseracts: make(map[common.Hash]bool),
 		consensusNodes:   make(map[common.Hash][]identifiers.KramaID),
+		systemObject: state.NewSystemObject(
+			state.NewStateObject(
+				common.SystemAccountID, nil, nil, nil,
+				common.Account{AccType: common.SystemAccount}, state.NilMetrics(), true,
+			)),
 	}
 }
 
-func (m *MockStateManager) RemoveCachedObject(id identifiers.Identifier) {
+func (m *MockStateManager) GetSystemObject() *state.SystemObject {
+	return m.systemObject
+}
+
+func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) RefreshCachedObject(id identifiers.Identifier, sysObj *state.SystemObject) {
 }
 
 func (m *MockStateManager) LoadTransitionObjects(
 	ps map[identifiers.Identifier]common.ParticipantInfo,
+	psState common.ParticipantsState,
 ) (*state.Transition, error) {
 	// Create a new objects map
 	objects := make(state.ObjectMap)
@@ -582,7 +598,7 @@ func (m *MockStateManager) LoadTransitionObjects(
 		objects[id] = obj.Copy()
 	}
 
-	return state.NewTransition(objects, nil), nil
+	return state.NewTransition(nil, objects, nil), nil
 }
 
 func (m *MockStateManager) CreateStateObject(id identifiers.Identifier,
@@ -1304,7 +1320,7 @@ func generateTesseracts(
 			},
 			CommitInfo: &common.CommitInfo{
 				Operator:  tests.RandomKramaID(t, 1),
-				RandomSet: []identifiers.KramaID{serverID},
+				RandomSet: []common.ValidatorIndex{0},
 			},
 		}
 
@@ -1988,4 +2004,20 @@ func compressData(t *testing.T, data []byte) (common.Compressor, []byte) {
 	copy(rawData[4:], compressedData)
 
 	return compressor, rawData
+}
+
+func setValidators(t *testing.T, s *Syncer, validators []identifiers.KramaID) {
+	t.Helper()
+
+	for _, kramaID := range validators {
+		sysObject := s.state.GetSystemObject()
+		err := sysObject.SetValidators([]*common.Validator{
+			{
+				ID:      0,
+				KramaID: kramaID,
+			},
+		})
+
+		require.NoError(t, err)
+	}
 }

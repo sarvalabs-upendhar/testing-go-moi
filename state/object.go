@@ -54,6 +54,10 @@ type Object struct {
 	metrics     *Metrics
 }
 
+func (object *Object) AccType() common.AccountType {
+	return object.accType
+}
+
 func NewStateObject(
 	id identifiers.Identifier,
 	cache *lru.Cache,
@@ -198,6 +202,16 @@ func (object *Object) Balances() (map[identifiers.AssetID]*big.Int, error) {
 	return balances, nil
 }
 
+func (object *Object) getMetaCtxObject() (*MetaContextObject, error) {
+	if object.metaContext == nil {
+		if err := object.loadMetaCtxObject(); err != nil {
+			return nil, err
+		}
+	}
+
+	return object.metaContext, nil
+}
+
 func (object *Object) loadMetaCtxObject() error {
 	if object.data.ContextHash.IsNil() {
 		object.metaContext = &MetaContextObject{
@@ -218,36 +232,31 @@ func (object *Object) loadMetaCtxObject() error {
 }
 
 func (object *Object) UpdateSubAccount(subAccount, targetAccount identifiers.Identifier) error {
-	if object.metaContext == nil {
-		if err := object.loadMetaCtxObject(); err != nil {
-			panic(err)
-		}
+	metaContext, err := object.getMetaCtxObject()
+	if err != nil {
+		return err
 	}
 
-	if object.metaContext.SubAccounts == nil {
+	if metaContext.SubAccounts == nil {
 		object.metaContext.SubAccounts = make(map[identifiers.Identifier]identifiers.Identifier)
 	}
 
-	object.metaContext.SubAccounts[subAccount] = targetAccount
+	metaContext.SubAccounts[subAccount] = targetAccount
 
 	return nil
 }
 
 func (object *Object) SubAccountCount() int {
-	if object.metaContext == nil {
-		if err := object.loadMetaCtxObject(); err != nil {
-			panic(err)
-		}
+	if _, err := object.getMetaCtxObject(); err != nil {
+		panic(err)
 	}
 
 	return len(object.metaContext.SubAccounts)
 }
 
 func (object *Object) UpdateInheritedAccount(inheritedAccount identifiers.Identifier) error {
-	if object.metaContext == nil {
-		if err := object.loadMetaCtxObject(); err != nil {
-			panic(err)
-		}
+	if _, err := object.getMetaCtxObject(); err != nil {
+		panic(err)
 	}
 
 	object.metaContext.InheritedAccount = inheritedAccount
@@ -416,8 +425,13 @@ func (object *Object) CreateLockup(assetID identifiers.AssetID, id identifiers.I
 	// Deduct the amount from asset balance
 	assetObject.Balance.Sub(assetObject.Balance, amount)
 
-	// Create a new lockup for the specified id
-	assetObject.Lockup[id] = amount
+	if _, ok := assetObject.Lockup[id]; ok {
+		// Increment the lockup amount if the lockup already exist
+		assetObject.Lockup[id].Add(assetObject.Lockup[id], amount)
+	} else {
+		// Create a new lockup if it doesn't exist
+		assetObject.Lockup[id] = amount
+	}
 
 	object.updateAssetTree(assetID, assetObject)
 
@@ -1627,7 +1641,19 @@ func (object *Object) DeductFuel(amount *big.Int) {
 }
 
 func (object *Object) ConsensusNodes() []identifiers.KramaID {
+	if _, err := object.getMetaCtxObject(); err != nil {
+		panic(err)
+	}
+
 	return object.metaContext.ConsensusNodes
+}
+
+func (object *Object) ConsensusNodesHash() common.Hash {
+	if _, err := object.getMetaCtxObject(); err != nil {
+		panic(err)
+	}
+
+	return object.metaContext.ConsensusNodesHash
 }
 
 func (object *Object) InheritAccount(payload *common.AccountInheritPayload, sender *Object) {
@@ -1637,4 +1663,12 @@ func (object *Object) InheritAccount(payload *common.AccountInheritPayload, send
 
 	accountKeys, _ := sender.AccountKeys()
 	object.UpdateKeys(accountKeys.CopyForInheritAccount())
+}
+
+func (object *Object) InheritedAccount() identifiers.Identifier {
+	if _, err := object.getMetaCtxObject(); err != nil {
+		panic(err)
+	}
+
+	return object.metaContext.InheritedAccount
 }

@@ -19,6 +19,12 @@ const (
 	IxAssetLockup
 	IxAssetRelease
 
+	IxGuardianRegister
+	IxGuardianStake
+	IxGuardianUnstake
+	IxGuardianWithdraw
+	IxGuardianClaim
+
 	IxLogicDeploy
 	IxLogicInvoke
 	IxLogicEnlist
@@ -39,6 +45,11 @@ var txTypeToString = map[IxOpType]string{
 	IxAssetBurn:         "IxAssetBurn",
 	IxAssetLockup:       "IxAssetLockup",
 	IxAssetRelease:      "IxAssetRelease",
+	IxGuardianRegister:  "IxGuardianRegister",
+	IxGuardianStake:     "IxGuardianStake",
+	IxGuardianUnstake:   "IxGuardianUnstake",
+	IxGuardianWithdraw:  "IxGuardianWithdraw",
+	IxGuardianClaim:     "IxGuardianClaim",
 	IxLogicDeploy:       "IxLogicDeploy",
 	IxLogicInvoke:       "IxLogicInvoke",
 	IxLogicEnlist:       "IxLogicEnlist",

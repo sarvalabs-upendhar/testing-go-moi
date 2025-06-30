@@ -132,4 +132,6 @@ var (
 	ErrSenderAccount               = errors.New("sender should be a primary account")
 	ErrInvalidSubAccountCount      = errors.New("invalid sub account count")
 	ErrExpectedPrimaryAccount      = errors.New("identifier should be a primary account")
+	ErrGuardianExists              = errors.New("guardian already exists")
+	ErrGuardianNotFound            = errors.New("guardian not found")
 )

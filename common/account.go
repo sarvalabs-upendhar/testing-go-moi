@@ -11,6 +11,7 @@ type AccountType int
 
 const (
 	SargaAccount AccountType = iota + 1
+	SystemAccount
 	LogicAccount
 	AssetAccount
 	RegularAccount

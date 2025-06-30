@@ -1037,7 +1037,7 @@ func createMandatesOrLockups(t *testing.T) ([]common.AssetMandateOrLockup, []rpc
 
 	for _, assetID := range assetIDs {
 		id := tests.RandomIdentifier(t)
-		amount := big.NewInt(int64(rand.Uint64()))
+		amount := new(big.Int).SetUint64(rand.Uint64())
 
 		list = append(list, common.AssetMandateOrLockup{
 			AssetID: assetID,

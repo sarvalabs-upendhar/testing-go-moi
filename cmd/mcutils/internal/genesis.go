@@ -83,14 +83,14 @@ func getRandomMOIID() []byte {
 func createTestGenesisFile() {
 	var kidTracker int
 
-	kramaIDs, err := common.ReadKramaIDsFromInstancesFile(readInstancesFilePath)
+	instances, err := common.ReadInstancesFile(readInstancesFilePath)
 	if err != nil {
 		cmdcommon.Err(err)
 	}
 
-	totalIDs := len(kramaIDs)
+	instancesCount := len(instances)
 
-	if consensusNodesCount > totalIDs {
+	if consensusNodesCount > instancesCount {
 		cmdcommon.Err(errors.New("insufficient krama IDs in instances file"))
 	}
 
@@ -99,8 +99,8 @@ func createTestGenesisFile() {
 		ids := make([]identifiers.KramaID, 0, count)
 
 		for i := 0; i < count; i++ {
-			kid := kramaIDs[kidTracker]
-			kidTracker = (kidTracker + 1) % totalIDs
+			kid := instances[kidTracker].KramaID
+			kidTracker = (kidTracker + 1) % instancesCount
 
 			ids = append(ids, identifiers.KramaID(kid))
 		}
@@ -138,6 +138,23 @@ func createTestGenesisFile() {
 		AccType:        common.SargaAccount,
 		MoiID:          common.BytesToHex(getRandomMOIID()),
 		ConsensusNodes: getKramaIDs(consensusNodesCount),
+	})
+
+	validators := make([]*common.Validator, instancesCount)
+
+	for i := 0; i < instancesCount; i++ {
+		validators[i] = common.NewValidator(
+			common.ValidatorIndex(i), identifiers.KramaID(instances[i].KramaID), big.NewInt(0),
+			accounts[0].ID, common.Hex2Bytes(instances[i].ConsensusKey),
+			nil, common.KYCStatus(0),
+		)
+	}
+
+	g.AddSystemAccount(common.SystemAccountSetupArgs{
+		ID:             common.SystemAccountID,
+		AccType:        common.SystemAccount,
+		ConsensusNodes: getKramaIDs(consensusNodesCount),
+		Validators:     validators,
 	})
 
 	assetInfo := common.AssetAccountSetupArgs{

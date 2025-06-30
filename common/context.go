@@ -11,11 +11,11 @@ const (
 	StochasticSetSize  = 5
 )
 
-type NodeList []identifiers.KramaID
+type NodeList []*ValidatorInfo
 
 func (nl NodeList) Contains(id identifiers.KramaID) bool {
-	for _, kramaID := range nl {
-		if id == kramaID {
+	for _, info := range nl {
+		if id == info.KramaID {
 			return true
 		}
 	}
@@ -25,6 +25,16 @@ func (nl NodeList) Contains(id identifiers.KramaID) bool {
 
 func (nl NodeList) Len() int {
 	return len(nl)
+}
+
+func (nl NodeList) KramaIDs() []identifiers.KramaID {
+	kramaIDs := make([]identifiers.KramaID, nl.Len())
+
+	for i, info := range nl {
+		kramaIDs[i] = info.KramaID
+	}
+
+	return kramaIDs
 }
 
 type ContextDelta map[identifiers.Identifier]*DeltaGroup

@@ -3,7 +3,6 @@ package consensus
 import (
 	"bytes"
 	"container/heap"
-	"context"
 	"fmt"
 	"sync"
 
@@ -205,7 +204,7 @@ func (os *OperatorSelection) VerifySelection(
 	icsOutput [32]byte,
 	icsProof []byte,
 ) (uint64, error) {
-	keys, err := os.state.GetPublicKeys(context.Background(), operator)
+	keys, err := os.state.GetPublicKeys(operator)
 	if err != nil {
 		return 0, err
 	}

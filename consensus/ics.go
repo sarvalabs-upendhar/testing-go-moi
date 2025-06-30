@@ -1,8 +1,6 @@
 package consensus
 
 import (
-	"context"
-
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -10,27 +8,21 @@ import (
 	"github.com/sarvalabs/go-moi/state"
 )
 
-func (k *Engine) NodeSet(ids []identifiers.KramaID, setSizeWithoutDelta uint32) (*types.NodeSet, error) {
-	var (
-		publicKeys [][]byte
-		err        error
-	)
-
-	if len(ids) == 0 {
-		return nil, err
+func (k *Engine) NodeSet(
+	validators []*common.ValidatorInfo,
+	setSizeWithoutDelta uint32,
+) (*types.NodeSet, error) {
+	if len(validators) == 0 {
+		return nil, nil
 	}
 
-	publicKeys, err = k.state.GetPublicKeys(context.Background(), ids...)
-	if err != nil {
-		return nil, err
-	}
-
-	return types.NewNodeSet(ids, publicKeys, setSizeWithoutDelta), nil
+	return types.NewNodeSet(validators, setSizeWithoutDelta), nil
 }
 
 func (k *Engine) GetICSCommittee(
 	ts *common.Tesseract,
 	info *common.CommitInfo,
+	systemObject *state.SystemObject,
 ) (*types.ICSCommittee, error) {
 	ids := ts.AccountIDs()
 	ps := ts.Participants()
@@ -50,7 +42,12 @@ func (k *Engine) GetICSCommittee(
 		ics.UpdateNodeset(consensusNodesHash, consensusNodes, ps[id])
 	}
 
-	randomSet, err := k.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
+	vals, err := systemObject.GetValidators(info.RandomSet...)
+	if err != nil {
+		return nil, err
+	}
+
+	randomSet, err := k.NodeSet(vals, info.RandomSetSizeWithoutDelta)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +61,7 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 	ts *common.Tesseract,
 	rawContext map[string][]byte,
 	info *common.CommitInfo,
+	systemObject *state.SystemObject,
 ) (*types.ICSCommittee, error) {
 	contextHashes := make([]common.Hash, 0)
 	ids := ts.AccountIDs()
@@ -81,7 +79,12 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 			return nil, err
 		}
 
-		nodeSet, err := k.NodeSet(metaObject.ConsensusNodes, uint32(len(metaObject.ConsensusNodes)))
+		validators, err := systemObject.GetValidatorsByKramaID(metaObject.ConsensusNodes)
+		if err != nil {
+			return nil, err
+		}
+
+		nodeSet, err := k.NodeSet(validators, uint32(len(metaObject.ConsensusNodes)))
 		if err != nil {
 			return nil, err
 		}
@@ -108,7 +111,12 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 		delete(rawContext, hash.String())
 	}
 
-	randomSet, err := k.NodeSet(info.RandomSet, info.RandomSetSizeWithoutDelta)
+	validators, err := systemObject.GetValidators(info.RandomSet...)
+	if err != nil {
+		return nil, err
+	}
+
+	randomSet, err := k.NodeSet(validators, info.RandomSetSizeWithoutDelta)
 	if err != nil {
 		return nil, err
 	}
@@ -136,14 +144,7 @@ func (k *Engine) fetchParticipantContextByHash(ics *types.ICSCommittee, id ident
 		return nil, consensusNodesHash, nil
 	}
 
-	publicKeys, err := k.state.GetPublicKeys(context.Background(), consensusNodes...)
-	if err != nil {
-		k.logger.Error("failed to retrieve the public key of consensus nodes", "err", err)
-
-		return nil, common.NilHash, common.ErrPublicKeyNotFound
-	}
-
-	consensusSet = types.NewNodeSet(consensusNodes, publicKeys, uint32(len(consensusNodes)))
+	consensusSet = types.NewNodeSet(consensusNodes, uint32(len(consensusNodes)))
 
 	return consensusSet, consensusNodesHash, nil
 }

@@ -14,6 +14,7 @@ const GenesisView = 0
 // GenesisFile is Genesis file with V1 version
 type GenesisFile struct {
 	SargaAccount  AccountSetupArgs        `json:"sarga_account"`
+	SystemAccount SystemAccountSetupArgs  `json:"system_account"`
 	Accounts      []AccountSetupArgs      `json:"accounts"`
 	Logics        []LogicSetupArgs        `json:"logics"`
 	AssetAccounts []AssetAccountSetupArgs `json:"asset_accounts"`
@@ -59,6 +60,10 @@ type Allocation struct {
 
 func (g *GenesisFile) AddSargaAccount(info AccountSetupArgs) {
 	g.SargaAccount = info
+}
+
+func (g *GenesisFile) AddSystemAccount(info SystemAccountSetupArgs) {
+	g.SystemAccount = info
 }
 
 func (g *GenesisFile) AddAccount(info AccountSetupArgs) {
@@ -115,10 +120,10 @@ type AccountSetupArgs struct {
 	ConsensusNodes []identifiers.KramaID  `json:"consensus_nodes"`
 }
 
-func (as *AccountSetupArgs) ContextDelta() ContextDelta {
-	return map[identifiers.Identifier]*DeltaGroup{
-		as.ID: {
-			ConsensusNodes: as.ConsensusNodes,
-		},
-	}
+type SystemAccountSetupArgs struct {
+	ID             identifiers.Identifier `json:"id"`
+	Keys           []KeyArgs              `json:"keys"`
+	AccType        AccountType            `json:"type"`
+	ConsensusNodes []identifiers.KramaID  `json:"consensus_nodes"`
+	Validators     []*Validator           `json:"validators"`
 }

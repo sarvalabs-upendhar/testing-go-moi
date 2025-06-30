@@ -278,6 +278,38 @@ func (op *IxOp) GetAssetSupplyPayload() (*AssetSupplyPayload, error) {
 	return payload.Supply, nil
 }
 
+// getGuardianPayload returns the guardian payload if present, or an error if not found.
+func (op *IxOp) getGuardianPayload() *GuardianPayload {
+	// If payload has been decoded, return the guardian form
+	if op.Payload != nil && op.Payload.guardian != nil {
+		return op.Payload.guardian
+	}
+
+	return nil
+}
+
+// GetGuardianRegisterPayload returns the guardian register payload if present,
+// or an error if not found.
+func (op *IxOp) GetGuardianRegisterPayload() (*GuardianRegisterPayload, error) {
+	payload := op.getGuardianPayload()
+	if payload == nil || payload.Register == nil {
+		return nil, errors.New("payload not found")
+	}
+
+	return payload.Register, nil
+}
+
+// GetGuardianActionPayload returns the guardian action payload if present,
+// or an error if not found.
+func (op *IxOp) GetGuardianActionPayload() (*GuardianActionPayload, error) {
+	payload := op.getGuardianPayload()
+	if payload == nil || payload.Action == nil {
+		return nil, errors.New("payload not found")
+	}
+
+	return payload.Action, nil
+}
+
 // GetLogicPayload returns the logic payload if present, or an error if not found.
 func (op *IxOp) GetLogicPayload() (*LogicPayload, error) {
 	// If payload has been decoded, return the logic form

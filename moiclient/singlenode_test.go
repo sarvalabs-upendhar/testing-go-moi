@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/compute/exlogics/tokenledger"
@@ -19,7 +22,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/bgclient"
@@ -27,7 +29,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/compute/pisa"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/storage"
 )

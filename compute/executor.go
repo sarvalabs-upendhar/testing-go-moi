@@ -22,7 +22,7 @@ type IxExecutor struct {
 
 	metrics *Metrics
 
-	commitHashes common.AccStateHashes
+	commitHashes common.AccountStateHashes
 }
 
 // Execute executes all the given Interactions with their context delta.
@@ -136,40 +136,67 @@ func (executor *IxExecutor) SuccessIxParticipants() map[identifiers.Identifier]b
 	return ps
 }
 
-// CommitStateObjects commits all StateObjects of the interaction participants to the state db.
-// If the interaction receiver is a new account, the Object of the sarga account is also committed.
+// CommitObject defines the methods for participant state management
+type CommitObject interface {
+	Data() *common.Account
+	Commit() (common.Hash, error)
+	ContextHash() common.Hash
+}
+
+// commitObject commits the state object of a participant to state db.
+func (executor *IxExecutor) commitObject(
+	ps common.ParticipantInfo, obj CommitObject,
+	isSuccess map[identifiers.Identifier]bool,
+) error {
+	if !isSuccess[ps.ID] {
+		executor.commitHashes.SetStateHash(ps.ID, common.NilHash)
+		executor.commitHashes.SetContextHash(ps.ID, common.NilHash)
+
+		return nil
+	}
+
+	previousHash, err := obj.Data().Hash()
+	if err != nil {
+		return err
+	}
+
+	if ps.LockType > common.MutateLock {
+		executor.commitHashes.SetStateHash(ps.ID, previousHash)
+		executor.commitHashes.SetContextHash(ps.ID, obj.Data().ContextHash)
+
+		return nil
+	}
+
+	newHash, err := obj.Commit()
+	if err != nil {
+		return err
+	}
+
+	executor.commitHashes.SetStateHash(ps.ID, newHash)
+	executor.commitHashes.SetContextHash(ps.ID, obj.ContextHash())
+
+	return nil
+}
+
+// CommitStateObjects commits all state objects of the interaction participants including the system object to
+// the state db. If the interaction receiver is a new account, the state object of the sarga account is also committed.
 func (executor *IxExecutor) CommitStateObjects() error {
+	participants := executor.Interactions.Participants()
 	isSuccess := executor.SuccessIxParticipants()
 
-	for id, ps := range executor.Interactions.Participants() {
-		if !isSuccess[id] {
-			executor.commitHashes.SetStateHash(id, common.NilHash)
-			executor.commitHashes.SetContextHash(id, common.NilHash)
+	for id, ps := range participants {
+		var object CommitObject
 
-			continue
+		if id == common.SystemAccountID {
+			object = executor.transition.GetSystemObject()
+		} else {
+			object = executor.transition.GetObject(id)
 		}
 
-		obj := executor.transition.GetObject(id)
-
-		previousHash, err := obj.Data().Hash()
+		err := executor.commitObject(ps, object, isSuccess)
 		if err != nil {
 			return err
 		}
-
-		if ps.LockType > common.MutateLock {
-			executor.commitHashes.SetStateHash(id, previousHash)
-			executor.commitHashes.SetContextHash(id, obj.Data().ContextHash)
-
-			continue
-		}
-
-		newHash, err := obj.Commit()
-		if err != nil {
-			return err
-		}
-
-		executor.commitHashes.SetStateHash(id, newHash)
-		executor.commitHashes.SetContextHash(id, obj.ContextHash())
 	}
 
 	return nil

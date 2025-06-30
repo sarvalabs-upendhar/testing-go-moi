@@ -102,10 +102,10 @@ func TestFullSync(t *testing.T) {
 	ids := tests.GetIdentifiers(t, 2)
 
 	accountsToSync := map[identifiers.Identifier]int{
-		common.GuardianAccountID: 4,
-		common.SargaAccountID:    4,
-		ids[0]:                   4,
-		ids[1]:                   4,
+		common.SystemAccountID: 4,
+		common.SargaAccountID:  4,
+		ids[0]:                 4,
+		ids[1]:                 4,
 	}
 
 	ts := generateTesseractsByMap(t, accountsToSync)
@@ -216,13 +216,19 @@ func TestFullSync_SyncPeers(t *testing.T) {
 	id := tests.RandomIdentifierWithZeroVariant(t)
 
 	accountsToSync := map[identifiers.Identifier]int{
-		common.GuardianAccountID: 10,
-		common.SargaAccountID:    10,
-		id:                       10,
+		common.SystemAccountID: 10,
+		common.SargaAccountID:  10,
+		id:                     10,
 	}
 
-	ts1 := generateTesseracts(t, "", 0, accountsToSync[common.GuardianAccountID], common.NilHash, common.GuardianAccountID)
-	ts2 := generateTesseracts(t, "", 0, accountsToSync[common.SargaAccountID], common.NilHash, common.SargaAccountID)
+	ts1 := generateTesseracts(
+		t, "", 0, accountsToSync[common.SystemAccountID],
+		common.NilHash, common.SystemAccountID,
+	)
+	ts2 := generateTesseracts(
+		t, "", 0, accountsToSync[common.SargaAccountID],
+		common.NilHash, common.SargaAccountID,
+	)
 	ts3 := generateTesseracts(t, "", 0, accountsToSync[id], common.NilHash, id)
 
 	storeTesseractsInDB(t, serverSyncers[0], ts1...)
@@ -339,13 +345,19 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 	id := tests.RandomIdentifierWithZeroVariant(t)
 
 	accountsToSync := map[identifiers.Identifier]int{
-		common.GuardianAccountID: 10,
-		common.SargaAccountID:    10,
-		id:                       10,
+		common.SystemAccountID: 10,
+		common.SargaAccountID:  10,
+		id:                     10,
 	}
 
-	ts1 := generateTesseracts(t, "", 0, accountsToSync[common.GuardianAccountID], common.NilHash, common.GuardianAccountID)
-	ts2 := generateTesseracts(t, "", 0, accountsToSync[common.SargaAccountID], common.NilHash, common.SargaAccountID)
+	ts1 := generateTesseracts(
+		t, "", 0, accountsToSync[common.SystemAccountID],
+		common.NilHash, common.SystemAccountID,
+	)
+	ts2 := generateTesseracts(
+		t, "", 0, accountsToSync[common.SargaAccountID],
+		common.NilHash, common.SargaAccountID,
+	)
 	ts3 := generateTesseracts(t, "", 0, accountsToSync[id], common.NilHash, id)
 
 	storeTesseractsInDB(t, serverSyncers[0], ts1...)
@@ -458,6 +470,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 	clientSyncer.logger.Info(string(servers[0].GetKramaID()))
 	serverSyncer.logger.Info(string(servers[1].GetKramaID()))
 
+	setValidators(t, clientSyncer, []identifiers.KramaID{serverSyncer.network.GetKramaID()})
 	serverSyncer.setInitialSyncDone(true)
 	clientSyncer.setInitialSyncDone(true)
 
@@ -561,10 +574,10 @@ func TestSync_FromRejoining(t *testing.T) {
 
 	ids := tests.GetIdentifiers(t, 3)
 	accountsToSync := map[identifiers.Identifier]int{
-		common.GuardianAccountID: 4,
-		common.SargaAccountID:    4,
-		ids[0]:                   4,
-		ids[1]:                   4,
+		common.SystemAccountID: 4,
+		common.SargaAccountID:  4,
+		ids[0]:                 4,
+		ids[1]:                 4,
 	}
 
 	ts := generateTesseractsByMap(t, accountsToSync)
@@ -725,6 +738,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 	clientSyncer.logger.Info(string(servers[0].GetKramaID()))
 	serverSyncer.logger.Info(string(servers[1].GetKramaID()))
 
+	setValidators(t, clientSyncer, []identifiers.KramaID{serverSyncer.network.GetKramaID()})
 	serverSyncer.setInitialSyncDone(true)
 	clientSyncer.setInitialSyncDone(true)
 
@@ -849,9 +863,9 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 	id := tests.RandomIdentifierWithZeroVariant(t)
 
 	accountsToSync := map[identifiers.Identifier]int{
-		common.GuardianAccountID: 1,
-		common.SargaAccountID:    1,
-		id:                       1,
+		common.SystemAccountID: 1,
+		common.SargaAccountID:  1,
+		id:                     1,
 	}
 
 	ts := generateTesseractsByMap(t, accountsToSync)
@@ -895,7 +909,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 	// start the server that has lattices later as we need to simulate removal of best peers in client
 	// and when this is started, lattices will be available on this and client should complete accounts syncing
 	_, err = tests.RetryUntilTimeout(ctx, 500*time.Millisecond, func() (interface{}, bool) {
-		job, ok := jq.getJob(common.GuardianAccountID)
+		job, ok := jq.getJob(common.SystemAccountID)
 		if !ok {
 			return nil, true
 		}

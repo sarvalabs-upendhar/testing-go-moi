@@ -31,6 +31,17 @@ var (
 )
 
 var (
+	SystemLogicID = CreateLogicIDFromString(
+		"system-registry",
+		0,
+		identifiers.Systemic,
+		identifiers.LogicIntrinsic,
+		identifiers.LogicExtrinsic,
+	)
+	SystemAccountID = SystemLogicID.AsIdentifier()
+)
+
+var (
 	KMOITokenAssetID = CreateAssetIDFromString(
 		KMOITokenSymbol,
 		0,
@@ -134,7 +145,7 @@ func (iList IdentifierList) Swap(i, j int) {
 }
 
 func IsSystemAccount(id identifiers.Identifier) bool {
-	if id == SargaAccountID || id == GuardianAccountID {
+	if id == SargaAccountID || id == SystemAccountID {
 		return true
 	}
 

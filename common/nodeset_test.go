@@ -11,8 +11,8 @@ import (
 func TestGetVoteSet(t *testing.T) {
 	nodeset := types.NewICSCommittee()
 	keys := make([][]byte, 2)
-	nodeset.AppendNodeSet(tests.RandomHash(t), types.NewNodeSet(tests.RandomKramaIDs(t, 2), keys, 0))
-	nodeset.AppendNodeSet(tests.RandomHash(t), types.NewNodeSet(tests.RandomKramaIDs(t, 2), keys, 0))
+	nodeset.AppendNodeSet(tests.RandomHash(t), types.NewNodeSet(tests.RandomValidatorsInfo(t, keys), 0))
+	nodeset.AppendNodeSet(tests.RandomHash(t), types.NewNodeSet(tests.RandomValidatorsInfo(t, keys), 0))
 
 	nodeset.Sets[0].Responses.SetIndex(0, true)
 	nodeset.Sets[0].Responses.SetIndex(1, false)
