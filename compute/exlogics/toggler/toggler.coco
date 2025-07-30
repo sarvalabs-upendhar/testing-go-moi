@@ -1,6 +1,6 @@
 coco Toggler
 
-state ephemeral:
+state actor:
     value Bool
 
 endpoint enlist Init():
@@ -9,15 +9,15 @@ endpoint enlist Init():
 endpoint enlist Seed(initial Bool):
     set(value: initial)
 
-endpoint invoke readonly Get() -> (value Bool):
+endpoint Get() -> (value Bool):
     observe value <- Sender.Toggler.value
  
-endpoint invoke ephemeral Set(value Bool):
+endpoint dynamic Set(value Bool):
     set(value: value)
 
-endpoint invoke ephemeral Toggle():
+endpoint dynamic Toggle():
     mutate value <- Sender.Toggler.value:
         value = !value
 
-func ephemeral set(value Bool):
+function dynamic set(value Bool):
     mutate value -> Sender.Toggler.value

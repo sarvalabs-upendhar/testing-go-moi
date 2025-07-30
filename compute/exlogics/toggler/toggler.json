@@ -2,14 +2,16 @@
   "syntax": 1,
   "engine": {
     "kind": "PISA",
-    "flags": []
+    "flags": [],
+    "version": "0.5.0"
   },
+  "kind": "logic",
   "elements": [
     {
       "ptr": 0,
       "kind": "state",
       "data": {
-        "mode": "ephemeral",
+        "mode": "actor",
         "fields": [
           {
             "slot": 0,
@@ -21,13 +23,10 @@
     },
     {
       "ptr": 1,
-      "deps": [
-        0
-      ],
-      "kind": "routine",
+      "kind": "callable",
       "data": {
         "name": "Init",
-        "mode": "ephemeral",
+        "mode": "dynamic",
         "kind": "enlist",
         "accepts": [],
         "returns": [],
@@ -40,13 +39,12 @@
     {
       "ptr": 2,
       "deps": [
-        6,
-        0
+        6
       ],
-      "kind": "routine",
+      "kind": "callable",
       "data": {
         "name": "Seed",
-        "mode": "ephemeral",
+        "mode": "dynamic",
         "kind": "enlist",
         "accepts": [
           {
@@ -63,7 +61,7 @@
             4,
             1,
             0,
-            83,
+            85,
             0,
             0,
             1,
@@ -81,13 +79,10 @@
     },
     {
       "ptr": 3,
-      "deps": [
-        0
-      ],
-      "kind": "routine",
+      "kind": "callable",
       "data": {
         "name": "Get",
-        "mode": "readonly",
+        "mode": "static",
         "kind": "invoke",
         "accepts": [],
         "returns": [
@@ -99,18 +94,17 @@
         ],
         "executes": {
           "bin": [
-            115,
+            132,
             0,
-            131,
+            145,
             1,
             0,
             0,
             5,
             1,
             0,
-            133,
-            1,
-            0
+            158,
+            1
           ]
         },
         "catches": []
@@ -119,13 +113,12 @@
     {
       "ptr": 4,
       "deps": [
-        6,
-        0
+        6
       ],
-      "kind": "routine",
+      "kind": "callable",
       "data": {
         "name": "Set",
-        "mode": "ephemeral",
+        "mode": "dynamic",
         "kind": "invoke",
         "accepts": [
           {
@@ -142,7 +135,7 @@
             4,
             1,
             0,
-            83,
+            85,
             0,
             0,
             1,
@@ -160,36 +153,32 @@
     },
     {
       "ptr": 5,
-      "deps": [
-        0
-      ],
-      "kind": "routine",
+      "kind": "callable",
       "data": {
         "name": "Toggle",
-        "mode": "ephemeral",
+        "mode": "dynamic",
         "kind": "invoke",
         "accepts": [],
         "returns": [],
         "executes": {
           "bin": [
-            115,
+            132,
             0,
-            131,
+            145,
             1,
             0,
             0,
-            55,
+            156,
             2,
             1,
             98,
             2,
             2,
-            54,
+            155,
             1,
             2,
-            132,
-            1,
-            0
+            159,
+            1
           ]
         },
         "catches": []
@@ -197,13 +186,10 @@
     },
     {
       "ptr": 6,
-      "deps": [
-        0
-      ],
-      "kind": "routine",
+      "kind": "callable",
       "data": {
         "name": "set",
-        "mode": "ephemeral",
+        "mode": "dynamic",
         "kind": "internal",
         "accepts": [
           {
@@ -215,21 +201,20 @@
         "returns": [],
         "executes": {
           "bin": [
-            115,
+            132,
             0,
-            131,
+            145,
             1,
             0,
             0,
             4,
             2,
             0,
-            54,
+            155,
             1,
             2,
-            132,
-            1,
-            0
+            159,
+            1
           ]
         },
         "catches": []

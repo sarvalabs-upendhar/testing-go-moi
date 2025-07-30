@@ -2,22 +2,22 @@ syntax: 1
 engine:
   kind: PISA
   flags: []
+  version: 0.5.0
+kind: logic
 elements:
 - ptr: 0
   kind: state
   data:
-    mode: ephemeral
+    mode: actor
     fields:
     - slot: 0
       label: value
       type: bool
 - ptr: 1
-  deps:
-  - 0
-  kind: routine
+  kind: callable
   data:
     name: Init
-    mode: ephemeral
+    mode: dynamic
     kind: enlist
     accepts: []
     returns: []
@@ -27,11 +27,10 @@ elements:
 - ptr: 2
   deps:
   - 6
-  - 0
-  kind: routine
+  kind: callable
   data:
     name: Seed
-    mode: ephemeral
+    mode: dynamic
     kind: enlist
     accepts:
     - slot: 0
@@ -44,15 +43,13 @@ elements:
       - OBTAIN $1 &0
       - SETFLD $0 &0 $1
       - LDPTR1 $1 0x6
-      - CALLR $0 $1 $0
+      - CALLC $0 $1 $0
     catches: []
 - ptr: 3
-  deps:
-  - 0
-  kind: routine
+  kind: callable
   data:
     name: Get
-    mode: readonly
+    mode: static
     kind: invoke
     accepts: []
     returns:
@@ -61,19 +58,18 @@ elements:
       type: bool
     executes:
       asm:
-      - SENDER $0
-      - ELOAD $1 &0 $0
+      - ORIGIN $0
+      - ALOAD $1 $0 &0
       - YIELD $1 &0
-      - EFREE $1 $0
+      - DUMP $1
     catches: []
 - ptr: 4
   deps:
   - 6
-  - 0
-  kind: routine
+  kind: callable
   data:
     name: Set
-    mode: ephemeral
+    mode: dynamic
     kind: invoke
     accepts:
     - slot: 0
@@ -86,34 +82,30 @@ elements:
       - OBTAIN $1 &0
       - SETFLD $0 &0 $1
       - LDPTR1 $1 0x6
-      - CALLR $0 $1 $0
+      - CALLC $0 $1 $0
     catches: []
 - ptr: 5
-  deps:
-  - 0
-  kind: routine
+  kind: callable
   data:
     name: Toggle
-    mode: ephemeral
+    mode: dynamic
     kind: invoke
     accepts: []
     returns: []
     executes:
       asm:
-      - SENDER $0
-      - ELOAD $1 &0 $0
+      - ORIGIN $0
+      - ALOAD $1 $0 &0
       - GATHER $2 $1
       - NOT $2 $2
-      - DISPERSE $1 $2
-      - ESAVE $1 $0
+      - DISPER $1 $2
+      - STORE $1
     catches: []
 - ptr: 6
-  deps:
-  - 0
-  kind: routine
+  kind: callable
   data:
     name: set
-    mode: ephemeral
+    mode: dynamic
     kind: internal
     accepts:
     - slot: 0
@@ -122,9 +114,9 @@ elements:
     returns: []
     executes:
       asm:
-      - SENDER $0
-      - ELOAD $1 &0 $0
+      - ORIGIN $0
+      - ALOAD $1 $0 &0
       - OBTAIN $2 &0
-      - DISPERSE $1 $2
-      - ESAVE $1 $0
+      - DISPER $1 $2
+      - STORE $1
     catches: []

@@ -1,5 +1,5 @@
 [coco]
-version = "0.5.0-rc.1"
+version = "0.7.0"
 
 [module]
 name = "TokenLedger"
@@ -18,6 +18,7 @@ output = "tokenledger"
 
 [target.pisa]
 format = "ASM"
+version = "0.5.0"
 
 [lab.render]
 big_int_as_hex = true

@@ -1,38 +1,38 @@
 coco TokenLedger
 
-state persistent:
+state logic:
     Symbol String
     Supply U256
-    Balances Map[Address]U256
+    Balances Map[Identifier]U256
 
 endpoint deploy Seed(symbol String, supply U256): 
-    mutate symbol -> TokenLedger.Symbol
-    mutate supply -> TokenLedger.Supply
+    mutate symbol -> Logic.TokenLedger.Symbol
+    mutate supply -> Logic.TokenLedger.Supply
 
-    mutate balances <- TokenLedger.Balances:
-        balances[Address(Sender)] = supply
+    mutate balances <- Logic.TokenLedger.Balances:
+        balances[Identifier(Sender)] = supply
 
-    emit f"seeded {Address(Sender)} with {supply} {symbol}"
+    emit f"seeded {Identifier(Sender)} with {supply} {symbol}"
 
-endpoint invoke Decimals() -> (decimals U64):
+endpoint Decimals() -> (decimals U64):
     yield decimals 18
 
-endpoint invoke BalanceOf(addr Address) -> (balance U256):
-    observe balances <- TokenLedger.Balances:
+endpoint BalanceOf(addr Identifier) -> (balance U256):
+    observe balances <- Logic.TokenLedger.Balances:
         // If balance exists for address, read and return
         // balance = 0, if no entry for the address
         if balances[addr]?:
             balance = balances[addr]
 
 event Transfer:
-    topic sender Address
-    topic receiver Address
+    topic sender Identifier
+    topic receiver Identifier
     field amount U256
 
-endpoint invoke persistent Transfer(amount U256, receiver Address):
-    memory sender = Address(Sender)
+endpoint dynamic Transfer(amount U256, receiver Identifier):
+    memory sender = Identifier(Sender)
 
-    mutate balances <- TokenLedger.Balances:
+    mutate balances <- Logic.TokenLedger.Balances:
         if !balances[sender]?: throw "sender has no balance"
 
         memory balance = balances[sender]
@@ -46,25 +46,25 @@ endpoint invoke persistent Transfer(amount U256, receiver Address):
 
     emit Transfer(sender, receiver, amount)
 
-endpoint invoke persistent Mint(amount U256):
-    mutate supply <- TokenLedger.Supply:
+endpoint dynamic Mint(amount U256):
+    mutate supply <- Logic.TokenLedger.Supply:
         supply += amount
 
-    mutate balances <- TokenLedger.Balances:
-        memory sender = Address(Sender)
+    mutate balances <- Logic.TokenLedger.Balances:
+        memory sender = Identifier(Sender)
 
         if !balances[sender]?:
             balances[sender] = 0
 
         balances[sender] += amount
 
-endpoint invoke persistent Burn(amount U256):
-    mutate supply <- TokenLedger.Supply:
+endpoint dynamic Burn(amount U256):
+    mutate supply <- Logic.TokenLedger.Supply:
         if supply < amount: throw "invalid burn amount: exceeds supply"
         supply -= amount
 
-    mutate balances <- TokenLedger.Balances:
-        memory sender = Address(Sender)
+    mutate balances <- Logic.TokenLedger.Balances:
+        memory sender = Identifier(Sender)
 
         if !balances[sender]?: 
             throw "invalid burn amount: sender has no balance"
