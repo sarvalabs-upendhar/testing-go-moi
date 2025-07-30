@@ -12,6 +12,7 @@ on:
       - "**.go"
       - "**.mod"
       - "**.sum"
+      - "**.coco"
 
   workflow_call:
     secrets:
