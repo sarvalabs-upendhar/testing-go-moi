@@ -23,6 +23,9 @@
     },
     {
       "ptr": 1,
+      "deps": [
+        0
+      ],
       "kind": "callable",
       "data": {
         "name": "Init",
@@ -39,7 +42,8 @@
     {
       "ptr": 2,
       "deps": [
-        6
+        6,
+        0
       ],
       "kind": "callable",
       "data": {
@@ -79,6 +83,9 @@
     },
     {
       "ptr": 3,
+      "deps": [
+        0
+      ],
       "kind": "callable",
       "data": {
         "name": "Get",
@@ -150,6 +157,9 @@
     },
     {
       "ptr": 5,
+      "deps": [
+        0
+      ],
       "kind": "callable",
       "data": {
         "name": "Toggle",
@@ -180,6 +190,9 @@
     },
     {
       "ptr": 6,
+      "deps": [
+        0
+      ],
       "kind": "callable",
       "data": {
         "name": "set",

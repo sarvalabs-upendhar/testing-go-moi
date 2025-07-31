@@ -14,6 +14,8 @@ elements:
       label: value
       type: bool
 - ptr: 1
+  deps:
+  - 0
   kind: callable
   data:
     name: Init
@@ -27,6 +29,7 @@ elements:
 - ptr: 2
   deps:
   - 6
+  - 0
   kind: callable
   data:
     name: Seed
@@ -46,6 +49,8 @@ elements:
       - CALLC $0 $1 $0
     catches: []
 - ptr: 3
+  deps:
+  - 0
   kind: callable
   data:
     name: Get
@@ -85,6 +90,8 @@ elements:
       - CALLC $0 $1 $0
     catches: []
 - ptr: 5
+  deps:
+  - 0
   kind: callable
   data:
     name: Toggle
@@ -102,6 +109,8 @@ elements:
       - STORE $1
     catches: []
 - ptr: 6
+  deps:
+  - 0
   kind: callable
   data:
     name: set

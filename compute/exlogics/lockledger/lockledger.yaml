@@ -39,6 +39,9 @@ elements:
       label: Lockedup
       type: u256
 - ptr: 3
+  deps:
+  - 1
+  - 2
   kind: callable
   data:
     name: Seed
@@ -79,6 +82,8 @@ elements:
       - STORE $2
     catches: []
 - ptr: 4
+  deps:
+  - 2
   kind: callable
   data:
     name: Register
@@ -102,6 +107,7 @@ elements:
 - ptr: 5
   deps:
   - 0
+  - 2
   kind: callable
   data:
     name: Lockup
@@ -140,6 +146,9 @@ elements:
       - STORE $1
     catches: []
 - ptr: 6
+  deps:
+  - 1
+  - 2
   kind: callable
   data:
     name: Mint

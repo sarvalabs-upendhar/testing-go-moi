@@ -138,7 +138,8 @@
       "deps": [
         0,
         1,
-        2
+        2,
+        11
       ],
       "kind": "callable",
       "data": {
@@ -291,6 +292,9 @@
     },
     {
       "ptr": 14,
+      "deps": [
+        11
+      ],
       "kind": "callable",
       "data": {
         "name": "BalanceOf",
@@ -351,7 +355,8 @@
       "deps": [
         4,
         5,
-        10
+        10,
+        11
       ],
       "kind": "callable",
       "data": {
@@ -523,6 +528,9 @@
     },
     {
       "ptr": 16,
+      "deps": [
+        11
+      ],
       "kind": "callable",
       "data": {
         "name": "Mint",
@@ -617,7 +625,8 @@
       "deps": [
         6,
         7,
-        8
+        8,
+        11
       ],
       "kind": "callable",
       "data": {
