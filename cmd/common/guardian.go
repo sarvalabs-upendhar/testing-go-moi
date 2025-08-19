@@ -9,33 +9,23 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/sarvalabs/go-moi/common"
+
+	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/config"
-	"github.com/sarvalabs/go-moi/compute/pisa"
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
-	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/sarvalabs/go-polo"
 )
 
 func IsGuardianRegistered(client *moiclient.Client, kramaID identifiers.KramaID) (bool, error) {
-	// Generate the hash of the krama ID
-	kramaIDEncoded, _ := polo.Polorize(kramaID)
-	kramaIDHashed := common.GetHash(kramaIDEncoded)
-	// Generate the storage key for the guardian with the given krama ID
-	storageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
-
 	// Retrieve the value for the storage key from the
-	_, err := client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
-		LogicID: common.GuardianLogicID, StorageKey: storageKey,
-		Options: rpcargs.TesseractNumberOrHash{
-			TesseractNumber: &rpcargs.LatestTesseractHeight,
-		},
+	_, err := client.Validators(context.Background(), &rpcargs.GetValidatorsArgs{
+		KramaID: kramaID,
 	})
 	if err == nil {
 		// If no error was returned, the key was found.
@@ -43,8 +33,8 @@ func IsGuardianRegistered(client *moiclient.Client, kramaID identifiers.KramaID)
 		return true, nil
 	}
 
-	// If the key is not found, the guardian is NOT registered
-	if err.Error() == common.ErrKeyNotFound.Error() {
+	// If the krama id is not found, the guardian is NOT registered
+	if err.Error() == common.ErrKramaIDNotFound.Error() {
 		return false, nil
 	}
 

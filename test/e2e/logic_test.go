@@ -2,20 +2,20 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"testing"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/tests"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/exlogics/lockledger"
+	"github.com/sarvalabs/go-moi/compute/exlogics/questions"
 	"github.com/sarvalabs/go-moi/compute/exlogics/toggler"
 	"github.com/sarvalabs/go-moi/compute/exlogics/tokenledger"
 	"github.com/sarvalabs/go-moi/compute/pisa"
@@ -43,7 +43,7 @@ func (te *TestEnvironment) TestEphemeralLogic() {
 	}()
 
 	// Deploy the Toggler Logic
-	te.CallAndCheckReceipt(te.deployLogic(sender, &common.LogicPayload{
+	te.CallAndCheckReceipt(te.logicDeploy(sender, &common.LogicPayload{
 		Manifest: manifest, Callsite: "", Calldata: nil,
 	}))
 
@@ -51,32 +51,13 @@ func (te *TestEnvironment) TestEphemeralLogic() {
 	logicID := te.GetLogicID(sender.ID)
 	reader := te.moiClient.NewStorageReader(sender.ID, logicID)
 
-	// Enlist the sender with the Toggler Logic
-	te.CallAndCheckReceipt(te.enlistLogic(sender, &common.LogicPayload{
-		Logic: logicID, Callsite: "Seed", Calldata: func() []byte {
-			inputs := toggler.InputSeed{Initial: false}
-
-			encoded, err := polo.Polorize(inputs, polo.DocStructs())
-			if err != nil {
-				require.NoError(te.T(), err)
-			}
-
-			return encoded
-		}(),
-	}))
-
-	// Check State for SenderID [must be false]
-	value, err := toggler.GetValue(reader)
-	require.NoError(te.T(), err)
-	require.Equal(te.T(), false, value)
-
 	// Invoke the Toggle Callsite
 	te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
 		Logic: logicID, Callsite: "Toggle", Calldata: nil,
 	}))
 
 	// Check State for SenderID
-	value, err = toggler.GetValue(reader)
+	value, err := toggler.GetValue(reader)
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), true, value)
 }
@@ -85,7 +66,7 @@ func (te *TestEnvironment) TestHybridStateLogic() {
 	accounts, err := te.chooseRandomUniqueAccounts(2)
 	require.NoError(te.T(), err)
 
-	sender, another := accounts[0], accounts[1]
+	sender, _ := accounts[0], accounts[1]
 
 	manifest := func() []byte {
 		engineio.RegisterEngine(pisa.NewEngine())
@@ -104,7 +85,7 @@ func (te *TestEnvironment) TestHybridStateLogic() {
 	}()
 
 	// Deploy the LockLedger Logic
-	te.CallAndCheckReceipt(te.deployLogic(sender, &common.LogicPayload{
+	te.CallAndCheckReceipt(te.logicDeploy(sender, &common.LogicPayload{
 		Manifest: manifest, Callsite: "Seed", Calldata: func() []byte {
 			inputs := lockledger.InputSeed{
 				Name: "MOI", Symbol: "MOI",
@@ -166,26 +147,6 @@ func (te *TestEnvironment) TestHybridStateLogic() {
 		require.NoError(te.T(), err)
 		require.Equal(te.T(), uint64(1000), lockedup)
 	})
-
-	te.T().Run("enlist", func(t *testing.T) {
-		// Create ephemeral state reader for another account
-		anotherState := te.moiClient.NewStorageReader(another.ID, logicID)
-
-		// Enlist another account with the LockLedger Logic
-		te.CallAndCheckReceipt(te.enlistLogic(another, &common.LogicPayload{
-			Logic: logicID, Callsite: "Register", Calldata: nil,
-		}))
-
-		// Check spendable balance for another
-		spendable, err := lockledger.GetEphemeralSpendable(anotherState)
-		require.NoError(te.T(), err)
-		require.Equal(te.T(), uint64(0), spendable)
-
-		// Check lockedup balance for another
-		lockedup, err := lockledger.GetEphemeralLockedup(anotherState)
-		require.NoError(te.T(), err)
-		require.Equal(te.T(), uint64(0), lockedup)
-	})
 }
 
 func (te *TestEnvironment) TestLogicWithEvent() {
@@ -211,7 +172,7 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 	}()
 
 	// Deploy the TokenLedger Logic
-	te.CallAndCheckReceipt(te.deployLogic(sender, &common.LogicPayload{
+	te.CallAndCheckReceipt(te.logicDeploy(sender, &common.LogicPayload{
 		Manifest: manifest, Callsite: "Seed", Calldata: func() []byte {
 			inputs := tokenledger.InputSeed{
 				Symbol: "MOI",
@@ -301,6 +262,114 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 	}(), log.Data)
 }
 
+func (te *TestEnvironment) TestLogicInterfaces() {
+	accounts, err := te.chooseRandomUniqueAccounts(2)
+	require.NoError(te.T(), err)
+
+	sender, _ := accounts[0], accounts[1]
+
+	calleeManifest := func() []byte {
+		engineio.RegisterEngine(pisa.NewEngine())
+
+		file, err := engineio.NewManifestFromFile("./../../compute/exlogics/questions/answer.yaml")
+		if err != nil {
+			panic(err)
+		}
+
+		encoded, err := file.Encode(common.POLO)
+		if err != nil {
+			panic(err)
+		}
+
+		return encoded
+	}()
+
+	callerManifest := func() []byte {
+		engineio.RegisterEngine(pisa.NewEngine())
+
+		file, err := engineio.NewManifestFromFile("./../../compute/exlogics/questions/question.yaml")
+		if err != nil {
+			panic(err)
+		}
+
+		encoded, err := file.Encode(common.POLO)
+		if err != nil {
+			panic(err)
+		}
+
+		return encoded
+	}()
+
+	// Deploy the LockLedger Logic
+	te.CallAndCheckReceipt(te.logicDeploy(sender, &common.LogicPayload{
+		Manifest: calleeManifest, Callsite: "Init", Calldata: func() []byte {
+			doc := polo.Document{}
+
+			encoded, err := polo.Polorize(doc, polo.DocStructs())
+			if err != nil {
+				require.NoError(te.T(), err)
+			}
+
+			return encoded
+		}(),
+	}))
+
+	AnswerLogicID := te.GetLogicID(sender.ID)
+
+	fmt.Printf("Answer LogicID: %s\n", AnswerLogicID)
+
+	te.CallAndCheckReceipt(te.logicDeploy(sender, &common.LogicPayload{
+		Manifest: callerManifest, Callsite: "", Calldata: func() []byte {
+			doc := polo.Document{}
+
+			encoded, err := polo.Polorize(doc, polo.DocStructs())
+			if err != nil {
+				require.NoError(te.T(), err)
+			}
+
+			return encoded
+		}(),
+	}))
+
+	QuestionLogicID := te.GetLogicID(sender.ID)
+
+	te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
+		Logic:    QuestionLogicID,
+		Callsite: "SetActorAnswer",
+		Calldata: must(polo.Polorize(questions.InputExternAnswer{
+			LogicID: AnswerLogicID.AsIdentifier(),
+			Answer:  50,
+		}, polo.DocStructs())),
+		Interfaces: map[string]identifiers.LogicID{
+			"AnswerLogic": AnswerLogicID,
+		},
+	}))
+
+	reader := te.moiClient.NewStorageReader(sender.ID, AnswerLogicID)
+
+	output, err := questions.GetActorAnswer(reader)
+	require.NoError(te.T(), err)
+	require.Equal(te.T(), uint64(50), output)
+
+	te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
+		Logic:    QuestionLogicID,
+		Callsite: "SetMyAnswer",
+		Calldata: must(polo.Polorize(questions.InputExternAnswer{
+			LogicID: AnswerLogicID.AsIdentifier(),
+			Answer:  70,
+		}, polo.DocStructs())),
+		Interfaces: map[string]identifiers.LogicID{
+			"AnswerLogic": AnswerLogicID,
+		},
+	}))
+
+	reader = te.moiClient.NewStorageReader(QuestionLogicID.AsIdentifier(), AnswerLogicID)
+
+	output, err = questions.GetActorAnswer(reader)
+	require.NoError(te.T(), err)
+	require.Equal(te.T(), uint64(70), output)
+}
+
 func (te *TestEnvironment) CallAndCheckReceipt(ixhash common.Hash, err error) {
 	require.NoError(te.T(), err)
 	checkForReceiptSuccess(te.T(), te.moiClient, ixhash)
@@ -310,57 +379,6 @@ func (te *TestEnvironment) GetLogicID(id identifiers.Identifier) identifiers.Log
 	height := moiclient.GetLatestHeight(te.T(), te.moiClient, id)
 
 	return moiclient.GetLogicID(te.T(), te.moiClient, 0, id, int64(height))
-}
-
-//nolint:dupl
-func (te *TestEnvironment) enlistLogic(
-	acc tests.AccountWithMnemonic,
-	logicPayload *common.LogicPayload,
-) (common.Hash, error) {
-	te.logger.Debug("enlist logic ",
-		"sender", acc.ID,
-		"logicID", logicPayload.Logic,
-		"callsite", logicPayload.Callsite,
-		"calldata", logicPayload.Calldata,
-	)
-
-	payload, err := logicPayload.Bytes()
-	te.Suite.NoError(err)
-
-	ixData := &common.IxData{
-		Sender: common.Sender{
-			ID:         acc.ID,
-			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.ID, 0),
-		},
-		FuelPrice: DefaultFuelPrice,
-		FuelLimit: DefaultFuelLimit,
-		IxOps: []common.IxOpRaw{
-			{
-				Type:    common.IxLogicEnlist,
-				Payload: payload,
-			},
-		},
-		Participants: []common.IxParticipant{
-			{
-				ID:       acc.ID,
-				LockType: common.MutateLock,
-			},
-			{
-				ID:       logicPayload.Logic.AsIdentifier(),
-				LockType: common.MutateLock,
-			},
-		},
-	}
-
-	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
-		{
-			ID:       acc.ID,
-			KeyID:    0,
-			Mnemonic: acc.Mnemonic,
-		},
-	})
-
-	return te.moiClient.SendInteractions(context.Background(), sendIX)
 }
 
 func must[T any](object T, err error) T {

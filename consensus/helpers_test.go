@@ -813,7 +813,7 @@ func defaultTesseractData() *tests.TesseractData {
 		Timestamp:        0,
 		Operator:         "",
 		FuelUsed:         100,
-		FuelLimit:        100,
+		ComputeFuelLimit:        100,
 
 		CommitInfo: &common.CommitInfo{
 			QC: &common.Qc{
@@ -892,7 +892,7 @@ func createTesseract(t *testing.T, params *createTesseractParams) *common.Tesser
 		tsData.Epoch,
 		tsData.Timestamp,
 		tsData.FuelUsed,
-		tsData.FuelLimit,
+		tsData.ComputeFuelLimit,
 		tsData.ConsensusInfo,
 		tsData.Seal,
 		tsData.SealBy,
@@ -1251,7 +1251,7 @@ func checkForAssetAccounts(t *testing.T, expected, actual []common.AssetAccountS
 func checkSargaStorageEntry(t *testing.T, obj *state.Object, id identifiers.Identifier) {
 	t.Helper()
 
-	val, err := obj.GetStorageEntry(common.SargaLogicID, id.Bytes())
+	val, err := obj.ReadPresistentStorage(common.SargaLogicID, id.Bytes())
 	require.NoError(t, err)
 
 	genesisInfo := common.AccountGenesisInfo{
@@ -1517,7 +1517,7 @@ func updateTotalIncentive(t *testing.T, so *state.Object, count uint64) {
 	value, err := polo.Polorize(count)
 	require.NoError(t, err)
 
-	err = so.SetStorageEntry(common.GuardianLogicID, key, value)
+	err = so.WritePersistentStorage(common.GuardianLogicID, key, value)
 	require.NoError(t, err)
 }
 
@@ -1563,7 +1563,7 @@ func updateGuardianIncentive(t *testing.T, sm *MockStateManager, id kramaid.Kram
 	value, err := polo.Polorize(incentive)
 	require.NoError(t, err)
 
-	err = so.SetStorageEntry(common.GuardianLogicID, key, value)
+	err = so.WritePersistentStorage(common.GuardianLogicID, key, value)
 	require.NoError(t, err)
 
 	sm.setLatestStateObject(common.GuardianLogicAddr, so)

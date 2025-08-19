@@ -4,33 +4,38 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/sarvalabs/go-pisa/logic"
-	"github.com/sarvalabs/go-pisa/state"
+	"github.com/sarvalabs/go-pisa"
 
 	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
+const (
+	DynamicState = "dynamic"
+)
+
 var (
-	ConstantElement = logic.ConstantElement.String()
-	TypedefElement  = logic.TypedefElement.String()
-	RoutineElement  = logic.RoutineElement.String()
-	ClassElement    = logic.ClassElement.String()
-	MethodElement   = logic.MethodElement.String()
-	StateElement    = logic.StateElement.String()
-	EventElement    = logic.EventElement.String()
+	LiteralElement = pisa.ArtifactElementLiteral.String()
+	TypedefElement = pisa.ArtifactElementType.String()
+	RoutineElement = pisa.ArtifactElementCallable.String()
+	ClassElement   = pisa.ArtifactElementClass.String()
+	MethodElement  = pisa.ArtifactElementMethod.String()
+	StateElement   = pisa.ArtifactElementState.String()
+	EventElement   = pisa.ArtifactElementEvent.String()
+	ExternElement  = pisa.ArtifactElementExtern.String()
 )
 
 var ElementMetadata = map[engineio.ElementKind]struct {
-	pisakind  logic.ElementKind
+	pisakind  pisa.ArtifactElementKind
 	generator func() any
 }{
-	ConstantElement: {logic.ConstantElement, func() any { return new(ConstantSchema) }},
-	TypedefElement:  {logic.TypedefElement, func() any { return new(TypedefSchema) }},
-	RoutineElement:  {logic.RoutineElement, func() any { return new(RoutineSchema) }},
-	ClassElement:    {logic.ClassElement, func() any { return new(ClassSchema) }},
-	MethodElement:   {logic.MethodElement, func() any { return new(MethodSchema) }},
-	StateElement:    {logic.StateElement, func() any { return new(StateSchema) }},
-	EventElement:    {logic.EventElement, func() any { return new(EventSchema) }},
+	LiteralElement: {pisa.ArtifactElementLiteral, func() any { return new(ConstantSchema) }},
+	TypedefElement: {pisa.ArtifactElementType, func() any { return new(TypedefSchema) }},
+	RoutineElement: {pisa.ArtifactElementCallable, func() any { return new(RoutineSchema) }},
+	ClassElement:   {pisa.ArtifactElementClass, func() any { return new(ClassSchema) }},
+	MethodElement:  {pisa.ArtifactElementMethod, func() any { return new(MethodSchema) }},
+	StateElement:   {pisa.ArtifactElementState, func() any { return new(StateSchema) }},
+	EventElement:   {pisa.ArtifactElementEvent, func() any { return new(EventSchema) }},
+	ExternElement:  {pisakind: pisa.ArtifactElementExtern, generator: func() any { return new(ExternSchema) }},
 }
 
 type ConstantSchema struct {
@@ -44,7 +49,7 @@ type CatchExpressionSchema string
 
 type RoutineSchema struct {
 	Name string                `json:"name" yaml:"name"`
-	Mode state.Mode            `json:"mode" yaml:"mode"`
+	Mode string                `json:"mode" yaml:"mode"`
 	Kind engineio.CallsiteKind `json:"kind" yaml:"kind"`
 
 	Accepts []TypefieldSchema `json:"accepts" yaml:"accepts"`
@@ -73,9 +78,33 @@ type MethodSchema struct {
 	Catches  []CatchExpressionSchema `json:"catches" yaml:"catches"`
 }
 
+type ExternalRoutineSchema struct {
+	Name    string            `json:"name" yaml:"name"`
+	Accepts []TypefieldSchema `json:"accepts" yaml:"accepts"`
+	Returns []TypefieldSchema `json:"returns" yaml:"returns"`
+}
+
 type StateSchema struct {
-	Mode   state.Mode        `json:"mode" yaml:"mode"`
+	Mode   string            `json:"mode" yaml:"mode"`
 	Fields []TypefieldSchema `json:"fields" yaml:"fields"`
+}
+
+func StateModeToKind(mode string) pisa.StateKind {
+	switch mode {
+	case "logic":
+		return pisa.LogicState
+	case "actor":
+		return pisa.ActorState
+	default:
+		return -1
+	}
+}
+
+type ExternSchema struct {
+	Name      string                  `json:"name" yaml:"name"`
+	Logic     *StateSchema            `json:"logic" yaml:"logic"`
+	Actor     *StateSchema            `json:"actor" yaml:"actor"`
+	Endpoints []ExternalRoutineSchema `json:"endpoint" yaml:"endpoint"`
 }
 
 type EventSchema struct {

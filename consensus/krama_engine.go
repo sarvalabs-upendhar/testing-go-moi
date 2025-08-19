@@ -105,8 +105,6 @@ type stateManager interface {
 	IsInitialTesseract(ts *common.Tesseract, id identifiers.Identifier) (bool, error)
 	IsSealValid(ts *common.Tesseract) (bool, error)
 	RefreshCachedObject(id identifiers.Identifier, sysObj *state.SystemObject)
-	GetGuardianIncentives(id identifiers.KramaID) (uint64, error)
-	GetTotalIncentives() (uint64, error)
 	GetConsensusNodes(
 		id identifiers.Identifier,
 		hash common.Hash,
@@ -176,7 +174,6 @@ type Engine struct {
 	metrics             *Metrics
 	avgICSTime          time.Duration
 	icsCloseCh          chan common.ClusterID
-	lottery             *OperatorSelection
 	signatureVerifier   AggregatedSignatureVerifier
 	tsTracker           map[common.Hash]*utils.TSTrackerEvent
 	view                atomic.Uint64
@@ -212,11 +209,6 @@ func NewKramaEngine(
 		return nil, errors.Wrap(err, "WAL failed")
 	}
 
-	operatorSortition, err := NewOperatorSelection(selfID, val, state)
-	if err != nil {
-		return nil, err
-	}
-
 	ctx, ctxCancel := context.WithCancel(context.Background())
 	k := &Engine{
 		ctx:                 ctx,
@@ -241,7 +233,6 @@ func NewKramaEngine(
 		avgICSTime:          cfg.AccountWaitTime,
 		icsCloseCh:          make(chan common.ClusterID),
 		signatureVerifier:   verifier,
-		lottery:             operatorSortition,
 		tsTracker:           make(map[common.Hash]*utils.TSTrackerEvent),
 		trustedPeersPresent: len(cfg.TrustedPeers) > 0,
 		safety:              safety.NewConsensusSafety(db, val),
@@ -456,8 +447,6 @@ func (k *Engine) isOperatorEligible(peerID identifiers.KramaID, ixns common.Inte
 		}
 	}
 
-	fmt.Print("PositionInContextSet", metaInfo.PositionInContextSet)
-
 	if peerID == k.selfID {
 		if metaInfo.PositionInContextSet < 0 {
 			return false
@@ -666,6 +655,8 @@ func generateTesseract(
 		return nil, err
 	}
 
+	fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&", receiptHash)
+
 	ts := common.NewTesseract(
 		participants,
 		ixnsHash,
@@ -697,7 +688,7 @@ func (k *Engine) executionInteractions(cs *ktypes.ClusterState) (common.AccountS
 		return nil, errors.Wrap(err, "failed to load state transition objects")
 	}
 
-	if err := k.updateContextDelta(cs); err != nil {
+	if err = k.updateContextDelta(cs); err != nil {
 		return nil, err
 	}
 
@@ -735,15 +726,17 @@ func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesse
 		return nil, err
 	}
 
-	seed, err := k.lottery.computeICSSeed(cs.Participants)
-	if err != nil {
-		return nil, err
-	}
+	/*
+		seed, err := k.lottery.computeICSSeed(cs.Participants)
+		if err != nil {
+			return nil, err
+		}
 
-	newSeed, proof, err := k.lottery.computeVRFOutput(seed)
-	if err != nil {
-		return nil, err
-	}
+		newSeed, proof, err := k.lottery.computeVRFOutput(seed)
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	lockInfo := cs.Participants.LockInfo(true)
 	lastCommitHash := make(map[identifiers.Identifier]common.Hash)
@@ -758,8 +751,8 @@ func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesse
 		LastCommit:   lastCommitHash,
 		EvidenceHash: make(map[identifiers.Identifier]common.Hash),
 		AccountLocks: cs.Participants.LockInfo(true),
-		ICSSeed:      newSeed,
-		ICSProof:     proof,
+		// ICSSeed:      newSeed,
+		// ICSProof:     proof,
 	}
 
 	k.logger.Debug("Generating tesseracts", "cluster-id", cs.ClusterID)
@@ -1286,6 +1279,10 @@ func isReceiptsHashValid(ts *common.Tesseract, receipts common.Receipts) bool {
 	}
 
 	if ts.ReceiptsHash() != receiptsHash {
+		fmt.Println("Receipts hash mismatch", "ts-receipts-hash", ts.ReceiptsHash(), "post-exec-receipts-hash", receiptsHash)
+		fmt.Println("Post exec receipts", common.PrintReceipts(receipts))
+		fmt.Println("Pre exec receipts", common.PrintReceipts(ts.Receipts()))
+
 		return false
 	}
 

@@ -6,7 +6,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
-	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/compute/exlogics/tokenledger"
 
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -51,12 +50,12 @@ var (
 	DeployCallData, _ = polo.PolorizeDocument(inputs, polo.DocStructs())
 )
 
-func (te *TestEnvironment) deployLogic(
+func (te *TestEnvironment) logicDeploy(
 	acc tests.AccountWithMnemonic,
 	logicPayload *common.LogicPayload,
 ) (common.Hash, error) {
 	te.logger.Debug("deploy logic ",
-		"sender", acc.ID, "manifest", logicPayload.Manifest,
+		"sender", acc.ID,
 		"call site", logicPayload.Callsite, "call data", logicPayload.Calldata)
 
 	payload, err := logicPayload.Bytes()
@@ -91,7 +90,14 @@ func (te *TestEnvironment) deployLogic(
 		},
 	})
 
-	return te.moiClient.SendInteractions(context.Background(), sendIX)
+	ixHash, err := te.moiClient.SendInteractions(context.Background(), sendIX)
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	te.logger.Debug("Deploy Interaction fired", "ix-hash", ixHash)
+
+	return ixHash, nil
 }
 
 // 1. check if receipt generated for ix successfully
@@ -149,8 +155,8 @@ func (te *TestEnvironment) TestLogicDeploy() {
 			txnID int,
 			ixHash common.Hash,
 		)
-		checkReceiptSuccess func(t *testing.T, client *moiclient.Client, ixHash common.Hash) *rpcargs.RPCReceipt
-		expectedError       error
+		checkReceipt  func(t *testing.T, client *moiclient.Client, ixHash common.Hash) *rpcargs.RPCReceipt
+		expectedError error
 	}{
 		{
 			name:   "valid ledger logic deploy",
@@ -180,7 +186,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 				Calldata: DeployCallData.Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
-			checkReceiptSuccess: checkForReceiptSuccess, // TODO check if this can be structured in better way
+			checkReceipt: checkForReceiptSuccess, // TODO check if this can be structured in better way
 		},
 		{
 			name:   "empty call data",
@@ -190,7 +196,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 				Calldata: make(polo.Document).Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
-			expectedError: errors.New("failed to validate logic deploy"),
+			checkReceipt: checkForReceiptFailure,
 		},
 		{
 			name:   "invalid call site",
@@ -200,7 +206,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 				Calldata: DeployCallData.Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
-			expectedError: errors.New("failed to validate logic deploy"),
+			checkReceipt: checkForReceiptFailure,
 		},
 		{
 			name:   "invalid call data",
@@ -210,13 +216,13 @@ func (te *TestEnvironment) TestLogicDeploy() {
 				Calldata: []byte{1, 2, 3},
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
-			expectedError: errors.New("failed to validate logic deploy"),
+			checkReceipt: checkForReceiptFailure,
 		},
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.deployLogic(
+			ixHash, err := te.logicDeploy(
 				test.sender,
 				test.logicPayload,
 			)
@@ -229,8 +235,8 @@ func (te *TestEnvironment) TestLogicDeploy() {
 
 			require.NoError(te.T(), err)
 
-			if test.checkReceiptSuccess != nil {
-				test.checkReceiptSuccess(te.T(), te.moiClient, ixHash)
+			if test.checkReceipt != nil {
+				test.checkReceipt(te.T(), te.moiClient, ixHash)
 
 				return
 			}

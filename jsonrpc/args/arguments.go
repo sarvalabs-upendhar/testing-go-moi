@@ -90,6 +90,10 @@ type GetLogicStorageArgs struct {
 	Options    TesseractNumberOrHash  `json:"options"`
 }
 
+type GetValidatorsArgs struct {
+	KramaID identifiers.KramaID `json:"krama_id"`
+}
+
 type LogicManifestArgs struct {
 	LogicID  identifiers.LogicID   `json:"logic_id"`
 	Encoding string                `json:"encoding"`

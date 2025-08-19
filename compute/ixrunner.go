@@ -2,11 +2,12 @@ package compute
 
 import (
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
 type OpRunner func(
-	*common.IxOp, *common.ExecutionContext,
+	*common.IxOp, *engineio.RuntimeContext,
 	*FuelTank, *state.Transition,
 ) *common.IxOpResult
 
@@ -33,5 +34,5 @@ var opRunnerLookup = map[common.IxOpType]OpRunner{
 	common.IxGuardianClaim:     RunGuardianClaim,
 	common.IxLogicDeploy:       RunLogicDeploy,
 	common.IxLogicInvoke:       RunLogicInvoke,
-	common.IxLogicEnlist:       RunLogicEnlist,
+	// common.IxLogicEnlist:       RunLogicEnlist,
 }

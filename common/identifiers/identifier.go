@@ -159,6 +159,16 @@ func (id Identifier) IsParticipantVariant() bool {
 	return id.IsVariant() && id.Tag().Kind() == KindParticipant
 }
 
+// IsLogic returns true if the identifier is of LogicKind
+func (id Identifier) IsLogic() bool {
+	return id.Tag().Kind() == KindLogic
+}
+
+// IsAsset returns true if the identifier is of AssetKind
+func (id Identifier) IsAsset() bool {
+	return id.Tag().Kind() == KindAsset
+}
+
 // DeriveVariant returns a new Identifier with the given variant ID and specified flags set/unset.
 // Returns an error if the given flags are not supported for the Identifier tag.
 func (id Identifier) DeriveVariant(variant uint32, set []Flag, unset []Flag) (Identifier, error) {

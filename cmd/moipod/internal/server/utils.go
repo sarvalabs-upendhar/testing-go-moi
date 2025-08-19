@@ -377,7 +377,8 @@ func (p *Params) getDBConfig(path string) *config.DBConfig {
 
 func (p *Params) getExecutionConfig() *config.ExecutionConfig {
 	return &config.ExecutionConfig{
-		FuelLimit: uint64(p.rawCfg.Execution.FuelLimit),
+		ComputeLimit: uint64(p.rawCfg.Execution.ComputeFuelLimit),
+		StorageLimit: uint64(p.rawCfg.Execution.StorageFuelLimit),
 	}
 }
 

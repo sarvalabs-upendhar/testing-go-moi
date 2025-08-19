@@ -1360,7 +1360,13 @@ func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []
 	_, ok := object.storageTreeTxns[logicID]
 	if !ok {
 		if _, err := object.GetStorageTree(logicID); err != nil {
-			return err
+			if !errors.Is(err, common.ErrLogicStorageTreeNotFound) {
+				return err
+			}
+
+			if _, err = object.createStorageTreeForLogic(logicID); err != nil {
+				return err
+			}
 		}
 
 		object.storageTreeTxns[logicID] = iradix.New().Txn()
@@ -1465,7 +1471,7 @@ func (object *Object) isAssetRegistered(assetID identifiers.AssetID) error {
 
 // isAssetRegistered checks if the given logic ID is registered.
 func (object *Object) isLogicRegistered(logicID identifiers.LogicID) error {
-	_, err := object.getLogicObject(logicID)
+	_, err := object.getLogicObject(logicID.AsIdentifier())
 	if err != nil {
 		return err
 	}
@@ -1552,7 +1558,7 @@ func (object *Object) getAssetObject(assetID identifiers.AssetID, checkTxn bool)
 }
 
 // getLogicObject retrieves the logic object for the specified logic ID.
-func (object *Object) getLogicObject(logicID identifiers.LogicID) (*LogicObject, error) {
+func (object *Object) getLogicObject(logicID identifiers.Identifier) (*LogicObject, error) {
 	if object.logicTreeTxn != nil {
 		v, ok := object.logicTreeTxn.Get(logicID.Bytes())
 		if ok {
@@ -1610,13 +1616,13 @@ func (object *Object) FetchAssetObject(assetID identifiers.AssetID, fromTxn bool
 
 // FetchLogicObject returns the LogicObject associated with the given logicID,
 // This returns an error if the logicID is not registered
-func (object *Object) FetchLogicObject(logicID identifiers.LogicID) (*LogicObject, error) {
+func (object *Object) FetchLogicObject(logicID identifiers.Identifier) (*LogicObject, error) {
 	return object.getLogicObject(logicID)
 }
 
-// GenerateLogicStorageObject returns a LogicStorageObject scoped to a given types.LogicID
-func (object *Object) GenerateLogicStorageObject(logicID identifiers.LogicID) *LogicStorageObject {
-	return NewLogicStorageObject(logicID, object)
+// GenerateLogicStorageObject returns a LogicStorageObject
+func (object *Object) GenerateLogicStorageObject() *LogicStorageObject {
+	return NewLogicStorageObject(object)
 }
 
 func (object *Object) HasSufficientFuel(amount *big.Int) (bool, error) {

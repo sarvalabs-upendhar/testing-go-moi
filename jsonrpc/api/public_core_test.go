@@ -1834,6 +1834,61 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	}
 }
 
+func TestPublicCoreAPI_GetValidators(t *testing.T) {
+	stateManager := NewMockStateManager(t)
+	validators := tests.CreateTestValidators(t, 2)
+	stateManager.setValidators(validators)
+
+	coreAPI := NewPublicCoreAPI(nil, nil, stateManager, nil, nil, nil)
+
+	testcases := []struct {
+		name               string
+		args               rpcargs.GetValidatorsArgs
+		expectedError      error
+		expectedValidators []*rpcargs.RPCValidator
+	}{
+		{
+			name: "should return error if krama id is invalid",
+			args: rpcargs.GetValidatorsArgs{
+				KramaID: "invalid",
+			},
+			expectedError: common.ErrInvalidKramaID,
+		},
+		{
+			name: "should return error if krama not found",
+			args: rpcargs.GetValidatorsArgs{
+				KramaID: tests.RandomKramaID(t, 0),
+			},
+			expectedError: common.ErrKramaIDNotFound,
+		},
+		{
+			name: "should return the queried validator",
+			args: rpcargs.GetValidatorsArgs{
+				KramaID: validators[1].KramaID,
+			},
+			expectedValidators: rpcargs.CreateRPCValidators([]*common.Validator{validators[1]}),
+		},
+		{
+			name:               "should return all the validators",
+			expectedValidators: rpcargs.CreateRPCValidators(validators),
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			rpcValidators, err := coreAPI.Validators(&test.args)
+			if test.expectedError != nil {
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.ElementsMatch(t, test.expectedValidators, rpcValidators)
+		})
+	}
+}
+
 func TestPublicCoreAPI_GetDeeds(t *testing.T) {
 	ts := tests.CreateTesseracts(t, 2, nil)
 	height := int64(ts[0].Height(ts[0].AnyAccountID()))

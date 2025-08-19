@@ -16,12 +16,12 @@ var (
 	password               string
 	peerListFilePath       string
 	genesisFilePath        string
+	artifactFilePath       string
 	writeInstancesFilePath string
 	directoryPath          string
 	readInstancesFilePath  string
 	writeAccountsFilePath  string
 	readAccountsFilePath   string
-	GuardianLogicPath      string
 	writeLogsToFile        bool
 	shouldExecute          bool
 	enableSortition        bool

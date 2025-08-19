@@ -16,13 +16,11 @@ import (
 
 	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
 	rpcargs "github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/sarvalabs/go-polo"
 )
 
 var (
@@ -34,6 +32,8 @@ var (
 	walletAddress            string
 	nodePassword             string
 	localRPC                 string
+	kycProof                 string
+	stakeAmount              int64
 	mnemonicKeystorePath     string
 	mnemonicKeystorePassword string
 )
@@ -106,6 +106,18 @@ func parseRegisterFlags(cmd *cobra.Command) {
 		os.Getenv("NODE_PASSWORD"),
 		"Passcode to encrypt the node keystore.",
 	)
+	cmd.PersistentFlags().StringVar(
+		&kycProof,
+		"kyc-proof",
+		"",
+		"KYC Proof in Hex.",
+	)
+	cmd.PersistentFlags().Int64Var(
+		&stakeAmount,
+		"stake-amount",
+		10000,
+		"Initial Stake amount.",
+	)
 
 	_ = cmd.MarkPersistentFlagRequired("sender-id")
 	_ = cmd.MarkPersistentFlagRequired("sender-key-id")
@@ -114,6 +126,7 @@ func parseRegisterFlags(cmd *cobra.Command) {
 	_ = cmd.MarkPersistentFlagRequired("wallet-address")
 	_ = cmd.MarkPersistentFlagRequired("node-index")
 	_ = cmd.MarkPersistentFlagRequired("mnemonic-keystore-path")
+	_ = cmd.MarkPersistentFlagRequired("kyc-proof")
 }
 
 func validateFlags() error {
@@ -135,6 +148,14 @@ func validateFlags() error {
 
 	if nodeIndex == -1 {
 		return errors.New("invalid node index")
+	}
+
+	if kycProof == "" {
+		return errors.New("invalid KYC proof")
+	}
+
+	if stakeAmount <= 0 {
+		return errors.New("invalid stake amount")
 	}
 
 	if _, err := os.Stat(nodeDataDir); err != nil {
@@ -237,31 +258,15 @@ func registerGuardian(vault *crypto.KramaVault) {
 		cmdCommon.Err(errors.Wrap(err, "failed to fetch sequenceID"))
 	}
 
-	logicPayload := &common.LogicPayload{
-		Logic:    common.GuardianLogicID,
-		Callsite: "RegisterGuardian",
-		Calldata: func() polo.Document {
-			// Create a guardian object to register
-			guardian := guardianregistry.Guardian{
-				// OperatorID: moiID, TODO[Krama]: Check if this field is required
-				KramaID:   string(vault.KramaID()),
-				PublicKey: vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
-				Incentive: guardianregistry.Incentive{
-					Wallet: sender.AsIdentifier(),
-				},
-			}
-
-			doc := make(polo.Document)
-			// Set the guardian input data
-			if err = doc.Set("guardian", guardian, polo.DocStructs()); err != nil {
-				cmdCommon.Err(err)
-			}
-
-			return doc
-		}().Bytes(),
+	payload := &common.GuardianRegisterPayload{
+		KramaID:      vault.KramaID(),
+		WalletID:     sender.AsIdentifier(),
+		ConsensusKey: vault.GetConsensusPrivateKey().GetPublicKeyInBytes(),
+		KYCProof:     common.Hex2Bytes(kycProof),
+		Amount:       big.NewInt(stakeAmount),
 	}
 
-	rawPayload, err := logicPayload.Bytes()
+	rawPayload, err := payload.Bytes()
 	if err != nil {
 		cmdCommon.Err(err)
 	}
@@ -276,7 +281,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 		FuelLimit: 10000,
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IxLogicInvoke,
+				Type:    common.IxGuardianRegister,
 				Payload: rawPayload,
 			},
 		},
@@ -286,7 +291,7 @@ func registerGuardian(vault *crypto.KramaVault) {
 				LockType: common.MutateLock,
 			},
 			{
-				ID:       common.GuardianAccountID,
+				ID:       common.SystemAccountID,
 				LockType: common.MutateLock,
 			},
 		},

@@ -1,7 +1,6 @@
 package state
 
 import (
-	"github.com/manishmeganathan/depgraph"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -22,21 +21,8 @@ type LogicObject struct {
 	// Represents the hash of the Logic Manifest
 	Manifest common.Hash
 
-	Sealed     bool
-	Persistent *uint64
-	Ephemeral  *uint64
-
-	// Represents the dependency driver for managing logic elements relationships
-	Dependencies *depgraph.DependencyGraph
-	// Represents the collection of all engineio.LogicElement objects
-	Elements map[engineio.ElementPtr]*engineio.LogicElement
-	// Represents mapping of string names to engineio.Callsite
-	Callsites map[string]engineio.Callsite
-	// Represents mapping of string names to engineio.Classdef
-	Classdefs map[string]engineio.Classdef
-
-	// Represents mapping of string names to engineio.Eventdef
-	Eventdefs map[string]engineio.Eventdef
+	Sealed   bool
+	Artifact []byte
 }
 
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
@@ -45,18 +31,8 @@ func NewLogicObject(id identifiers.Identifier, descriptor engineio.LogicDescript
 		ID:         identifiers.MustLogicID(id),
 		EngineKind: descriptor.Engine,
 		Manifest:   descriptor.ManifestHash,
-
+		Artifact:   descriptor.Artifact,
 		Sealed:     false,
-		Persistent: descriptor.Persistent,
-		Ephemeral:  descriptor.Ephemeral,
-
-		Dependencies: descriptor.Depgraph,
-		Elements:     descriptor.Elements,
-
-		Callsites: descriptor.Callsites,
-		Classdefs: descriptor.Classdefs,
-
-		Eventdefs: descriptor.Eventdefs,
 	}
 }
 
@@ -64,55 +40,6 @@ func (logic LogicObject) LogicID() identifiers.LogicID { return logic.ID }
 func (logic LogicObject) Engine() engineio.EngineKind  { return logic.EngineKind }
 func (logic LogicObject) ManifestHash() [32]byte       { return logic.Manifest }
 func (logic LogicObject) IsSealed() bool               { return logic.Sealed }
-
-func (logic LogicObject) IsInteractable() bool {
-	// TODO: this is just a place holder
-	return true
-}
-
-func (logic LogicObject) PersistentState() (engineio.ElementPtr, bool) {
-	if logic.Persistent == nil {
-		return 0, false
-	}
-
-	return *logic.Persistent, true
-}
-
-func (logic LogicObject) EphemeralState() (engineio.ElementPtr, bool) {
-	if logic.Ephemeral == nil {
-		return 0, false
-	}
-
-	return *logic.Ephemeral, true
-}
-
-func (logic LogicObject) GetCallsite(name string) (engineio.Callsite, bool) {
-	callsite, ok := logic.Callsites[name]
-
-	return callsite, ok
-}
-
-func (logic LogicObject) GetClassdef(name string) (engineio.Classdef, bool) {
-	classdef, ok := logic.Classdefs[name]
-
-	return classdef, ok
-}
-
-func (logic LogicObject) GetEventdef(name string) (engineio.Eventdef, bool) {
-	eventdef, ok := logic.Eventdefs[name]
-
-	return eventdef, ok
-}
-
-func (logic LogicObject) GetElementDeps(ptr engineio.ElementPtr) []engineio.ElementPtr {
-	return logic.Dependencies.Dependencies(ptr)
-}
-
-func (logic LogicObject) GetElement(ptr engineio.ElementPtr) (*engineio.LogicElement, bool) {
-	element, ok := logic.Elements[ptr]
-
-	return element, ok
-}
 
 func (logic *LogicObject) Bytes() ([]byte, error) {
 	data, err := polo.Polorize(logic)
@@ -165,32 +92,54 @@ func GetManifestHashFromRawLogicObject(raw []byte) (common.Hash, error) {
 }
 
 type LogicStorageObject struct {
-	state *Object
-	logic identifiers.LogicID
+	obj *Object
 }
 
-func NewLogicStorageObject(logic identifiers.LogicID, state *Object) *LogicStorageObject {
-	return &LogicStorageObject{state: state, logic: logic}
+func NewLogicStorageObject(obj *Object) *LogicStorageObject {
+	return &LogicStorageObject{
+		obj: obj,
+	}
 }
 
-func (ctx LogicStorageObject) Identifier() identifiers.Identifier {
-	return ctx.state.Identifier()
+func (lso *LogicStorageObject) Root() [32]byte { return lso.obj.Identifier() }
+
+func (lso *LogicStorageObject) Identifier() [32]byte {
+	return lso.obj.Identifier()
 }
 
-func (ctx LogicStorageObject) LogicID() identifiers.LogicID {
-	return ctx.logic
+func (lso *LogicStorageObject) ReadPersistentStorage(logicID [32]byte, key [32]byte) ([]byte, error) {
+	return lso.obj.GetStorageEntry(logicID, key[:])
 }
 
-func (ctx LogicStorageObject) GetStorageEntry(key []byte) ([]byte, error) {
-	data, err := ctx.state.GetStorageEntry(ctx.logic, key)
-
-	return data, err
+func (lso *LogicStorageObject) WritePersistentStorage(logicID [32]byte, key [32]byte, value []byte) error {
+	return lso.obj.SetStorageEntry(logicID, key[:], value)
 }
 
-func (ctx LogicStorageObject) SetStorageEntry(key, val []byte) error {
-	err := ctx.state.SetStorageEntry(ctx.logic, key, val)
+func (lso *LogicStorageObject) DeletePersistentStorage(logicID [32]byte, key [32]byte) (uint64, error) {
+	val, err := lso.obj.GetStorageEntry(logicID, key[:])
+	if err != nil {
+		return 0, err
+	}
 
-	return err
+	if err = lso.obj.SetStorageEntry(logicID, key[:], nil); err != nil {
+		return 0, err
+	}
+
+	return uint64(len(val)), nil
+}
+
+func (lso *LogicStorageObject) WriteTransientStorage(logicID [32]byte, key [32]byte, value []byte) error {
+	// Transient storage is not supported in this implementation
+	return common.ErrTransientStorageNotSupported
+}
+
+func (lso *LogicStorageObject) DeleteTransientStorage(logicID, key [32]byte) (uint64, error) {
+	return 0, common.ErrTransientStorageNotSupported
+}
+
+func (lso *LogicStorageObject) ReadTransientStorage(logicID [32]byte, key [32]byte) ([]byte, error) {
+	// Transient storage is not supported in this implementation
+	return nil, common.ErrTransientStorageNotSupported
 }
 
 type Storage map[string][]byte

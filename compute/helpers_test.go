@@ -30,15 +30,6 @@ func createTestSystemObject(t *testing.T) *state.SystemObject {
 	return state.NewSystemObject(createTestStateObject(t))
 }
 
-func createTestGuardianStateObject(t *testing.T) *state.Object {
-	t.Helper()
-
-	return state.NewStateObject(
-		common.GuardianAccountID, nil, tests.NewTestTreeCache(),
-		nil, common.Account{}, state.NilMetrics(), false,
-	)
-}
-
 func createTestAsset(t *testing.T, supply *big.Int) (*state.Object, *state.Object, identifiers.AssetID) {
 	t.Helper()
 
@@ -263,13 +254,13 @@ func createTestMandate(
 }
 
 func createLockup(
-	t *testing.T, sender, beneficiary *state.Object,
+	t *testing.T, sender *state.Object, beneficiary identifiers.Identifier,
 	assetID identifiers.AssetID, amount *big.Int,
 ) {
 	t.Helper()
 
 	err := lockupAsset(sender, &common.AssetActionPayload{
-		Beneficiary: beneficiary.Identifier(),
+		Beneficiary: beneficiary,
 		AssetID:     assetID,
 		Amount:      amount,
 	})

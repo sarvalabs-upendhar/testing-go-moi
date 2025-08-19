@@ -2367,9 +2367,8 @@ func TestSetStorageEntry(t *testing.T) {
 		expectedError error
 	}{
 		{
-			name:          "should return error if storage tree is not initiated",
-			soParams:      stateObjectParamsWithASTAndMST(t, nil, mockMerkleTreeWithDB()),
-			expectedError: common.ErrLogicStorageTreeNotFound,
+			name:     "should create tree if storage tree is not initiated",
+			soParams: stateObjectParamsWithASTAndMST(t, nil, mockMerkleTreeWithDB()),
 		},
 		{
 			name: "should add storage entry",
@@ -2664,7 +2663,7 @@ func TestGetLogicObject(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
 
-			actualLogicObject, err := sObj.getLogicObject(logicID)
+			actualLogicObject, err := sObj.getLogicObject(logicID.AsIdentifier())
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2884,7 +2883,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 
 			require.NoError(t, err)
 
-			actualLogicObject, err := sObj.getLogicObject(logicID)
+			actualLogicObject, err := sObj.getLogicObject(logicID.AsIdentifier())
 			require.NoError(t, err)
 			require.Equal(t, logicObject, actualLogicObject)
 		})

@@ -1,0 +1,113 @@
+syntax: 1
+engine:
+  kind: PISA
+  flags: []
+  version: 0.5.0
+kind: logic
+elements:
+- ptr: 0
+  kind: literal
+  data:
+    type: u64
+    value: '0x032a'
+- ptr: 1
+  kind: state
+  data:
+    mode: logic
+    fields:
+    - slot: 0
+      label: Answer
+      type: u64
+- ptr: 2
+  kind: state
+  data:
+    mode: actor
+    fields:
+    - slot: 0
+      label: ActorAnswer
+      type: u64
+- ptr: 3
+  deps:
+  - 0
+  - 1
+  kind: callable
+  data:
+    name: Init
+    mode: dynamic
+    kind: deploy
+    accepts: []
+    returns: []
+    executes:
+      asm:
+      - LLOAD $0 &0
+      - LDPTR1 $1 0x0
+      - LMAKE $1 $1
+      - DISPER $0 $1
+      - STORE $0
+    catches: []
+- ptr: 4
+  deps:
+  - 1
+  kind: callable
+  data:
+    name: GetLogicAnswer
+    mode: static
+    kind: invoke
+    accepts: []
+    returns:
+    - slot: 0
+      label: logic_answer
+      type: u64
+    executes:
+      asm:
+      - LLOAD $0 &0
+      - YIELD $0 &0
+      - DUMP $0
+    catches: []
+- ptr: 5
+  deps:
+  - 2
+  kind: callable
+  data:
+    name: GetActorAnswer
+    mode: static
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: actorId
+      type: identifier
+    returns:
+    - slot: 0
+      label: actor_answer
+      type: u64
+    executes:
+      asm:
+      - OBTAIN $0 &0
+      - ALOAD $1 $0 &0
+      - YIELD $1 &0
+      - DUMP $1
+    catches: []
+- ptr: 6
+  deps:
+  - 2
+  kind: callable
+  data:
+    name: SetActorAnswer
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: actorId
+      type: identifier
+    - slot: 1
+      label: new_answer
+      type: u64
+    returns: []
+    executes:
+      asm:
+      - OBTAIN $0 &0
+      - ALOAD $1 $0 &0
+      - OBTAIN $2 &1
+      - DISPER $1 $2
+      - STORE $1
+    catches: []

@@ -21,7 +21,7 @@ func GetValue(storage engineio.StorageReader) (bool, error) {
 	key := pisa.GenerateStorageKey(SlotValue)
 
 	// Retrieve the value for the storage key
-	val, err := storage.GetStorageEntry(key)
+	val, err := storage.ReadPersistentStorage(storage.Identifier(), key)
 	if err != nil {
 		return false, err
 	}

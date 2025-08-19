@@ -18,7 +18,6 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p-pubsub"
-	"github.com/manishmeganathan/depgraph"
 	"github.com/munna0908/smt"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-polo"
@@ -666,7 +665,6 @@ func getLogicObjectParamsWithLogicID(logicID identifiers.LogicID) *createLogicOb
 	return &createLogicObjectParams{
 		id: logicID,
 		logicCallback: func(object *LogicObject) {
-			object.Dependencies = depgraph.NewDependencyGraph()
 		},
 	}
 }
@@ -775,7 +773,7 @@ func setGuardianPublicKeys(t *testing.T, state *Object, ids []identifiers.KramaI
 		require.NoError(t, err)
 
 		// Retrieve the value for the storage key
-		err = state.SetStorageEntry(common.GuardianLogicID, key, pk)
+		err = state.WritePersistentStorage(common.GuardianLogicID, key, pk)
 		require.NoError(t, err)
 	}
 }
@@ -951,7 +949,10 @@ func stateObjectParamsWithASTAndMST(
 
 	return &createStateObjectParams{
 		soCallback: func(so *Object) {
-			so.storageTrees = ast
+			if ast != nil {
+				so.storageTrees = ast
+			}
+
 			so.metaStorageTree = mst
 		},
 	}

@@ -67,6 +67,9 @@ type StateManager interface {
 	GetEphemeralStorageEntry(identifiers.Identifier, identifiers.LogicID, []byte, common.Hash) ([]byte, error)
 	GetSubAccountCount(id identifiers.Identifier) (uint64, error)
 	GetMetaContextObject(id identifiers.Identifier, hash common.Hash) (*state.MetaContextObject, error)
+
+	GetValidators() []*common.Validator
+	GetValidatorByKramaID(kramaID identifiers.KramaID) (*common.Validator, error)
 }
 
 type ExecutionManager interface {

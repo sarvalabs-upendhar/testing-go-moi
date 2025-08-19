@@ -346,6 +346,16 @@ func (m *MockStateManager) GetDeeds(
 	panic("implement me")
 }
 
+func (m *MockStateManager) GetValidators() []*common.Validator {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m *MockStateManager) GetValidatorByKramaID(kramaID identifiers.KramaID) (*common.Validator, error) {
+	// TODO implement me
+	panic("implement me")
+}
+
 func createReceipt(t *testing.T, callBack func(r *common.Receipt)) *common.Receipt {
 	t.Helper()
 

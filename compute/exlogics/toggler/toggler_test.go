@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio/test"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -19,7 +20,7 @@ func TestTogglerTestSuite(t *testing.T) {
 }
 
 type TogglerTestSuite struct {
-	engineio.TestSuite
+	test.SingleLogicSuite
 }
 
 var SeederID = identifiers.RandomParticipantIDv0().AsIdentifier()
@@ -38,17 +39,17 @@ func (suite *TogglerTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Deploy the logic to initialise its initial state
-	suite.Enlist("Seed", calldata, nil, nil)
+	suite.Enlist("Seed", calldata, nil, nil, nil)
 
 	// Check the balance of the seeder
 	keyValue := pisa.GenerateStorageKey(SlotValue)
-	suite.CheckEphemeralStorage(SeederID, keyValue, false)
+	suite.CheckActorStorage(SeederID, keyValue, false)
 }
 
 func (suite *TogglerTestSuite) TestToggle() {
-	suite.Invoke("Toggle", nil, nil, nil)
+	suite.Invoke("Toggle", nil, nil, nil, nil)
 
 	// Check the balance of the seeder
 	keyValue := pisa.GenerateStorageKey(SlotValue)
-	suite.CheckEphemeralStorage(SeederID, keyValue, true)
+	suite.CheckActorStorage(SeederID, keyValue, true)
 }

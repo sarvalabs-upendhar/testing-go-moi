@@ -248,7 +248,7 @@ func (ms *MockStateManager) registerAccounts(ids ...identifiers.Identifier) {
 
 func (ms *MockStateManager) IsLogicRegistered(logicID identifiers.LogicID) error {
 	if _, ok := ms.logicRegistration[logicID]; !ok {
-		return errors.New("logic id is not registered")
+		return errors.New("logic is not registered")
 	}
 
 	return nil
@@ -266,7 +266,6 @@ func CreateTestIxpool(
 	cfgCallback func(cfg *config.IxPoolConfig),
 	skipSignatureVerification bool,
 	sm *MockStateManager,
-	exec *MockExecutionManager,
 	network *mockNetwork,
 ) *IxPool {
 	t.Helper()
@@ -295,7 +294,6 @@ func CreateTestIxpool(
 		new(utils.TypeMux),
 		network,
 		sm,
-		exec,
 		cfg,
 		NilMetrics(),
 		verifier,

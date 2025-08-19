@@ -3,10 +3,12 @@ package compute
 import (
 	"math/big"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
+	"github.com/hashicorp/go-hclog"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/config"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -15,13 +17,12 @@ import (
 type IxExecutor struct {
 	Interactions common.Interactions
 	execContext  *common.ExecutionContext
+	logger       hclog.Logger
 
-	mgr *Manager
+	cfg *config.ExecutionConfig
 
-	transition *state.Transition
-
-	metrics *Metrics
-
+	transition   *state.Transition
+	metrics      *Metrics
 	commitHashes common.AccountStateHashes
 }
 
@@ -32,12 +33,21 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 	executor.Interactions = ixs
 	executor.execContext = ctx
 
+	engine, ok := engineio.FetchEngine(engineio.PISA)
+	if !ok {
+		return errors.New("Engine not found")
+	}
+
+	runtimeCtx := &engineio.RuntimeContext{
+		ClusterContext: ctx,
+		Runtime:        engine.Runtime(ctx.Time),
+	}
+
 	for _, ix := range executor.Interactions.IxList() {
 		checkpoint := executor.transition.Snapshot()
 
 		// Execute the interaction using the transition state
-		if err := executor.executeInteraction(ix, ctx, checkpoint); err != nil {
-			executor.transition.UpdateSnapshot(checkpoint)
+		if err := executor.executeInteraction(ix, runtimeCtx, checkpoint); err != nil {
 			executor.metrics.captureNumOfExecutionFailure(1)
 
 			return errors.Wrap(err, "execution failed")
@@ -59,12 +69,17 @@ func (executor *IxExecutor) Execute(ixs common.Interactions, ctx *common.Executi
 
 func (executor *IxExecutor) executeInteraction(
 	ix *common.Interaction,
-	ctx *common.ExecutionContext,
+	ctx *engineio.RuntimeContext,
 	snapshot *state.Transition,
 ) error {
+	if err := AddActorsToRuntime(ix, ctx.Runtime, executor.transition); err != nil {
+		return err
+	}
 	// Run the interaction
-	receipt, err := executor.mgr.runInteraction(ix, ctx, executor.transition, true)
+	receipt, err := executor.runInteraction(ix, ctx, executor.transition, true)
 	if err != nil {
+		executor.transition.UpdateSnapshot(snapshot)
+
 		return err
 	}
 
@@ -87,6 +102,67 @@ func (executor *IxExecutor) executeInteraction(
 	)
 
 	return nil
+}
+
+func (executor *IxExecutor) runInteraction(
+	ix *common.Interaction, ctx *engineio.RuntimeContext,
+	transition *state.Transition, useIxFuelLimit bool,
+) (
+	receipt *common.Receipt, err error,
+) {
+	var tank *FuelTank
+
+	receipt = common.NewReceipt(ix)
+
+	if useIxFuelLimit {
+		// Determine the tank limit from the interaction
+		// FIXME: We use the default compute limit until the costing mechanism is implemented
+		tank = NewFuelTank(ix.FuelLimit(), executor.cfg.StorageLimit)
+
+		// Check that the sender has sufficient balance
+		if ok, _ := transition.HasSufficientFuel(ix.SenderID(), ix.Cost()); !ok {
+			receipt.Status = common.ReceiptInsufficientFuel
+
+			return receipt, nil
+		}
+	} else {
+		// Determine the tank limit from the node configuration
+		tank = NewFuelTank(executor.cfg.ComputeLimit, executor.cfg.StorageLimit)
+	}
+
+	// Set up a defer function to recover from any panic
+	// that may occur while executing the interaction
+	defer func() {
+		if trace := recover(); trace != nil {
+			err = errors.New("execution failed: executor panicked!")
+
+			executor.logger.Debug("EXECUTION PANIC OCCURRED", "trace:", trace)
+		}
+	}()
+
+	receipt.IxOps = make([]*common.IxOpResult, 0)
+
+	for idx, op := range ix.Ops() {
+		// Lookup the runner for the operation type
+		runner := lookupOpRunner(op.Type())
+		// Call the interaction runner and get the result
+		opResult := runner(ix.GetIxOp(idx), ctx, tank, transition)
+		receipt.AddIxOpResult(opResult)
+
+		switch opResult.Status {
+		case common.ResultExceptionRaised:
+			receipt.SetStatus(common.ReceiptStateReverted)
+			receipt.SetFuelUsed(tank.ComputeConsumed)
+		case common.ResultDefectRaised:
+			receipt.SetStatus(common.ReceiptStateReverted)
+			receipt.SetFuelUsed(ix.FuelLimit())
+		case common.ResultOk:
+			receipt.SetStatus(common.ReceiptOk)
+			receipt.SetFuelUsed(tank.ComputeConsumed)
+		}
+	}
+
+	return receipt, err
 }
 
 // UpdateContext updates the context of the participant accounts using context delta

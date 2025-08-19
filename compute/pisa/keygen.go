@@ -3,22 +3,25 @@ package pisa
 import (
 	"golang.org/x/crypto/blake2b"
 
-	"github.com/sarvalabs/go-pisa/state"
+	"github.com/sarvalabs/go-pisa/storage"
 	"github.com/sarvalabs/go-polo"
 )
 
 type (
-	Accessor = state.Accessor
-	ArrIdx   = state.ArrayIndex
-	MapKey   = state.MapKey
-	ClsFld   = state.ClassField
+	ArrIdx = storage.ArrayIndex
+	MapKey = storage.MapKey
+	ClsFld = storage.ClassField
 )
 
-func GenerateStorageKey(slot uint8, accessors ...state.Accessor) []byte {
-	key := state.GenerateStorageKey(slot, accessors...)
+func KeySlice(key [32]byte) []byte {
+	return key[:]
+}
+
+func GenerateStorageKey(slot uint8, accessors ...storage.KeyLayer) [32]byte {
+	key := storage.NewKey(slot, accessors...)
 	key32 := key.Bytes32()
 
-	return key32[:]
+	return key32
 }
 
 func MakeMapKey(object any) MapKey {

@@ -5,9 +5,8 @@ import (
 	"sort"
 	"sync/atomic"
 
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -330,26 +329,6 @@ func (op *IxOp) Manifest() []byte {
 	return payload.Manifest
 }
 
-// Callsite returns the callsite from the logic payload.
-func (op *IxOp) Callsite() string {
-	payload, err := op.GetLogicPayload()
-	if err != nil {
-		return ""
-	}
-
-	return payload.Callsite
-}
-
-// Calldata returns the calldata from the logic payload.
-func (op *IxOp) Calldata() []byte {
-	payload, err := op.GetLogicPayload()
-	if err != nil {
-		return nil
-	}
-
-	return payload.Calldata
-}
-
 // LogicID returns the logic identifier from the logic payload.
 func (op *IxOp) LogicID() identifiers.LogicID {
 	payload, err := op.GetLogicPayload()
@@ -438,33 +417,6 @@ func (op *IxOp) Target() identifiers.Identifier {
 	return op.target
 }
 
-type Signature struct {
-	ID        identifiers.Identifier
-	KeyID     uint64
-	Signature []byte
-}
-
-type Signatures []Signature
-
-// Bytes serializes signatures to bytes.
-func (s Signatures) Bytes() ([]byte, error) {
-	data, err := polo.Polorize(s)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize signatures payload")
-	}
-
-	return data, nil
-}
-
-// FromBytes deserializes signatures from bytes.
-func (s *Signatures) FromBytes(data []byte) error {
-	if err := polo.Depolorize(s, data); err != nil {
-		return errors.Wrap(err, "failed to depolorize signatures payload")
-	}
-
-	return nil
-}
-
 // Benefactor returns the benefactor's id if applicable; otherwise, returns nil id.
 func (op *IxOp) Benefactor() identifiers.Identifier {
 	if op.Type() == IxAssetTransfer || op.Type() == IxAssetRelease {
@@ -477,6 +429,73 @@ func (op *IxOp) Benefactor() identifiers.Identifier {
 	}
 
 	return identifiers.Nil
+}
+
+// Following methods implement engineio.Action interface
+
+func (op *IxOp) Callsite() string {
+	payload, err := op.GetLogicPayload()
+	if err != nil {
+		// Panic here because the caller must ensure the op is of type IxLogicInvoke or IxLogicEnlist before calling
+		panic("failed to get logic payload")
+	}
+
+	return payload.Callsite
+}
+
+func (op *IxOp) Calldata() polo.Document {
+	payload, err := op.GetLogicPayload()
+	if err != nil {
+		panic("failed to get logic payload")
+	}
+
+	doc := make(polo.Document)
+
+	if len(payload.Calldata) == 0 {
+		return doc
+	}
+
+	if err = polo.Depolorize(&doc, payload.Calldata); err != nil {
+		return doc
+	}
+
+	return doc
+}
+
+func (op *IxOp) Timestamp() uint64 {
+	return 0
+}
+
+func (op *IxOp) Identifier() [32]byte {
+	return op.Hash()
+}
+
+func (op *IxOp) Origin() [32]byte {
+	return op.Sender().ID
+}
+
+func (op *IxOp) Access(id [32]byte) (bool, error) {
+	info, ok := op.Participants()[id]
+	if !ok {
+		return false, errors.New("actor not found")
+	}
+
+	return info.LockType == MutateLock, nil
+}
+
+func (op *IxOp) AccessList() map[[32]byte]bool {
+	accessList := make(map[[32]byte]bool, len(op.Participants()))
+
+	for id, info := range op.Participants() {
+		accessList[id] = info.LockType == MutateLock
+	}
+
+	return accessList
+}
+
+func (op *IxOp) Parameters() map[string][]byte {
+	// This method is not implemented for IxOp.
+	return nil
 }
 
 // Interaction represents a batch of ops with associated data and metadata.
@@ -749,7 +768,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 
 			info.AccType = AssetAccount
 
-		case IxLogicDeploy, IxLogicInvoke, IxLogicEnlist:
+		case IxLogicDeploy, IxLogicInvoke: // IxLogicEnlist
 			logicPayload := new(LogicPayload)
 			if err = logicPayload.FromBytes(op.Payload); err != nil {
 				return nil, err
@@ -815,6 +834,60 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			}
 
 			ix.ops[idx].target = logicID.AsIdentifier()
+
+		case IxGuardianRegister:
+			guardianRegisterPayload := new(GuardianRegisterPayload)
+			if err = guardianRegisterPayload.FromBytes(op.Payload); err != nil {
+				return nil, err
+			}
+
+			ix.ops[idx] = &IxOp{
+				Interaction: ix,
+				OpType:      op.Type,
+				Payload: &IxOpPayload{
+					guardian: &GuardianPayload{
+						Register: guardianRegisterPayload,
+					},
+				},
+			}
+
+			_, ok := ix.ps[SystemAccountID]
+			if !ok {
+				ix.ps[SystemAccountID] = &ParticipantInfo{
+					AccType:   SystemAccount,
+					IsSigner:  false,
+					LockType:  MutateLock,
+					IsGenesis: false,
+					ID:        SystemAccountID,
+				}
+			}
+
+		case IxGuardianStake, IxGuardianUnstake, IxGuardianWithdraw, IxGuardianClaim:
+			guardianActionPayload := new(GuardianActionPayload)
+			if err = guardianActionPayload.FromBytes(op.Payload); err != nil {
+				return nil, err
+			}
+
+			ix.ops[idx] = &IxOp{
+				Interaction: ix,
+				OpType:      op.Type,
+				Payload: &IxOpPayload{
+					guardian: &GuardianPayload{
+						Action: guardianActionPayload,
+					},
+				},
+			}
+
+			_, ok := ix.ps[SystemAccountID]
+			if !ok {
+				ix.ps[SystemAccountID] = &ParticipantInfo{
+					AccType:   SystemAccount,
+					IsSigner:  false,
+					LockType:  MutateLock,
+					IsGenesis: false,
+					ID:        SystemAccountID,
+				}
+			}
 
 		default:
 			return nil, ErrInvalidInteractionType

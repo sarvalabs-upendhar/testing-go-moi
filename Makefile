@@ -5,7 +5,7 @@ lint:
 build:
 	go build -o ./build/ ./cmd/moipod
 
-install: moipod mcutils logiclab
+install: moipod mcutils
 
 moipod:
 	go install ./cmd/moipod
@@ -13,8 +13,6 @@ moipod:
 mcutils:
 	go install ./cmd/mcutils
 
-logiclab:
-	go install ./cmd/logiclab
 
 test:
 	make install && go test ./... -v -race --shuffle=on --short --count=1 --timeout=5m

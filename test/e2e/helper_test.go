@@ -112,7 +112,7 @@ func deployLogic(
 	sender tests.AccountWithMnemonic,
 	payload *common.LogicPayload,
 ) identifiers.LogicID {
-	ixHash, err := te.deployLogic(sender, payload)
+	ixHash, err := te.logicDeploy(sender, payload)
 	require.NoError(te.T(), err)
 
 	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
@@ -138,16 +138,18 @@ func getBalance(te *TestEnvironment, id identifiers.Identifier, assetID identifi
 	return senderBal.ToInt().Uint64()
 }
 
-// func checkForReceiptFailure(t *testing.T, client *moiclient.Client, ixHash common.Hash) {
-//	t.Helper()
-//
-//	// make sure interaction executed successfully
-//	ctx, cancel := context.WithTimeout(context.Background(), DefaultConfirmIxTimeout)
-//	defer cancel()
-//
-//	receipt := moiclient.RetryFetchReceipt(t, ctx, client, ixHash)
-//	require.Equal(t, common.ReceiptStateReverted, receipt.Status)
-// }
+func checkForReceiptFailure(t *testing.T, client *moiclient.Client, ixHash common.Hash) *rpcargs.RPCReceipt {
+	t.Helper()
+
+	// make sure interaction executed successfully
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultConfirmIxTimeout)
+	defer cancel()
+
+	receipt := moiclient.RetryFetchReceipt(t, ctx, client, ixHash)
+	require.Equal(t, common.ReceiptStateReverted, receipt.Status)
+
+	return receipt
+}
 
 func checkForReceiptSuccess(t *testing.T, client *moiclient.Client, ixHash common.Hash) *rpcargs.RPCReceipt {
 	t.Helper()
@@ -156,7 +158,10 @@ func checkForReceiptSuccess(t *testing.T, client *moiclient.Client, ixHash commo
 	defer cancel()
 
 	receipt := moiclient.RetryFetchReceipt(t, ctx, client, ixHash)
-	require.Equal(t, common.ReceiptOk, receipt.Status)
+
+	require.Equal(t, common.ReceiptOk, receipt.Status, "Interaction failed")
+
+	require.NotEqual(t, uint64(0), receipt.FuelUsed.ToUint64())
 
 	return receipt
 }

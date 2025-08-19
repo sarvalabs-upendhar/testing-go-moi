@@ -38,10 +38,10 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 		"Path to genesis.json file.",
 	)
 	genesisTestCmd.Flags().StringVar(
-		&GuardianLogicPath,
-		"guardian-path",
-		"artifact.json",
-		"Path to guardian-logic file, i.e artifact.json file.",
+		&artifactFilePath,
+		"artifact-path",
+		"",
+		"Path to logic artifact file.",
 	)
 	genesisTestCmd.Flags().StringVar(
 		&readAccountsFilePath,
@@ -119,19 +119,21 @@ func createTestGenesisFile() {
 		Accounts: make([]common.AccountSetupArgs, 0, accCount),
 	}
 
-	guardianArtifact, err := cmdcommon.ReadArtifactFile(GuardianLogicPath)
-	if err != nil {
-		cmdcommon.Err(err)
-	}
+	if artifactFilePath != "" {
+		logicArtifact, err := cmdcommon.ReadArtifactFile(artifactFilePath)
+		if err != nil {
+			cmdcommon.Err(err)
+		}
 
-	g.AddLogic(
-		common.LogicSetupArgs{
-			Name:           guardianArtifact.Name,
-			Callsite:       guardianArtifact.Callsite,
-			Calldata:       guardianArtifact.Calldata,
-			Manifest:       guardianArtifact.Manifest,
-			ConsensusNodes: getKramaIDs(consensusNodesCount),
-		})
+		g.AddLogic(
+			common.LogicSetupArgs{
+				Name:           logicArtifact.Name,
+				Callsite:       logicArtifact.Callsite,
+				Calldata:       logicArtifact.Calldata,
+				Manifest:       logicArtifact.Manifest,
+				ConsensusNodes: getKramaIDs(consensusNodesCount),
+			})
+	}
 
 	g.AddSargaAccount(common.AccountSetupArgs{
 		ID:             common.SargaAccountID,

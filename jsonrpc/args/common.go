@@ -405,6 +405,25 @@ func CreateRPCAccountKeys(accountKeys []*common.AccountKey) []*RPCAccountKey {
 	return rpcAccountKeys
 }
 
+func CreateRPCValidators(validators []*common.Validator) []*RPCValidator {
+	rpcValidators := make([]*RPCValidator, len(validators))
+
+	for i, validator := range validators {
+		rpcValidators[i] = &RPCValidator{
+			ID:              validator.ID,
+			KramaID:         validator.KramaID,
+			ActiveStake:     (*hexutil.Big)(validator.ActiveStake),
+			InactiveStake:   (*hexutil.Big)(validator.InactiveStake),
+			SocialTokens:    (*hexutil.Big)(validator.SocialTokens),
+			BehaviourTokens: (*hexutil.Big)(validator.BehaviourTokens),
+			Rewards:         (*hexutil.Big)(validator.Rewards),
+			WalletID:        validator.WalletAddress,
+		}
+	}
+
+	return rpcValidators
+}
+
 func UnmarshalTopic(topics []interface{}) ([][]common.Hash, error) {
 	resTopics := [][]common.Hash{}
 	// decode topics, either "" or ["", ""] or null

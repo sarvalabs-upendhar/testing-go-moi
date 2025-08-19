@@ -61,7 +61,7 @@ type ClusterConfig struct {
 	WithLogs            bool
 	logsDirOnce         sync.Once
 	WithStdout          bool
-	GuardianPath        string
+	FlipperPath         string
 	ShouldExecute       bool
 	OldState            bool
 	EnableSortition     bool
@@ -87,7 +87,7 @@ func DefaultClusterConfig() *ClusterConfig {
 		RandomCount:         1,
 		WithLogs:            true,
 		WithStdout:          true,
-		GuardianPath:        "./",
+		FlipperPath:         "./",
 		ShouldExecute:       true,
 		EnableSortition:     false,
 	}
@@ -101,8 +101,8 @@ func (c *ClusterConfig) Dir(name string) string {
 	return filepath.Join(c.TempDir, name)
 }
 
-func (c *ClusterConfig) GuardianPathDir(name string) string {
-	return filepath.Join(c.GuardianPath, name)
+func (c *ClusterConfig) FlipperPathDir(name string) string {
+	return filepath.Join(c.FlipperPath, name)
 }
 
 func (c *ClusterConfig) initLogsDir() {

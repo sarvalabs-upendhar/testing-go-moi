@@ -20,7 +20,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
 	"github.com/sarvalabs/go-moi/state/tree"
 	"github.com/sarvalabs/go-moi/storage"
 	"github.com/sarvalabs/go-moi/storage/db"
@@ -718,44 +717,6 @@ func (sm *StateManager) GetPublicKeys(ids ...identifiers.KramaID) ([][]byte, err
 	return pubkeys, nil
 }
 
-func (sm *StateManager) GetGuardianIncentives(id identifiers.KramaID) (uint64, error) {
-	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
-
-	defer func() {
-		if err := sm.sysLocks.Unlock(common.GuardianAccountID.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "id", common.GuardianAccountID)
-		}
-	}()
-
-	object, err := sm.getStateObject(common.GuardianAccountID, common.NilHash)
-	if err != nil {
-		return 0, err
-	}
-
-	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
-
-	return guardianregistry.GetGuardianIncentive(storageReader, id)
-}
-
-func (sm *StateManager) GetTotalIncentives() (uint64, error) {
-	sm.sysLocks.Lock(common.GuardianAccountID.Hex())
-
-	defer func() {
-		if err := sm.sysLocks.Unlock(common.GuardianAccountID.Hex()); err != nil {
-			sm.logger.Error("failed to unlock object", "err", err, "id", common.GuardianAccountID)
-		}
-	}()
-
-	object, err := sm.getStateObject(common.GuardianAccountID, common.NilHash)
-	if err != nil {
-		return 0, err
-	}
-
-	storageReader := NewLogicStorageObject(common.GuardianLogicID, object)
-
-	return guardianregistry.GetTotalIncentives(storageReader)
-}
-
 // IsLogicRegistered checks if the logicID is registered with the account.
 // If the logicID is not registered, this returns an error
 func (sm *StateManager) IsLogicRegistered(logicID identifiers.LogicID) error {
@@ -930,7 +891,7 @@ func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash 
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	logicObject, err := so.getLogicObject(logicID)
+	logicObject, err := so.getLogicObject(logicID.AsIdentifier())
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch logic object")
 	}
@@ -941,6 +902,19 @@ func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash 
 	}
 
 	return logicManifest, nil
+}
+
+func (sm *StateManager) GetValidators() []*common.Validator {
+	return sm.GetSystemObject().Validators()
+}
+
+func (sm *StateManager) GetValidatorByKramaID(kramaID identifiers.KramaID) (*common.Validator, error) {
+	validator, err := sm.GetSystemObject().ValidatorByKramaID(kramaID)
+	if err != nil {
+		return nil, err
+	}
+
+	return validator, nil
 }
 
 func (sm *StateManager) getAuxiliaryStateObjects() (ObjectMap, error) {

@@ -9,8 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sarvalabs/go-moi/compute/pisa"
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
+	"github.com/sarvalabs/go-moi/state"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -52,7 +51,7 @@ type TestSingleNode struct {
 }
 
 func (tn *TestSingleNode) runCriticallyNecessaryTearDown() {
-	err := tn.bgClient.DestroyNetwork(context.Background(), true)
+	err := tn.bgClient.DestroyNetwork(context.Background(), false)
 	tn.Suite.NoError(err)
 }
 
@@ -692,8 +691,8 @@ func (tn *TestSingleNode) TestLogicStorage() {
 		{
 			name: "fetch storage value for existing logic ID",
 			logicStorageArgs: &rpcargs.GetLogicStorageArgs{
-				LogicID:    common.GuardianLogicID,
-				StorageKey: pisa.GenerateStorageKey(guardianregistry.SlotGuardians),
+				LogicID:    common.SystemLogicID,
+				StorageKey: state.GenesisTimeKey,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -737,7 +736,7 @@ func (tn *TestSingleNode) TestLogics() {
 		{
 			name: "fetch logicIDs for existing id",
 			LogicIDArgs: &rpcargs.GetLogicIDArgs{
-				ID: common.GuardianAccountID,
+				ID: bgclient.FlipperAccountID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -766,7 +765,7 @@ func (tn *TestSingleNode) TestLogics() {
 			}
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), common.GuardianLogicID, logicIDs[0])
+			require.Equal(tn.T(), bgclient.FlipperLogicID, logicIDs[0])
 		})
 	}
 }
@@ -780,7 +779,7 @@ func (tn *TestSingleNode) TestLogicManifest() {
 		{
 			name: "fetch json logic manifest for existing logicID",
 			logicManifestArgs: &rpcargs.LogicManifestArgs{
-				LogicID:  common.GuardianLogicID,
+				LogicID:  bgclient.FlipperLogicID,
 				Encoding: "JSON",
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -1351,7 +1350,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 					},
 				},
 			},
-			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(3473)),
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(2117)),
 		},
 		{
 			name: "failed to fetch fuel estimate as options are empty",
@@ -1499,7 +1498,7 @@ func (tn *TestSingleNode) TestCall() {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				FuelUsed: hexutil.Uint64(3473),
+				FuelUsed: hexutil.Uint64(2117),
 				From:     id,
 				IxOps: []*rpcargs.RPCIxOpResult{
 					{

@@ -9,10 +9,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
-	"github.com/sarvalabs/go-moi/compute/pisa"
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
-	"github.com/sarvalabs/go-polo"
-
 	"github.com/hashicorp/go-hclog"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -461,49 +457,6 @@ func (r *ReputationEngine) isSysAccSynced() bool {
 	defer r.sysAccSyncLock.RUnlock()
 
 	return r.sysAccSyncDone
-}
-
-func (r *ReputationEngine) isGuardianRegisterd(kramaID identifiers.KramaID) bool {
-	// Generate the hash of the krama ID
-	kramaIDEncoded, _ := polo.Polorize(kramaID)
-	kramaIDHashed := common.GetHash(kramaIDEncoded)
-
-	// Generate the storage key for the guardian with the given krama ID
-	storageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
-
-	accMetaInfo, err := r.State.GetAccountMetaInfo(common.GuardianLogicID.AsIdentifier())
-	if err != nil {
-		r.logger.Error("failed to get account meta info", "err", err)
-
-		return false
-	}
-
-	ts, err := r.Chain.GetTesseract(accMetaInfo.TesseractHash, false, false)
-	if err != nil {
-		r.logger.Error("failed to fetch tesseract", "err", err)
-
-		return false
-	}
-
-	_, err = r.State.GetPersistentStorageEntry(
-		common.GuardianLogicID,
-		storageKey,
-		ts.StateHash(common.GuardianLogicID.AsIdentifier()),
-	)
-	if err == nil {
-		// If no error was returned, the key was found.
-		// This means the guardian is registered
-		return true
-	}
-
-	// If the key is not found, the guardian is NOT registered
-	if err.Error() == common.ErrKeyNotFound.Error() {
-		return false
-	}
-
-	r.logger.Error("failed to fetch guardian info", "err", err)
-
-	return false
 }
 
 func (r *ReputationEngine) dbWorker() {

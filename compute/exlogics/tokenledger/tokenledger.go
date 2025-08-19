@@ -31,7 +31,7 @@ func GetSymbol(storage engineio.StorageReader) (string, error) {
 	key := pisa.GenerateStorageKey(SlotSymbol)
 
 	// Retrieve the value for the storage key
-	val, err := storage.GetStorageEntry(key)
+	val, err := storage.ReadPersistentStorage(storage.Identifier(), key)
 	if err != nil {
 		return "", err
 	}
@@ -49,7 +49,7 @@ func GetSupply(storage engineio.StorageReader) (*big.Int, error) {
 	key := pisa.GenerateStorageKey(SlotSupply)
 
 	// Retrieve the value for the storage key
-	val, err := storage.GetStorageEntry(key)
+	val, err := storage.ReadPersistentStorage(storage.Identifier(), key)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func GetBalance(storage engineio.StorageReader, id identifiers.Identifier) (*big
 	key := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(id))
 
 	// Retrieve the value for the storage key
-	val, err := storage.GetStorageEntry(key)
+	val, err := storage.ReadPersistentStorage(storage.Identifier(), key)
 	if err != nil {
 		return nil, err
 	}

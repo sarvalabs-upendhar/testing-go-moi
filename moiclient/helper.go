@@ -300,11 +300,11 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client,
 		Balances: make(map[identifiers.Identifier]*big.Int),
 	}
 
-	rawSymbol := getLatestStorage([32]byte(pisa.GenerateStorageKey(0)))
+	rawSymbol := getLatestStorage(pisa.GenerateStorageKey(0))
 	err := polo.Depolorize(&state.Symbol, rawSymbol)
 	require.NoError(t, err)
 
-	rawSupply := getLatestStorage([32]byte(pisa.GenerateStorageKey(1)))
+	rawSupply := getLatestStorage(pisa.GenerateStorageKey(1))
 	err = polo.Depolorize(&state.Supply, rawSupply)
 	require.NoError(t, err)
 
@@ -313,7 +313,7 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client,
 		hashed := blake2b.Sum256(encoded)
 
 		k := pisa.GenerateStorageKey(2, pisa.MapKey(hashed))
-		rawBalance := getLatestStorage([32]byte(k))
+		rawBalance := getLatestStorage(k)
 
 		balance := new(big.Int)
 		err = polo.Depolorize(balance, rawBalance)
@@ -471,11 +471,19 @@ func (c *Client) NewStorageReader(id identifiers.Identifier, logicID identifiers
 	return StorageReader{client: c, logicID: logicID, id: id}
 }
 
-func (reader StorageReader) GetStorageEntry(key []byte) ([]byte, error) {
+func (reader StorageReader) Identifier() [32]byte {
+	return reader.id
+}
+
+func (reader StorageReader) Root() [32]byte {
+	return reader.id
+}
+
+func (reader StorageReader) ReadPersistentStorage(logicID [32]byte, key [32]byte) ([]byte, error) {
 	content, err := reader.client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
 		LogicID:    reader.logicID,
 		ID:         reader.id,
-		StorageKey: key,
+		StorageKey: key[:],
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,
 		},

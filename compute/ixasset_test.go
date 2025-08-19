@@ -1154,7 +1154,7 @@ func Test_ValidateAssetRelease(t *testing.T) {
 				insertTestAssetObject(
 					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
-				createLockup(t, benefactor, sender, assetID, big.NewInt(2000))
+				createLockup(t, benefactor, sender.Identifier(), assetID, big.NewInt(2000))
 			},
 		},
 	}
@@ -1228,7 +1228,7 @@ func Test_AssetRelease(t *testing.T) {
 				insertTestAssetObject(
 					t, benefactor, assetID, state.NewAssetObject(big.NewInt(5000), nil),
 				)
-				createLockup(t, benefactor, sender, assetID, big.NewInt(2500))
+				createLockup(t, benefactor, sender.Identifier(), assetID, big.NewInt(2500))
 			},
 			expectedAmount: big.NewInt(1500),
 		},

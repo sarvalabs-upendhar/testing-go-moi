@@ -34,9 +34,14 @@ func NewManager(logger hclog.Logger, config *config.ExecutionConfig, metrics *Me
 }
 
 // SpawnExecutor generates a new IxExecutor instance with a given fuel limit.
-func (manager *Manager) SpawnExecutor(transition *state.Transition) *IxExecutor {
+func (manager *Manager) SpawnExecutor(
+	logger hclog.Logger,
+	cfg *config.ExecutionConfig,
+	transition *state.Transition,
+) *IxExecutor {
 	return &IxExecutor{
-		mgr:          manager,
+		logger:       logger,
+		cfg:          cfg,
 		transition:   transition,
 		metrics:      manager.metrics,
 		commitHashes: make(common.AccountStateHashes),
@@ -53,7 +58,7 @@ func (manager *Manager) ExecuteInteractions(
 	common.AccountStateHashes, error,
 ) {
 	// Spawn a new IxExecutor instance
-	executor := manager.SpawnExecutor(transition)
+	executor := manager.SpawnExecutor(manager.logger, manager.config, transition)
 	// Execute all the given interactions
 	if err := executor.Execute(ixs, ctx); err != nil {
 		return nil, err
@@ -63,74 +68,72 @@ func (manager *Manager) ExecuteInteractions(
 	return executor.commitHashes, nil
 }
 
+func AddActorsToRuntime(ix *common.Interaction, runtime engineio.Runtime, transition *state.Transition) error {
+	// Iterate over all the actors in the transition
+	for id, info := range ix.Participants() {
+		if id == common.SargaAccountID || id == common.SystemAccountID {
+			continue
+		}
+
+		if info.IsGenesis || runtime.ActorExists(id) {
+			continue
+		}
+
+		if id.IsLogic() { // TODO: || id.IsAsset() {
+			logicObject, err := transition.GetObject(id).FetchLogicObject(id)
+			if err != nil {
+				return errors.Wrap(err, "failed to fetch logic object")
+			}
+
+			if err = runtime.CreateLogic(
+				id,
+				logicObject.Artifact,
+				transition.GetObject(id).GenerateLogicStorageObject(),
+				nil,
+			); err != nil {
+				return errors.Wrap(err, "failed to create logic actor")
+			}
+
+			continue
+		}
+
+		if err := runtime.CreateActor(
+			id,
+			transition.GetObject(id).GenerateLogicStorageObject(),
+			nil,
+		); err != nil {
+			return errors.Wrap(err, "failed to create actor")
+		}
+	}
+
+	return nil
+}
+
 func (manager *Manager) InteractionCall(
 	ctx *common.ExecutionContext,
 	ix *common.Interaction,
 	transition *state.Transition,
 ) (*common.Receipt, error) {
 	// Run the interaction and return the receipt
-	return manager.runInteraction(ix, ctx, transition, false)
-}
+	executor := manager.SpawnExecutor(manager.logger, manager.config, transition)
 
-func (manager *Manager) runInteraction(
-	ix *common.Interaction, ctx *common.ExecutionContext,
-	transition *state.Transition, useIxFuelLimit bool,
-) (
-	receipt *common.Receipt, err error,
-) {
-	var tank *FuelTank
-
-	receipt = common.NewReceipt(ix)
-
-	if useIxFuelLimit {
-		// Determine the tank limit from the interaction
-		tank = NewFuelTank(ix.FuelLimit())
-
-		// Check that the sender has sufficient balance
-		if ok, _ := transition.HasSufficientFuel(ix.SenderID(), ix.Cost()); !ok {
-			receipt.Status = common.ReceiptInsufficientFuel
-
-			return receipt, nil
-		}
-	} else {
-		// Determine the tank limit from the node configuration
-		tank = NewFuelTank(manager.config.FuelLimit)
+	engine, ok := engineio.FetchEngine(engineio.PISA)
+	if !ok {
+		return nil, errors.New("Engine not found")
 	}
 
-	// Set up a defer function to recover from any panic
-	// that may occur while executing the interaction
-	defer func() {
-		if trace := recover(); trace != nil {
-			err = errors.New("execution failed: executor panicked!")
+	runtime := engine.Runtime(ctx.Time)
 
-			manager.logger.Debug("EXECUTION PANIC OCCURRED", "trace:", trace)
-		}
-	}()
-
-	receipt.IxOps = make([]*common.IxOpResult, 0)
-
-	for idx, op := range ix.Ops() {
-		// Lookup the runner for the operation type
-		runner := lookupOpRunner(op.Type())
-		// Call the interaction runner and get the result
-		opResult := runner(ix.GetIxOp(idx), ctx, tank, transition)
-
-		receipt.AddIxOpResult(opResult)
-
-		if opResult.Status >= common.ResultStateReverted {
-			manager.logger.Trace("ixOp reverted", "op-hash", op.Hash(), "status", opResult.Status)
-
-			receipt.SetStatus(common.ReceiptStateReverted)
-			// in case of any error while executing the ixOp, we should consume total full
-			receipt.SetFuelUsed(ix.FuelLimit())
-
-			return receipt, err
-		}
+	if err := AddActorsToRuntime(ix, runtime, transition); err != nil {
+		return nil, err
 	}
 
-	receipt.SetFuelUsed(tank.Consumed)
-
-	return receipt, err
+	return executor.runInteraction(
+		ix,
+		&engineio.RuntimeContext{
+			ClusterContext: ctx,
+			Runtime:        runtime,
+		}, transition, false)
 }
 
 func addNewAccountsToSargaAccount(

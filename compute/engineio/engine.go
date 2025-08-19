@@ -1,8 +1,9 @@
 package engineio
 
 import (
-	"context"
 	"strings"
+
+	"github.com/sarvalabs/go-moi/common"
 )
 
 // EngineFuel is a measure of execution effort
@@ -36,63 +37,47 @@ const (
 	MERU
 )
 
+type Cryptography interface {
+	// IsSignature returns whether the given signature is in a supported format.
+	// This function provides no indication on the authenticity of the signature for some message.
+	IsSignature(signature []byte) bool
+
+	// AuthenticateSignature returns whether the given signature is valid for the given message and public key.
+	// Errors if the signature or the public key formats are unsupported.
+	AuthenticateSignature(data, signature, publicKey []byte) (bool, error)
+}
+
 // Engine is the base definition for execution engine runtime. It is
 // used for runtime level behavioural capabilities rather for logic execution.
 //
 // This can include:
-//   - Compiling Manifest objects for the runtime into a LogicDriver
-//   - Spawning execution EngineInstance for a specific LogicDriver
-//   - Validating input calldata for a specific callsite on a LogicDriver
-//   - Obtaining a calldata encoder for a specific callsite on a LogicDriver
+//   - Compiling Manifest objects for the runtime
+//   - Creating Runtime instances that can execute logic
 type Engine interface {
 	// Kind returns the kind of engine that the factory can produce
 	Kind() EngineKind
 	// Version returns the semver version string of the engine runtime
 	Version() string
 
-	// GetCallEncoderFromLogicDriver returns a CallEncoder object
-	// for a given callsite element pointer from a LogicDriver object
-	GetCallEncoderFromLogicDriver(LogicDriver, Callsite) (CallEncoder, error)
-	// GetCallEncoderFromManifest returns a CallEncoder object
-	// for a given callsite element pointer from a Manifest object
-	GetCallEncoderFromManifest(Manifest, Callsite) (CallEncoder, error)
+	Runtime(timestamp uint64) Runtime
 
-	// GenerateManifestElement returns an object for the given ElementKind
-	// The object is used as a deserialization target when decoding a Manifest
-	GenerateManifestElement(ElementKind) (any, bool)
-	// CompileManifest generates a LogicDescriptor from a Manifest,
-	// which can then be used to generate a Logic object.
-	// The fuel spent during compile is returned with any potential error.
-	CompileManifest(Manifest, EngineFuel) (LogicDescriptor, EngineFuel, error)
+	CompileManifest(
+		manifest Manifest,
+		fuel FuelGauge,
+	) (
+		[]byte,
+		*FuelGauge,
+		error,
+	)
 
-	// DecodeErrorResult decodes the given bytes into an
-	// ErrorResult that is suitable for the engine runtime
-	DecodeErrorResult([]byte) (ErrorResult, error)
-	// ValidateCalldata verifies the calldata and callsite in an IxDriver.
-	// The Logic must describe a callsite which accepts the calldata.
-	ValidateCalldata(LogicDriver, IxDriver) error
-
-	// SpawnInstance returns a new EngineInstance instance and initializes it with some
-	// EngineFuel, a LogicDriver, the StateDriver associated with the logic and an EnvironmentDriver.
-	// Will return an error if the Logic and its StateDriver do not match.
-	SpawnInstance(LogicDriver, EngineFuel, StateDriver, EnvironmentDriver, EventDriver) (EngineInstance, error)
-	SpawnDebugInstance(LogicDriver, EngineFuel, StateDriver, EnvironmentDriver, EventDriver) (DebugEngineInstance, error)
+	GenerateManifestElement(kind ElementKind) (any, bool)
 }
 
-// EngineInstance is an execution engine runner with a specific EngineKind.
-// A new EngineRunner instance can be spawned from an EngineRuntime with its
-// Spawn method and is bound to a specific Logic and EnvironmentDriver.
-//
-// An Engine can be used to perform calls on its Logic with an IxDriver
-// and some optional participants with their StateDriver objects.
-type EngineInstance interface {
-	// Kind returns the kind of engine
-	Kind() EngineKind
-
-	// Call calls a logical callsite on the Engine's Logic.
-	// The callsite and input calldata are provided in the given IxDriver.
-	// Optionally accepts some participant StateDriver objects based on the operation type.
-	Call(context.Context, IxDriver, StateDriver, ...StateDriver) (CallResult, error)
+type Runtime interface {
+	CreateLogic(logicID [32]byte, artifact []byte, storage Storage, params map[string][]byte) error
+	ActorExists(logicID [32]byte) bool
+	CreateActor(id [32]byte, storage Storage, params map[string][]byte) error
+	Call(logicID [32]byte, action Action, limit *FuelGauge) *CallResult
 }
 
 // registry is an in-memory registry of supported EngineRuntime instances.
@@ -123,4 +108,9 @@ func EngineKindFromString(str string) EngineKind {
 	default:
 		return InvalidEngine
 	}
+}
+
+type RuntimeContext struct {
+	ClusterContext *common.ExecutionContext
+	Runtime        Runtime
 }

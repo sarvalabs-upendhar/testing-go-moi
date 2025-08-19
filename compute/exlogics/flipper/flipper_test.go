@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio/test"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -19,7 +20,7 @@ func TestFlipperTestSuite(t *testing.T) {
 }
 
 type FlipperTestSuite struct {
-	engineio.TestSuite
+	test.SingleLogicSuite
 }
 
 var SeederID = identifiers.RandomParticipantIDv0().AsIdentifier()
@@ -38,17 +39,17 @@ func (suite *FlipperTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Deploy the logic to initialise its initial state
-	suite.Deploy("Seed", calldata, nil, nil)
+	suite.Deploy("Seed", calldata, nil, nil, nil)
 
 	// Check the value of the state
 	keyState := pisa.GenerateStorageKey(SlotValue)
-	suite.CheckPersistentStorage(keyState, false)
+	suite.CheckLogicStorage(keyState, false)
 }
 
 func (suite *FlipperTestSuite) TestToggle() {
-	suite.Invoke("Toggle", nil, nil, nil)
+	suite.Invoke("Toggle", nil, nil, nil, nil)
 
 	// Check the value of the state
 	keyValue := pisa.GenerateStorageKey(SlotValue)
-	suite.CheckPersistentStorage(keyValue, true)
+	suite.CheckLogicStorage(keyValue, true)
 }

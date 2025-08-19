@@ -210,6 +210,7 @@ type MockStateManager struct {
 	lockups                 map[identifiers.Identifier][]common.AssetMandateOrLockup
 	accounts                map[identifiers.Identifier]*common.Account
 	assetDeeds              map[identifiers.AssetID]*common.AssetDescriptor
+	validators              map[identifiers.KramaID]*common.Validator
 	logicManifests          map[string][]byte
 	logicStorage            map[string]map[string]string // first key denotes logic id, second key denotes storage key
 	accMetaInfo             map[identifiers.Identifier]*common.AccountMetaInfo
@@ -245,6 +246,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState := new(MockStateManager)
 	mockState.sequenceID = make(map[identifiers.Identifier]uint64)
 	mockState.assetDeeds = make(map[identifiers.AssetID]*common.AssetDescriptor)
+	mockState.validators = make(map[identifiers.KramaID]*common.Validator)
 	mockState.balances = make(map[identifiers.Identifier]common.AssetMap)
 	mockState.mandates = make(map[identifiers.Identifier][]common.AssetMandateOrLockup)
 	mockState.lockups = make(map[identifiers.Identifier][]common.AssetMandateOrLockup)
@@ -506,6 +508,24 @@ func (s *MockStateManager) IsGenesis(id identifiers.Identifier) (bool, error) {
 	return false, nil
 }
 
+func (s *MockStateManager) GetValidators() []*common.Validator {
+	validators := make([]*common.Validator, 0, len(s.validators))
+
+	for _, validator := range s.validators {
+		validators = append(validators, validator)
+	}
+
+	return validators
+}
+
+func (s *MockStateManager) GetValidatorByKramaID(kramaID identifiers.KramaID) (*common.Validator, error) {
+	if _, ok := s.validators[kramaID]; ok {
+		return s.validators[kramaID], nil
+	}
+
+	return nil, common.ErrKramaIDNotFound
+}
+
 func (s *MockStateManager) setBalance(id identifiers.Identifier, assetID identifiers.AssetID, balance *big.Int) {
 	s.balances[id] = make(common.AssetMap)
 	s.balances[id][assetID] = balance
@@ -529,6 +549,14 @@ func (s *MockStateManager) getTDU(id identifiers.Identifier, stateHash common.Ha
 
 func (s *MockStateManager) setLogicManifest(logicID string, logicManifest []byte) {
 	s.logicManifests[logicID] = logicManifest
+}
+
+func (s *MockStateManager) setValidators(validators []*common.Validator) {
+	s.validators = make(map[identifiers.KramaID]*common.Validator)
+
+	for _, validator := range validators {
+		s.validators[validator.KramaID] = validator
+	}
 }
 
 type MockExecutionManager struct {

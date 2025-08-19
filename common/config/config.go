@@ -50,7 +50,8 @@ type DBConfig struct {
 }
 
 type ExecutionConfig struct {
-	FuelLimit uint64
+	ComputeLimit uint64
+	StorageLimit uint64
 }
 
 type IxPoolConfig struct {
@@ -186,7 +187,8 @@ func DefaultDevnetConfig(path string) *Config {
 			MaxSnapSize:  DefaultSnapSize, // 6GB limit
 		},
 		Execution: &ExecutionConfig{
-			FuelLimit: DefaultFuelLimit,
+			ComputeLimit: DefaultComputeFuelLimit,
+			StorageLimit: DefaultStorageFuelLimit,
 		},
 		IxPool: &IxPoolConfig{
 			Mode:       DefaultIxPoolMode,

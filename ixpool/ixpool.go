@@ -62,12 +62,6 @@ type stateManager interface {
 	GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) (common.AccountKeys, error)
 }
 
-type executionManager interface {
-	ValidateLogicDeploy(op *common.IxOp) error
-	ValidateLogicInvoke(op *common.IxOp, calleracc, logicacc *state.Object) error
-	ValidateLogicEnlist(op *common.IxOp, calleracc, logicacc *state.Object) error
-}
-
 type p2pServer interface {
 	Subscribe(
 		ctx context.Context,
@@ -94,7 +88,6 @@ type IxPool struct {
 	msgCache           *ixSaltedCache
 	network            p2pServer
 	sm                 stateManager
-	exec               executionManager
 	allIxs             *lookupMap
 	close              chan struct{}
 	mux                *utils.TypeMux
@@ -113,7 +106,6 @@ func NewIxPool(
 	mux *utils.TypeMux,
 	node p2pServer,
 	sm stateManager,
-	exec executionManager,
 	cfg *config.IxPoolConfig,
 	metrics *Metrics,
 	verifier func(data, signature, pubBytes []byte) (bool, error),
@@ -130,7 +122,6 @@ func NewIxPool(
 		mux:       mux,
 		network:   node,
 		sm:        sm,
-		exec:      exec,
 		allIxs:    NewLookupMap(),
 		close:     make(chan struct{}),
 		accounts:  newAccountsMap(),
@@ -1186,10 +1177,6 @@ func (i *IxPool) validateLogicDeployPayload(ix *common.Interaction, txnID int) e
 		return err
 	}
 
-	if err = i.exec.ValidateLogicDeploy(ix.GetIxOp(txnID)); err != nil {
-		return errors.Wrap(err, "failed to validate logic deploy")
-	}
-
 	return nil
 }
 
@@ -1217,44 +1204,12 @@ func (i *IxPool) validateLogicInvokePayload(ix *common.Interaction, txnID int) e
 		return err
 	}
 
-	// Obtain state object of sender
-	callerAcc, err := i.sm.GetLatestStateObject(ix.SenderID())
-	if err != nil {
-		return err
-	}
-
-	// Obtain state object of receiver (logic)
-	logicAcc, err := i.sm.GetLatestStateObject(ix.GetIxOp(txnID).Target())
-	if err != nil {
-		return err
-	}
-
-	if err := i.exec.ValidateLogicInvoke(ix.GetIxOp(txnID), callerAcc, logicAcc); err != nil {
-		return errors.Wrap(err, "failed to validate logic invoke")
-	}
-
 	return nil
 }
 
 func (i *IxPool) validateLogicEnlistPayload(ix *common.Interaction, txnID int) error {
 	if err := i.validateLogicInteractPayload(ix, txnID); err != nil {
 		return err
-	}
-
-	// Obtain state object of sender
-	callerAcc, err := i.sm.GetLatestStateObject(ix.SenderID())
-	if err != nil {
-		return err
-	}
-
-	// Obtain state object of receiver (logic)
-	logicAcc, err := i.sm.GetLatestStateObject(ix.GetIxOp(txnID).Target())
-	if err != nil {
-		return err
-	}
-
-	if err := i.exec.ValidateLogicEnlist(ix.GetIxOp(txnID), callerAcc, logicAcc); err != nil {
-		return errors.Wrap(err, "failed to validate logic enlist")
 	}
 
 	return nil

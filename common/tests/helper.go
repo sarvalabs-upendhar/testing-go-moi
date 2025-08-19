@@ -1063,7 +1063,7 @@ func CreateReceiptWithTestData(t *testing.T) *common.Receipt {
 		IxOps: []*common.IxOpResult{
 			{
 				IxType: 2,
-				Status: common.ResultStateReverted,
+				Status: common.ResultDefectRaised,
 				Data:   []byte{1, 2},
 				Logs:   []common.Log{log},
 			},
@@ -1478,4 +1478,27 @@ func GetTestAssetIDFromAssetDescriptor(
 	require.NoError(t, err)
 
 	return assetID
+}
+
+func CreateTestValidators(t *testing.T, count int) []*common.Validator {
+	t.Helper()
+
+	validators := make([]*common.Validator, count)
+
+	for i := 0; i < count; i++ {
+		kramaID, _ := identifiers.RandomKramaIDv0()
+
+		validators[i] = &common.Validator{
+			ID:              common.ValidatorIndex(i),
+			KramaID:         kramaID,
+			ActiveStake:     big.NewInt(int64(GetRandomNumber(t, 1000000))),
+			InactiveStake:   big.NewInt(int64(GetRandomNumber(t, 1000000))),
+			BehaviourTokens: big.NewInt(int64(GetRandomNumber(t, 1000000))),
+			SocialTokens:    big.NewInt(int64(GetRandomNumber(t, 1000000))),
+			Rewards:         big.NewInt(int64(GetRandomNumber(t, 1000000))),
+			WalletAddress:   identifiers.RandomParticipantIDv0().AsIdentifier(),
+		}
+	}
+
+	return validators
 }

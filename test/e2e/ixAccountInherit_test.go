@@ -168,7 +168,7 @@ func (te *TestEnvironment) TestIXAccountInherit() {
 	sender := accs[0]
 	invalidTarget := accs[1]
 
-	ixHash, err := te.deployLogic(
+	ixHash, err := te.logicDeploy(
 		sender,
 		&common.LogicPayload{
 			Callsite: "Seed",
@@ -354,7 +354,7 @@ func (te *TestEnvironment) TestSubAccountInteractions() {
 	sender := te.chooseRandomAccount()
 
 	// create the logic
-	ixHash, err := te.deployLogic(
+	ixHash, err := te.logicDeploy(
 		sender,
 		&common.LogicPayload{
 			Callsite: "Seed",

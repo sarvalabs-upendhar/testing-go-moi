@@ -7,17 +7,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
-	"time"
 
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
+	"github.com/sarvalabs/go-moi/compute/engineio"
+	"github.com/sarvalabs/go-moi/compute/pisa"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/google/uuid"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -25,12 +24,7 @@ import (
 	"github.com/pkg/errors"
 
 	bgcommon "github.com/sarvalabs/battleground/common"
-	"github.com/sarvalabs/go-polo"
-
-	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/compute/pisa"
 )
 
 const (
@@ -40,7 +34,18 @@ const (
 	genesisFile     = "genesis.json"
 	bootnodeFileKey = "file.key"
 
-	guardianManifest = "./../corelogics/guardianregistry/guardians.yaml"
+	flipperManifest = "./../compute/exlogics/flipper/flipper.yaml"
+)
+
+var (
+	FlipperLogicID = common.CreateLogicIDFromString(
+		"flipper-logic",
+		0,
+		identifiers.Systemic,
+		identifiers.LogicIntrinsic,
+		identifiers.LogicExtrinsic,
+	)
+	FlipperAccountID = FlipperLogicID.AsIdentifier()
 )
 
 var startTime int64
@@ -154,16 +159,11 @@ func (c *Cluster) generateArtifact() error {
 		Manifest string `json:"manifest"`
 	}
 
-	instances, err := readInstancesFile(c.Config.Dir(instancesFile))
-	if err != nil {
-		return err
-	}
-
 	// Register the PISA element registry with the EngineIO package
 	engineio.RegisterEngine(pisa.NewEngine())
 
 	// Read manifest file
-	manifest, err := engineio.NewManifestFromFile(c.Config.GuardianPathDir(guardianManifest))
+	manifest, err := engineio.NewManifestFromFile(c.Config.FlipperPathDir(flipperManifest))
 	if err != nil {
 		return err
 	}
@@ -173,48 +173,10 @@ func (c *Cluster) generateArtifact() error {
 		return err
 	}
 
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	guardians := make([]string, 0)
-	pubKeys := make([][]byte, 0)
-	incentives := make([]uint64, 0)
-
-	for _, instance := range instances {
-		guardians = append(guardians, instance.KramaID)
-		incentives = append(incentives, uint64(r.Intn(1000)))
-		pubKeys = append(pubKeys, must(hex.DecodeString(instance.ConsensusKey)))
-	}
-
-	masterID := identifiers.RandomParticipantIDv0()
-
-	masterMoiID := strings.TrimPrefix(masterID.Hex(), "0x")
-
 	inputs := struct {
-		Master      guardianregistry.Master `polo:"master"`
-		Guardians   []string                `polo:"guardians"`
-		PubKeys     [][]byte                `polo:"pubkeys"`
-		Incentives  []uint64                `polo:"incentives"`
-		Admins      [][32]byte              `polo:"admins"`
-		PreApproved []string                `polo:"preApproved"`
-		LimitKYC    uint64                  `polo:"limitKYC"`
-		LimitKYB    uint64                  `polo:"limitKYB"`
+		Initial bool `polo:"initial"`
 	}{
-		Master: guardianregistry.Master{
-			PubKey: masterID.Bytes(),
-			MOIID:  masterMoiID,
-			Wallet: masterID,
-		},
-		Guardians:  guardians,
-		PubKeys:    pubKeys,
-		Incentives: incentives,
-		Admins: [][32]byte{
-			identifiers.RandomParticipantIDv0(),
-		},
-		PreApproved: []string{
-			"a5JLBNzoxVHvxFRUUhoFpC8YwZHUAb5krfnQWokcA8MdibmZ9H.16Uiu2HAmVNTp43B3axQfZYwU2hTVXuHMBJzGcvghHST9BzDvwpnn",
-		},
-		LimitKYC: 20,
-		LimitKYB: 100,
+		Initial: false,
 	}
 
 	// Serialize the input args into calldata
@@ -224,8 +186,8 @@ func (c *Cluster) generateArtifact() error {
 	}
 
 	a := artifact{
-		Name:     "guardian-registry",
-		Callsite: "Setup",
+		Name:     "flipper-logic",
+		Callsite: "Seed",
 		Calldata: "0x" + hex.EncodeToString(calldata.Bytes()),
 		Manifest: "0x" + hex.EncodeToString(encodedManifest),
 	}
@@ -377,7 +339,7 @@ func (c *Cluster) generateGenesis() error {
 		"--premine-amount", fmt.Sprintf("%d", c.Config.PremineAmount),
 		"--accounts-path", c.Config.Dir(accountsFile),
 		"--instances-path", c.Config.Dir(instancesFile),
-		"--guardian-path", c.Config.Dir(artifactFile),
+		"--artifact-path", c.Config.Dir(artifactFile),
 		"--genesis-path", c.Config.Dir(genesisFile),
 	}
 

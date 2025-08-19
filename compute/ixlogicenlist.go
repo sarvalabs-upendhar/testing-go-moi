@@ -1,14 +1,6 @@
 package compute
 
-import (
-	"context"
-
-	"github.com/pkg/errors"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-moi/state"
-)
+/*
 
 // RunLogicEnlist performs the given IxLogicEnlist Operation.
 // The state.Transition must contain state objects for the sender and Target of the op.
@@ -17,7 +9,7 @@ import (
 // The logic call is verified and executed with the output/error being returned as the result.
 func RunLogicEnlist(
 	op *common.IxOp,
-	ctx *common.ExecutionContext,
+	ctx *engineio.RuntimeContext,
 	tank *FuelTank,
 	objects *state.Transition,
 ) *common.IxOpResult {
@@ -36,7 +28,7 @@ func RunLogicEnlist(
 
 	consumption, receiptPayload, err := EnlistLogic(op, ctx, logicacc, invoker, fueltank, eventstream)
 	if err != nil {
-		status = common.ResultStateReverted
+		status = common.ResultDefectRaised
 	}
 
 	// Exhaust fuel from tank
@@ -166,3 +158,4 @@ func (manager *Manager) ValidateLogicEnlist(
 
 	return runtime.ValidateCalldata(logic, op)
 }
+*/

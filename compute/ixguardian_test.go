@@ -406,7 +406,7 @@ func Test_ValidateGuardianWithdraw(t *testing.T) {
 		WalletAddress: sender.Identifier(),
 	})
 
-	createLockup(t, sender, createTestGuardianStateObject(t),
+	createLockup(t, sender, common.SystemAccountID,
 		common.KMOITokenAssetID, big.NewInt(inactiveStake-3000),
 	)
 
@@ -545,7 +545,7 @@ func Test_GuardianWithdraw(t *testing.T) {
 				)
 
 				createLockup(
-					t, sender, createTestGuardianStateObject(t),
+					t, sender, common.SystemAccountID,
 					common.KMOITokenAssetID, big.NewInt(inactiveStake),
 				)
 			},
@@ -571,7 +571,7 @@ func Test_GuardianWithdraw(t *testing.T) {
 				})
 
 				createLockup(
-					t, sender, createTestGuardianStateObject(t),
+					t, sender, common.SystemAccountID,
 					common.KMOITokenAssetID, big.NewInt(inactiveStake),
 				)
 			},

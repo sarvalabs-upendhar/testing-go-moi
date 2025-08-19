@@ -2,10 +2,10 @@ package e2e
 
 import (
 	"context"
+	"testing"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-polo"
@@ -16,7 +16,6 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
-//nolint:dupl
 func (te *TestEnvironment) logicInvoke(
 	acc tests.AccountWithMnemonic,
 	logicPayload *common.LogicPayload,
@@ -56,6 +55,8 @@ func (te *TestEnvironment) logicInvoke(
 		},
 	}
 
+	tests.AppendParticipantsInIxData(te.T(), ixData)
+
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
 			ID:       acc.ID,
@@ -64,7 +65,14 @@ func (te *TestEnvironment) logicInvoke(
 		},
 	})
 
-	return te.moiClient.SendInteractions(context.Background(), sendIX)
+	ixHash, err := te.moiClient.SendInteractions(context.Background(), sendIX)
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	te.logger.Debug("Logic Invoked fired", "ix-hash", ixHash)
+
+	return ixHash, nil
 }
 
 // 1. check if receipt generated for ix successfully
@@ -102,7 +110,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 		"receiver": receiver,
 	}).Bytes()
 
-	ixHash, err := te.deployLogic(
+	ixHash, err := te.logicDeploy(
 		sender,
 		&common.LogicPayload{
 			Callsite: "Seed",
@@ -128,6 +136,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			ixHash common.Hash,
 		)
 		expectedError error
+		checkReceipt  func(t *testing.T, client *moiclient.Client, ixHash common.Hash) *args.RPCReceipt
 	}{
 		{
 			name:   "valid logic invoke",
@@ -157,7 +166,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 				Callsite: "Transfer",
 				Calldata: make(polo.Document).Bytes(),
 			},
-			expectedError: errors.New("failed to validate logic invoke"),
+			checkReceipt: checkForReceiptFailure,
 		},
 		{
 			name:   "empty callsite",
@@ -187,7 +196,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 				Callsite: "abcd",
 				Calldata: []byte{},
 			},
-			expectedError: errors.New("failed to validate logic invoke"),
+			checkReceipt: checkForReceiptFailure,
 		},
 		{
 			name:   "invalid call data",
@@ -197,7 +206,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 				Callsite: "Transfer",
 				Calldata: []byte{1, 2, 3},
 			},
-			expectedError: errors.New("failed to validate logic invoke"),
+			checkReceipt: checkForReceiptFailure,
 		},
 	}
 
@@ -215,6 +224,12 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			}
 
 			require.NoError(te.T(), err)
+
+			if test.checkReceipt != nil {
+				test.checkReceipt(te.T(), te.moiClient, ixHash)
+
+				return
+			}
 
 			test.postTest(te, test.sender.ID, receiver, test.logicPayload, ixHash)
 		})

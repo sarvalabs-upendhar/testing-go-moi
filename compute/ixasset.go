@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -20,7 +21,7 @@ import (
 // or if the sender/benefactor does not have enough balance for that asset ID
 func RunAssetTransfer(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -36,19 +37,19 @@ func RunAssetTransfer(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleParticipantCreate) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelSimpleParticipantCreate, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if payload.Benefactor.IsNil() {
 		// Validate asset transfer payload
 		if err := validateAssetTransfer(sender, target, sarga, payload); err != nil {
-			return opResult.WithStatus(common.ResultStateReverted)
+			return opResult.WithStatus(common.ResultExceptionRaised)
 		}
 
 		// Transfer the asset amount from the sender to target account
 		if err := transferAsset(sender, target, payload); err != nil {
-			return opResult.WithStatus(common.ResultStateReverted)
+			return opResult.WithStatus(common.ResultExceptionRaised)
 		}
 	}
 
@@ -57,12 +58,12 @@ func RunAssetTransfer(
 
 		// Validate asset consume payload
 		if err := validateAssetConsume(sender, target, sarga, benefactor, payload); err != nil {
-			return opResult.WithStatus(common.ResultStateReverted)
+			return opResult.WithStatus(common.ResultExceptionRaised)
 		}
 
 		// Transfer the asset amount from the benefactor to target account
 		if err := consumeMandate(sender, target, benefactor, payload); err != nil {
-			return opResult.WithStatus(common.ResultStateReverted)
+			return opResult.WithStatus(common.ResultExceptionRaised)
 		}
 	}
 
@@ -77,7 +78,7 @@ func RunAssetTransfer(
 // The created supply of the asset is credited to the balances of the asset operator.
 func RunAssetCreate(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -99,23 +100,23 @@ func RunAssetCreate(
 
 	// todo: [asset logics] this is a simple value now, but will be include logic deployment cost
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelAssetCreation) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelAssetCreation, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Validate asset create payload
 	if err := validateAssetCreate(operator, identifiers.MustAssetID(op.Target())); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Create a new asset on the operator state object and get the asset ID
 	assetID, err := createAsset(operator, assetacc, payload)
 	if err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err = addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), assetacc.Identifier()); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Generate and set the result payload
@@ -134,7 +135,7 @@ func RunAssetCreate(
 // The mandate is recorded, allowing the target to access the asset in the future based on the sender's approval.
 func RunAssetApprove(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -148,18 +149,18 @@ func RunAssetApprove(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleAssetTransfer) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelSimpleAssetTransfer, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Validate asset approve payload
 	if err := validateAssetApprove(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Create an asset mandate for the target in the sender account
 	if err := approveAsset(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)
@@ -173,7 +174,7 @@ func RunAssetApprove(
 // This operation ensures that the sender's mandates are appropriately updated in the state.
 func RunAssetRevoke(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -187,18 +188,18 @@ func RunAssetRevoke(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleAssetTransfer) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelSimpleAssetTransfer, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Validate asset revoke payload
 	if err := validateAssetRevoke(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Delete the asset mandate from the sender account for the target
 	if err := revokeAsset(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)
@@ -213,7 +214,7 @@ func RunAssetRevoke(
 //nolint:dupl
 func RunAssetMint(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	objects *state.Transition,
 ) *common.IxOpResult {
@@ -228,19 +229,19 @@ func RunAssetMint(
 	assetacc := objects.GetObject(op.Target())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelAssetSupplyModulate) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelAssetSupplyModulate, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Validate asset mint payload
 	if err := validateAssetMint(operator, assetacc, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Obtain the registry entry for the asset from the asset account
 	supply, err := mintAsset(operator, assetacc, payload)
 	if err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Generate and set the result payload
@@ -260,7 +261,7 @@ func RunAssetMint(
 //nolint:dupl
 func RunAssetBurn(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	objects *state.Transition,
 ) *common.IxOpResult {
@@ -275,19 +276,19 @@ func RunAssetBurn(
 	assetacc := objects.GetObject(op.Target())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelAssetSupplyModulate) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelAssetSupplyModulate, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Validate asset burn payload
 	if err := validateAssetBurn(operator, assetacc, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Burn the asset supply from asset account
 	supply, err := burnAsset(operator, assetacc, payload)
 	if err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Generate and set the result payload
@@ -305,7 +306,7 @@ func RunAssetBurn(
 // The specified asset amount is locked up in the sender's account for the target beneficiary.
 func RunAssetLockup(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -319,18 +320,18 @@ func RunAssetLockup(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleAssetTransfer) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelSimpleAssetTransfer, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Validate asset lockup payload
 	if err := validateAssetLockup(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Create a lockup in the sender's account for the specified target
 	if err := lockupAsset(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)
@@ -343,7 +344,7 @@ func RunAssetLockup(
 // The specified asset amount is released from the benefactor's lockup to the target account.
 func RunAssetRelease(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -360,18 +361,18 @@ func RunAssetRelease(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleAssetTransfer) {
-		opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelSimpleAssetTransfer, 0) {
+		opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Validate asset release payload
 	if err := validateAssetRelease(sender, target, sarga, benefactor, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	// Transfer the lockup amount from the benefactor to target account
 	if err := releaseAsset(sender, target, benefactor, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)

@@ -41,7 +41,7 @@ const filterTimeout = 5 * time.Second
 var setupSuiteAssetID, setupSuiteSenderID identifiers.Identifier
 
 func (tm *TestMultiNode) runCriticallyNecessaryTearDown() {
-	err := tm.bgClient.DestroyNetwork(context.Background(), true)
+	err := tm.bgClient.DestroyNetwork(context.Background(), false)
 	tm.Suite.NoError(err)
 }
 

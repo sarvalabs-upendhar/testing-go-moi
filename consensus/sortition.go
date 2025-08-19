@@ -1,5 +1,6 @@
 package consensus
 
+/*
 import (
 	"bytes"
 	"container/heap"
@@ -324,3 +325,4 @@ func (os *OperatorSelection) GetEligibleOperators(key common.LotteryKey) []types
 
 	return newList
 }
+*/

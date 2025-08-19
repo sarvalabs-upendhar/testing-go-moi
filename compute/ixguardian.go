@@ -4,6 +4,7 @@ import (
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/state"
 )
 
@@ -36,7 +37,7 @@ func registerGuardian(sender *state.Object, system *state.SystemObject, payload 
 	// Lock the specified amount of KMOI tokens for the GuardianAccount
 	err := sender.CreateLockup(
 		common.KMOITokenAssetID,
-		common.GuardianAccountID,
+		common.SystemAccountID,
 		payload.Amount,
 	)
 	if err != nil {
@@ -86,7 +87,7 @@ func stakeGuardian(sender *state.Object, system *state.SystemObject, payload *co
 	// Lock the specified amount of KMOI tokens for the GuardianAccount
 	err := sender.CreateLockup(
 		common.KMOITokenAssetID,
-		common.GuardianAccountID,
+		common.SystemAccountID,
 		payload.Amount,
 	)
 	if err != nil {
@@ -173,7 +174,7 @@ func validateGuardianWithdraw(
 	}
 
 	// Check if the sender has sufficient lockup balance in the Guardian account
-	lockupAmount, err := sender.GetLockup(common.KMOITokenAssetID, common.GuardianAccountID)
+	lockupAmount, err := sender.GetLockup(common.KMOITokenAssetID, common.SystemAccountID)
 	if err != nil {
 		return common.ErrLockupNotFound
 	}
@@ -190,7 +191,7 @@ func validateGuardianWithdraw(
 func withdrawStake(sender *state.Object, system *state.SystemObject, payload *common.GuardianActionPayload) error {
 	// Release the specified amount of KMOI tokens locked under the GuardianAccount
 	err := sender.ReleaseLockup(
-		common.KMOITokenAssetID, common.GuardianAccountID,
+		common.KMOITokenAssetID, common.SystemAccountID,
 		payload.Amount,
 	)
 	if err != nil {
@@ -290,7 +291,7 @@ func claimRewards(sender *state.Object, system *state.SystemObject, payload *com
 // RunGuardianRegister handles the execution of a guardian registration operation.
 func RunGuardianRegister(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -305,16 +306,16 @@ func RunGuardianRegister(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelGuardianRegister) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelGuardianRegister, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := validateGuardianRegister(sender, system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := registerGuardian(sender, system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)
@@ -323,7 +324,7 @@ func RunGuardianRegister(
 // RunGuardianStake handles execution of a guardian stake operation.
 func RunGuardianStake(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -338,16 +339,16 @@ func RunGuardianStake(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelGuardianStake) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelGuardianStake, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := validateGuardianStake(sender, system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := stakeGuardian(sender, system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)
@@ -356,7 +357,7 @@ func RunGuardianStake(
 // RunGuardianUnstake handles execution of a guardian unstake operation.
 func RunGuardianUnstake(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -370,16 +371,16 @@ func RunGuardianUnstake(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelGuardianUnstake) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelGuardianUnstake, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := validateGuardianUnstake(system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := unstakeGuardian(system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)
@@ -388,7 +389,7 @@ func RunGuardianUnstake(
 // RunGuardianWithdraw handles execution of a guardian withdraw operation.
 func RunGuardianWithdraw(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -403,16 +404,16 @@ func RunGuardianWithdraw(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelGuardianWithdraw) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelGuardianWithdraw, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := validateGuardianWithdraw(sender, system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := withdrawStake(sender, system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)
@@ -421,7 +422,7 @@ func RunGuardianWithdraw(
 // RunGuardianClaim handles execution of a guardian rewards claim operation.
 func RunGuardianClaim(
 	op *common.IxOp,
-	_ *common.ExecutionContext,
+	_ *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -436,16 +437,16 @@ func RunGuardianClaim(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelGuardianClaim) {
-		return opResult.WithStatus(common.ResultFuelExhausted)
+	if !tank.Exhaust(FuelGuardianClaim, 0) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := validateGuardianClaim(sender, system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	if err := claimRewards(sender, system, payload); err != nil {
-		return opResult.WithStatus(common.ResultStateReverted)
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	return opResult.WithStatus(common.ResultOk)

@@ -1,0 +1,153 @@
+syntax: 1
+engine:
+  kind: PISA
+  flags: []
+  version: 0.5.0
+kind: logic
+elements:
+- ptr: 0
+  kind: interface
+  data:
+    name: answer
+    logic:
+      mode: logic
+      fields:
+      - slot: 0
+        label: Answer
+        type: u64
+    actor:
+      mode: actor
+      fields:
+      - slot: 0
+        label: ActorAnswer
+        type: u64
+    endpoint:
+    - name: GetLogicAnswer
+      mode: static
+      accepts: []
+      returns:
+      - slot: 0
+        label: answer
+        type: u64
+    - name: GetActorAnswer
+      mode: static
+      accepts:
+      - slot: 0
+        label: actorId
+        type: identifier
+      returns:
+      - slot: 0
+        label: answer
+        type: u64
+    - name: SetActorAnswer
+      mode: dynamic
+      accepts:
+      - slot: 0
+        label: actorId
+        type: identifier
+      - slot: 1
+        label: new_answer
+        type: u64
+      returns: []
+- ptr: 1
+  kind: callable
+  data:
+    name: SetActorAnswer
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: answerLogicId
+      type: identifier
+    - slot: 1
+      label: new_answer
+      type: u64
+    returns: []
+    executes:
+      asm:
+      - OBTAIN $0 &0
+      - LDPTR1 $1 0x0
+      - XBIND $0 $1 $0
+      - CARGS $1
+      - ORIGIN $2
+      - SETFLD $1 &0 $2
+      - OBTAIN $2 &1
+      - SETFLD $1 &1 $2
+      - CALLX $0 $0 &2 $1
+    catches: []
+- ptr: 2
+  kind: callable
+  data:
+    name: SetMyAnswer
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: answerLogicId
+      type: identifier
+    - slot: 1
+      label: new_answer
+      type: u64
+    returns: []
+    executes:
+      asm:
+      - OBTAIN $0 &0
+      - LDPTR1 $1 0x0
+      - XBIND $0 $1 $0
+      - CARGS $1
+      - LOGIC $2
+      - SETFLD $1 &0 $2
+      - OBTAIN $2 &1
+      - SETFLD $1 &1 $2
+      - CALLX $0 $0 &2 $1
+    catches: []
+- ptr: 3
+  kind: callable
+  data:
+    name: GetAnswers
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: answerLogicId
+      type: identifier
+    returns:
+    - slot: 0
+      label: logicAnswer
+      type: u64
+    - slot: 1
+      label: actorAnswer
+      type: u64
+    - slot: 2
+      label: endpointLogicAnswer
+      type: u64
+    - slot: 3
+      label: endpointActorAnswer
+      type: u64
+    - slot: 4
+      label: logicActorAnswer
+      type: u64
+    executes:
+      asm:
+      - OBTAIN $0 &0
+      - LDPTR1 $1 0x0
+      - XBIND $0 $1 $0
+      - XLLOAD $1 $0 &0
+      - YIELD $1 &0
+      - ORIGIN $1
+      - XALOAD $1 $0 $1 &0
+      - YIELD $1 &1
+      - CARGS $2
+      - CALLX $2 $0 &0 $2
+      - GETFLD $2 $2 &0
+      - YIELD $2 &2
+      - CARGS $2
+      - ORIGIN $3
+      - SETFLD $2 &0 $3
+      - CALLX $2 $0 &1 $2
+      - GETFLD $2 $2 &0
+      - YIELD $2 &3
+      - LOGIC $2
+      - XALOAD $1 $0 $2 &0
+      - YIELD $1 &4
+    catches: []

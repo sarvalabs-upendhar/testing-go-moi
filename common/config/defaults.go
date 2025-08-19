@@ -10,7 +10,10 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-const DefaultFuelLimit uint64 = 10000
+const (
+	DefaultComputeFuelLimit uint64 = 10000
+	DefaultStorageFuelLimit uint64 = 1000000 // TODO: Verify this value
+)
 
 var DefaultIxPriceLimit = big.NewInt(1)
 

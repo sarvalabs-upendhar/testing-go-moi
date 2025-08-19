@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio/test"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -19,7 +20,7 @@ func TestLockLedgerTestSuite(t *testing.T) {
 }
 
 type LockLedgerTestSuite struct {
-	engineio.TestSuite
+	test.SingleLogicSuite
 }
 
 var (
@@ -48,11 +49,11 @@ func (suite *LockLedgerTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Deploy the logic to initialise its initial state
-	suite.Deploy("Seed", calldata, nil, nil)
+	suite.Deploy("Seed", calldata, nil, nil, nil)
 
 	// Check the balance of the seeder
 	keySeederSpendable := pisa.GenerateStorageKey(EphemeralSlotSpendable)
-	suite.CheckEphemeralStorage(SeederID, keySeederSpendable, InitialSeed)
+	suite.CheckActorStorage(SeederID, keySeederSpendable, InitialSeed)
 }
 
 func (suite *LockLedgerTestSuite) TestLockup() {
@@ -64,20 +65,25 @@ func (suite *LockLedgerTestSuite) TestLockup() {
 		must(polo.PolorizeDocument(InputLockup{
 			Amount: LockupAmount,
 		})),
-		nil, nil,
+		nil, nil, nil,
 	)
 
 	// Check the spendable balance of the seeder
 	keySeederSpendable := pisa.GenerateStorageKey(EphemeralSlotSpendable)
-	suite.CheckEphemeralStorage(SeederID, keySeederSpendable, InitialSeed-LockupAmount)
+	suite.CheckActorStorage(SeederID, keySeederSpendable, InitialSeed-LockupAmount)
 
 	// Check the lockedup balance of the seeder
 	keySeederLockedup := pisa.GenerateStorageKey(EphemeralSlotLockedup)
-	suite.CheckEphemeralStorage(SeederID, keySeederLockedup, LockupAmount)
+	suite.CheckActorStorage(SeederID, keySeederLockedup, LockupAmount)
 }
 
 func (suite *LockLedgerTestSuite) TestMint() {
 	MintAmount := uint64(1000)
+	keySupply := pisa.GenerateStorageKey(PersistentSlotSupply)
+	suite.CheckLogicStorage(keySupply, InitialSeed)
+
+	keySeederSpendable := pisa.GenerateStorageKey(EphemeralSlotSpendable)
+	suite.CheckActorStorage(SeederID, keySeederSpendable, InitialSeed)
 
 	// Add incentives for an existing krama ID with valid inputs
 	suite.Invoke(
@@ -85,16 +91,14 @@ func (suite *LockLedgerTestSuite) TestMint() {
 		must(polo.PolorizeDocument(InputMint{
 			Amount: MintAmount,
 		})),
-		nil, nil,
+		nil, nil, nil,
 	)
 
 	// Check the total supply
-	keySupply := pisa.GenerateStorageKey(PersistentSlotSupply)
-	suite.CheckPersistentStorage(keySupply, InitialSeed+MintAmount)
+	suite.CheckLogicStorage(keySupply, InitialSeed+MintAmount)
 
 	// Check the spendable balance of the seeder
-	keySeederSpendable := pisa.GenerateStorageKey(EphemeralSlotSpendable)
-	suite.CheckEphemeralStorage(SeederID, keySeederSpendable, InitialSeed+MintAmount)
+	suite.CheckActorStorage(SeederID, keySeederSpendable, InitialSeed+MintAmount)
 }
 
 func must[T any](t T, err error) T {

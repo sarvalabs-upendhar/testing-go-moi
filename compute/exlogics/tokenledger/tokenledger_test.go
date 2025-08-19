@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio/test"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -19,7 +20,7 @@ func TestTokenLedgerTestSuite(t *testing.T) {
 }
 
 type TokenLedgerTestSuite struct {
-	engineio.TestSuite
+	test.SingleLogicSuite
 }
 
 var (
@@ -48,11 +49,11 @@ func (suite *TokenLedgerTestSuite) SetupSuite() {
 	require.NoError(suite.T(), err)
 
 	// Deploy the logic to initialise its initial state
-	suite.Deploy("Seed", calldata, nil, nil)
+	suite.Deploy("Seed", calldata, nil, nil, nil)
 
 	// Check the balance of the seeder
 	keySeederBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(SeederID))
-	suite.CheckPersistentStorage(keySeederBalance, InitialSeed)
+	suite.CheckLogicStorage(keySeederBalance, InitialSeed)
 }
 
 func (suite *TokenLedgerTestSuite) TestTransfer() {
@@ -65,14 +66,14 @@ func (suite *TokenLedgerTestSuite) TestTransfer() {
 			"amount":   TransferAmount,
 			"receiver": ReceiverID,
 		}),
-		nil, nil,
+		nil, nil, nil,
 	)
 
 	// Check the balance of the seeder
 	keySeederBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(SeederID))
-	suite.CheckPersistentStorage(keySeederBalance, InitialSeed-TransferAmount)
+	suite.CheckLogicStorage(keySeederBalance, InitialSeed-TransferAmount)
 
 	// Check the balance of the receiver
 	keyReceiverBalance := pisa.GenerateStorageKey(SlotBalances, pisa.MakeMapKey(ReceiverID))
-	suite.CheckPersistentStorage(keyReceiverBalance, TransferAmount)
+	suite.CheckLogicStorage(keyReceiverBalance, TransferAmount)
 }

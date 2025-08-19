@@ -2537,10 +2537,10 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
 	assert.NoError(t, err)
 
-	err = so.SetStorageEntry(common.SargaLogicID, ixs[0].Receiver().Bytes(), []byte{0x01})
+	err = so.WritePersistentStorage(common.SargaLogicID, ixs[0].Receiver().Bytes(), []byte{0x01})
 	assert.NoError(t, err)
 
-	err = so.SetStorageEntry(common.SargaLogicID, ixs[1].Receiver().Bytes(), []byte{0x01})
+	err = so.WritePersistentStorage(common.SargaLogicID, ixs[1].Receiver().Bytes(), []byte{0x01})
 	assert.NoError(t, err)
 
 	assert.NoError(t, err)
@@ -2879,9 +2879,9 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
 	assert.NoError(t, err)
 
-	err = so.SetStorageEntry(common.SargaLogicID, ixs[0].Receiver().Bytes(), []byte{0x01})
+	err = so.WritePersistentStorage(common.SargaLogicID, ixs[0].Receiver().Bytes(), []byte{0x01})
 	assert.NoError(t, err)
-	err = so.SetStorageEntry(common.SargaLogicID, ixs[1].Receiver().Bytes(), []byte{0x01})
+	err = so.WritePersistentStorage(common.SargaLogicID, ixs[1].Receiver().Bytes(), []byte{0x01})
 	assert.NoError(t, err)
 
 	stateHash, err := so.Commit()

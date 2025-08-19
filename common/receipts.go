@@ -2,6 +2,7 @@ package common
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
@@ -26,8 +27,7 @@ type IxOpStatus uint64
 const (
 	ResultOk IxOpStatus = iota
 	ResultExceptionRaised
-	ResultStateReverted
-	ResultFuelExhausted
+	ResultDefectRaised
 )
 
 type Log struct {
@@ -194,6 +194,12 @@ func (r *IxOpResult) WithStatus(status IxOpStatus) *IxOpResult {
 	return r
 }
 
+func (r *IxOpResult) WithType(ixType IxOpType) *IxOpResult {
+	r.IxType = ixType
+
+	return r
+}
+
 // SetResultPayload serializes the payload and assigns it to the Data field of the IxOpResult.
 func SetResultPayload[Payload OperationResultPayload](op *IxOpResult, payload Payload) {
 	raw, _ := json.Marshal(payload)
@@ -327,6 +333,34 @@ func (rs Receipts) IsSuccess(ixHash Hash) bool {
 	receipt := rs[ixHash]
 
 	return receipt.Status == ReceiptOk
+}
+
+func PrintReceipts(receipts Receipts) any {
+	if len(receipts) == 0 {
+		fmt.Println("No receipts to display")
+
+		return nil
+	}
+
+	fmt.Printf("Total receipts: %d\n", len(receipts))
+	fmt.Println("==========================================")
+
+	for hash, receipt := range receipts {
+		fmt.Printf("Hash: %s\n", hash.String())
+		fmt.Printf("  Status: %d\n", receipt.Status)
+		fmt.Printf("  Fuel Used: %d\n", receipt.FuelUsed)
+		fmt.Printf("  Operations: %d\n", len(receipt.IxOps))
+
+		for i, op := range receipt.IxOps {
+			fmt.Printf("    Op %d - Type: %d, Status: %d, Logs: %d\n",
+				i, op.IxType, op.Status, len(op.Logs))
+			fmt.Println("DATA:", string(op.Data))
+		}
+
+		fmt.Println("------------------------------------------")
+	}
+
+	return nil
 }
 
 type OperationResultPayload interface {

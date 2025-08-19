@@ -1,9 +1,6 @@
 package compute
 
 import (
-	"context"
-	"math"
-
 	"github.com/pkg/errors"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -18,12 +15,10 @@ import (
 // The logic manifest is verified, compiled and deployed on to a new account and any deployer call is executed.
 func RunLogicDeploy(
 	op *common.IxOp,
-	ctx *common.ExecutionContext,
+	ctx *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
-	status := common.ResultOk
-
 	// Create a new op result
 	opResult := common.NewIxOpResult(op.Type())
 
@@ -31,23 +26,20 @@ func RunLogicDeploy(
 	deployer := transition.GetObject(op.SenderID())
 	logicacc := transition.GetObject(op.Target())
 
-	// Create an options chain
-	options := make([]LogicDeployOption, 0, 3)
-	// Append deploy options for deployer state and fuel limit
-	options = append(options, DeployFuelLimit(tank.Level()))
-
 	// Create an event stream to emit the events on
-	eventstream := NewEventStream(op.LogicID())
-
-	consumption, receiptPayload, err := DeployLogic(ctx, op, logicacc, deployer, eventstream, options...)
-	if err != nil {
-		status = common.ResultStateReverted
-	}
+	consumption, receiptPayload, logs, err := DeployLogic(ctx, op, logicacc, deployer, tank)
 
 	// Exhaust fuel from tank
-	if !tank.Exhaust(consumption) {
-		status = common.ResultFuelExhausted
+	if !tank.Exhaust(consumption.Compute, consumption.Storage) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
+
+	if err != nil {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	// Set the logs in the receipt
+	opResult.SetLogs(logs)
 
 	// Set the result payload
 	if receiptPayload != nil {
@@ -55,31 +47,15 @@ func RunLogicDeploy(
 
 		// Set the status of the receipt based on the error stat
 		if receiptPayload.Error != nil {
-			status = common.ResultExceptionRaised
+			return opResult.WithStatus(common.ResultExceptionRaised)
 		}
 	}
 
 	if err = addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
-		status = common.ResultStateReverted
+		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
-	// Set the logs in the receipt
-	opResult.SetLogs(eventstream.Collect())
-	opResult.SetStatus(status)
-
-	return opResult
-}
-
-// LogicDeployOption is an option for DeployLogic and modifies the logic deployment behaviour
-type LogicDeployOption func(*logicDeployer) error
-
-// DeployFuelLimit returns a LogicDeployOption to provide the fuel limit for logic deployment.
-func DeployFuelLimit(limit uint64) LogicDeployOption {
-	return func(config *logicDeployer) error {
-		config.fueltank = NewFuelTank(limit)
-
-		return nil
-	}
+	return opResult.WithStatus(common.ResultOk)
 }
 
 // DeployLogic deploys the given manifest code into the given state object.
@@ -88,66 +64,75 @@ func DeployFuelLimit(limit uint64) LogicDeployOption {
 // Uses unlimited fuel limit unless otherwise specified with the DeployFuelLimit option.
 // Does not perform a call to deployer callsite unless specified with DeploymentCall.
 func DeployLogic(
-	ctx *common.ExecutionContext,
+	ctx *engineio.RuntimeContext,
 	op *common.IxOp,
 	logicState *state.Object,
 	deployerState *state.Object,
-	eventstream *EventStream,
-	opts ...LogicDeployOption,
+	fueltank *FuelTank,
 ) (
-	uint64, *common.LogicDeployResult, error,
+	*engineio.FuelGauge, *common.LogicDeployResult, []common.Log, error,
 ) {
 	// Generate basic deployment config
 	deployer := &logicDeployer{
 		manifest:      op.Manifest(),
 		logicState:    logicState,
 		deployerState: deployerState,
-		fueltank:      NewFuelTank(math.MaxUint64),
-	}
-
-	// Apply all deployment options on the config
-	for _, opt := range opts {
-		if err := opt(deployer); err != nil {
-			return 0, nil, err
-		}
+		fuel:          NewFuelTank(fueltank.Level()),
 	}
 
 	// Compile the manifest bytes into a LogicDescriptor
 	descriptor, err := deployer.compileManifest()
 	if err != nil {
-		return 0, nil, err
+		return engineio.NewFuelGauge(deployer.fuel.Consumed()), nil, nil, err
 	}
 
 	// Generate the logic object and deploy it to state
 	logicObject, err := deployer.deployLogicObject(descriptor)
 	if err != nil {
-		return 0, nil, err
+		return engineio.NewFuelGauge(deployer.fuel.Consumed()), nil, nil, err
 	}
 
 	// If no callsite is provided -> return the logic ID and fuel consumption
 	if op.Callsite() == "" {
-		return deployer.fueltank.Consumed, &common.LogicDeployResult{LogicID: logicObject.ID}, nil
+		return engineio.NewFuelGauge(deployer.fuel.Consumed()),
+			&common.LogicDeployResult{LogicID: logicObject.ID},
+			nil, nil
+	}
+
+	if err = ctx.Runtime.CreateLogic(
+		logicObject.LogicID(),
+		descriptor.Artifact,
+		logicState.GenerateLogicStorageObject(),
+		nil,
+	); err != nil {
+		return engineio.NewFuelGauge(deployer.fuel.Consumed()),
+			nil, nil,
+			errors.Wrap(err, "failed to create logic in runtime")
 	}
 
 	// Call the logic deployer to set up logic state
-	result, err := deployer.callDeployer(op, ctx, logicObject, eventstream)
-	if err != nil {
-		return 0, nil, err
+	result := ctx.Runtime.Call(logicObject.LogicID(), op, engineio.NewFuelGauge(deployer.fuel.Level()))
+
+	if !deployer.fuel.Exhaust(result.ComputeEffort, result.StorageEffort) {
+		return engineio.NewFuelGauge(deployer.fuel.Consumed()), nil, nil, errors.New("insufficient fuel")
 	}
 
 	// Check the execution result
-	if !result.Ok() {
-		return deployer.fueltank.Consumed, &common.LogicDeployResult{Error: result.Error()}, nil
+	if result.IsError() {
+		return engineio.NewFuelGauge(deployer.fuel.Consumed()), &common.LogicDeployResult{Error: result.Err}, result.Logs, nil
 	}
 
 	// Return the total fuel consumed and the logic ID
-	return deployer.fueltank.Consumed, &common.LogicDeployResult{LogicID: logicObject.ID}, nil
+	return engineio.NewFuelGauge(deployer.fuel.Consumed()),
+		&common.LogicDeployResult{LogicID: logicObject.ID},
+		result.Logs,
+		nil
 }
 
 type logicDeployer struct {
 	manifest []byte
 
-	fueltank      *FuelTank
+	fuel          *FuelTank
 	logicState    *state.Object
 	deployerState *state.Object
 }
@@ -160,23 +145,32 @@ func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, erro
 	}
 
 	// Obtain the runtime for the logic engine in the header
-	runtime, ok := engineio.FetchEngine(manifest.Engine().Kind)
+	engine, ok := engineio.FetchEngine(manifest.Engine().Kind)
 	if !ok {
 		return nil, errors.Errorf("unsupported manifest engine: %v", manifest.Engine().Kind)
 	}
 
-	// Compile the manifest into a LogicDescriptor
-	logicDescriptor, consumed, err := runtime.CompileManifest(manifest, deployer.fueltank.Level())
-	if err != nil {
-		return nil, errors.Wrap(err, "manifest compile failed")
+	// Check that the Manifest Instance is PISA
+	if manifest.Engine().Kind != engineio.PISA {
+		return nil, errors.New("invalid manifest: manifest engine is not PISA")
 	}
 
-	// Exhaust fuel for compile
-	if !deployer.fueltank.Exhaust(consumed) {
+	rawArtifact, consumed, err := engine.CompileManifest(manifest, *engineio.NewFuelGauge(deployer.fuel.Level()))
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compile manifest")
+	}
+
+	if !deployer.fuel.Exhaust(consumed.Compute, consumed.Storage) {
 		return nil, errors.New("insufficient fuel: could not compile manifest")
 	}
 
-	return &logicDescriptor, nil
+	// Create a new manifest compiler
+	return &engineio.LogicDescriptor{
+		Engine:       manifest.Engine().Kind,
+		Artifact:     rawArtifact,
+		ManifestHash: manifest.Hash(), // TODO: This is expensive, optimize this.
+		ManifestData: deployer.manifest,
+	}, nil
 }
 
 func (deployer logicDeployer) deployLogicObject(descriptor *engineio.LogicDescriptor) (*state.LogicObject, error) {
@@ -187,99 +181,15 @@ func (deployer logicDeployer) deployLogicObject(descriptor *engineio.LogicDescri
 	}
 
 	// Fetch the logic object from the state object
-	logicObject, err := deployer.logicState.FetchLogicObject(logicID)
+	logicObject, err := deployer.logicState.FetchLogicObject(logicID.AsIdentifier())
 	if err != nil {
 		return nil, err
 	}
 
 	// Exhaust fuel for state deploy
-	if !deployer.fueltank.Exhaust(FuelLogicObjectDeployment) {
+	if !deployer.fuel.Exhaust(FuelLogicObjectDeployment, 0) {
 		return nil, errors.New("insufficient fuel: could not deploy logic object to state")
 	}
 
 	return logicObject, nil
-}
-
-func (deployer logicDeployer) callDeployer(
-	op *common.IxOp,
-	ctx *common.ExecutionContext,
-	logic *state.LogicObject,
-	eventstream *EventStream,
-) (engineio.CallResult, error) {
-	// Check if logic has a persistent state
-	if _, ok := logic.PersistentState(); !ok {
-		return nil, errors.New("cannot call deployer for logic without persistent state")
-	}
-
-	// Get runtime for logic engine
-	engine, _ := engineio.FetchEngine(logic.Engine())
-	// Create a new engine for the execution
-	instance, err := engine.SpawnInstance(
-		logic,
-		deployer.fueltank.Level(),
-		deployer.logicState.GenerateLogicStorageObject(logic.ID),
-		ctx,
-		eventstream,
-	)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not bootstrap engine")
-	}
-
-	// Declare context driver
-	var deployerCtx engineio.StateDriver
-	// Create the deployer context driver if not nil
-	if deployer.deployerState != nil {
-		// If the logic describes an ephemeral state
-		if _, ok := logic.EphemeralState(); ok {
-			// We need to initialise the logic tree for the deployer as well
-			if err = deployer.deployerState.InitLogicStorage(logic.LogicID()); err != nil {
-				return nil, err
-			}
-		}
-
-		deployerCtx = deployer.deployerState.GenerateLogicStorageObject(logic.ID)
-	}
-
-	// Perform execution call on the engine
-	result, err := instance.Call(context.Background(), op, deployerCtx)
-	if err != nil {
-		return nil, errors.Wrap(err, "could not perform call")
-	}
-
-	// Exhaust fuel for deployer call
-	if !deployer.fueltank.Exhaust(result.Fuel()) {
-		return nil, errors.New("insufficient fuel: could not call logic deployer")
-	}
-
-	return result, nil
-}
-
-func (manager *Manager) ValidateLogicDeploy(op *common.IxOp) error {
-	// Check that the manifest decodes correctly
-	manifest, err := engineio.NewManifest(op.Manifest(), common.POLO)
-	if err != nil {
-		return err
-	}
-
-	runtime, ok := engineio.FetchEngine(manifest.Kind())
-	if !ok {
-		return errors.New("failed to get runtime for logic")
-	}
-
-	// Attempt to compile the manifest into logic descriptor with fuel limit
-	descriptor, _, err := runtime.CompileManifest(manifest, op.FuelLimit())
-	if err != nil {
-		return err
-	}
-
-	if op.Callsite() == "" {
-		// If no callsite is provided, skip calldata validation
-		return nil
-	}
-
-	// Create a logic object from the descriptor
-	logic := state.NewLogicObject(op.Target(), descriptor)
-	// TODO: this logic object is wasted after creation, consider caching somewhere?
-
-	return runtime.ValidateCalldata(logic, op)
 }

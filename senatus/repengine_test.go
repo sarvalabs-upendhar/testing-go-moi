@@ -8,10 +8,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
-	"github.com/sarvalabs/go-moi/compute/pisa"
-	"github.com/sarvalabs/go-moi/corelogics/guardianregistry"
-	"github.com/sarvalabs/go-polo"
-
 	"github.com/hashicorp/go-hclog"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
@@ -822,13 +818,6 @@ func TestReputationEngine_StreamPeerInfos(t *testing.T) {
 func TestReputationEngine_FlushDirtyEntries(t *testing.T) {
 	testKramaID := tests.RandomKramaID(t, 0)
 
-	// Generate the hash of the krama ID
-	kramaIDEncoded, _ := polo.Polorize(testKramaID)
-	kramaIDHashed := common.GetHash(kramaIDEncoded)
-
-	// Generate the storage key for the guardian with the given krama ID
-	storageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
-
 	testcases := []struct {
 		name           string
 		entries        map[peer.ID]*NodeMetaInfo
@@ -888,17 +877,7 @@ func TestReputationEngine_FlushDirtyEntries(t *testing.T) {
 
 			testTesseract := tests.CreateTesseract(t, nil)
 
-			mockState.setAccountMetaInfo(
-				t,
-				&common.AccountMetaInfo{
-					ID:            common.GuardianLogicID.AsIdentifier(),
-					TesseractHash: testTesseract.Hash(),
-				},
-			)
-
 			mockChain.setTesseract(t, testTesseract.Hash(), testTesseract)
-
-			mockState.setStorageEntry(t, common.GuardianLogicID, storageKey)
 
 			if test.testFn != nil {
 				test.testFn(reputationEngine, test.entries)
@@ -1071,88 +1050,6 @@ func TestReputationEngine_LoadPeerCountWhileSetup(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, test.expectedCount, r.TotalPeerCount())
-		})
-	}
-}
-
-func TestReputationEngine_IsGuardianRegistered(t *testing.T) {
-	testKramaID := tests.RandomKramaID(t, 0)
-
-	// Generate the hash of the krama ID
-	kramaIDEncoded, _ := polo.Polorize(testKramaID)
-	kramaIDHashed := common.GetHash(kramaIDEncoded)
-
-	// Generate the storage key for the guardian with the given krama ID
-	validStorageKey := pisa.GenerateStorageKey(guardianregistry.SlotGuardians, pisa.MapKey(kramaIDHashed))
-
-	testTesseract := tests.CreateTesseract(t, nil)
-
-	testcases := []struct {
-		name           string
-		setAccMetaInfo bool
-		guardianTSHash common.Hash
-		logicID        identifiers.LogicID
-		storageKey     []byte
-		expectedResult bool
-	}{
-		{
-			name: "failed to get account meta info",
-		},
-		{
-			name:           "failed to fetch tesseract",
-			setAccMetaInfo: true,
-			// tesseract hash different from the one in accMetaInfo
-			guardianTSHash: tests.RandomHash(t),
-		},
-		{
-			name:           "failed to fetch logic storage tree",
-			setAccMetaInfo: true,
-			guardianTSHash: testTesseract.Hash(),
-			logicID:        tests.GetLogicID(t, tests.RandomIdentifier(t)),
-		},
-		{
-			name:           "Invalid storage key",
-			setAccMetaInfo: true,
-			guardianTSHash: testTesseract.Hash(),
-			logicID:        common.GuardianLogicID,
-			storageKey:     []byte{1},
-		},
-		{
-			name:           "Guardian is registered",
-			setAccMetaInfo: true,
-			guardianTSHash: testTesseract.Hash(),
-			logicID:        common.GuardianLogicID,
-			expectedResult: true,
-			storageKey:     validStorageKey,
-		},
-	}
-
-	for _, testcase := range testcases {
-		t.Run(testcase.name, func(t *testing.T) {
-			reputationEngine, _ := createTestReputationEngine(t)
-
-			// set mock state and chain manager
-			mockState := NewMockState()
-			reputationEngine.State = mockState
-			mockChain := NewMockChain()
-			reputationEngine.Chain = mockChain
-
-			if testcase.setAccMetaInfo {
-				mockState.setAccountMetaInfo(
-					t,
-					&common.AccountMetaInfo{
-						ID:            common.GuardianLogicID.AsIdentifier(),
-						TesseractHash: testTesseract.Hash(),
-					},
-				)
-			}
-
-			mockChain.setTesseract(t, testcase.guardianTSHash, testTesseract)
-
-			mockState.setStorageEntry(t, testcase.logicID, testcase.storageKey)
-
-			check := reputationEngine.isGuardianRegisterd(testKramaID)
-			require.Equal(t, testcase.expectedResult, check)
 		})
 	}
 }

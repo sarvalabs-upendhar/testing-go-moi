@@ -3,11 +3,13 @@ package consensus
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"time"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common/utils"
@@ -245,7 +247,7 @@ func (k *Engine) updateValidatorStakes(transition *state.Transition) error {
 
 		if err := obj.CreateLockup(
 			common.KMOITokenAssetID,
-			common.GuardianLogicID.AsIdentifier(),
+			common.SystemAccountID,
 			val.ActiveStake,
 		); err != nil {
 			return errors.Wrap(err, "failed to create lockup")
@@ -285,7 +287,7 @@ func (k *Engine) setupNewAccount(info common.AccountSetupArgs) (*state.Object, e
 }
 
 func (k *Engine) setupGenesisLogics(
-	transition map[identifiers.Identifier]*state.Object,
+	objectMap state.ObjectMap,
 	logics []common.LogicSetupArgs,
 ) ([]common.Hash, error) {
 	hashes := make([]common.Hash, len(logics))
@@ -296,12 +298,6 @@ func (k *Engine) setupGenesisLogics(
 			identifiers.LogicIntrinsic,
 			identifiers.LogicExtrinsic,
 		).AsIdentifier()
-
-		if !common.ContainsID(common.GenesisLogicIDs, logicID) {
-			k.logger.Error("Mismatch of logic id", "logic-name", logic.Name, logicID)
-
-			return nil, errors.New("generated id does not exist in predefined logic ids")
-		}
 
 		// Create state object for the logic
 		logicState := k.state.CreateStateObject(logicID, common.LogicAccount, true)
@@ -319,7 +315,7 @@ func (k *Engine) setupGenesisLogics(
 		}
 
 		// Create a new execution context
-		ctx := &common.ExecutionContext{
+		execCtx := &common.ExecutionContext{
 			CtxDelta: nil,
 			Cluster:  "genesis",
 			Time:     k.cfg.GenesisTimestamp,
@@ -329,11 +325,11 @@ func (k *Engine) setupGenesisLogics(
 		ix, err := common.NewInteraction(common.IxData{
 			Participants: []common.IxParticipant{
 				{
-					ID: common.SargaAccountID,
+					ID: deployerState.Identifier(),
 				},
 			},
 			Sender: common.Sender{
-				ID: common.SargaAccountID,
+				ID: deployerState.Identifier(),
 			},
 			IxOps: []common.IxOpRaw{
 				{
@@ -341,7 +337,7 @@ func (k *Engine) setupGenesisLogics(
 					Payload: func() []byte {
 						payload := &common.LogicPayload{
 							Callsite: logic.Callsite,
-							Calldata: logic.Calldata,
+							Calldata: logic.Calldata.Bytes(),
 							Manifest: logic.Manifest.Bytes(),
 						}
 
@@ -357,10 +353,27 @@ func (k *Engine) setupGenesisLogics(
 			panic(err)
 		}
 
+		engine, ok := engineio.FetchEngine(engineio.PISA)
+		if !ok {
+			return nil, errors.New("failed to fetch engine")
+		}
+
+		ctx := &engineio.RuntimeContext{
+			ClusterContext: execCtx,
+			Runtime:        engine.Runtime(execCtx.Time),
+		}
+
+		err = compute.AddActorsToRuntime(ix, ctx.Runtime, state.NewTransition(nil, objectMap, nil))
+		if err != nil {
+			return nil, err
+		}
+
 		// Deploy the genesis logic and check for errors
-		_, receipt, err := compute.DeployLogic(
-			ctx, ix.GetIxOp(0), logicState,
-			deployerState, compute.NewEventStream(identifiers.Nil),
+		_, receipt, _, err := compute.DeployLogic(ctx,
+			ix.GetIxOp(0),
+			logicState,
+			deployerState,
+			compute.NewFuelTank(math.MaxUint64, math.MaxUint64),
 		)
 		if err != nil {
 			k.logger.Error("Unable to deploy logic for", "logic-name", logic.Name)
@@ -373,7 +386,7 @@ func (k *Engine) setupGenesisLogics(
 		}
 
 		// Update the dirty objects map with the logic state object
-		transition[logicState.Identifier()] = logicState
+		objectMap[logicState.Identifier()] = logicState
 
 		// Obtain the logic ID from the call receipt
 

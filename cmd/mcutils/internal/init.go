@@ -192,7 +192,8 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			MaxSnapSize: config.DefaultSnapSize, // 6GB limit
 		},
 		Execution: cmdCommon.ExecutionConfig{
-			FuelLimit: hexutil.Uint64(config.DefaultFuelLimit),
+			ComputeFuelLimit: hexutil.Uint64(config.DefaultComputeFuelLimit),
+			StorageFuelLimit: hexutil.Uint64(config.DefaultStorageFuelLimit),
 		},
 		IxPool: cmdCommon.IxPoolConfig{
 			Mode:                    config.DefaultIxPoolMode,

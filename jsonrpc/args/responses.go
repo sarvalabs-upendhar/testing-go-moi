@@ -183,6 +183,17 @@ type RPCAccountMetaInfo struct {
 	TesseractHash common.Hash            `json:"tesseract_hash"`
 }
 
+type RPCValidator struct {
+	ID              common.ValidatorIndex  `json:"validator_id"`
+	KramaID         identifiers.KramaID    `json:"krama_id"`
+	ActiveStake     *hexutil.Big           `json:"active_stake"`
+	InactiveStake   *hexutil.Big           `json:"inactive_stake"`
+	SocialTokens    *hexutil.Big           `json:"social_tokens"`
+	BehaviourTokens *hexutil.Big           `json:"behaviour_tokens"`
+	Rewards         *hexutil.Big           `json:"rewards"`
+	WalletID        identifiers.Identifier `json:"wallet_id"`
+}
+
 type AccSyncStatus struct {
 	CurrentHeight     hexutil.Uint64 `json:"current_height"`
 	ExpectedHeight    hexutil.Uint64 `json:"expected_height"`

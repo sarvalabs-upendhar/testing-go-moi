@@ -70,7 +70,7 @@ func (p *Participant) IsContextUpdateRequired() bool {
 }
 
 func (p *Participant) ExcludedFromICS() bool {
-	return p.ExcludeFromICS
+	return !p.IsGenesis && p.ExcludeFromICS // TODO: Check this logic
 }
 
 type Participants map[identifiers.Identifier]*Participant

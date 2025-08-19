@@ -9,25 +9,11 @@ import (
 
 const KMOITokenSymbol = "KMOI"
 
-var (
-	GenesisIxHash   = GetHash([]byte("Genesis Interaction"))
-	GenesisLogicIDs = []identifiers.Identifier{GuardianAccountID}
-)
+var GenesisIxHash = GetHash([]byte("Genesis Interaction"))
 
 var (
 	SargaLogicID   = CreateLogicIDFromString("sargaAccount", 0, identifiers.Systemic)
 	SargaAccountID = SargaLogicID.AsIdentifier()
-)
-
-var (
-	GuardianLogicID = CreateLogicIDFromString(
-		"guardian-registry",
-		0,
-		identifiers.Systemic,
-		identifiers.LogicIntrinsic,
-		identifiers.LogicExtrinsic,
-	)
-	GuardianAccountID = GuardianLogicID.AsIdentifier()
 )
 
 var (

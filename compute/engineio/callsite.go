@@ -17,21 +17,14 @@ type Callsite struct {
 	Kind CallsiteKind `json:"kind" yaml:"kind"`
 }
 
-// CallEncoder is an interface with capabilities to encode inputs and decode outputs for a specific callable site.
-// It can be generated from either a Manifest or Logic.
-type CallEncoder interface {
-	EncodeInputs(map[string]any) ([]byte, error)
-	DecodeOutputs([]byte) (map[string]any, error)
-}
-
 // CallsiteKind represents the type of callable point in a Logic.
 type CallsiteKind int
 
 const (
 	CallsiteInternal CallsiteKind = iota
+	CallsiteInvoke
 	CallsiteDeploy
 	CallsiteEnlist
-	CallsiteInvoke
 	CallsiteInteract
 )
 
@@ -59,7 +52,7 @@ func (kind *CallsiteKind) Depolorize(depolorizer *polo.Depolorizer) error {
 		return err
 	}
 
-	*kind, err = newCallsiteKindFromString(str)
+	*kind, err = NewCallsiteKindFromString(str)
 	if err != nil {
 		return err
 	}
@@ -77,7 +70,7 @@ func (kind *CallsiteKind) UnmarshalJSON(data []byte) (err error) {
 		return err
 	}
 
-	*kind, err = newCallsiteKindFromString(*str)
+	*kind, err = NewCallsiteKindFromString(*str)
 	if err != nil {
 		return err
 	}
@@ -95,7 +88,7 @@ func (kind *CallsiteKind) UnmarshalYAML(node *yaml.Node) (err error) {
 		return err
 	}
 
-	*kind, err = newCallsiteKindFromString(*str)
+	*kind, err = NewCallsiteKindFromString(*str)
 	if err != nil {
 		return err
 	}
@@ -103,7 +96,7 @@ func (kind *CallsiteKind) UnmarshalYAML(node *yaml.Node) (err error) {
 	return nil
 }
 
-func newCallsiteKindFromString(str string) (CallsiteKind, error) {
+func NewCallsiteKindFromString(str string) (CallsiteKind, error) {
 	kind, ok := callsiteKindFromString[str]
 	if !ok {
 		return -1, errors.Errorf("invalid callsite kind: %v", str)

@@ -37,7 +37,7 @@ func GetEphemeralSpendable(storage engineio.StorageReader) (uint64, error) {
 	key := pisa.GenerateStorageKey(EphemeralSlotSpendable)
 
 	// Retrieve the value for the storage key
-	val, err := storage.GetStorageEntry(key)
+	val, err := storage.ReadPersistentStorage(storage.Identifier(), key)
 	if err != nil {
 		return 0, err
 	}
@@ -55,7 +55,7 @@ func GetEphemeralLockedup(storage engineio.StorageReader) (uint64, error) {
 	key := pisa.GenerateStorageKey(EphemeralSlotLockedup)
 
 	// Retrieve the value for the storage key
-	val, err := storage.GetStorageEntry(key)
+	val, err := storage.ReadPersistentStorage(storage.Identifier(), key)
 	if err != nil {
 		return 0, err
 	}
@@ -73,7 +73,7 @@ func GetPersistentSymbol(storage engineio.StorageReader) (string, error) {
 	key := pisa.GenerateStorageKey(PersistentSlotSymbol)
 
 	// Retrieve the value for the storage key
-	val, err := storage.GetStorageEntry(key)
+	val, err := storage.ReadPersistentStorage(storage.Identifier(), key)
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +91,7 @@ func GetPersistentSupply(storage engineio.StorageReader) (*big.Int, error) {
 	key := pisa.GenerateStorageKey(PersistentSlotSupply)
 
 	// Retrieve the value for the storage key
-	val, err := storage.GetStorageEntry(key)
+	val, err := storage.ReadPersistentStorage(storage.Identifier(), key)
 	if err != nil {
 		return nil, err
 	}

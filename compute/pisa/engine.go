@@ -2,183 +2,23 @@ package pisa
 
 import (
 	"github.com/pkg/errors"
-
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
-	"github.com/sarvalabs/go-pisa"
-	"github.com/sarvalabs/go-pisa/drivers"
-	"github.com/sarvalabs/go-pisa/values"
-	"github.com/sarvalabs/go-polo"
+	pisa "github.com/sarvalabs/go-pisa"
+	"github.com/sarvalabs/go-pisa/metering"
 )
 
-type Engine struct {
-	library *pisa.Library
-	crypto  engineio.CryptographyDriver
+type RuntimeWrapper struct {
+	rn *pisa.Runtime
 }
 
-// NewEngine generates a new Engine instance that can be
-// used to generate new instances of the PISA Execution Instance
-func NewEngine() Engine {
-	run := Engine{
-		library: &pisa.Library{
-			Builtins:  pisa.NewBuiltinSet(),
-			Instructs: pisa.NewInstructionSet(),
-		},
-		crypto: Crypto(0),
-	}
+type Pisa struct{}
 
-	return run
+func NewEngine() *Pisa {
+	return &Pisa{}
 }
 
-func (engine Engine) Kind() engineio.EngineKind { return engineio.PISA }
-func (engine Engine) Version() string           { return pisa.VersionWithMeta }
-
-// SpawnInstance generates a new engineio.EngineInstance bootstrapped with some engineio.EngineFuel,
-// an engineio.LogicDriver, its associated engineio.StateDriver and an engineio.EnvironmentDriver.
-// The returned instance is configured with the base PISA instruction set and builtin primitives.
-// Implements the engineio.Engine interface for pisa.Engine
-func (engine Engine) SpawnInstance(
-	logic engineio.LogicDriver,
-	fuel engineio.EngineFuel,
-	state engineio.StateDriver,
-	env engineio.EnvironmentDriver,
-	event engineio.EventDriver,
-) (
-	engineio.EngineInstance, error,
-) {
-	// Check logic driver engine
-	if logic.Engine() != engineio.PISA {
-		return nil, errors.New("incompatible logic driver: not a PISA logic")
-	}
-
-	// Check logic driver's logic ID and its context's logic ID.
-	if logic.LogicID().String() != state.LogicID().String() {
-		return nil, errors.New("incompatible context driver for logic: logic ID is not equal")
-	}
-
-	// Check the logic driver and context driver's addresses
-	if logic.LogicID().AsIdentifier() != state.Identifier() {
-		return nil, errors.New("incompatible context driver for logic: address does not match")
-	}
-
-	return &Instance{
-		logicIO: logic,
-		internal: pisa.NewInstance(
-			engine.library,
-			Logic{logic},
-			newState(state),
-			drivers.NewMeteredFuelTank(fuel),
-			env, engine.crypto,
-			EventStream{event},
-		),
-	}, nil
-}
-
-// CompileManifest generates an engineio.LogicDescriptor from an engineio.Manifest object.
-// The compilation will fail if the manifest object is not compatible or has malformed elements.
-// Implements the engineio.Engine interface for pisa.Engine
-func (engine Engine) CompileManifest(
-	manifest engineio.Manifest,
-	fuel engineio.EngineFuel,
-) (
-	engineio.LogicDescriptor,
-	engineio.EngineFuel, error,
-) {
-	// Check that the Manifest Instance is PISA
-	if manifest.Engine().Kind != engineio.PISA {
-		return engineio.LogicDescriptor{}, 0, errors.New("invalid manifest: manifest engine is not PISA")
-	}
-
-	// Create a new manifest compiler
-	compiler := NewManifestCompiler(fuel, manifest)
-	// Compile the manifest
-	descriptor, leftover, err := compiler.CompileDescriptor()
-	if err != nil {
-		return engineio.LogicDescriptor{}, fuel - leftover, errors.Wrap(err, "compile error")
-	}
-
-	return descriptor, fuel - leftover, nil
-}
-
-func (engine Engine) DecodeErrorResult(data []byte) (engineio.ErrorResult, error) {
-	// Create a new ErrorResult object
-	var result pisa.ErrorResult
-	// Decode the error result
-	if err := polo.Depolorize(&result, data); err != nil {
-		return nil, err
-	}
-
-	return Error{err: result}, nil
-}
-
-// ValidateCalldata verifies the given engineio.IxnDriver for an engineio.LogicDriver.
-// Returns an error for one of the following:
-// * If the logic is not supported by PISA
-// * If the callsite does not exist
-// * If the callsite is not compatible with the ixn type
-// * If the calldata is invalid for the callsite.
-//
-// Implements the engineio.Engine interface for pisa.Engine.
-func (engine Engine) ValidateCalldata(logic engineio.LogicDriver, txn engineio.IxDriver) error {
-	// Check logic driver engine
-	if logic.Engine() != engineio.PISA {
-		return errors.New("incompatible logic driver: not a PISA logic")
-	}
-
-	// Get the callsite information from the logic and verify that it exists
-	callsite, ok := logic.GetCallsite(txn.Callsite())
-	if !ok {
-		return errors.Errorf("invalid callsite '%v': does not exist", txn.Callsite())
-	}
-
-	// Check that the callsite kind and ixn type of the IxnObject are compatible
-	switch callsite.Kind {
-	case engineio.CallsiteInvoke:
-		if txn.Type() != common.IxLogicInvoke {
-			return errors.Errorf("invalid callsite '%v' for IxnLogicInvoke", txn.Callsite())
-		}
-
-	case engineio.CallsiteDeploy:
-		if txn.Type() != common.IxLogicDeploy {
-			return errors.Errorf("invalid callsite '%v' for IxnLogicDeploy", txn.Callsite())
-		}
-
-	case engineio.CallsiteEnlist:
-		if txn.Type() != common.IxLogicEnlist {
-			return errors.Errorf("invalid callsite '%v' for IxnLogicEnlist", txn.Callsite())
-		}
-
-	default:
-		return errors.Errorf("unsupported callsite kind '%v' for callsite '%v'", callsite.Kind, txn.Callsite())
-	}
-
-	element, ok := logic.GetElement(callsite.Ptr)
-	if !ok {
-		return errors.Errorf("could not fetch element for callsite '%v'", txn.Callsite())
-	}
-
-	routine := new(pisa.Routine)
-	if err := polo.Depolorize(routine, element.Data); err != nil {
-		return errors.Wrap(err, "could not decode element into routine")
-	}
-
-	calldata := make(polo.Document)
-	// Decode the payload calldata into a polo.Document
-	if txn.Calldata() != nil {
-		if err := polo.Depolorize(&calldata, txn.Calldata()); err != nil {
-			return errors.Wrap(err, "could not decode calldata into polo document")
-		}
-	}
-
-	// Convert the input Calldata into a RegisterSet confirming
-	if _, err := values.NewRegisterSet(routine.Inputs, calldata); err != nil {
-		return errors.Errorf("invalid calldata for callsite '%v': %v", txn.Callsite(), err)
-	}
-
-	return nil
-}
-
-func (engine Engine) GenerateManifestElement(kind engineio.ElementKind) (any, bool) {
+func (p *Pisa) GenerateManifestElement(kind engineio.ElementKind) (any, bool) {
 	element, ok := ElementMetadata[kind]
 	if !ok {
 		return nil, false
@@ -187,47 +27,129 @@ func (engine Engine) GenerateManifestElement(kind engineio.ElementKind) (any, bo
 	return element.generator(), true
 }
 
-// GetCallEncoderFromLogicDriver generates an engineio.CallEncoder from a engineio.LogicDriver
-// that can encode inputs and decode outputs for a given callsite pointer. This will fail
-// if no valid callsite element exists for the given pointer in the given Manifest.
-// Implements the engineio.Engine interface for pisa.Engine.
-func (engine Engine) GetCallEncoderFromLogicDriver(
-	driver engineio.LogicDriver,
-	callsite engineio.Callsite,
-) (
-	engineio.CallEncoder, error,
-) {
-	// Check that the logic engine matches for the runtime
-	if driver.Engine() != engine.Kind() {
-		return nil, errors.New("incompatible logic for runtime: PISA")
-	}
-
-	return NewCallEncoder(Logic{driver}, callsite.Name)
+func (p *Pisa) Kind() engineio.EngineKind {
+	return engineio.PISA
 }
 
-func (engine Engine) GetCallEncoderFromManifest(
+func (p *Pisa) Version() string { return pisa.Version }
+
+func (p *Pisa) Runtime(timestamp uint64) engineio.Runtime {
+	return NewRuntimeWrapper(pisa.NewRuntime(timestamp, 0, 0, pisa.WithCryptography(Crypto(0))))
+}
+
+func (p *Pisa) CompileManifest(
 	manifest engineio.Manifest,
-	callsite engineio.Callsite,
+	fuel engineio.FuelGauge,
 ) (
-	engineio.CallEncoder, error,
+	[]byte,
+	*engineio.FuelGauge,
+	error,
 ) {
-	// TODO implement me
-	panic("implement me")
-}
-
-func (engine Engine) SpawnDebugInstance(
-	logic engineio.LogicDriver,
-	fuel engineio.EngineFuel,
-	state engineio.StateDriver,
-	env engineio.EnvironmentDriver,
-	event engineio.EventDriver,
-) (
-	engineio.DebugEngineInstance, error,
-) {
-	instance, err := engine.SpawnInstance(logic, fuel, state, env, event)
-	if err != nil {
-		return nil, err
+	// Check that the Manifest Instance is PISA
+	if manifest.Engine().Kind != engineio.PISA {
+		return nil, nil, errors.New("invalid manifest: manifest engine is not PISA")
 	}
 
-	return instance.(*Instance), nil //nolint:forcetypeassert
+	// Create a new manifest compiler
+	compiler := NewManifestCompiler(fuel, manifest)
+	// Compile the manifest
+	descriptor, err := compiler.CompileArtifact()
+	if err != nil {
+		return nil, fuel.Consumed(compiler.fuel), errors.Wrap(err, "compile error")
+	}
+
+	return descriptor, fuel.Consumed(compiler.fuel), nil
+}
+
+func NewRuntimeWrapper(rn *pisa.Runtime) *RuntimeWrapper {
+	return &RuntimeWrapper{rn: rn}
+}
+
+func (rw *RuntimeWrapper) CreateLogic(
+	logicID [32]byte,
+	artifact []byte,
+	storage engineio.Storage,
+	params map[string][]byte,
+) error {
+	ops := make([]pisa.ActorOption, 0)
+	for k, v := range params {
+		ops = append(ops, pisa.SetActorParameter(k, v))
+	}
+
+	art, err := pisa.NewBytecodeArtifact(artifact)
+	if err != nil {
+		return nil
+	}
+
+	return rw.rn.Spawn(art, logicID, storage, nil, ops...)
+}
+
+func (rw *RuntimeWrapper) ActorExists(logicID [32]byte) bool {
+	return rw.rn.ActorExists(logicID)
+}
+
+func (rw *RuntimeWrapper) CreateActor(id [32]byte, storage engineio.Storage, params map[string][]byte) error {
+	ops := make([]pisa.ActorOption, 0)
+	for k, v := range params {
+		ops = append(ops, pisa.SetActorParameter(k, v))
+	}
+
+	return rw.rn.CreateActor(id, storage, nil, ops...)
+}
+
+func (rw *RuntimeWrapper) Call(
+	logicID [32]byte,
+	action engineio.Action,
+	limit *engineio.FuelGauge,
+) *engineio.CallResult {
+	result := rw.rn.Call(
+		logicID,
+		action,
+		metering.SetEffortLimit(metering.ComputeEffort(limit.Compute)),
+		metering.SetVolumeLimit(metering.StorageVolume(limit.Storage)),
+	)
+
+	return callResult(result)
+}
+
+func callResult(result *pisa.CallResult) *engineio.CallResult {
+	if result == nil {
+		return nil
+	}
+
+	logs := make([]common.Log, 0)
+
+	for index, log := range result.Log() {
+		logs = append(logs, common.Log{
+			LogicID: log.LogicID,
+			ID:      log.ActorID,
+			Topics:  make([]common.Hash, 0, len(log.Topics)),
+			Data:    log.Values.Bytes(),
+		})
+
+		for _, topic := range log.Topics {
+			logs[index].Topics = append(logs[index].Topics, common.Hash(topic))
+		}
+	}
+
+	computeEffort, storageConsumed, storageReleased := result.MeterState()
+	storageEffort := uint64(0)
+
+	if storageReleased <= storageConsumed {
+		storageEffort = storageConsumed - storageReleased
+	}
+
+	cr := &engineio.CallResult{
+		Out:           result.Output(),
+		Logs:          logs,
+		ComputeEffort: computeEffort,
+		StorageEffort: storageEffort,
+	}
+
+	if result.Error() != nil {
+		// TODO: check if we need to parse the entire error or just the message
+		cr.Err = result.Error().Bytes()
+	}
+
+	return cr
 }

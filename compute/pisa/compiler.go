@@ -1,21 +1,18 @@
 package pisa
 
 import (
-	"bytes"
 	"encoding/hex"
 	"strings"
 
 	"github.com/manishmeganathan/depgraph"
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common"
 	"golang.org/x/exp/constraints"
 
-	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-pisa/datatypes"
-	"github.com/sarvalabs/go-pisa/logic"
 	"github.com/sarvalabs/go-pisa/opcode"
-	"github.com/sarvalabs/go-pisa/state"
 )
 
 const (
@@ -29,12 +26,14 @@ const (
 	TypeExprParseCost engineio.EngineFuel = 10
 	// BaseClassCost is the base cost for compiling a ClassElement
 	BaseClassCost engineio.EngineFuel = 10
+	// BaseExternCost is the base cost for compiling an ExternElement
+	BaseExternCost engineio.EngineFuel = 10
 	// BaseStateCost is the base cost for compiling a StateElement
 	BaseStateCost engineio.EngineFuel = 20
 	// BaseEventCost is the base cost for compiling an EventElement
 	BaseEventCost engineio.EngineFuel = 15
 
-	// ConstantCompileCost is the cost to compile a ConstantElement
+	// ConstantCompileCost is the cost to compile a LiteralElement
 	ConstantCompileCost engineio.EngineFuel = 20
 	// TypedefCompileCost is the cost to compile a TypedefElement
 	TypedefCompileCost engineio.EngineFuel = TypeExprParseCost + 5
@@ -75,39 +74,22 @@ var ErrInsufficientCompileFuel = errors.New("insufficient fuel for manifest comp
 // manifestCompiler internally uses the tools and validation rules provided by pisa.ArtifactBuilder
 type ManifestCompiler struct {
 	manifest   engineio.Manifest
-	fueltank   engineio.EngineFuel
+	fuel       engineio.FuelGauge
 	dependency *depgraph.DependencyGraph
 
 	builder *pisa.ArtifactBuilder
-
-	classdefs map[string]engineio.Classdef
-	callsites map[string]engineio.Callsite
-
-	deployers []uint64
-	enlisters []uint64
-
-	eventdefs map[string]engineio.Eventdef
 }
 
-func NewManifestCompiler(fuel uint64, manifest engineio.Manifest) *ManifestCompiler {
+func NewManifestCompiler(fuel engineio.FuelGauge, manifest engineio.Manifest) *ManifestCompiler {
 	return &ManifestCompiler{
-		fueltank:   fuel,
+		fuel:       fuel,
 		manifest:   manifest,
 		dependency: depgraph.NewDependencyGraph(),
-
-		builder: pisa.NewArtifactBuilder(),
-
-		classdefs: make(map[string]engineio.Classdef),
-		callsites: make(map[string]engineio.Callsite),
-
-		deployers: make([]uint64, 0),
-
-		eventdefs: make(map[string]engineio.Eventdef),
-		// enlisters: make([]uint64, 0),
+		builder:    pisa.NewArtifactBuilder(common.Hash(manifest.Hash()).String()),
 	}
 }
 
-func (compiler *ManifestCompiler) CompileArtifact() (*logic.Artifact, engineio.EngineFuel, error) {
+func (compiler *ManifestCompiler) CompileArtifact() ([]byte, error) {
 	// Insert elements to the depgraph
 	for _, element := range compiler.manifest.Elements() {
 		compiler.dependency.Insert(element.Ptr, element.Deps...)
@@ -117,12 +99,12 @@ func (compiler *ManifestCompiler) CompileArtifact() (*logic.Artifact, engineio.E
 	// representing the order in which the elements must be compiled
 	order, ok := compiler.dependency.Resolve()
 	if !ok {
-		return nil, compiler.fueltank, errors.New("invalid manifest: circular/empty dependency detected")
+		return nil, errors.New("invalid manifest: circular/empty dependency detected")
 	}
 
 	// Exhaust some fuel for the base and dependency resolution
-	if !compiler.exhaust(BaseCompileCost + DepsResolveCost) {
-		return nil, compiler.fueltank, errors.Wrap(ErrInsufficientCompileFuel, "dependency resolution failed")
+	if !compiler.exhaustCompute(BaseCompileCost + DepsResolveCost) {
+		return nil, errors.Wrap(ErrInsufficientCompileFuel, "dependency resolution failed")
 	}
 
 	// Iterate over the element pointers in declared compile order
@@ -130,140 +112,80 @@ func (compiler *ManifestCompiler) CompileArtifact() (*logic.Artifact, engineio.E
 		element, _ := compiler.manifest.GetElement(ptr)
 
 		switch element.Kind {
-		case ConstantElement:
-			// Compile the element as a ConstantElement
-			if err := compiler.compileConstantElement(element); err != nil {
-				return nil, compiler.fueltank, errors.Wrapf(err, "constant element [%#v] compile failed", ptr)
+		case LiteralElement:
+			// Compile the element as a LiteralElement
+			if err := compiler.compileLiteralElement(element); err != nil {
+				return nil, errors.Wrapf(err, "constant element [%#v] compile failed", ptr)
 			}
 
 		case TypedefElement:
 			// Compile the element as a TypedefElement
 			if err := compiler.compileTypedefElement(element); err != nil {
-				return nil, compiler.fueltank, errors.Wrapf(err, "typedef element [%#v] compile failed", ptr)
+				return nil, errors.Wrapf(err, "typedef element [%#v] compile failed", ptr)
 			}
 
 		case ClassElement:
 			// Compile the element as a ClassElement
 			if err := compiler.compileClassElement(element); err != nil {
-				return nil, compiler.fueltank, errors.Wrapf(err, "class element [%#v] compile failed", ptr)
+				return nil, errors.Wrapf(err, "class element [%#v] compile failed", ptr)
 			}
 
 		case StateElement:
 			// Compile the element as a StateElement
 			if err := compiler.compileStateElement(element); err != nil {
-				return nil, compiler.fueltank, errors.Wrapf(err, "state element [%#v] compile failed", ptr)
+				return nil, errors.Wrapf(err, "state element [%#v] compile failed", ptr)
 			}
 
 		case RoutineElement:
 			// Compile the element as a RoutineElement
 			if err := compiler.compileRoutineElement(element); err != nil {
-				return nil, compiler.fueltank, errors.Wrapf(err, "routine element [%#v] compile failed", ptr)
+				return nil, errors.Wrapf(err, "routine element [%#v] compile failed", ptr)
 			}
 
 		case MethodElement:
 			// Compile the element as a MethodElement
 			if err := compiler.compileMethodElement(element); err != nil {
-				return nil, compiler.fueltank, errors.Wrapf(err, "method element [%#v] compile failed", ptr)
+				return nil, errors.Wrapf(err, "method element [%#v] compile failed", ptr)
 			}
 
 		case EventElement:
 			// Compile the element as an EventElement
 			if err := compiler.compileEventElement(element); err != nil {
-				return nil, compiler.fueltank, errors.Wrapf(err, "event element [%#v] compile failed", ptr)
+				return nil, errors.Wrapf(err, "event element [%#v] compile failed", ptr)
+			}
+		case ExternElement:
+			if err := compiler.compileExternElement(element); err != nil {
+				return nil, errors.Wrapf(err, "extern element [%#v] compile failed", ptr)
 			}
 
 		default:
-			return nil, compiler.fueltank, errors.Errorf("invalid element kind [%#v]: %v", ptr, element.Kind)
+			return nil, errors.Errorf("invalid element kind [%#v]: %v", ptr, element.Kind)
 		}
 	}
 
-	artifact, err := compiler.builder.Build()
+	artifact, err := compiler.builder.GenerateRawArtifact()
 	if err != nil {
-		return nil, compiler.fueltank, errors.Wrap(err, "artifact build failed")
+		return nil, errors.Wrap(err, "artifact build failed")
 	}
 
-	return artifact, compiler.fueltank, nil
+	return artifact, nil
 }
 
-func (compiler *ManifestCompiler) CompileDescriptor() (engineio.LogicDescriptor, engineio.EngineFuel, error) {
-	artifact, fueltank, err := compiler.CompileArtifact()
-	if err != nil {
-		return engineio.LogicDescriptor{}, fueltank, err
-	}
-
-	// Generate the hash of the manifest
-	manifestHash := compiler.manifest.Hash()
-	manifestData, _ := compiler.manifest.Encode(common.POLO)
-
-	// Generate a LogicDescriptor from the compiler data
-	descriptor := engineio.LogicDescriptor{
-		Engine: engineio.PISA,
-
-		ManifestData: manifestData,
-		ManifestHash: manifestHash,
-
-		Callsites: compiler.callsites,
-		Classdefs: compiler.classdefs,
-
-		Depgraph: compiler.dependency,
-		Elements: make(map[engineio.ElementPtr]*engineio.LogicElement),
-
-		Eventdefs: compiler.eventdefs,
-	}
-
-	// Check if the compiled logic includes a persistent state
-	if ptr := artifact.Directory.Persistent; ptr != nil {
-		// Set the persistent state pointer to the descriptor
-		descriptor.Persistent = ptr
-
-		// Check that at least one deployer has been compiled
-		if len(compiler.deployers) == 0 {
-			return engineio.LogicDescriptor{},
-				compiler.fueltank,
-				errors.New("logic with persistent state must have at least one deployer")
-		}
-	}
-
-	// Check if the compiled logic includes a ephemeral state
-	if ptr := artifact.Directory.Ephemeral; ptr != nil {
-		// Set the persistent state pointer to the descriptor
-		descriptor.Ephemeral = ptr
-
-		// Check that at least one enlister has been compiled
-		if len(compiler.enlisters) == 0 {
-			return engineio.LogicDescriptor{},
-				compiler.fueltank,
-				errors.New("logic with ephemeral state must have at least one enlister")
-		}
-	}
-
-	for ptr := uint64(0); ptr < artifact.Size(); ptr++ {
-		element, _ := artifact.Element(ptr)
-		descriptor.Elements[ptr] = &engineio.LogicElement{
-			Kind: element.Kind.String(),
-			Deps: element.Deps,
-			Data: element.Data,
-		}
-	}
-
-	return descriptor, compiler.fueltank, nil
-}
-
-// exhaust exhausts some fuel from the compiler and return false if there isnt sufficient fuel
-func (compiler *ManifestCompiler) exhaust(amount uint64) bool {
-	if compiler.fueltank < amount {
+// exhaustCompute exhausts some fuel from the compiler and return false if there isnt sufficient fuel
+func (compiler *ManifestCompiler) exhaustCompute(amount uint64) bool {
+	if compiler.fuel.Compute < amount {
 		return false
 	}
 
-	compiler.fueltank -= amount
+	compiler.fuel.Compute -= amount
 
 	return true
 }
 
-// compileConstantElement compiles an engineio.ManifestElement object of type ConstantElement
-func (compiler *ManifestCompiler) compileConstantElement(element engineio.ManifestElement) error {
+// compileLiteralElement compiles an engineio.ManifestElement object of type LiteralElement
+func (compiler *ManifestCompiler) compileLiteralElement(element engineio.ManifestElement) error {
 	// Exhaust fuel for constant compilation
-	if !compiler.exhaust(ConstantCompileCost) {
+	if !compiler.exhaustCompute(ConstantCompileCost) {
 		return ErrInsufficientCompileFuel
 	}
 
@@ -292,13 +214,13 @@ func (compiler *ManifestCompiler) compileConstantElement(element engineio.Manife
 	}
 
 	// Create a new Constant object
-	constant, err := pisa.NewConstant(datatype, datavalue)
+	constant, err := pisa.NewLiteral(datatype, datavalue)
 	if err != nil {
 		return errors.Wrap(err, "invalid constant element")
 	}
 
 	// Add the Constant element into the builder
-	if err = compiler.builder.AddConstant(element.Ptr, constant); err != nil {
+	if err = compiler.builder.AddLiteral(element.Ptr, constant); err != nil {
 		return errors.Wrap(err, "invalid constant element")
 	}
 
@@ -308,7 +230,7 @@ func (compiler *ManifestCompiler) compileConstantElement(element engineio.Manife
 // compileTypedefElement compiles an engineio.ManifestElement object of type TypedefElement
 func (compiler *ManifestCompiler) compileTypedefElement(element engineio.ManifestElement) error {
 	// Exhaust fuel for typedef compilation
-	if !compiler.exhaust(TypedefCompileCost) {
+	if !compiler.exhaustCompute(TypedefCompileCost) {
 		return ErrInsufficientCompileFuel
 	}
 
@@ -325,18 +247,71 @@ func (compiler *ManifestCompiler) compileTypedefElement(element engineio.Manifes
 	}
 
 	// Add the Typedef element into the builder
-	if err = compiler.builder.AddTypedef(element.Ptr, datatype, element.Deps); err != nil {
+	if err = compiler.builder.AddType(element.Ptr, datatype, element.Deps); err != nil {
 		return errors.Wrap(err, "invalid typedef element")
 	}
 
 	return nil
 }
 
+func (compiler *ManifestCompiler) compileExternElement(element engineio.ManifestElement) error {
+	// Exhaust fuel for class element compilation
+	// We will charge cost beyond this per field in the class
+	if !compiler.exhaustCompute(BaseExternCost) {
+		return ErrInsufficientCompileFuel
+	}
+
+	schema, ok := element.Data.(*ExternSchema)
+	if !ok {
+		return errors.New("invalid element data for 'extern' kind")
+	}
+
+	var (
+		logicDef *pisa.StateDef
+		actorDef *pisa.StateDef
+		err      error
+	)
+
+	if schema.Logic != nil {
+		logicDef, err = compiler.getStateDef(schema.Logic, false)
+		if err != nil {
+			return errors.Wrap(err, "invalid extern element: invalid logic state")
+		}
+	}
+
+	if schema.Actor != nil {
+		actorDef, err = compiler.getStateDef(schema.Actor, false)
+		if err != nil {
+			return errors.Wrap(err, "invalid extern element: invalid actor state")
+		}
+	}
+
+	callables := make([]pisa.ExternalCallable, 0, len(schema.Endpoints))
+
+	for _, routine := range schema.Endpoints {
+		callable, err := compiler.compileExternEndpoint(&routine)
+		if err != nil {
+			return errors.Wrap(err, "invalid extern element: invalid routine")
+		}
+
+		callables = append(callables, *callable)
+	}
+
+	return compiler.builder.AddExtern(
+		element.Ptr,
+		&pisa.ExternDef{
+			Name:      schema.Name,
+			Logic:     logicDef,
+			Actor:     actorDef,
+			Callables: callables,
+		}, element.Deps)
+}
+
 // compileClassElement compiles an engineio.ManifestElement object into a ClassElement
 func (compiler *ManifestCompiler) compileClassElement(element engineio.ManifestElement) error {
 	// Exhaust fuel for class element compilation
 	// We will charge cost beyond this per field in the class
-	if !compiler.exhaust(BaseClassCost) {
+	if !compiler.exhaustCompute(BaseClassCost) {
 		return ErrInsufficientCompileFuel
 	}
 
@@ -365,9 +340,6 @@ func (compiler *ManifestCompiler) compileClassElement(element engineio.ManifestE
 		return errors.Wrap(err, "invalid class element")
 	}
 
-	// Add the classdef to the compiler
-	compiler.classdefs[schema.Name] = engineio.Classdef{Ptr: element.Ptr, Name: schema.Name}
-
 	return nil
 }
 
@@ -375,7 +347,7 @@ func (compiler *ManifestCompiler) compileClassElement(element engineio.ManifestE
 func (compiler *ManifestCompiler) compileEventElement(element engineio.ManifestElement) error {
 	// Exhaust fuel for event element compilation
 	// We will charge cost beyond this per field in the event
-	if !compiler.exhaust(BaseEventCost) {
+	if !compiler.exhaustCompute(BaseEventCost) {
 		return ErrInsufficientCompileFuel
 	}
 
@@ -402,16 +374,13 @@ func (compiler *ManifestCompiler) compileEventElement(element engineio.ManifestE
 		return errors.Wrap(err, "invalid event element")
 	}
 
-	// Add the eventdef to the compiler
-	compiler.eventdefs[schema.Name] = engineio.Eventdef{Ptr: element.Ptr, Name: schema.Name}
-
 	return nil
 }
 
 // compileMethodElement compiles an engineio.ManifestElement object into a MethodElement
 func (compiler *ManifestCompiler) compileMethodElement(element engineio.ManifestElement) error {
 	// Exhaust fuel for method compilation
-	if !compiler.exhaust(ClassMethodCost) {
+	if !compiler.exhaustCompute(ClassMethodCost) {
 		return ErrInsufficientCompileFuel
 	}
 
@@ -465,10 +434,10 @@ func (compiler *ManifestCompiler) compileMethodElement(element engineio.Manifest
 	}
 
 	// Create a routine for the compiled method
-	method := &pisa.RoutineMethod{
+	method := &pisa.DefinedMethod{
 		Name:  schema.Name,
 		Point: element.Ptr,
-		CallFields: logic.CallFields{
+		CallFields: datatypes.CallFields{
 			Inputs:  inputs,
 			Outputs: outputs,
 		},
@@ -486,11 +455,27 @@ func (compiler *ManifestCompiler) compileMethodElement(element engineio.Manifest
 	return nil
 }
 
+func (compiler *ManifestCompiler) getStateDef(schema *StateSchema, allowEvents bool) (*pisa.StateDef, error) {
+	// Create a new TypeFields from the map set
+	fields, err := compiler.compileTypeFields(schema.Fields, allowEvents)
+	if err != nil {
+		return nil, errors.Errorf("invalid state element: invalid fields: %v", err)
+	}
+
+	// Check the intended scope for StateElement
+	stateKind := StateModeToKind(schema.Mode)
+	if stateKind < 0 {
+		return nil, errors.Errorf("invalid mode for state element")
+	}
+
+	return pisa.NewStateDef(stateKind, fields), nil
+}
+
 // compileStateElement compiles an engineio.ManifestElement object of type StateElement
 func (compiler *ManifestCompiler) compileStateElement(element engineio.ManifestElement) error {
 	// Exhaust fuel for state fields compilation
 	// We charge more per field in the state
-	if !compiler.exhaust(BaseStateCost) {
+	if !compiler.exhaustCompute(BaseStateCost) {
 		return ErrInsufficientCompileFuel
 	}
 
@@ -500,40 +485,19 @@ func (compiler *ManifestCompiler) compileStateElement(element engineio.ManifestE
 		return errors.New("invalid element data for 'state' kind")
 	}
 
-	// Create a new TypeFields from the map set
-	fields, err := compiler.compileTypeFields(schema.Fields, false)
+	pisaStateDef, err := compiler.getStateDef(schema, false)
 	if err != nil {
-		return errors.Errorf("invalid state element: invalid fields: %v", err)
+		return err
 	}
 
-	// Check intended scope for StateElement
-	switch schema.Mode {
-	case state.Persistent:
-		// Add the State element into the builder
-		if err = compiler.builder.AddPersistentState(element.Ptr, state.NewStateFields(fields), element.Deps); err != nil {
-			return errors.Wrap(err, "invalid class element")
-		}
-
-		return nil
-
-	case state.Ephemeral:
-		// Add the State element into the builder
-		if err = compiler.builder.AddEphemeralState(element.Ptr, state.NewStateFields(fields), element.Deps); err != nil {
-			return errors.Wrap(err, "invalid class element")
-		}
-
-		return nil
-
-	default:
-		return errors.Errorf("invalid mode '%v' for state element", schema.Mode)
-	}
+	return compiler.builder.AddState(element.Ptr, pisaStateDef, element.Deps)
 }
 
 // compileRoutineElement compiles an engineio.ManifestElement object of type RoutineElement
 func (compiler *ManifestCompiler) compileRoutineElement(element engineio.ManifestElement) (err error) {
 	// Exhaust fuel for base routine compilation
 	// We charge more for specific callsite types and per instruction in the routine.
-	if !compiler.exhaust(BaseRoutineCost) {
+	if !compiler.exhaustCompute(BaseRoutineCost) {
 		return ErrInsufficientCompileFuel
 	}
 
@@ -550,7 +514,7 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 	case engineio.CallsiteInvoke:
 		// Exhaust surcharge fuel for invokable endpoint compilation
-		if !compiler.exhaust(InvokableRoutineSurcharge) {
+		if !compiler.exhaustCompute(InvokableRoutineSurcharge) {
 			return ErrInsufficientCompileFuel
 		}
 
@@ -558,17 +522,17 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 	case engineio.CallsiteDeploy:
 		// Exhaust surcharge fuel for deployer endpoint compilation
-		if !compiler.exhaust(DeployerRoutineSurcharge) {
+		if !compiler.exhaustCompute(DeployerRoutineSurcharge) {
 			return ErrInsufficientCompileFuel
 		}
 
 		// Check that deployer has the persistent mode
-		if schema.Mode != state.Persistent {
+		if schema.Mode != DynamicState {
 			return errors.New("invalid routine element: invalid state mode for deployer routine")
 		}
 
 		// Check if the persistent state has been compiled
-		pstate, ok := compiler.builder.GetPersistentStatePtr()
+		pstate, ok := compiler.builder.GetLogicStatePtr()
 		if !ok {
 			return errors.New("invalid routine element: deployer routine for non-existent persistent storage")
 		}
@@ -583,17 +547,17 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 
 	case engineio.CallsiteEnlist:
 		// Exhaust surcharge fuel for enlister endpoint compilation
-		if !compiler.exhaust(EnlisterRoutineSurcharge) {
+		if !compiler.exhaustCompute(EnlisterRoutineSurcharge) {
 			return ErrInsufficientCompileFuel
 		}
 
 		// Check that enlister has the ephemeral mode
-		if schema.Mode != state.Ephemeral {
+		if schema.Mode != DynamicState {
 			return errors.New("invalid routine element: invalid state mode for enlister routine")
 		}
 
 		// Check if the ephemeral state has been compiled
-		estate, ok := compiler.builder.GetEphemeralStatePtr()
+		estate, ok := compiler.builder.GetActorStatePtr()
 		if !ok {
 			return errors.New("invalid routine element: enlister routine for non-existent ephemeral storage")
 		}
@@ -626,36 +590,69 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 	}
 
 	// Create a routine element
-	routine := &pisa.Routine{
-		Point:     element.Ptr,
-		Name:      schema.Name,
-		Mode:      schema.Mode,
-		Endpoint:  schema.Kind != engineio.CallsiteInternal,
-		Instructs: instructions,
-		CallFields: logic.CallFields{
+	routine := &pisa.DefinedCallable{
+		Point:      element.Ptr,
+		Name:       schema.Name,
+		Access:     pisa.DynamicAccess{},
+		Visibility: pisa.CallVisibility(schema.Kind),
+		Instructs:  instructions,
+		CallFields: datatypes.CallFields{
 			Inputs:  inputs,
 			Outputs: outputs,
 		},
 	}
 
-	// Add the Routine element to the builder
-	if err = compiler.builder.AddRoutine(routine, element.Deps); err != nil {
-		return errors.Wrap(err, "invalid routine element")
+	switch schema.Mode {
+	case "dynamic":
+		routine.Access = pisa.DynamicAccess{
+			Logic:  true,
+			Origin: true,
+			Actors: true,
+		}
+	case "static":
+		routine.Access = pisa.DynamicAccess{
+			Logic:  false,
+			Origin: false,
+			Actors: false,
+		}
+	default:
+		return errors.Errorf("invalid mode for routine element")
 	}
 
-	// Add the endpoint reference to the compiler metadata
-	if routine.Endpoint {
-		switch schema.Kind {
-		case engineio.CallsiteDeploy:
-			compiler.deployers = append(compiler.deployers, element.Ptr)
-		case engineio.CallsiteEnlist:
-			compiler.enlisters = append(compiler.enlisters, element.Ptr)
-		}
-
-		compiler.callsites[schema.Name] = engineio.Callsite{Ptr: element.Ptr, Name: schema.Name, Kind: schema.Kind}
+	// Add the Routine element to the builder
+	if err = compiler.builder.AddCallable(routine, element.Deps); err != nil {
+		return errors.Wrap(err, "failed to add routine element")
 	}
 
 	return nil
+}
+
+func (compiler *ManifestCompiler) compileExternEndpoint(
+	routine *ExternalRoutineSchema,
+) (*pisa.ExternalCallable, error) {
+	// Exhaust fuel for external callable compilation
+	if !compiler.exhaustCompute(BaseRoutineCost) {
+		return nil, ErrInsufficientCompileFuel
+	}
+
+	// Create a new TypeFields from the schema 'accepts'
+	inputs, err := compiler.compileTypeFields(routine.Accepts, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid callable: invalid accept fields")
+	}
+
+	// Create a new TypeFields from the schema 'returns'
+	outputs, err := compiler.compileTypeFields(routine.Returns, false)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid callable: invalid return fields")
+	}
+
+	callable := &pisa.ExternalCallable{
+		Name:       routine.Name,
+		CallFields: datatypes.CallFields{Inputs: inputs, Outputs: outputs},
+	}
+
+	return callable, nil
 }
 
 // compileTypeFields compiles a list of TypefieldSchema objects into datatypes.TypeFields.
@@ -671,7 +668,7 @@ func (compiler *ManifestCompiler) compileTypeFields(
 	}
 
 	// Exhaust fuel for typefields compilation per type expression expected to be parsed
-	if !compiler.exhaust(TypeExprParseCost * engineio.EngineFuel(len(table))) {
+	if !compiler.exhaustCompute(TypeExprParseCost * engineio.EngineFuel(len(table))) {
 		return nil, ErrInsufficientCompileFuel
 	}
 
@@ -716,48 +713,8 @@ func (compiler *ManifestCompiler) compileInstructions(schema InstructionsSchema)
 
 // compileBinInstructions compiles an InstructionsSchema with binary instructions into runtime.Instructions.
 func (compiler *ManifestCompiler) compileBinInstructions(instructions []byte) (pisa.Instructions, error) {
-	reader := bytes.NewReader(instructions)
-	instructs := make(pisa.Instructions, 0)
-
-	for line := 0; reader.Len() != 0; line++ {
-		// Fuel charge for instruction (base = BIN)
-		if !compiler.exhaust(BaseInstructionCost) {
-			return nil, ErrInsufficientCompileFuel
-		}
-
-		// Read an opcode byte
-		code, _ := reader.ReadByte()
-
-		// Check the number of args for the opcode
-		count, ok := opcode.OpCode(code).Operands()
-		if !ok {
-			return nil, errors.Errorf("invalid opcode '%#v' [line %v]", code, line)
-		}
-
-		instruct := pisa.Instruction{Op: opcode.OpCode(code)}
-
-		// If no operands are expected for the opcode, skip operand reading
-		if count == 0 {
-			// Append instruction into the program code
-			instructs = append(instructs, instruct)
-
-			continue
-		}
-
-		operands := make([]byte, count)
-		// Read the operands
-		read, err := reader.Read(operands)
-		if read != count || err != nil {
-			return nil, errors.Errorf("insufficient operands for '%#v' [line %v]", code, line)
-		}
-
-		// Set the operands into the instruction
-		instruct.Args = operands
-		// Append instruction into the program code
-		instructs = append(instructs, instruct)
-	}
-
-	return instructs, nil
+	// TODO: Exhaust fuel for BIN instructions
+	return pisa.NewBinaryInstructions(instructions)
 }
 
 // compileHexInstructions compiles an InstructionsSchema with hexadecimal instructions into runtime.Instructions.
@@ -779,7 +736,7 @@ func (compiler *ManifestCompiler) compileHexInstructions(instructions string) (p
 	surcharge := HexInstructionSurcharge * uint64(len(compiled))
 	// Exhaust fuel surcharge for HEX instruction
 	// The base instruction cost is exhausted when decoding the binary instruction
-	if !compiler.exhaust(surcharge) {
+	if !compiler.exhaustCompute(surcharge) {
 		return nil, ErrInsufficientCompileFuel
 	}
 
@@ -792,16 +749,12 @@ func (compiler *ManifestCompiler) compileAsmInstructions(asm []string) (pisa.Ins
 	surcharge := AsmInstructionSurcharge * uint64(len(asm))
 	// Exhaust fuel surcharge for ASM instruction
 	// The base instruction cost is exhausted when decoding the binary instruction
-	if !compiler.exhaust(surcharge) {
+	if !compiler.exhaustCompute(surcharge) {
 		return nil, ErrInsufficientCompileFuel
 	}
 
-	binary, err := opcode.Asm2Bin(asm)
-	if err != nil {
-		return nil, err
-	}
-
-	return compiler.compileBinInstructions(binary)
+	// TODO: Charge fuel for ASM instructions
+	return pisa.NewAssemblyInstructions(asm)
 }
 
 // hasgaps returns if the keys of a map of unsigned numbers has gaps.

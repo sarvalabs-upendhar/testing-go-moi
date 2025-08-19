@@ -129,12 +129,6 @@ func NewMockState() *MockStateManager {
 	}
 }
 
-func (m *MockStateManager) setAccountMetaInfo(t *testing.T, accMetaInfo *common.AccountMetaInfo) {
-	t.Helper()
-
-	m.accMetaInfo[accMetaInfo.ID] = accMetaInfo
-}
-
 func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
 	accMetaInfo, ok := m.accMetaInfo[id]
 	if !ok {
@@ -142,20 +136,6 @@ func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*commo
 	}
 
 	return accMetaInfo, nil
-}
-
-func (m *MockStateManager) setStorageEntry(
-	t *testing.T,
-	logicID identifiers.LogicID,
-	slot []byte,
-) {
-	t.Helper()
-
-	store := make(map[string]string)
-
-	store[string(slot)] = "value"
-
-	m.logicStorage[hex.EncodeToString(logicID.Bytes())] = store
 }
 
 func (m *MockStateManager) GetPersistentStorageEntry(

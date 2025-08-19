@@ -25,7 +25,7 @@ func TestIxPool_GetNonce(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
-	}, true, sm, nil, nil)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name          string
@@ -119,7 +119,7 @@ func TestIxPool_GetIxs(t *testing.T) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil, newMockNetwork(""))
+			}, true, sm, newMockNetwork(""))
 
 			sm.setAccountKeysAndPublicKeys(t, []identifiers.Identifier{id}, tests.GetTestPublicKeys(t, 1))
 
@@ -207,7 +207,7 @@ func TestIxPool_GetAllIxs(t *testing.T) {
 				c.Mode = 0
 				c.PriceLimit = big.NewInt(1)
 				c.MaxSlots = config.DefaultMaxIXPoolSlots
-			}, true, sm, nil, newMockNetwork(""))
+			}, true, sm, newMockNetwork(""))
 
 			sm.setAccountKeysAndPublicKeys(t, ids, tests.GetTestPublicKeys(t, len(ids)))
 
@@ -230,7 +230,7 @@ func TestIxPool_GetAccountWaitTime(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
-	}, true, sm, nil, nil)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name        string
@@ -288,7 +288,7 @@ func TestIxPool_GetAllAccountsWaitTime(t *testing.T) {
 	ixPool := CreateTestIxpool(t, func(c *config.IxPoolConfig) {
 		c.Mode = 0
 		c.PriceLimit = big.NewInt(1)
-	}, true, sm, nil, nil)
+	}, true, sm, nil)
 
 	testcases := []struct {
 		name     string

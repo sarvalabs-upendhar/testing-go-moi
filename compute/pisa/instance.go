@@ -1,5 +1,6 @@
 package pisa
 
+/*
 import (
 	"context"
 
@@ -101,3 +102,4 @@ func (instance Instance) GetSenderDriver() engineio.StateDriver {
 func (instance Instance) SetSenderDriver(driver engineio.StateDriver) {
 	instance.internal.SetSenderDriver(newState(driver))
 }
+*/

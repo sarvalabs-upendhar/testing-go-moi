@@ -604,6 +604,24 @@ func (p *PublicCoreAPI) LogicIDs(args *rpcargs.GetAccountArgs) ([]identifiers.Lo
 	return p.sm.GetLogicIDs(args.ID, stateHash)
 }
 
+// Validators returns the list of validators and their details
+func (p *PublicCoreAPI) Validators(args *rpcargs.GetValidatorsArgs) ([]*rpcargs.RPCValidator, error) {
+	if args.KramaID != "" {
+		if err := args.KramaID.Validate(); err != nil {
+			return nil, common.ErrInvalidKramaID
+		}
+
+		validator, err := p.sm.GetValidatorByKramaID(args.KramaID)
+		if err != nil {
+			return nil, err
+		}
+
+		return rpcargs.CreateRPCValidators([]*common.Validator{validator}), nil
+	}
+
+	return rpcargs.CreateRPCValidators(p.sm.GetValidators()), nil
+}
+
 // AssetInfoByAssetID returns the asset info associated with the given asset id
 func (p *PublicCoreAPI) AssetInfoByAssetID(args *rpcargs.GetAssetInfoArgs) (*rpcargs.RPCAssetDescriptor, error) {
 	stateHash, err := p.getStateHash(getTesseractArgs(args.AssetID.AsIdentifier(), args.Options))

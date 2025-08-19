@@ -138,7 +138,6 @@ func (n *Node) setupIxPool() error {
 		n.eventMux,
 		n.network,
 		sm,
-		n.exec,
 		n.cfg.IxPool,
 		n.nodeMetrics.ixpool,
 		crypto.Verify,

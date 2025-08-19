@@ -439,6 +439,18 @@ func (c *Client) LogicManifest(ctx context.Context, args *rpcargs.LogicManifestA
 	return res, nil
 }
 
+// Validators return the list of registered validator and their details
+func (c *Client) Validators(ctx context.Context, args *rpcargs.GetValidatorsArgs) ([]rpcargs.RPCValidator, error) {
+	var validators []rpcargs.RPCValidator
+
+	err := c.Call(ctx, &validators, "moi.Validators", args)
+	if err != nil {
+		return nil, err
+	}
+
+	return validators, nil
+}
+
 // SendInteractions sends given Interactions
 func (c *Client) SendInteractions(ctx context.Context, args *rpcargs.SendIX) (common.Hash, error) {
 	var res common.Hash
