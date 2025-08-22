@@ -655,8 +655,6 @@ func generateTesseract(
 		return nil, err
 	}
 
-	fmt.Println("&&&&&&&&&&&&&&&&&&&&&&&", receiptHash)
-
 	ts := common.NewTesseract(
 		participants,
 		ixnsHash,

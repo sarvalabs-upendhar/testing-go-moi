@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"math/big"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
@@ -248,8 +247,6 @@ func (te *TestEnvironment) TestMultiSig() {
 			}
 
 			require.NoError(te.T(), err)
-
-			fmt.Println("ix hash", ixHash)
 
 			checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 

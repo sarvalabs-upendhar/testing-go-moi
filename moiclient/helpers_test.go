@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"math/big"
 	"net/http"
 	"strconv"
@@ -216,8 +215,6 @@ func checkForCallReceipt(
 	t.Helper()
 
 	require.Equal(t, expectedReceipt.FuelUsed, actualReceipt.FuelUsed)
-	fmt.Println("111", expectedReceipt.IxOps[0].Data, actualReceipt.IxOps[0].Data)
-	fmt.Println("###", string(expectedReceipt.IxOps[0].Data), string(actualReceipt.IxOps[0].Data))
 	require.Equal(t, expectedReceipt.IxOps[0].Data, actualReceipt.IxOps[0].Data)
 	require.Equal(t, expectedReceipt.IxOps[0].TxType, actualReceipt.IxOps[0].TxType)
 	require.Equal(t, expectedReceipt.From, actualReceipt.From)
