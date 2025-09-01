@@ -100,7 +100,7 @@ func (tdb *TreeDB) Flush() error {
 	tdb.mtx.Lock()
 	defer func() {
 		tdb.mtx.Unlock()
-		tdb.dirty = nil
+		tdb.dirty = make(map[string][]byte)
 	}()
 
 	return tdb.db.SetMerkleTreeEntries(tdb.id, tdb.dataType, tdb.dirty)

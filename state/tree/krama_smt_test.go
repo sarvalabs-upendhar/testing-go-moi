@@ -103,6 +103,43 @@ func TestKramaHashTree_Set_UpdateEntry(t *testing.T) {
 	checkForDeltaNodes(t, key, updatedValue, hashTree, true)
 }
 
+func TestKramaHashTree_Set_ClearHashtable(t *testing.T) {
+	id := tests.RandomIdentifier(t)
+	db := NewMockDB()
+
+	existingKey := []byte("Existing-Test-Key")
+	existingValue := []byte("Existing-Test-Value")
+
+	hashTree := createTestHashTreeWithEntries(
+		t,
+		id,
+		db,
+		map[string][]byte{string(existingKey): existingValue},
+	)
+
+	// Commit the changes and flush to db
+	err := hashTree.Commit()
+	require.NoError(t, err)
+
+	err = hashTree.Flush()
+	require.NoError(t, err)
+
+	checkForEntry(t, existingKey, existingValue, hashTree, true)
+	checkForDeltaNodes(t, existingKey, existingValue, hashTree, true)
+
+	newKey := []byte("New-Test-Key")
+	newValue := []byte("New-Test-Value")
+
+	err = hashTree.Set(newKey, newValue)
+	require.NoError(t, err)
+
+	checkForEntry(t, newKey, newValue, hashTree, true)
+	checkForDeltaNodes(t, newKey, newValue, hashTree, true)
+	checkForEntry(t, existingKey, existingValue, hashTree, true)
+	// The delta nodes should not contain the existing key
+	checkForDeltaNodes(t, existingKey, existingValue, hashTree, false)
+}
+
 func TestKramaHashTree_Get_UnCommitted_Entry(t *testing.T) {
 	id := tests.RandomIdentifier(t)
 	db := NewMockDB()

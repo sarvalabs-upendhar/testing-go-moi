@@ -128,6 +128,10 @@ func (kht *KramaHashTree) Set(key, value []byte) error {
 		return common.ErrInvalidValue
 	}
 
+	if !kht.IsDirty() && len(kht.root.HashTable) > 0 {
+		kht.root.HashTable = make(map[string][]byte)
+	}
+
 	hashKey := HashKey(key)
 
 	if _, err := kht.tree.Update(hashKey.Bytes(), value); err != nil {
