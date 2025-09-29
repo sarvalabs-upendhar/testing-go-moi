@@ -107,6 +107,7 @@ type ConsensusConfig struct {
 	TimeoutPrecommit      time.Duration
 	TimeoutPrecommitDelta time.Duration
 	TimeoutCommit         time.Duration
+	TimeoutPrepare        time.Duration
 	SkipTimeoutCommit     bool
 	AccountWaitTime       time.Duration
 	MessageDelay          time.Duration

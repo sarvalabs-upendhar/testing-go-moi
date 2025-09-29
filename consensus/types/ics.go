@@ -26,7 +26,6 @@ type ClusterState struct {
 	ICSHash                  common.Hash
 	dirty                    map[common.Hash][]byte
 	ts                       *common.Tesseract
-	ICSReqTime               time.Time
 	ICSRespCount             int
 	operatorIncluded         bool
 	Participants             common.Participants
@@ -36,12 +35,16 @@ type ClusterState struct {
 	quorum                   []uint32
 	SystemObject             *gtypes.SystemObject
 	// TODO: Load following view infos appropriately
-	localViewInfo       common.Views
-	highestViewInfo     common.Views
-	preparedQc          *PreparedInfo
-	view                uint64
-	viewTimeoutDeadline time.Time
-	TrustedPeers        []identifiers.KramaID
+	localViewInfo   common.Views
+	highestViewInfo common.Views
+	preparedQc      *PreparedInfo
+	currentView     *View
+	TrustedPeers    []identifiers.KramaID
+	isTSStored      bool // indicates if the proposed tesseract is already committed
+}
+
+func (cs *ClusterState) IsTSStored() bool {
+	return cs.isTSStored
 }
 
 func (cs *ClusterState) GetSeed() [32]byte {
@@ -49,7 +52,7 @@ func (cs *ClusterState) GetSeed() [32]byte {
 	return [32]byte{}
 }
 
-func (cs *ClusterState) SetPrepareQc(prepareQc *PreparedInfo) {
+func (cs *ClusterState) SetPreparedQc(prepareQc *PreparedInfo) {
 	cs.preparedQc = prepareQc
 }
 
@@ -69,26 +72,25 @@ func NewICS(
 	systemObject *gtypes.SystemObject,
 	participants map[identifiers.Identifier]*common.Participant,
 	viewInfos common.Views,
-	currentView uint64,
-	viewTimeoutDeadline time.Time,
+	view *View,
+	isTSStored bool,
 ) *ClusterState {
 	return &ClusterState{
-		ixns:                ixs,
-		selfID:              selfID,
-		ClusterID:           clusterID,
-		operator:            operator,
-		operatorIncluded:    false,
-		dirty:               make(map[common.Hash][]byte),
-		ICSReqTime:          reqTime,
-		ICSRespCount:        0,
-		Participants:        participants,
-		committee:           committee,
-		SystemObject:        systemObject,
-		Transition:          gtypes.NewTransition(nil, nil, nil),
-		localViewInfo:       viewInfos.Copy(),
-		highestViewInfo:     viewInfos.Copy(),
-		view:                currentView,
-		viewTimeoutDeadline: viewTimeoutDeadline,
+		ixns:             ixs,
+		selfID:           selfID,
+		ClusterID:        clusterID,
+		operator:         operator,
+		operatorIncluded: false,
+		dirty:            make(map[common.Hash][]byte),
+		ICSRespCount:     0,
+		Participants:     participants,
+		committee:        committee,
+		SystemObject:     systemObject,
+		Transition:       gtypes.NewTransition(nil, nil, nil),
+		localViewInfo:    viewInfos.Copy(),
+		highestViewInfo:  make([]*common.ViewInfo, len(viewInfos)),
+		currentView:      view,
+		isTSStored:       isTSStored,
 	}
 }
 
@@ -120,8 +122,8 @@ func (cs *ClusterState) ParticipantTSHash(id identifiers.Identifier) common.Hash
 	return common.NilHash
 }
 
-func (cs *ClusterState) CurrentView() uint64 {
-	return cs.view
+func (cs *ClusterState) CurrentView() *View {
+	return cs.currentView
 }
 
 func (cs *ClusterState) Size() int {
@@ -153,8 +155,8 @@ func (cs *ClusterState) AppendNodeSet(data *NodeSet) {
 	cs.committee.AppendNodeSet(common.NilHash, data)
 }
 
-func (cs *ClusterState) UpdateNodeSetResponses(nodeSetPosition int, responses *common.ArrayOfBits) {
-	cs.committee.UpdateSetResponses(nodeSetPosition, responses)
+func (cs *ClusterState) UpdateNodeSetResponses(ct CounterType, nodeSetPosition int, responses *common.ArrayOfBits) {
+	cs.committee.UpdateSetResponses(ct, nodeSetPosition, responses)
 }
 
 func (cs *ClusterState) Operator() identifiers.KramaID {
@@ -215,7 +217,7 @@ func (cs *ClusterState) GetMetaData(msgs []*ICSMSG) (*ICSMetaInfo, error) {
 	m.Msgs = append(m.Msgs, rawData)
 
 	for _, v := range msgs {
-		rawData, err := polo.Polorize(v)
+		rawData, err = polo.Polorize(v)
 		if err != nil {
 			return nil, err
 		}
@@ -251,18 +253,18 @@ func (cs *ClusterState) HighestViewInfo() common.Views {
 	return cs.highestViewInfo
 }
 
-func (cs *ClusterState) IsContextQuorum() bool {
+func (cs *ClusterState) IsContextQuorum(ct CounterType) bool {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.committee.IsContextQuorum()
+	return cs.committee.IsContextQuorum(ct)
 }
 
-func (cs *ClusterState) IsRandomQuorum() bool {
+func (cs *ClusterState) IsRandomQuorum(ct CounterType) bool {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.committee.RandomSet().GetRespCount() >= int(cs.committee.RandomQuorumSize())
+	return cs.committee.RandomSet().GetRespCount(ct) >= int(cs.committee.RandomQuorumSize())
 }
 
 func (cs *ClusterState) HasKramaID(kramaID identifiers.KramaID) (int32, []byte, bool) {
@@ -272,24 +274,33 @@ func (cs *ClusterState) HasKramaID(kramaID identifiers.KramaID) (int32, []byte, 
 	return cs.committee.HasKramaID(kramaID)
 }
 
+func (cs *ClusterState) IsICSMember(kramaID identifiers.KramaID) bool {
+	cs.mtx.Lock()
+	defer cs.mtx.Unlock()
+
+	pos, _ := cs.committee.GetIndex(kramaID)
+
+	return pos >= 0
+}
+
 // GetByIndex returns the krama id and bls public key of the validator based on the index
 func (cs *ClusterState) GetByIndex(index int32) (identifiers.KramaID, []byte) {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	slots, slotIndex, kramaID, publicKey := cs.committee.GetKramaID(index)
-	if slots == nil || !cs.committee.Sets[slots[0]].Responses.GetIndex(slotIndex) {
+	slots, _, kramaID, publicKey := cs.committee.GetKramaID(index)
+	if slots == nil {
 		return "", nil
 	}
 
 	return kramaID, publicKey
 }
 
-func (cs *ClusterState) GetICSVoteset() *common.ArrayOfBits {
+func (cs *ClusterState) GetICSVoteset(ct CounterType) *common.ArrayOfBits {
 	cs.mtx.Lock()
 	defer cs.mtx.Unlock()
 
-	return cs.committee.GetVoteset()
+	return cs.committee.GetVoteset(ct)
 }
 
 func (cs *ClusterState) GetRandomNodes() []common.ValidatorIndex {
@@ -368,7 +379,7 @@ func (cs *ClusterState) ExecutionContext() *common.ExecutionContext {
 	return &common.ExecutionContext{
 		CtxDelta: cs.ContextDelta(),
 		Cluster:  cs.ClusterID,
-		Time:     uint64(cs.ICSReqTime.Unix()),
+		Time:     uint64(cs.currentView.StartTime().Unix()),
 	}
 }
 
@@ -399,8 +410,6 @@ func (cs *ClusterState) ContextDelta() common.ContextDelta {
 	for id, ps := range cs.Participants {
 		if !ps.ExcludeFromICS && ps.ContextDelta != nil {
 			contextDelta[id] = ps.ContextDelta
-
-			continue
 		}
 	}
 

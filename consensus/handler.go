@@ -2,14 +2,108 @@ package consensus
 
 import (
 	"context"
+	"sort"
 	"time"
 
-	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common/identifiers"
+
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-polo"
 )
+
+func findWinner(msgs []*metaPrepareMsg) identifiers.KramaID {
+	senders := make([]identifiers.KramaID, len(msgs))
+
+	for i, msg := range msgs {
+		senders[i] = msg.sender
+	}
+
+	sort.Slice(senders, func(i, j int) bool {
+		return senders[i].String() < senders[j].String()
+	})
+
+	return senders[0]
+}
+
+// viewTime calculates the timestamp for a given view number.
+func viewTime(genesisTime uint64, viewNumber uint64, viewDuration time.Duration) time.Time {
+	genesis := time.Unix(int64(genesisTime), 0)
+	offset := time.Duration(viewNumber) * viewDuration
+
+	return genesis.Add(offset)
+}
+
+func (k *Engine) startPrepareTimeoutTimer(prepareTimeoutDeadline time.Time) {
+	select {
+	case <-k.ctx.Done():
+		return
+	case <-time.After(time.Until(prepareTimeoutDeadline)):
+		k.prepareTimeout <- struct{}{}
+	}
+}
+
+func (k *Engine) processPrepareMsgs(participantToPrepareMsgs map[identifiers.Identifier][]*metaPrepareMsg) {
+	for _, prepareMsgs := range participantToPrepareMsgs {
+		if len(prepareMsgs) == 1 { // if number of unique prepare msgs are equal to 1
+			continue
+		}
+
+		winner := findWinner(prepareMsgs)
+
+		for _, prepare := range prepareMsgs {
+			if prepare.sender == winner {
+				continue
+			}
+
+			prepare.shouldReply = false
+		}
+	}
+
+	for _, prepareMsgs := range participantToPrepareMsgs {
+		for _, prepare := range prepareMsgs {
+			if !prepare.shouldReply || prepare.msgSent {
+				continue
+			}
+
+			ps := prepare.ixns.UniqueIds()
+
+			viewInfos, err := k.loadViewInfo(ps)
+			if err != nil {
+				k.logger.Error("failed to load view info", "err", err)
+
+				break
+			}
+
+			preparedMsg, err := k.createPreparedMsg(prepare.msg, viewInfos)
+			if err != nil {
+				break
+			}
+
+			rawData, err := preparedMsg.Bytes()
+			if err != nil {
+				break
+			}
+
+			if err := k.publishEventPrepared(preparedMsg); err != nil {
+				k.logger.Error("failed to publish prepared message", "err", err)
+			}
+
+			if err = k.transport.SendMessage(
+				context.Background(),
+				prepare.sender,
+				types.NewICSMsg(k.selfID, prepare.clusterID, message.PREPARED, rawData, false),
+			); err != nil {
+				k.logger.Error("failed to send prepared message", "err", err)
+			}
+
+			prepare.msgSent = true
+
+			break
+		}
+	}
+}
 
 // Handler is the main event loop for the consensus engine.It listens for the following events
 // - Context cancellation
@@ -25,16 +119,39 @@ func (k *Engine) handler() {
 		case <-k.ctx.Done():
 			// If the context is done, close the view ticker and return
 			viewTicker.Done()
-			k.logger.Info("Closing Krama engine. Reason: context-closed")
 
-			return
+			if k.slots.Len() == 0 {
+				k.logger.Info("Closing Krama engine. Reason: context-closed")
+
+				return
+			}
+
+			k.ctxClosed.Store(true)
 		case viewID := <-viewTicker.C():
 			k.metrics.captureCurrentView(viewID)
-			k.view.Store(viewID) // When a new view tick is received, update the current view and trigger the view handler.
-			k.pool.UpdateCurrentView(viewID)
-			k.viewTimeOutDeadline.Store(time.Now().Add(k.pool.ViewTimeOut()))
 
-			k.handleNewView(k.ctx, viewID)
+			viewStartTime := viewTime(k.cfg.GenesisTimestamp, viewID, k.pool.ViewTimeOut())
+			currentTime := time.Now()
+
+			// When a new view tick is received, update the current view and trigger the view handler.
+			k.currentView = types.NewView(viewID, viewStartTime, currentTime.Add(k.pool.ViewTimeOut()))
+
+			k.pool.UpdateCurrentView(viewID)
+
+			prepareTimeOutDeadline := currentTime.Add(k.cfg.TimeoutPrepare)
+
+			k.participantToPrepareMsg = make(map[identifiers.Identifier][]*metaPrepareMsg)
+			k.stopPrepareMsgs = false
+
+			go k.startPrepareTimeoutTimer(prepareTimeOutDeadline)
+			go k.handleNewView(k.ctx, k.currentView)
+		case <-k.prepareTimeout:
+			k.stopPrepareMsgs = true
+
+			participantToPrepareMsgs := k.participantToPrepareMsg
+
+			go k.processPrepareMsgs(participantToPrepareMsgs)
+
 		case msg := <-k.transport.Messages():
 			k.handleConsensusMessage(msg)
 		case clusterID := <-k.icsCloseCh:
@@ -42,11 +159,19 @@ func (k *Engine) handler() {
 			k.transport.GracefullyCloseContextRouter(clusterID)
 			k.slots.CleanupSlot(clusterID)
 			k.logger.Debug("Cleaning consensus slot", "cluster-id", clusterID)
+
+			if err := k.publishEventCleanup(clusterID); err != nil {
+				k.logger.Error("failed to publish cleanup event", "err", err)
+			}
+
+			if k.ctxClosed.Load() && k.slots.Len() == 0 {
+				return
+			}
 		}
 	}
 }
 
-// deleteLockedTesseractInfo returns true locked ts already exist in db
+// deleteLockedTesseractInfo returns true if locked ts already exist in db
 func (k *Engine) deleteLockedTesseractInfo(ts *common.Tesseract) bool {
 	for id, state := range ts.Participants() {
 		dbState, err := k.db.GetAccountMetaInfo(id)
@@ -72,11 +197,13 @@ func (k *Engine) deleteLockedTesseractInfo(ts *common.Tesseract) bool {
 
 // handleNewView checks if there are any failed views to handle first. If failed views exist, it processes them.
 // Otherwise, it fetches interactions from the pool and creates a new cluster for the interactions.
-func (k *Engine) handleNewView(ctx context.Context, viewID uint64) {
+func (k *Engine) handleNewView(ctx context.Context, view *types.View) {
 	for _, msg := range k.futureMsg {
 		k.handleConsensusMessage(msg)
 		k.dequeueFutureMsg()
 	}
+
+	viewID := view.ID()
 
 	proposedTS, err := k.safety.GetFailedViewTS()
 	if err != nil {
@@ -91,13 +218,13 @@ func (k *Engine) handleNewView(ctx context.Context, viewID uint64) {
 			continue
 		}
 
-		if !k.isOperatorEligible(k.selfID, ts.Interactions()) {
-			k.logger.Debug("can not propose locked tesseract", "cluster-id", ts.ClusterID())
+		if !k.isOperatorEligible(k.selfID, ts.Interactions(), viewID) {
+			k.logger.Debug("not eligible to propose locked tesseract", "cluster-id", ts.ClusterID())
 
 			continue
 		}
 
-		if err = k.handleFailedView(ts.ConsensusInfo().View, ts); err != nil {
+		if err = k.handleFailedView(ts.ConsensusInfo().View, ts, view); err != nil {
 			k.logger.Error("failed to handle old view qc", "error", err)
 		}
 	}
@@ -112,9 +239,9 @@ func (k *Engine) handleNewView(ctx context.Context, viewID uint64) {
 
 		ixs := batch.Interactions()
 
-		k.logger.Debug("Handling new ixs for view", "view-id", viewID)
+		k.logger.Debug("Handling new ixs for view", "view-id", viewID, "batch-size", ixs.Len())
 
-		if !k.isOperatorEligible(k.selfID, ixs) {
+		if !k.isOperatorEligible(k.selfID, ixs, viewID) {
 			k.logger.Debug("operator not eligible", "view", viewID)
 
 			continue
@@ -122,7 +249,7 @@ func (k *Engine) handleNewView(ctx context.Context, viewID uint64) {
 
 		k.logger.Debug("Operator is eligible", "view", viewID)
 
-		slot, activeCluster, err := k.createICS(ctx, clusterID, ixs, ixs.Locks())
+		slot, activeCluster, err := k.createICS(ctx, clusterID, ixs, ixs.Locks(), view)
 		if err != nil {
 			k.logger.Debug("failed to create a slot", "view", viewID, "active-cluster", activeCluster, "err", err)
 			k.slots.CleanupSlot(clusterID)
@@ -135,7 +262,7 @@ func (k *Engine) handleNewView(ctx context.Context, viewID uint64) {
 	}
 }
 
-func (k *Engine) handleFailedView(failedView uint64, ts *common.Tesseract) error {
+func (k *Engine) handleFailedView(failedView uint64, ts *common.Tesseract, view *types.View) error {
 	clusterID, err := types.GenerateClusterID()
 	if err != nil {
 		k.logger.Error("failed to create clusterID")
@@ -145,7 +272,7 @@ func (k *Engine) handleFailedView(failedView uint64, ts *common.Tesseract) error
 
 	k.logger.Debug("Handling failed view", "old cluster id", ts.ClusterID(), "cluster-id", clusterID)
 
-	slot, activeCluster, err := k.createICS(k.ctx, clusterID, ts.Interactions(), ts.ConsensusInfo().AccountLocks)
+	slot, activeCluster, err := k.createICS(k.ctx, clusterID, ts.Interactions(), ts.ConsensusInfo().AccountLocks, view)
 	if err != nil {
 		k.logger.Debug("failed to create a slot", "view", failedView,
 			"active-cluster", activeCluster, "cluster-id", ts.ClusterID(), "error", err)
@@ -169,6 +296,10 @@ func (k *Engine) handleFailedView(failedView uint64, ts *common.Tesseract) error
 func (k *Engine) handleConsensusMessage(msg *types.ICSMSG) {
 	switch msg.MsgType {
 	case message.PREPARE:
+		if k.stopPrepareMsgs {
+			return
+		}
+
 		prepare := new(types.Prepare)
 		if err := polo.Depolorize(prepare, msg.Payload); err != nil {
 			k.logger.Error("failed to depolarize prepare msg", "err", err)
@@ -176,7 +307,7 @@ func (k *Engine) handleConsensusMessage(msg *types.ICSMSG) {
 			return
 		}
 
-		if err := k.handlePrepare(context.Background(), msg, prepare); err != nil {
+		if err := k.handlePrepare(msg, prepare); err != nil {
 			k.logger.Error("failed to handle prepare msg", "err", err, "cluster-id", msg.ClusterID)
 		}
 
@@ -187,6 +318,8 @@ func (k *Engine) handleConsensusMessage(msg *types.ICSMSG) {
 
 			return
 		}
+
+		prepared.Verified = msg.Verified
 
 		slot := k.slots.GetSlot(msg.ClusterID)
 		if slot == nil {
@@ -218,7 +351,7 @@ func (k *Engine) handleConsensusMessage(msg *types.ICSMSG) {
 			return
 		}
 
-		if err := k.createICSForProposal(k.ctx, msg.Sender, proposal.Proposal()); err != nil {
+		if err := k.initICS(k.ctx, msg.Sender, proposal, k.currentView); err != nil {
 			k.logger.Error("failed to handle proposal msg", "err", err, "cluster-id", msg.ClusterID)
 
 			k.metrics.captureICSParticipationFailureCount(1)
@@ -239,7 +372,8 @@ func (k *Engine) handleConsensusMessage(msg *types.ICSMSG) {
 
 		slot := k.slots.GetSlot(msg.ClusterID)
 		if slot == nil {
-			k.logger.Error("slot missing for cluster", "cluster-id", msg.ClusterID)
+			k.logger.Error("slot missing for cluster", "cluster-id", msg.ClusterID,
+				"sender", msg.Sender, "type", msg.MsgType)
 
 			return
 		}
@@ -267,47 +401,90 @@ func (k *Engine) createPreparedMsg(msg *types.Prepare, viewInfos []*common.ViewI
 	return responseMsg, nil
 }
 
+func (k *Engine) isParticipantsContext(id identifiers.Identifier, peerID identifiers.KramaID) bool {
+	metaInfo, err := k.state.GetAccountMetaInfo(id)
+	if err != nil {
+		k.logger.Error("failed to check operator eligibility", "error", err)
+
+		return false
+	}
+
+	if id.IsParticipantVariant() {
+		metaInfo, err = k.state.GetAccountMetaInfo(metaInfo.InheritedAccount)
+		if err != nil {
+			k.logger.Error("failed to check operator eligibility", "error", err)
+
+			return false
+		}
+	}
+
+	consensusNodes, _, err := k.state.GetConsensusNodes(id, metaInfo.ContextHash)
+	if err != nil {
+		k.logger.Error("failed to check operator eligibility", "error", err)
+
+		return false
+	}
+
+	return consensusNodes.Contains(peerID)
+}
+
+func (k *Engine) fetchParticipantsThisNodeIsContext(ixns *common.Interactions) []identifiers.Identifier {
+	ids := make([]identifiers.Identifier, 0)
+
+	for id, info := range ixns.Participants() {
+		if info.IsGenesis {
+			continue
+		}
+
+		if k.isParticipantsContext(id, k.selfID) {
+			ids = append(ids, id)
+		}
+	}
+
+	return ids
+}
+
 /*
 - Validate the view ID
 - Load the view information of the participants and send the prepared message
 */
-func (k *Engine) handlePrepare(
-	ctx context.Context,
-	msg *types.ICSMSG,
-	prepare *types.Prepare,
-) error {
+func (k *Engine) handlePrepareMsg(msg *types.ICSMSG, prepare *types.Prepare) error {
 	k.logger.Debug("Handling prepare message", "cluster-id", msg.ClusterID, "sender", msg.Sender)
 
-	if k.view.Load() != prepare.View {
-		if prepare.View-k.view.Load() == 1 {
+	if !k.currentView.IsEqualID(prepare.View) {
+		if k.currentView.IsNextView(prepare.View) {
 			k.enqueueFutureMsg(msg)
 		}
 
-		k.logger.Debug("invalid view", "local view", k.view.Load(), "remote view", prepare.View)
+		k.logger.Debug("invalid view", "local view", k.currentView.ID(), "remote view", prepare.View)
 		// leader view and the local view should match
-		return errors.New("invalid view")
+		return common.ErrInvalidView
 	}
 
-	viewInfos, err := k.loadViewInfo(prepare.Ps)
-	if err != nil {
-		return errors.Wrap(err, "failed to load view infos")
+	ixs, found := k.pool.GetIxns(prepare.Ixns)
+	if !found {
+		return common.ErrIxnsNotFound
 	}
 
-	preparedMsg, err := k.createPreparedMsg(prepare, viewInfos)
-	if err != nil {
-		return err
+	ixns := common.NewInteractionsWithLeaderCheck(true, ixs...)
+
+	if !k.isOperatorEligible(msg.Sender, ixns, k.currentView.ID()) {
+		return common.ErrOperatorNotEligible
 	}
 
-	rawData, err := preparedMsg.Bytes()
-	if err != nil {
-		return err
+	ids := k.fetchParticipantsThisNodeIsContext(&ixns)
+
+	metaPrepareMessage := &metaPrepareMsg{
+		msg:         prepare,
+		ixns:        &ixns,
+		sender:      msg.Sender,
+		clusterID:   msg.ClusterID,
+		shouldReply: true,
 	}
 
-	k.logger.Debug("sending prepared message", "cluster-id", msg.ClusterID, "sender", msg.Sender)
+	for _, id := range ids {
+		k.participantToPrepareMsg[id] = append(k.participantToPrepareMsg[id], metaPrepareMessage)
+	}
 
-	return k.transport.SendMessage(
-		ctx,
-		msg.Sender,
-		types.NewICSMsg(k.selfID, msg.ClusterID, message.PREPARED, rawData),
-	)
+	return nil
 }

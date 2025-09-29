@@ -55,6 +55,7 @@ type KBFT struct {
 	safety           *safety.ConsensusSafety
 	exitChan         chan error
 	operator         identifiers.KramaID
+	IsTSStored       bool
 }
 
 // NewKBFTService initializes a new KBFT instance for the ICS, this service holds the core logic for BFT agreement
@@ -67,6 +68,7 @@ func NewKBFTService(
 	voteset *ktypes.HeightVoteSet,
 	slot *ktypes.Slot,
 	safety *safety.ConsensusSafety,
+	isTSStored bool,
 	tesseractHandler func(tesseract *common.Tesseract) error,
 	opts ...Option,
 ) *KBFT {
@@ -83,6 +85,7 @@ func NewKBFTService(
 		closeChan:        make(chan error),
 		exitChan:         slot.BftStopChan,
 		safety:           safety,
+		IsTSStored:       isTSStored,
 	}
 
 	for _, opt := range opts {
@@ -98,7 +101,7 @@ func NewKBFTService(
 func (kbft *KBFT) updateToState(voteset *ktypes.HeightVoteSet) {
 	kbft.toTicker = NewTicker(kbft.logger)
 	kbft.Heights = kbft.ics.NewHeights()
-	kbft.updateViewStep(kbft.ics.CurrentView(), ViewStepNewHeight)
+	kbft.updateViewStep(kbft.ics.CurrentView().ID(), ViewStepNewHeight)
 	kbft.Proposal = nil
 	kbft.ProposalTS = nil
 
@@ -247,8 +250,6 @@ func (kbft *KBFT) enterNewView(view uint64) {
 		}
 	}
 
-	kbft.Votes.SetView(view + 1)
-
 	if err := kbft.publishEventNewView(kbft.viewStateEvent()); err != nil {
 		kbft.logger.Error("failed to publish new view", "err", err)
 	}
@@ -323,7 +324,8 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 		return errors.New("proposal already set")
 	}
 
-	if !areHeightsEqual(kbft.Heights, p.Heights()) || p.View() != kbft.View {
+	// Don't compare heights, if the tesseract is already stored
+	if (!kbft.IsTSStored && !areHeightsEqual(kbft.Heights, p.Heights())) || p.View() != kbft.View {
 		return errors.New("invalid height or view")
 	}
 
@@ -332,15 +334,17 @@ func (kbft *KBFT) setProposal(p *ktypes.Proposal) error {
 	// set the proposal tesseract
 	kbft.ProposalTS = p.Tesseract
 
+	kbft.Votes.SetTSHash(kbft.ProposalTS.Hash())
+
 	if kbft.isLeader(kbft.View, kbft.id) {
 		kbft.sendExternalMessage(ktypes.ConsensusMessage{
 			PeerID:  kbft.id,
-			Payload: p,
+			Payload: p.Copy(),
 		})
-	}
 
-	if err := kbft.publishEventProposal(p); err != nil {
-		kbft.logger.Error("failed to publish proposal", "err", err)
+		if err := kbft.publishEventProposal(p); err != nil {
+			kbft.logger.Error("failed to publish proposal", "err", err)
+		}
 	}
 
 	if kbft.Step <= ViewStepPropose && kbft.isProposalReceived() {
@@ -375,8 +379,7 @@ func (kbft *KBFT) enterPrevote(view uint64) {
 func (kbft *KBFT) enterPreCommit(view uint64) {
 	kbft.logger.Trace("Entered pre-commit", "view", view)
 
-	if kbft.View > view ||
-		(view == kbft.View && kbft.Step >= ViewStepPrecommit) {
+	if kbft.Step >= ViewStepPrecommit {
 		return
 	}
 
@@ -386,7 +389,7 @@ func (kbft *KBFT) enterPreCommit(view uint64) {
 	}()
 
 	// Before preCommit check for >2/3 preVotes
-	tsHash, ok := kbft.Votes.Prevotes(view).SuperMajority()
+	tsHash, ok := kbft.Votes.Prevotes().SuperMajority()
 	if !ok {
 		return // Log that we have entered precommit without super majority
 	}
@@ -417,11 +420,12 @@ func (kbft *KBFT) enterPreCommit(view uint64) {
 		return
 	}
 
-	err = kbft.safety.UpdateSafetyInfo(kbft.Proposal, qc)
-	if err != nil {
-		kbft.logger.Error("failed to store safety information", "error", err, "view", kbft.View, "ts-hash", tsHash)
+	if !kbft.IsTSStored {
+		if err = kbft.safety.UpdateSafetyInfo(kbft.Proposal, qc); err != nil {
+			kbft.logger.Error("failed to store safety information", "error", err, "view", kbft.View, "ts-hash", tsHash)
 
-		return
+			return
+		}
 	}
 
 	kbft.sendVote(common.PRECOMMIT, tsHash, kbft.isLeader(view, kbft.id))
@@ -438,10 +442,17 @@ func (kbft *KBFT) enterCommit(view uint64) {
 		kbft.CommitTime = time.Now()
 
 		kbft.stepChange()
+
+		if kbft.IsTSStored { // avoid storing tesseract again if it is already stored
+			kbft.Close(nil)
+
+			return
+		}
+
 		kbft.finalizeCommit()
 	}()
 
-	tsHash, ok := kbft.Votes.Precommits(view).SuperMajority()
+	tsHash, ok := kbft.Votes.Precommits().SuperMajority()
 	if !ok {
 		panic("expecting precommits")
 	}
@@ -453,11 +464,12 @@ func (kbft *KBFT) enterCommit(view uint64) {
 		return
 	}
 
-	err = kbft.safety.UpdateSafetyInfo(kbft.Proposal, qc)
-	if err != nil {
-		kbft.logger.Error("failed to store safety information", "error", err, "view", kbft.View, "ts-hash", tsHash)
+	if !kbft.IsTSStored {
+		if err = kbft.safety.UpdateSafetyInfo(kbft.Proposal, qc); err != nil {
+			kbft.logger.Error("failed to store safety information", "error", err, "view", kbft.View, "ts-hash", tsHash)
 
-		return
+			return
+		}
 	}
 
 	if kbft.isLeader(view, kbft.id) {
@@ -466,7 +478,7 @@ func (kbft *KBFT) enterCommit(view uint64) {
 }
 
 func (kbft *KBFT) finalizeCommit() {
-	tsHash, ok := kbft.Votes.Precommits(kbft.CommitView).SuperMajority()
+	tsHash, ok := kbft.Votes.Precommits().SuperMajority()
 	if !ok || tsHash.IsNil() {
 		kbft.logger.Trace("Majority is not available")
 
@@ -483,7 +495,7 @@ func (kbft *KBFT) finalizeCommit() {
 		return
 	}
 
-	voteBitSet, sign := kbft.Votes.Precommits(kbft.View).GetQC()
+	voteBitSet, sign := kbft.Votes.Precommits().GetQC()
 
 	if err := kbft.updateConsensusInfoInTesseracts(voteBitSet, sign); err != nil {
 		kbft.Close(err)
@@ -506,15 +518,17 @@ func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID identifier
 	_, span := tracing.Span(ctx, "Krama.KBFT", "addVote")
 	defer span.End()
 
+	if kbft.View != v.View {
+		return false, common.ErrInvalidView
+	}
+
 	if kbft.ProposalTS == nil {
-		kbft.evidence.AddVote(v)
 		kbft.logger.Trace("Proposal tesseract not found", "ts-hash", v.TSHash)
 
 		return added, err
 	}
 
 	if kbft.ProposalTS.Hash() != v.TSHash {
-		kbft.evidence.AddVote(v)
 		kbft.logger.Trace(
 			"Invalid tesseract hash", "proposal-ts-hash", kbft.ProposalTS.Hash(), "msg-ts-hash", v.TSHash,
 		)
@@ -527,36 +541,26 @@ func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID identifier
 			return false, errors.New("Invalid Leader")
 		}
 
-		added, err = kbft.Votes.AddQC(v, peerID)
-		if err != nil || !added {
-			kbft.evidence.AddVote(v)
-
-			return added, err
-		}
+		added, err = kbft.Votes.AddQC(v)
 	} else {
-		added, err = kbft.Votes.AddVote(v, peerID)
-		if err != nil || !added {
-			kbft.evidence.AddVote(v)
-
-			return added, err
-		}
+		added, err = kbft.Votes.AddVote(v)
 	}
 
-	if err := kbft.publishEventVote(v); err != nil {
-		kbft.logger.Error("failed to publish vote", "err", err)
+	if errors.Is(err, common.ErrConflictingVote) {
+		kbft.evidence.AddVote(v)
+
+		return added, err
+	}
+
+	if !added {
+		return added, err
 	}
 
 	switch {
 	case v.Type == common.PREVOTE:
-		preVotes := kbft.Votes.Prevotes(v.View)
+		preVotes := kbft.Votes.Prevotes()
 
 		switch {
-		case kbft.View < v.View && preVotes.HasMajorityAny():
-			kbft.logger.Error(
-				"PreVote received for a future view",
-				"current-view", kbft.View,
-				"vote-view", v.View)
-
 		case kbft.View == v.View && kbft.Step >= ViewStepPrevote:
 			tsHash, ok := preVotes.SuperMajority()
 			if ok && (kbft.isProposalReceived() || !tsHash.IsNil()) {
@@ -568,7 +572,7 @@ func (kbft *KBFT) addVote(ctx context.Context, v *ktypes.Vote, peerID identifier
 		}
 
 	case v.Type == common.PRECOMMIT:
-		preCommits := kbft.Votes.Precommits(v.View)
+		preCommits := kbft.Votes.Precommits()
 
 		tsHash, ok := preCommits.SuperMajority()
 		if ok && kbft.isProposalReceived() {
@@ -612,12 +616,16 @@ func (kbft *KBFT) sendQc(msgType common.ConsensusMsgType, tsHash common.Hash) *k
 
 	switch msgType {
 	case common.PREVOTE:
-		vote.SignerIndices, vote.Signature = kbft.Votes.Prevotes(kbft.View).GetQC()
+		vote.SignerIndices, vote.Signature = kbft.Votes.Prevotes().GetQC()
 	case common.PRECOMMIT:
-		vote.SignerIndices, vote.Signature = kbft.Votes.Precommits(kbft.View).GetQC()
+		vote.SignerIndices, vote.Signature = kbft.Votes.Precommits().GetQC()
 
 	default:
 		kbft.logger.Error("Invalid vote type")
+	}
+
+	if err := kbft.publishEventVote(vote); err != nil {
+		kbft.logger.Error("Failed to publish vote", "err", err)
 	}
 
 	kbft.sendExternalMessage(ktypes.ConsensusMessage{PeerID: kbft.id, Payload: vote})
@@ -635,15 +643,15 @@ func (kbft *KBFT) sendVote(msgType common.ConsensusMsgType, tsHash common.Hash, 
 		return nil
 	}
 
-	if _, _, exists := kbft.ics.HasKramaID(kbft.id); !exists {
-		return nil
-	}
-
 	vote, err := kbft.signVote(msgType, tsHash)
 	if err != nil {
 		kbft.logger.Error("Error signing the vote message during sendVote", "err", err)
 
 		return nil
+	}
+
+	if err := kbft.publishEventVote(vote); err != nil {
+		kbft.logger.Error("failed to publish vote", "err", err)
 	}
 
 	if internalMessage {
@@ -800,12 +808,8 @@ func (kbft *KBFT) post(ev interface{}) error {
 	return nil
 }
 
-func (kbft *KBFT) publishEventProposal(proposal *ktypes.Proposal) error {
-	return kbft.post(eventProposal{proposal})
-}
-
 func (kbft *KBFT) publishEventVote(vote *ktypes.Vote) error {
-	return kbft.post(eventVote{vote: vote})
+	return kbft.post(EventVote{vote})
 }
 
 func (kbft *KBFT) publishEventPolka(state eventDataViewState) error {
@@ -839,6 +843,10 @@ func areHeightsEqual(
 
 	// Heights match, return true
 	return true
+}
+
+func (kbft *KBFT) publishEventProposal(proposal *ktypes.Proposal) error {
+	return kbft.post(EventProposal{proposal})
 }
 
 // func (kbft *KBFT) PrintMetrics() {

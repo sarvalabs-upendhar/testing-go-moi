@@ -11,12 +11,8 @@ type eventDataViewState struct {
 	Step   string                            `json:"step"`
 }
 
-type eventProposal struct {
-	proposal *ktypes.Proposal
-}
-
-type eventVote struct {
-	vote *ktypes.Vote
+type EventVote struct {
+	Vote *ktypes.Vote
 }
 
 type eventPolka struct {
@@ -29,4 +25,8 @@ type eventNewViewStep struct {
 
 type eventNewView struct {
 	eventDataViewState
+}
+
+type EventProposal struct {
+	Proposal *ktypes.Proposal
 }

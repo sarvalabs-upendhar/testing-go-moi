@@ -123,6 +123,14 @@ type Proposal struct {
 	Tesseract *common.Tesseract
 }
 
+func (p *Proposal) Copy() *Proposal {
+	proposal := *p
+
+	proposal.Tesseract = p.Tesseract.CopyWithCommitInfo()
+
+	return &proposal
+}
+
 func (p *Proposal) Ixs() common.Interactions {
 	return p.Tesseract.Interactions()
 }
@@ -304,8 +312,9 @@ type VoteBitSet struct {
 }
 
 type SafetyData struct {
-	Qc       []*common.Qc
-	TSHashes []common.Hash
+	Qc             []*common.Qc
+	TSHashes       []common.Hash
+	ProposalTSHash common.Hash
 }
 
 func (sd *SafetyData) UpdateQc(qc *common.Qc) {

@@ -112,16 +112,27 @@ func (s *ConsensusSafety) GetLatestSafetyInfo(id identifiers.Identifier) (*ktype
 	return nil, err
 }
 
+func (s *ConsensusSafety) DeleteConsensusProposalInfo(tsHash common.Hash) error {
+	if err := s.db.DeleteConsensusProposalInfo(tsHash); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (s *ConsensusSafety) UpdateSafetyInfo(p *ktypes.Proposal, qc *common.Qc) error {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+
+	tsHash := p.Tesseract.Hash()
 
 	for id := range p.Heights() {
 		safetyInfo, err := s.getSafetyData(id)
 		if err != nil {
 			safetyInfo = &ktypes.SafetyData{
-				Qc:       []*common.Qc{qc},
-				TSHashes: []common.Hash{qc.TSHash},
+				Qc:             []*common.Qc{qc},
+				TSHashes:       []common.Hash{qc.TSHash},
+				ProposalTSHash: tsHash,
 			}
 		} else {
 			safetyInfo.UpdateQc(qc)
@@ -139,12 +150,6 @@ func (s *ConsensusSafety) UpdateSafetyInfo(p *ktypes.Proposal, qc *common.Qc) er
 		}
 
 		if err = s.db.SetConsensusProposalInfo(p.Tesseract.Hash(), rawInfo); err != nil {
-			return err
-		}
-	}
-
-	if qc.Type == common.PRECOMMIT {
-		if err := s.db.DeleteConsensusProposalInfo(p.Tesseract.Hash()); err != nil {
 			return err
 		}
 	}

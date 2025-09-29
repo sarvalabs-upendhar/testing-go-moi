@@ -55,16 +55,18 @@ type ICSMSG struct {
 	Payload          []byte
 	DecodedMsg       interface{}         `polo:"-"`
 	ReceivedFrom     identifiers.KramaID `polo:"-"`
+	Verified         bool                `polo:"-"`
 }
 
 func NewICSMsg(
-	sender identifiers.KramaID, clusterID common.ClusterID, msgType message.MsgType, payload []byte,
+	sender identifiers.KramaID, clusterID common.ClusterID, msgType message.MsgType, payload []byte, verified bool,
 ) *ICSMSG {
 	return &ICSMSG{
 		Sender:    sender,
 		ClusterID: clusterID,
 		MsgType:   msgType,
 		Payload:   payload,
+		Verified:  verified,
 	}
 }
 
@@ -121,7 +123,6 @@ func (im *ICSMSG) DeCompressPayload(compressor common.Compressor) error {
 type Prepare struct {
 	View uint64
 	Ixns []common.Hash
-	Ps   []identifiers.Identifier
 }
 
 func (pm *Prepare) Bytes() ([]byte, error) {
@@ -141,10 +142,34 @@ func (pm *Prepare) FromBytes(data []byte) error {
 	return nil
 }
 
+func (pm *Prepare) Hash() (common.Hash, error) {
+	raw, err := pm.Bytes()
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	return common.GetHash(raw), nil
+}
+
 type Prepared struct {
 	View      uint64
 	Infos     common.Views
 	Signature []byte
+	Verified  bool `polo:"-"`
+}
+
+func (pdMsg *Prepared) SetVerified(v bool) {
+	pdMsg.Verified = v
+}
+
+// Hash returns the hash of all Interactions
+func (pdMsg Prepared) Hash() (common.Hash, error) {
+	data, err := pdMsg.Bytes()
+	if err != nil {
+		return common.NilHash, err
+	}
+
+	return common.GetHash(data), nil
 }
 
 func (pdMsg *Prepared) Validate() error {

@@ -130,6 +130,16 @@ func (iList IdentifierList) Swap(i, j int) {
 	iList[i], iList[j] = iList[j], iList[i]
 }
 
+func (iList IdentifierList) Has(id identifiers.Identifier) bool {
+	for _, identifier := range iList {
+		if identifier == id {
+			return true
+		}
+	}
+
+	return false
+}
+
 func IsSystemAccount(id identifiers.Identifier) bool {
 	if id == SargaAccountID || id == SystemAccountID {
 		return true

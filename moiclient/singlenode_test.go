@@ -7,7 +7,6 @@ import (
 	"math/big"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/sarvalabs/go-moi/state"
 
@@ -80,7 +79,7 @@ func (tn *TestSingleNode) SetupSuite() {
 	d.BootNodePort = 21000
 	d.Libp2pPort = 22000
 	d.JSONRPCPort = 23000
-	d.ValidatorCount = 5
+	d.ValidatorCount = 7
 	// genesis asset count is 1 as we need to provide data for registry api
 	d.GenesisAssetCount = 1
 
@@ -93,8 +92,12 @@ func (tn *TestSingleNode) SetupSuite() {
 	_, err := tn.bgClient.StartNetwork(context.Background())
 	tn.Suite.NoError(err)
 
-	// wait for node to start all modules
-	time.Sleep(1 * time.Second)
+	jsonRPCUrls := GetJSONRPCUrls(tn.Suite.T(), tn.bgClient, d.ValidatorCount)
+
+	tn.logger.Debug("single json urls ", "urls", jsonRPCUrls)
+
+	// wait for initial sync and all node modules to start
+	CheckIfNodesInitialSyncDone(tn.Suite.T(), d.ValidatorCount, jsonRPCUrls)
 
 	tn.moiClient, err = NewClient(fmt.Sprintf("http://localhost:%d", d.JSONRPCPort))
 	tn.Suite.NoError(err)

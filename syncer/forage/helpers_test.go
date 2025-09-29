@@ -183,6 +183,9 @@ type MockKramaEngine struct {
 	mtx                sync.RWMutex
 }
 
+func (m *MockKramaEngine) DeleteLockedTSInfo(ts *common.Tesseract, fromSyncer bool) {
+}
+
 func NewMockKramaEngine(db store, logger hclog.Logger) *MockKramaEngine {
 	return &MockKramaEngine{
 		db:                 db,
@@ -192,8 +195,12 @@ func NewMockKramaEngine(db store, logger hclog.Logger) *MockKramaEngine {
 	}
 }
 
-func (m *MockKramaEngine) GetICSCommittee(
-	ts *common.Tesseract, info *common.CommitInfo, systemObject *state.SystemObject,
+func (m *MockKramaEngine) GetLockedTSFromDB(tsHash common.Hash) (*common.Tesseract, error) {
+	panic("implement me")
+}
+
+func (m *MockKramaEngine) GetICSCommittee(ts *common.Tesseract, info *common.CommitInfo,
+	systemObject *state.SystemObject,
 ) (*ktypes.ICSCommittee, error) {
 	return &ktypes.ICSCommittee{
 		Sets: []*ktypes.NodeSet{

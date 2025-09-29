@@ -683,6 +683,10 @@ func (object *Object) Copy() *Object {
 
 	sObj.dirtyEntries = object.dirtyEntries.Copy()
 
+	if len(object.keys) > 0 {
+		sObj.keys = object.keys.Copy()
+	}
+
 	if object.assetTreeTxn != nil {
 		sObj.assetTreeTxn = object.assetTreeTxn.CommitOnly().Txn()
 	}

@@ -2,6 +2,7 @@ package kbft
 
 import (
 	"github.com/hashicorp/go-hclog"
+	"github.com/sarvalabs/go-moi/common/utils"
 )
 
 type Option = func(kbft *KBFT)
@@ -21,5 +22,11 @@ func WithWal(wal WAL) Option {
 func WithLogger(logger hclog.Logger) Option {
 	return func(kbft *KBFT) {
 		kbft.logger = logger
+	}
+}
+
+func WithMux(mux *utils.TypeMux) Option {
+	return func(kbft *KBFT) {
+		kbft.mux = mux
 	}
 }

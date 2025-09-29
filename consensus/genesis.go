@@ -142,6 +142,8 @@ func (k *Engine) addGenesisTesseract(commitHashes common.AccountStateHashes, tra
 		transition,
 	)
 
+	k.logger.Debug("adding genesis tesseract", "ts-hash", tesseract.Hash())
+
 	if err := k.lattice.AddTesseract(
 		true,
 		identifiers.Nil,

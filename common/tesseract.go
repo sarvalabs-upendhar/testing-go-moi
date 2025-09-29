@@ -77,6 +77,12 @@ type CommitInfo struct {
 	RandomSetSizeWithoutDelta uint32              `json:"random_set_size"`
 }
 
+func (ci *CommitInfo) copy() *CommitInfo {
+	c := *ci
+
+	return &c
+}
+
 func (ci *CommitInfo) FromBytes(raw []byte) error {
 	if err := polo.Depolorize(ci, raw); err != nil {
 		return errors.Wrap(err, "failed to depolorize commit info")
@@ -168,6 +174,13 @@ func (t *Tesseract) Copy() *Tesseract {
 		t.Receipts(),
 		t.CommitInfo(),
 	)
+}
+
+func (t *Tesseract) CopyWithCommitInfo() *Tesseract {
+	ts := *t
+	ts.commitInfo = ts.commitInfo.copy()
+
+	return &ts
 }
 
 func (t *Tesseract) CompareHash(tsHash Hash) bool {
@@ -289,7 +302,7 @@ func (t *Tesseract) Timestamp() uint64 {
 }
 
 func (t *Tesseract) Operator() identifiers.KramaID {
-	return t.consensusInfo.Proposer
+	return t.CommitInfo().Operator
 }
 
 func (t *Tesseract) FuelUsed() uint64 {
@@ -302,6 +315,10 @@ func (t *Tesseract) FuelLimit() uint64 {
 
 func (t *Tesseract) ConsensusInfo() PoXtData {
 	return t.consensusInfo
+}
+
+func (t *Tesseract) LockedView() uint64 {
+	return t.consensusInfo.View
 }
 
 func (t *Tesseract) CommitInfo() *CommitInfo {

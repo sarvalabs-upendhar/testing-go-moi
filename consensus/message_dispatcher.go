@@ -13,7 +13,7 @@ import (
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 )
 
-// sendPrepareMsg broadcasts the ICS request to all the nodes that are part of the ICS
+// sendPrepareMsg broadcasts the ICS request to all the context nodes that are part of the ICS
 func (k *Engine) sendPrepareMsg(
 	ctx context.Context,
 	clusterID common.ClusterID,
@@ -46,7 +46,7 @@ func (k *Engine) sendPrepareMsg(
 		unRespondedNodes = make([]identifiers.KramaID, 0)
 	)
 
-	for icsSetType, ns := range nodeset.Sets {
+	for icsSetType, ns := range nodeset.ContextSet() {
 		if ns == nil {
 			continue
 		}
@@ -54,7 +54,7 @@ func (k *Engine) sendPrepareMsg(
 		for index, info := range ns.Infos {
 			if k.selfID == info.KramaID {
 				ns.UpdateViewInfo(index, preparedMsg)
-				ns.UpdateResponse(index, true)
+				ns.UpdateResponse(types.VoteCounter, index, true)
 
 				continue
 			}
@@ -71,6 +71,8 @@ func (k *Engine) sendPrepareMsg(
 				defer waitGroup.Done()
 
 				k.logger.Trace("sending prepare msg", "cluster-id", clusterID, "to", kramaID)
+
+				var err error
 
 				if err = k.transport.ConnectToDirectPeer(ctx, kramaID, clusterID); err != nil {
 					failedReqCount.Add(1)
@@ -92,6 +94,7 @@ func (k *Engine) sendPrepareMsg(
 						clusterID,
 						networkmsg.PREPARE,
 						payload,
+						false,
 					))
 				if err != nil {
 					failedReqCount.Add(1)

@@ -187,7 +187,6 @@ func (sm *StateManager) getStateObject(id identifiers.Identifier, stateHash comm
 }
 
 func (sm *StateManager) RefreshCachedObject(id identifiers.Identifier, sysObj *SystemObject) {
-	sm.logger.Trace("updating cached system object", id)
 	sm.objectLocks.Lock(id.Hex())
 
 	defer func() {

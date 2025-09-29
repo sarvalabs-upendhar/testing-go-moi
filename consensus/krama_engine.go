@@ -6,8 +6,12 @@ import (
 	"log"
 	"math/big"
 	"sort"
+	"sync"
 	"sync/atomic"
 	"time"
+
+	lru "github.com/hashicorp/golang-lru"
+	"github.com/sarvalabs/go-moi/network/rpc"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -22,7 +26,6 @@ import (
 	ktypes "github.com/sarvalabs/go-moi/consensus/types"
 	"github.com/sarvalabs/go-moi/crypto"
 	mudraCommon "github.com/sarvalabs/go-moi/crypto/common"
-	"github.com/sarvalabs/go-moi/flux"
 	"github.com/sarvalabs/go-moi/ixpool"
 	networkmsg "github.com/sarvalabs/go-moi/network/message"
 	"github.com/sarvalabs/go-moi/state"
@@ -30,7 +33,8 @@ import (
 )
 
 const (
-	ICSTimeOutDuration = 6 * time.Second
+	ICSTimeOutDuration    = 6 * time.Second
+	DefaultWorkerWaitTime = 50 * time.Millisecond
 )
 
 type AggregatedSignatureVerifier func(data []byte, aggSignature []byte, multiplePubKeys [][]byte) (bool, error)
@@ -61,6 +65,7 @@ type kramaTransport interface {
 	Start()
 	Close()
 	Messages() <-chan *ktypes.ICSMSG
+	ForwardMsgToEngine(msg *ktypes.ICSMSG)
 	CleanDirectPeer(clusterID common.ClusterID, peers ...identifiers.KramaID)
 	RegisterContextRouter(
 		ctx context.Context,
@@ -124,6 +129,7 @@ type ixPool interface {
 	ProcessableBatches() []*common.IxBatch
 	ViewTimeOut() time.Duration
 	UpdateCurrentView(view uint64)
+	GetIxns(ixHashes common.Hashes) ([]*common.Interaction, bool)
 }
 
 type execution interface {
@@ -152,38 +158,87 @@ type vault interface {
 	KramaID() identifiers.KramaID
 }
 
+type randomizer interface {
+	GetRandomNodes(
+		ctx context.Context,
+		count int,
+		avoidPeers []identifiers.KramaID,
+	) (randomPeers []identifiers.KramaID, err error)
+	DeletePeers(ids []identifiers.KramaID)
+}
+
+type rpcClient interface {
+	MoiCall(
+		ctx context.Context,
+		kramaID identifiers.KramaID,
+		svcName, svcMethod string,
+		args, reply interface{},
+		ttl time.Duration,
+	) error
+}
+
+type metaPrepareMsg struct {
+	msg         *ktypes.Prepare
+	ixns        *common.Interactions
+	sender      identifiers.KramaID
+	clusterID   common.ClusterID
+	msgSent     bool
+	shouldReply bool
+}
+
 type Engine struct {
-	ctx                 context.Context
-	ctxCancel           context.CancelFunc
-	cfg                 *config.ConsensusConfig
-	mux                 *utils.TypeMux
-	logger              hclog.Logger
-	selfID              identifiers.KramaID
-	slots               *ktypes.Slots
-	randomizer          *flux.Randomizer
-	transport           kramaTransport
-	exec                execution
-	pool                ixPool
-	db                  store
-	state               stateManager
-	executionReq        chan common.ClusterID
-	lattice             lattice
-	wal                 kbft.WAL
-	vault               vault
-	clusterLocks        *locker.Locker
-	metrics             *Metrics
-	avgICSTime          time.Duration
-	icsCloseCh          chan common.ClusterID
-	signatureVerifier   AggregatedSignatureVerifier
-	tsTracker           map[common.Hash]*utils.TSTrackerEvent
-	view                atomic.Uint64
-	viewTimeOutDeadline atomic.Value
-	accountLocks        map[identifiers.Identifier]*ktypes.AccConsensusLockInfo
-	safety              *safety.ConsensusSafety
-	trustedPeersPresent bool
-	futureMsg           []*ktypes.ICSMSG
-	compressor          common.Compressor
-	minimumStake        *big.Int
+	ctx                     context.Context
+	ctxCancel               context.CancelFunc
+	ctxClosed               atomic.Bool
+	cfg                     *config.ConsensusConfig
+	mux                     *utils.TypeMux
+	logger                  hclog.Logger
+	selfID                  identifiers.KramaID
+	slots                   *ktypes.Slots
+	randomizer              randomizer
+	transport               kramaTransport
+	exec                    execution
+	pool                    ixPool
+	db                      store
+	state                   stateManager
+	executionReq            chan common.ClusterID
+	lattice                 lattice
+	wal                     kbft.WAL
+	vault                   vault
+	clusterLocks            *locker.Locker
+	metrics                 *Metrics
+	avgICSTime              time.Duration
+	icsCloseCh              chan common.ClusterID
+	signatureVerifier       AggregatedSignatureVerifier
+	tsTracker               map[common.Hash]*utils.TSTrackerEvent
+	currentView             *ktypes.View
+	accountLocks            map[identifiers.Identifier]*ktypes.AccConsensusLockInfo
+	safety                  *safety.ConsensusSafety
+	trustedPeersPresent     bool
+	futureMsg               []*ktypes.ICSMSG
+	compressor              common.Compressor
+	preparedMsgQueue        *jobQueue
+	workerLock              sync.Mutex
+	workerCount             uint32
+	workerSignal            chan struct{}
+	workerWaitTime          time.Duration
+	maxRetryCount           int
+	cache                   *lru.Cache
+	rpcClient               rpcClient
+	consensusMux            *utils.TypeMux
+	minimumStake            *big.Int
+	participantToPrepareMsg map[identifiers.Identifier][]*metaPrepareMsg
+	stopPrepareMsgs         bool
+	prepareTimeout          chan struct{}
+	initICS                 func(ctx context.Context, sender identifiers.KramaID, proposal *ktypes.ProposalMsg,
+		view *ktypes.View) error
+	buildProposalTS   func(lockedTS *common.Tesseract, cs *ktypes.ClusterState) (*common.Tesseract, error)
+	FetchICSCommittee func(ts *common.Tesseract, info *common.CommitInfo,
+		systemObject *state.SystemObject) (*ktypes.ICSCommittee, error)
+	fetchAndStoreStochasticNodes func(ctx context.Context, cs *ktypes.ClusterState) error
+	finalizedTSHandler           func(tesseract *common.Tesseract) error
+	ExecuteAndValidateTS         func(ts *common.Tesseract, transition *state.Transition) error
+	handlePrepare                func(msg *ktypes.ICSMSG, prepare *ktypes.Prepare) error
 }
 
 func NewKramaEngine(
@@ -197,12 +252,14 @@ func NewKramaEngine(
 	ixPool ixPool,
 	val vault,
 	lattice lattice,
-	randomizer *flux.Randomizer,
+	randomizer randomizer,
 	transport kramaTransport,
 	metrics *Metrics,
 	slots *ktypes.Slots,
 	verifier AggregatedSignatureVerifier,
 	compressor common.Compressor,
+	cache *lru.Cache,
+	opts ...Option,
 ) (*Engine, error) {
 	wal, err := kbft.NewWAL(logger, cfg.DirectoryPath)
 	if err != nil {
@@ -238,13 +295,244 @@ func NewKramaEngine(
 		safety:              safety.NewConsensusSafety(db, val),
 		futureMsg:           make([]*ktypes.ICSMSG, 0, 30),
 		compressor:          compressor,
+		preparedMsgQueue:    newJobQueue(),
+		workerSignal:        make(chan struct{}),
+		workerCount:         10,
+		workerWaitTime:      DefaultWorkerWaitTime,
+		maxRetryCount:       5,
+		cache:               cache,
 		// TODO: Update after the staking flow is implemented
-		minimumStake: big.NewInt(0),
+		minimumStake:            big.NewInt(0),
+		participantToPrepareMsg: make(map[identifiers.Identifier][]*metaPrepareMsg),
+		prepareTimeout:          make(chan struct{}),
+		currentView:             &ktypes.View{},
+	}
+
+	for _, opt := range opts {
+		opt(k)
 	}
 
 	k.metrics.initMetrics(float64(cfg.OperatorSlotCount), float64(cfg.ValidatorSlotCount))
 
 	return k, nil
+}
+
+func (k *Engine) Init() {
+	k.initICS = k.createICSForProposal
+	k.buildProposalTS = k.createProposalTS
+	k.FetchICSCommittee = k.GetICSCommittee
+	k.fetchAndStoreStochasticNodes = k.fetchAndStoreRandomNodes
+	k.finalizedTSHandler = k.finalizedTesseractHandler
+	k.ExecuteAndValidateTS = k.ExecuteAndValidate
+	k.handlePrepare = k.handlePrepareMsg
+}
+
+func (k *Engine) SetRPCClient(client *rpc.Client) {
+	k.rpcClient = client
+}
+
+func (k *Engine) addLockedTS(ts *common.Tesseract) {
+	k.cache.Add(ts.Hash(), ts)
+}
+
+func (k *Engine) getLockedTSFromCache(tsHash common.Hash) (*common.Tesseract, error) {
+	tesseractData, isCached := k.cache.Get(tsHash)
+	if !isCached {
+		return nil, errors.New("ts not found")
+	}
+
+	tesseract, ok := tesseractData.(*common.Tesseract)
+	if !ok {
+		return nil, common.ErrInterfaceConversion
+	}
+
+	return tesseract, nil
+}
+
+func (k *Engine) rpcGetLockedTesseract(
+	bestPeer identifiers.KramaID,
+	tsHash common.Hash,
+) (*common.Tesseract, error) {
+	resp := new(networkmsg.TesseractSyncMsg)
+
+	if err := k.rpcClient.MoiCall(
+		context.Background(),
+		bestPeer,
+		"SYNCRPC",
+		"GetTesseract",
+		tsHash,
+		resp,
+		5*time.Second,
+	); err != nil {
+		k.logger.Error("failed to fetch locked tesseract",
+			"RPC-error", err, "peer-id", bestPeer, "ts-hash", tsHash)
+
+		return nil, err
+	}
+
+	return resp.GetTesseract()
+}
+
+type TesseractInfo struct {
+	ts      *common.Tesseract
+	msgType common.ConsensusMsgType
+}
+
+// sendSyncRequests sends sync requests if node is lagging in syncing previous tesseracts
+func (k *Engine) sendSyncRequests(
+	lockedTesseracts map[common.Hash]*TesseractInfo,
+	bestPeer identifiers.KramaID,
+) bool {
+	hasSentSyncRequest := false
+
+	sendSyncRequest := func(id identifiers.Identifier, height uint64) {
+		_ = k.mux.Post(utils.SyncRequestEvent{
+			ID:       id,
+			Height:   height,
+			BestPeer: bestPeer,
+		})
+
+		hasSentSyncRequest = true
+	}
+
+	for _, tsInfo := range lockedTesseracts {
+		for id, psState := range tsInfo.ts.Participants() {
+			accMetaInfo, err := k.state.GetAccountMetaInfo(id)
+			if err != nil {
+				if tsInfo.msgType == common.PRECOMMIT {
+					sendSyncRequest(id, psState.Height)
+				}
+
+				if tsInfo.msgType == common.PREVOTE && psState.Height >= 1 {
+					sendSyncRequest(id, psState.Height)
+				}
+
+				continue
+			}
+
+			height := accMetaInfo.Height
+
+			if psState.Height <= height || (tsInfo.msgType == common.PREVOTE && psState.Height-height <= 1) {
+				continue
+			}
+
+			var latestHeight uint64
+
+			if tsInfo.msgType == common.PREVOTE {
+				latestHeight = psState.Height - 1
+			}
+
+			if tsInfo.msgType == common.PRECOMMIT {
+				latestHeight = psState.Height
+			}
+
+			sendSyncRequest(id, latestHeight)
+		}
+	}
+
+	return hasSentSyncRequest
+}
+
+func (k *Engine) msgProcessor(id common.ClusterID, prepared *PreparedMessage) {
+	lockedTesseracts := make(map[common.Hash]*TesseractInfo)
+
+	for _, view := range prepared.msg.Infos {
+		if view.Qc == nil {
+			continue
+		}
+
+		qc := view.Qc[0]
+
+		if _, _, err := k.getTS(qc.Type, qc.TSHash, "", false); err == nil {
+			continue
+		}
+
+		lockedTS, err := k.rpcGetLockedTesseract(prepared.sender, qc.TSHash)
+		if err != nil {
+			return
+		}
+
+		k.addLockedTS(lockedTS)
+
+		lockedTesseracts[qc.TSHash] = &TesseractInfo{
+			ts:      lockedTS,
+			msgType: qc.Type,
+		}
+	}
+
+	var hasSentSyncRequest bool
+
+	if len(lockedTesseracts) > 0 {
+		hasSentSyncRequest = k.sendSyncRequests(lockedTesseracts, prepared.sender)
+	}
+
+	if !hasSentSyncRequest {
+		rawData, err := prepared.msg.Bytes()
+		if err != nil {
+			k.logger.Error("unable to serialize prepared message", err)
+		}
+
+		k.transport.ForwardMsgToEngine(ktypes.NewICSMsg(prepared.sender, id, networkmsg.PREPARED, rawData, true))
+	}
+}
+
+// jobProcessor processes locked Tesseracts that need to be fetched.
+// It first attempts to retrieve them from the local database; if unavailable, it tries fetching from a remote node.
+// If synchronization with previous Tesseracts is required, a sync request is sent.
+// The job is marked as complete once all locked Tesseracts are successfully fetched.
+// If fetching from a remote node fails more than the allowed maximum retries, the job is marked as done.
+func (k *Engine) jobProcessor(j *job) error {
+	prepared := j.nextPrepared()
+	if prepared == nil {
+		return nil
+	}
+
+	k.logger.Debug("processing job ", "cluster-id", j.clusterID)
+	k.msgProcessor(j.clusterID, prepared)
+
+	return nil
+}
+
+func (k *Engine) startWorkers() {
+	for i := uint32(0); i < k.workerCount; i++ {
+		go k.worker()
+	}
+}
+
+func (k *Engine) worker() {
+	defer func() {
+		k.workerLock.Lock()
+		k.workerCount--
+		k.workerLock.Unlock()
+		k.logger.Debug("closing krama worker")
+	}()
+
+	for {
+		select {
+		case <-k.workerSignal:
+		case <-time.After(k.workerWaitTime):
+		case <-k.ctx.Done():
+			return
+		}
+
+		j := k.preparedMsgQueue.next()
+
+		k.metrics.captureTotalJobs(float64(k.preparedMsgQueue.len()))
+
+		if j == nil {
+			continue
+		}
+
+		requestTime := time.Now()
+
+		if err := k.jobProcessor(j); err != nil {
+			k.logger.Error("Error from sync job processor", "err", err)
+		}
+
+		k.preparedMsgQueue.deleteActiveJob(j.clusterID)
+		k.metrics.captureJobTimeInQueue(j.creationTime)
+		k.metrics.captureJobProcessingTime(requestTime)
+	}
 }
 
 func (k *Engine) enqueueFutureMsg(msg *ktypes.ICSMSG) {
@@ -264,13 +552,14 @@ func (k *Engine) createICS(
 	clusterID common.ClusterID,
 	ixns common.Interactions,
 	locks map[identifiers.Identifier]common.LockType,
+	view *ktypes.View,
 ) (*ktypes.Slot, common.ClusterID, error) {
 	slot, activeCluster := k.slots.CreateSlotAndLockAccounts(clusterID, ktypes.OperatorSlot, locks)
 	if slot == nil {
 		return nil, activeCluster, common.ErrSlotsFull
 	}
 
-	cs, err := k.loadClusterState(ctx, k.selfID, ixns, clusterID, time.Now())
+	cs, err := k.loadClusterState(ctx, k.selfID, ixns, clusterID, time.Now(), view, false)
 	if err != nil {
 		return nil, "", err
 	}
@@ -293,6 +582,8 @@ func (k *Engine) loadClusterState(
 	ixns common.Interactions,
 	clusterID common.ClusterID,
 	reqTime time.Time,
+	view *ktypes.View,
+	isTSStored bool,
 	qc ...*common.Qc,
 ) (*ktypes.ClusterState, error) {
 	var err error
@@ -314,7 +605,7 @@ func (k *Engine) loadClusterState(
 		return nil, err
 	}
 
-	clusterState := ktypes.NewICS( //nolint:forcetypeassert
+	clusterState := ktypes.NewICS(
 		ixns,
 		clusterID,
 		operator,
@@ -324,8 +615,8 @@ func (k *Engine) loadClusterState(
 		k.state.GetSystemObject(),
 		participants,
 		viewInfos,
-		k.view.Load(),
-		k.viewTimeOutDeadline.Load().(time.Time),
+		view,
+		isTSStored,
 	)
 
 	return clusterState, nil
@@ -426,7 +717,7 @@ func (k *Engine) fetchParticipantsAndCommittee(
 }
 
 // isOperatorEligible checks if the operator is eligible to propose a tesseract for the given interactions.
-func (k *Engine) isOperatorEligible(peerID identifiers.KramaID, ixns common.Interactions) bool {
+func (k *Engine) isOperatorEligible(peerID identifiers.KramaID, ixns common.Interactions, currentView uint64) bool {
 	id := ixns.LeaderCandidateID()
 
 	fmt.Println("Leader candidate info", "id", id, "ixns-size", ixns.Len())
@@ -447,16 +738,16 @@ func (k *Engine) isOperatorEligible(peerID identifiers.KramaID, ixns common.Inte
 		}
 	}
 
+	nodePosition := currentView % common.ConsensusNodesSize
+
 	if peerID == k.selfID {
 		if metaInfo.PositionInContextSet < 0 {
 			return false
 		}
 
-		currentView := k.view.Load()
-
 		fmt.Println("Current View", currentView, currentView%common.ConsensusNodesSize)
 
-		return currentView%common.ConsensusNodesSize == uint64(metaInfo.PositionInContextSet)
+		return nodePosition == uint64(metaInfo.PositionInContextSet)
 	}
 
 	consensusNodes, _, err := k.state.GetConsensusNodes(id, metaInfo.ContextHash)
@@ -466,7 +757,7 @@ func (k *Engine) isOperatorEligible(peerID identifiers.KramaID, ixns common.Inte
 		return false
 	}
 
-	return consensusNodes.Contains(peerID)
+	return peerID == consensusNodes.KramaIDs()[nodePosition]
 }
 
 func (k *Engine) updateContextDelta(cs *ktypes.ClusterState) error {
@@ -521,12 +812,11 @@ func (k *Engine) getConsensusNodes(
 	set := clusterInfo.Committee().RandomSet()
 	count := 0
 
-	for index, info := range set.Infos {
-		if set.Responses.GetIndex(index) {
-			if len(consensusNodes) != requiredConsensusNodes {
-				consensusNodes = append(consensusNodes, info.KramaID)
-				count++
-			}
+	for _, info := range set.Infos {
+		if len(consensusNodes) != requiredConsensusNodes {
+			consensusNodes = append(consensusNodes, info.KramaID)
+
+			count++
 		}
 
 		if count == requiredConsensusNodes {
@@ -553,9 +843,29 @@ func (k *Engine) getStochasticNodes(
 		return nil, err
 	}
 
+	randomIndices := make([]common.ValidatorIndex, 0, len(indices))
+
+	for _, index := range indices {
+		if _, ok := exemptedNodes[index]; ok {
+			continue
+		}
+
+		randomIndices = append(randomIndices, index)
+
+		count--
+
+		if count == 0 {
+			break
+		}
+	}
+
+	if count != 0 {
+		return nil, errors.New("insufficient random nodes")
+	}
+
 	k.metrics.captureRandomNodesQueryTime(queryInitTime)
 
-	return indices, nil
+	return randomIndices, nil
 }
 
 func (k *Engine) getTrustedPeers(count int) []identifiers.KramaID {
@@ -571,8 +881,27 @@ func (k *Engine) getTrustedPeers(count int) []identifiers.KramaID {
 	return peers
 }
 
-func (k *Engine) createICSForProposal(ctx context.Context, sender identifiers.KramaID, msg *ktypes.Proposal) error {
+func (k *Engine) isValidTimeStamp(ts *common.Tesseract) bool {
+	expectedViewTime := viewTime(k.cfg.GenesisTimestamp, ts.LockedView(), k.pool.ViewTimeOut())
+
+	return expectedViewTime.UnixNano() == int64(ts.Timestamp())
+}
+
+func (k *Engine) createICSForProposal(ctx context.Context,
+	sender identifiers.KramaID, proposal *ktypes.ProposalMsg, view *ktypes.View,
+) error {
+	msg := proposal.Proposal()
+
 	k.logger.Debug("Handling proposal message", "cluster-id", msg.ClusterID())
+
+	if msg.View() != view.ID() {
+		return common.ErrInvalidView
+	}
+
+	if !k.isValidTimeStamp(msg.Tesseract) {
+		return common.ErrInvalidTimestamp
+	}
+
 	ts := msg.Tesseract
 	// TODO: validate ts timestamp
 	slot, _ := k.slots.CreateSlotAndLockAccounts(msg.ClusterID(), ktypes.ValidatorSlot, msg.Locks())
@@ -591,11 +920,14 @@ func (k *Engine) createICSForProposal(ctx context.Context, sender identifiers.Kr
 		return errors.New("failed to create slot")
 	}
 
-	if !k.isOperatorEligible(sender, msg.Tesseract.Interactions()) {
+	if !k.isOperatorEligible(sender, msg.Tesseract.Interactions(), view.ID()) {
 		return common.ErrOperatorNotEligible
 	}
 
-	cs, err := k.loadClusterState(ctx, ts.Operator(), ts.Interactions(), ts.ClusterID(), time.Now())
+	tesseract, _ := k.lattice.GetTesseract(ts.Hash(), false, false)
+
+	cs, err := k.loadClusterState(ctx, sender, ts.Interactions(), ts.ClusterID(),
+		common.Canonical(time.Unix(0, int64(proposal.Tesseract.Timestamp()))), view, tesseract != nil)
 	if err != nil {
 		return err
 	}
@@ -611,6 +943,10 @@ func (k *Engine) createICSForProposal(ctx context.Context, sender identifiers.Kr
 		ts.CommitInfo().RandomSetSizeWithoutDelta,
 	))
 
+	if !cs.IsICSMember(k.selfID) {
+		return common.ErrNotAMember
+	}
+
 	voteset := ktypes.NewHeightVoteSet(
 		make([]string, 0),
 		cs.NewHeights(),
@@ -621,8 +957,12 @@ func (k *Engine) createICSForProposal(ctx context.Context, sender identifiers.Kr
 	cs.UpdateVoteSet(voteset)
 	slot.UpdateClusterState(cs)
 
-	if err = k.validateInteractions(ts.Interactions()); err != nil {
-		return err
+	// Do not validate ixns if tesseract is stored already
+
+	if !cs.IsTSStored() {
+		if err = k.validateInteractions(ts.Interactions()); err != nil {
+			return err
+		}
 	}
 
 	go k.icsHandler(ctx, msg.ClusterID())
@@ -660,7 +1000,7 @@ func generateTesseract(
 		ixnsHash,
 		receiptHash,
 		big.NewInt(0), // TODO pass appropriate value
-		uint64(cs.ICSReqTime.Unix()),
+		uint64(cs.CurrentView().StartTime().UnixNano()),
 		fuelUsed,
 		fuelLimit,
 		poxt,
@@ -673,7 +1013,7 @@ func generateTesseract(
 			Operator:                  cs.Operator(),
 			RandomSet:                 cs.GetRandomNodes(),
 			RandomSetSizeWithoutDelta: cs.Committee().RandomSetSizeWithOutDelta(),
-			View:                      cs.CurrentView(),
+			View:                      cs.CurrentView().ID(),
 		},
 	)
 
@@ -745,10 +1085,10 @@ func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesse
 
 	poxt := common.PoXtData{
 		Proposer:     k.selfID,
-		View:         k.view.Load(),
+		View:         cs.CurrentView().ID(),
 		LastCommit:   lastCommitHash,
 		EvidenceHash: make(map[identifiers.Identifier]common.Hash),
-		AccountLocks: cs.Participants.LockInfo(true),
+		AccountLocks: lockInfo,
 		// ICSSeed:      newSeed,
 		// ICSProof:     proof,
 	}
@@ -756,6 +1096,45 @@ func (k *Engine) createProposalTesseract(cs *ktypes.ClusterState) (*common.Tesse
 	k.logger.Debug("Generating tesseracts", "cluster-id", cs.ClusterID)
 
 	return generateTesseract(cs, poxt, stateHashes)
+}
+
+func (k *Engine) DeleteLockedTSInfo(ts *common.Tesseract, fromSyncer bool) {
+	if err := k.safety.DeleteConsensusProposalInfo(ts.Hash()); err != nil {
+		k.logger.Error("Failed to delete consenus proposal info", "err", err, "ts-hash", ts.Hash())
+	}
+
+	if !fromSyncer {
+		for id := range ts.Participants() {
+			if err := k.safety.DeleteSafetyData(id); err != nil {
+				k.logger.Error("Failed to delete safety data", "err", err, "id", id)
+			}
+		}
+
+		return
+	}
+
+	deletedTSHash := make(map[common.Hash]struct{})
+
+	for id := range ts.Participants() {
+		data, err := k.safety.GetLatestSafetyInfo(id)
+		if err != nil {
+			continue
+		}
+
+		if err := k.safety.DeleteSafetyData(id); err != nil {
+			k.logger.Error("Failed to delete safety data", "err", err, "id", id)
+		}
+
+		if _, ok := deletedTSHash[data.ProposalTSHash]; ok {
+			continue
+		}
+
+		if err := k.safety.DeleteConsensusProposalInfo(data.ProposalTSHash); err != nil {
+			k.logger.Error("Failed to delete consensus proposal info", "err", err, "ts-hash", ts.Hash())
+		}
+
+		deletedTSHash[data.ProposalTSHash] = struct{}{}
+	}
 }
 
 func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
@@ -785,11 +1164,7 @@ func (k *Engine) finalizedTesseractHandler(tesseract *common.Tesseract) error {
 		return err
 	}
 
-	for id := range cs.Participants {
-		if err := k.safety.DeleteSafetyData(id); err != nil {
-			k.logger.Error("Failed to delete safety data", "err", err, "id", id)
-		}
-	}
+	k.DeleteLockedTSInfo(tesseract, false)
 
 	ixnHashes := make(common.Hashes, 0, tesseract.Interactions().Len())
 
@@ -1021,7 +1396,7 @@ func (k *Engine) verifyQc(
 
 func (k *Engine) verifySignatures(ts *common.Tesseract, ics *ktypes.ICSCommittee) (bool, error) {
 	return k.verifyQc(
-		ts.ConsensusInfo().View,
+		ts.CommitInfo().View,
 		ics,
 		ts.CommitInfo().QC,
 	)
@@ -1098,18 +1473,22 @@ func (k *Engine) ClearActiveAccounts(clusterID common.ClusterID, ids ...identifi
 	k.logger.Trace("removed from active accounts", "ids", ids)
 }
 
+// func (k *Engine) isTimely(reqTime time.Time, currentTime time.Time, isLockedTS bool) bool {
+//	if isLockedTS {
+//		return reqTime.Before(currentTime)
+//	}
+//
+//	lowerBound := reqTime.Add(-k.cfg.Precision)
+//	upperBound := reqTime.Add(k.cfg.MessageDelay).Add(k.cfg.Precision)
+//
+//	if currentTime.Before(lowerBound) || currentTime.After(upperBound) {
+//		return false
+//	}
+//
+//	return true
+// }
+
 /*
-func (k *Engine) isTimely(reqTime time.Time, currentTime time.Time) bool {
-	lowerBound := reqTime.Add(-k.cfg.Precision)
-	upperBound := reqTime.Add(k.cfg.MessageDelay).Add(k.cfg.Precision)
-
-	if currentTime.Before(lowerBound) || currentTime.After(upperBound) {
-		return false
-	}
-
-	return true
-}
-
 // verifyOperatorLottery validates the ICS proof provided by an operator with the computed ICS seed.
 func (k *Engine) verifyOperatorLottery(
 	operator identifiers.KramaID,
@@ -1176,7 +1555,7 @@ func (k *Engine) runLottery(key common.LotteryKey) ([32]byte, []byte, error) {
 }
 */
 
-func (k *Engine) getTS(tsHash common.Hash, kramaID identifiers.KramaID) (*common.Tesseract, error) {
+func (k *Engine) GetLockedTSFromDB(tsHash common.Hash) (*common.Tesseract, error) {
 	ts, err := k.lattice.GetTesseract(tsHash, false, true)
 	if err == nil {
 		return ts, nil
@@ -1187,9 +1566,64 @@ func (k *Engine) getTS(tsHash common.Hash, kramaID identifiers.KramaID) (*common
 		return ts, nil
 	}
 
-	// TODO: Should fetch ts from the network using agora
-
 	return nil, err
+}
+
+// getTS retrieves the locked tesseract. It first checks the database,
+// then falls back to the cache if not found. In the case of a proposal received
+// by a validator, it also makes an additional request to fetch the tesseract
+// from a remote node.
+// If the tesseract is fetched from the cache or remote, the caller is prompted to store
+// the tesseract in the database.
+func (k *Engine) getTS(
+	msgType common.ConsensusMsgType,
+	tsHash common.Hash,
+	kramaID identifiers.KramaID,
+	isProposal bool,
+) (ts *common.Tesseract, shouldStore bool, err error) {
+	ts, err = k.lattice.GetTesseract(tsHash, false, true)
+	if err == nil {
+		return ts, false, nil
+	}
+
+	ts, err = k.safety.GetTesseract(tsHash)
+	if err == nil {
+		return ts, false, nil
+	}
+
+	ts, err = k.getLockedTSFromCache(tsHash)
+	if err == nil {
+		return ts, true, nil
+	}
+
+	if !isProposal {
+		return ts, false, err
+	}
+
+	// TODO: Add retries to fetch locked tesseract
+
+	ts, err = k.rpcGetLockedTesseract(kramaID, tsHash)
+	if ts == nil || err != nil {
+		return nil, false, err
+	}
+
+	k.addLockedTS(ts)
+
+	sentRequest := k.sendSyncRequests(
+		map[common.Hash]*TesseractInfo{
+			tsHash: {
+				ts:      ts,
+				msgType: msgType,
+			},
+		},
+		kramaID,
+	)
+
+	if sentRequest {
+		return nil, false, common.ErrSyncRequestSent
+	}
+
+	return ts, true, err
 }
 
 // tsEventTracker adds a received event to the map if its pair doesn't exist
@@ -1244,6 +1678,8 @@ func (k *Engine) closeICS(clusterID common.ClusterID) {
 func (k *Engine) Start() {
 	eventSub := k.mux.Subscribe(utils.TSTrackerEvent{})
 	go k.tsEventTracker(eventSub)
+
+	k.startWorkers()
 
 	go k.minter()
 

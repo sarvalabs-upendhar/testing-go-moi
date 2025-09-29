@@ -11,32 +11,66 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
+type CounterType int
+
+const (
+	// VoteCounter is used to count the votes for prepared messages
+	VoteCounter CounterType = iota
+	// MajorityCounter is used to count the first 2/3 majority votes.
+	MajorityCounter
+)
+
+type NodeInfo struct {
+	ID          identifiers.KramaID
+	PublicKey   []byte
+	Msg         *Prepared
+	VotingPower int64
+}
+
+type Response struct {
+	Bits  *common.ArrayOfBits
+	Count atomic.Int32
+}
+
 type NodeSet struct {
 	mtx                 sync.RWMutex
 	Infos               []*common.ValidatorInfo
-	Responses           *common.ArrayOfBits
+	Responses           map[CounterType]*Response
 	ExcludedFromICS     bool
-	RespCount           atomic.Int32
 	SetSizeWithOutDelta uint32
 }
 
 // NewNodeSet creates and returns a new instance of NodeSet
 func NewNodeSet(vals []*common.ValidatorInfo, required uint32) *NodeSet {
-	return &NodeSet{
+	ns := &NodeSet{
 		mtx:                 sync.RWMutex{},
 		Infos:               vals,
-		Responses:           common.NewArrayOfBits(len(vals)),
+		Responses:           make(map[CounterType]*Response),
 		SetSizeWithOutDelta: required,
 	}
+
+	ns.Responses[VoteCounter] = &Response{
+		Bits: common.NewArrayOfBits(len(vals)),
+	}
+
+	ns.Responses[MajorityCounter] = &Response{
+		Bits: common.NewArrayOfBits(len(vals)),
+	}
+
+	return ns
 }
 
-func (ns *NodeSet) GetRespCount() int {
-	return int(ns.RespCount.Load())
+func (ns *NodeSet) GetRespCount(ct CounterType) int {
+	return int(ns.Responses[ct].Count.Load())
 }
 
-func (ns *NodeSet) UpdateResponse(index int, v bool) {
-	ns.Responses.SetIndex(index, v)
-	ns.RespCount.Add(1)
+func (ns *NodeSet) UpdateResponse(ct CounterType, index int, v bool) {
+	if ns.Responses[ct].Bits.GetIndex(index) {
+		return
+	}
+
+	ns.Responses[ct].Bits.SetIndex(index, v)
+	ns.Responses[ct].Count.Add(1)
 }
 
 func (ns *NodeSet) UpdateViewInfo(index int, msg *Prepared) {
@@ -83,7 +117,7 @@ type ICSCommittee struct {
 	Sets               []*NodeSet
 	ConsensusNodesHash map[common.Hash]*NodesetData
 	totalNodes         int
-	size               int
+	size               int // size represent number of node sets
 }
 
 // NewICSCommittee creates and returns a new instance of NodeSet
@@ -95,6 +129,10 @@ func NewICSCommittee() *ICSCommittee {
 	}
 
 	return ics
+}
+
+func (i *ICSCommittee) ContextSet() []*NodeSet {
+	return i.Sets[:len(i.Sets)-1]
 }
 
 func (i *ICSCommittee) IncrementPSCount(consensusNodesHash common.Hash) {
@@ -189,11 +227,53 @@ func (i *ICSCommittee) UpdateNodePreparedMsg(id identifiers.KramaID, msg *Prepar
 
 		for index, info := range set.Infos {
 			if info.KramaID == id {
-				set.UpdateResponse(index, true)
+				set.UpdateResponse(VoteCounter, index, true)
 				set.UpdateViewInfo(index, msg)
 			}
 		}
 	}
+}
+
+func (i *ICSCommittee) UpdateResponse(ct CounterType, id identifiers.KramaID) {
+	for _, set := range i.Sets {
+		if set == nil {
+			continue
+		}
+
+		for index, info := range set.Infos {
+			if info.KramaID == id {
+				set.UpdateResponse(ct, index, true)
+			}
+		}
+	}
+}
+
+func (i *ICSCommittee) ViewInfos() ([]common.Views, error) {
+	views := make([]common.Views, i.totalNodes)
+	offset := 0
+
+	for _, set := range i.Sets {
+		if set == nil {
+			continue
+		}
+
+		for j, info := range set.Infos {
+			if !set.Responses[VoteCounter].Bits.GetIndex(j) {
+				continue
+			}
+
+			prepareMsg, err := getPrepareMsg(info)
+			if err != nil {
+				return nil, err
+			}
+
+			views[offset+j] = prepareMsg.Infos
+		}
+
+		offset += len(set.Infos)
+	}
+
+	return views, nil
 }
 
 func (i *ICSCommittee) ViewInfosAndSignatures() ([]common.Views, [][]byte, error) {
@@ -207,7 +287,7 @@ func (i *ICSCommittee) ViewInfosAndSignatures() ([]common.Views, [][]byte, error
 		}
 
 		for j, info := range set.Infos {
-			if !set.Responses.GetIndex(j) {
+			if !set.Responses[VoteCounter].Bits.GetIndex(j) {
 				continue
 			}
 
@@ -226,16 +306,19 @@ func (i *ICSCommittee) ViewInfosAndSignatures() ([]common.Views, [][]byte, error
 	return views, signs, nil
 }
 
-func (i *ICSCommittee) UpdateSetResponses(position int, responses *common.ArrayOfBits) {
+func (i *ICSCommittee) UpdateSetResponses(ct CounterType, position int, responses *common.ArrayOfBits) {
 	if responses == nil {
 		return
 	}
 
-	i.Sets[position].Responses = responses
-	i.Sets[position].RespCount.Store(int32(responses.TrueIndicesSize()))
+	i.Sets[position].Responses[ct] = &Response{
+		Bits: responses,
+	}
+
+	i.Sets[position].Responses[ct].Count.Store(int32(responses.TrueIndicesSize()))
 }
 
-func (i *ICSCommittee) UpdateValidatorResponse(indices []int) ([][]byte, error) {
+func (i *ICSCommittee) UpdateValidatorResponse(ct CounterType, indices []int) ([][]byte, error) {
 	publicKeys := make([][]byte, 0, len(indices))
 
 	for _, index := range indices {
@@ -255,13 +338,29 @@ func (i *ICSCommittee) UpdateValidatorResponse(indices []int) ([][]byte, error) 
 			}
 
 			publicKeys = append(publicKeys, set.Infos[index].PublicKey)
-			set.UpdateResponse(index, true)
+			set.UpdateResponse(ct, index, true)
 
 			break
 		}
 	}
 
 	return publicKeys, nil
+}
+
+func (i *ICSCommittee) GetSlots(id identifiers.KramaID) []int32 {
+	slots := make([]int32, 0, i.Size())
+
+	for j := 0; j < i.Size(); j++ {
+		for _, info := range i.Sets[j].Infos {
+			if info.KramaID == id {
+				slots = append(slots, int32(j))
+
+				break
+			}
+		}
+	}
+
+	return slots
 }
 
 // GetKramaID returns the slot id, slot index, krama id and bls public key of the validator node based on the index
@@ -342,7 +441,7 @@ func (i *ICSCommittee) HasKramaID(peerID identifiers.KramaID) (int32, []byte, bo
 
 		for j, info := range set.Infos {
 			if info.KramaID == peerID {
-				return int32(offset + j), info.PublicKey, set.Responses.GetIndex(j)
+				return int32(offset + j), info.PublicKey, set.Responses[VoteCounter].Bits.GetIndex(j)
 			}
 		}
 
@@ -370,7 +469,7 @@ func (i *ICSCommittee) GetIndex(peerID identifiers.KramaID) (int, int) {
 }
 
 // GetNodes returns krama id's of all the nodes from the ICSNodes nodeset
-func (i *ICSCommittee) GetNodes(respondedOnly bool) []identifiers.KramaID {
+func (i *ICSCommittee) GetNodes() []identifiers.KramaID {
 	nodes := make(map[identifiers.KramaID]struct{})
 	distinctNodes := make([]identifiers.KramaID, 0)
 
@@ -379,11 +478,7 @@ func (i *ICSCommittee) GetNodes(respondedOnly bool) []identifiers.KramaID {
 			continue
 		}
 
-		for index, info := range nodeSet.Infos {
-			if respondedOnly && !nodeSet.Responses.GetIndex(index) {
-				continue
-			}
-
+		for _, info := range nodeSet.Infos {
 			if _, ok := nodes[info.KramaID]; ok {
 				continue
 			}
@@ -397,7 +492,7 @@ func (i *ICSCommittee) GetNodes(respondedOnly bool) []identifiers.KramaID {
 	return distinctNodes
 }
 
-func (i *ICSCommittee) GetInactiveNodes() []identifiers.KramaID {
+func (i *ICSCommittee) GetInactiveNodes(ct CounterType) []identifiers.KramaID {
 	nodes := make(map[identifiers.KramaID]struct{})
 	distinctNodes := make([]identifiers.KramaID, 0)
 
@@ -407,7 +502,7 @@ func (i *ICSCommittee) GetInactiveNodes() []identifiers.KramaID {
 		}
 
 		for index, info := range nodeSet.Infos {
-			if nodeSet.Responses.GetIndex(index) {
+			if nodeSet.Responses[ct].Bits.GetIndex(index) {
 				continue
 			}
 
@@ -425,7 +520,7 @@ func (i *ICSCommittee) GetInactiveNodes() []identifiers.KramaID {
 }
 
 // GetVoteset returns combined voteset of all the nodes from the ICSCommittee
-func (i *ICSCommittee) GetVoteset() *common.ArrayOfBits {
+func (i *ICSCommittee) GetVoteset(ct CounterType) *common.ArrayOfBits {
 	voteSet := common.NewArrayOfBits(i.totalNodes)
 
 	index := 0
@@ -433,7 +528,7 @@ func (i *ICSCommittee) GetVoteset() *common.ArrayOfBits {
 	for _, nodeSet := range i.Sets {
 		if nodeSet != nil {
 			for j := 0; j < len(nodeSet.Infos); j++ {
-				voteSet.SetIndex(index+j, nodeSet.Responses.GetIndex(j))
+				voteSet.SetIndex(index+j, nodeSet.Responses[ct].Bits.GetIndex(j))
 			}
 
 			index += len(nodeSet.Infos)
@@ -445,18 +540,39 @@ func (i *ICSCommittee) GetVoteset() *common.ArrayOfBits {
 
 // GetRespondedNodeCount returns count of nodes that responded from selected ICSNodes
 // between start and end indexes (inclusive)
-func (i *ICSCommittee) GetRespondedNodeCount(start, end int) (count int) {
+func (i *ICSCommittee) GetRespondedNodeCount(ct CounterType, start, end int) (count int) {
 	for j := start; j <= end; j++ {
 		if i.Sets[j] != nil {
-			count += i.Sets[j].GetRespCount()
+			count += i.Sets[j].GetRespCount(ct)
 		}
 	}
 
 	return
 }
 
+// IsSlotsQuorum check's whether slots quorum condition are satisfied, slot here refers to the participant's nodeset
+func (i *ICSCommittee) IsSlotsQuorum(slots []int32) bool {
+	for _, j := range slots {
+		responses := 0
+		setSize := 0
+
+		if i.Sets[j] == nil {
+			continue
+		}
+
+		responses += i.Sets[j].GetRespCount(MajorityCounter)
+		setSize += int(i.Sets[j].SetSizeWithOutDelta)
+
+		if setSize > 0 && responses < setSize*2/3+1 {
+			return false
+		}
+	}
+
+	return true
+}
+
 // IsContextQuorum check's whether context quorum condition is satisfied or not
-func (i *ICSCommittee) IsContextQuorum() bool {
+func (i *ICSCommittee) IsContextQuorum(ct CounterType) bool {
 	for j := 0; j < i.Size()-1; j++ {
 		responses := 0
 		setSize := 0
@@ -466,7 +582,7 @@ func (i *ICSCommittee) IsContextQuorum() bool {
 		}
 
 		if i.Sets[j] != nil {
-			responses += i.Sets[j].GetRespCount()
+			responses += i.Sets[j].GetRespCount(ct)
 			setSize += int(i.Sets[j].SetSizeWithOutDelta)
 		}
 
@@ -479,8 +595,8 @@ func (i *ICSCommittee) IsContextQuorum() bool {
 }
 
 // IsRandomQuorum check's whether random quorum condition is satisfied or not
-func (i *ICSCommittee) IsRandomQuorum(requiredRandomNodes int) bool {
-	return i.RandomSet().GetRespCount() >= requiredRandomNodes
+func (i *ICSCommittee) IsRandomQuorum(ct CounterType, requiredRandomNodes int) bool {
+	return i.RandomSet().GetRespCount(ct) >= requiredRandomNodes
 }
 
 func (i *ICSCommittee) RandomSet() *NodeSet {
@@ -515,12 +631,12 @@ func (i *ICSCommittee) Size() int {
 	return i.size
 }
 
-func (i *ICSCommittee) Responses() []*common.ArrayOfBits {
+func (i *ICSCommittee) Responses(ct CounterType) []*common.ArrayOfBits {
 	responses := make([]*common.ArrayOfBits, i.Size())
 
 	for j := 0; j < i.size; j++ {
 		if i.Sets[j] != nil && !i.Sets[j].ExcludedFromICS {
-			responses[j] = i.Sets[j].Responses.Copy()
+			responses[j] = i.Sets[j].Responses[ct].Bits.Copy()
 		}
 	}
 

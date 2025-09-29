@@ -14,6 +14,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/btcsuite/btcd/btcutil/hdkeychain"
+	"github.com/btcsuite/btcd/chaincfg"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/VictoriaMetrics/fastcache"
@@ -788,6 +791,70 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 	return ix
 }
 
+// CreateIXWithParticipants creates ixns with 0th participant as sender, 1 st participants as
+// receiver and remaining participants as extra ones
+func CreateIXWithParticipants(t *testing.T, ps []identifiers.Identifier,
+	sequenceID uint64, params *CreateIxParams,
+) *common.Interaction {
+	t.Helper()
+
+	if len(ps) < 2 {
+		return nil
+	}
+
+	if params == nil {
+		params = &CreateIxParams{}
+	}
+
+	data := &common.IxData{
+		IxOps: []common.IxOpRaw{
+			{
+				Type:    common.IxAssetTransfer,
+				Payload: CreateRawAssetActionPayload(t, ps[1]),
+			},
+		},
+		Participants: []common.IxParticipant{},
+	}
+
+	if params.IxDataCallback != nil {
+		params.IxDataCallback(data)
+	}
+
+	if data.Sender.ID == identifiers.Nil {
+		data.Sender.ID = ps[0]
+		data.Sender.SequenceID = sequenceID
+	}
+
+	AppendParticipantsInIxData(t, data)
+
+	for _, id := range ps[2:] {
+		data.Participants = append(data.Participants, common.IxParticipant{
+			ID:       id,
+			LockType: common.MutateLock,
+		})
+	}
+
+	if len(params.SenderSign) == 0 {
+		params.SenderSign = []byte{}
+	}
+
+	signatures := common.Signatures{
+		{
+			ID:    data.Sender.ID,
+			KeyID: data.Sender.KeyID,
+		},
+	}
+
+	if params.SignaturesCallback != nil {
+		params.SignaturesCallback(data, &signatures)
+	}
+
+	ix, err := common.NewInteraction(*data, signatures)
+	require.NoError(t, err)
+
+	return ix
+}
+
 func Min24Byte(t *testing.T, lastByte byte) [24]byte {
 	t.Helper()
 
@@ -1501,4 +1568,111 @@ func CreateTestValidators(t *testing.T, count int) []*common.Validator {
 	}
 
 	return validators
+}
+
+func GetPrivKeysForTest(t *testing.T, seed []byte) ([]byte, []byte, error) {
+	t.Helper()
+	// Let's derive 'm' in the path
+	masterKey, err := hdkeychain.NewMaster(seed, &chaincfg.MainNetParams) // here key is master key
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Hardened keys index starts from 2147483648 (2^31)
+	// So.,
+	// 44 = 2147483648 + 44 = 2147483692
+	// 6174 = 2147483648 + 6174 = 2147489822
+	igcParams := [2]uint32{2147483692, 2147489822}
+
+	tempKey := masterKey
+	for _, n := range igcParams {
+		tempKey, err = tempKey.Derive(n)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	// Now tempKey points to extended private key at path: m/44'/6174'
+
+	// Deriving MOI Id at m/44'/6174'/0'/0/0
+	moiIDPrivKey := tempKey
+
+	moiIDPath := new([3]uint32)
+	moiIDPath[0] = identifiers.HardenedStartIndex + 0 // m/44'/6174'/0'
+	moiIDPath[1] = 0                                  // m/44'/6174'/0'/0 ie., external
+	moiIDPath[2] = 0                                  // m/44'/6174'/0'/0/0
+
+	for _, n := range moiIDPath {
+		moiIDPrivKey, err = moiIDPrivKey.Derive(n)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+
+	moiPubKeyPoint, err := moiIDPrivKey.Neuter()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	moiIDPubInSecp256k1, err := moiPubKeyPoint.ECPubKey()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	moiIDPubBytes := moiIDPubInSecp256k1.SerializeCompressed()
+
+	// to persist consensus and network private keys
+	var aggPrivKey []byte
+	// Let's derive PrivateKey for signing, so load keyPair at path: m/44'/6174'/5020'/0/n
+	validatorPrivKey := tempKey
+
+	var validatorPath [3]uint32
+	validatorPath[0] = identifiers.HardenedStartIndex + 5020 // hardened
+	validatorPath[1] = 0
+	validatorPath[2] = 0
+
+	for _, n := range validatorPath {
+		validatorPrivKey, err = validatorPrivKey.Derive(n)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	// Now validatorPrivKey points to extended private key at path: m/44'/6174'/5020'/0/n
+
+	// Casting to Elliptic curve Private key
+	privKeyInEC, err := validatorPrivKey.ECPrivKey()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	signingPrivKeyInBytes := privKeyInEC.Serialize()
+
+	aggPrivKey = append(aggPrivKey, signingPrivKeyInBytes...)
+
+	// Let's derive PrivateKey for communication, so load keyPair at path: m/44'/6174'/6020'/0/n
+	ntwPrivKey := tempKey
+
+	var networkPath [3]uint32
+	networkPath[0] = identifiers.HardenedStartIndex + 6020 // hardened
+	networkPath[1] = 0
+	networkPath[2] = 0
+
+	for _, n := range networkPath {
+		ntwPrivKey, err = ntwPrivKey.Derive(n)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	// Now ntwPrivKey points to extended private key at path: m/44'/6174'/6020'/0/n
+
+	// Casting to Elliptic curve Private key
+	nPrivKeyInEC, err := ntwPrivKey.ECPrivKey()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	ntwPrivKeyInBytes := nPrivKeyInEC.Serialize()
+
+	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
+
+	return aggPrivKey, moiIDPubBytes, nil
 }

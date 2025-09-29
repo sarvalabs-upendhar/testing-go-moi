@@ -169,7 +169,7 @@ type store interface {
 }
 
 type ixpool interface {
-	GetIxns(ixHashes common.Hashes) ([]*common.Interaction, []common.Hash)
+	GetIxnsWithMissingIxns(ixHashes common.Hashes) ([]*common.Interaction, []common.Hash)
 }
 
 type p2pServer interface {
@@ -214,6 +214,8 @@ type kramaEngine interface {
 	) (*ktypes.ICSCommittee, error)
 	AddActiveAccounts(lockType common.LockType, clusterID common.ClusterID, ids ...identifiers.Identifier) bool
 	ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier)
+	GetLockedTSFromDB(tsHash common.Hash) (*common.Tesseract, error)
+	DeleteLockedTSInfo(ts *common.Tesseract, fromSyncer bool)
 }
 
 type Syncer struct {
@@ -312,6 +314,10 @@ func NewSyncer(
 	}
 
 	return s, nil
+}
+
+func (s *Syncer) RPCClient() *rpc.Client {
+	return s.rpcClient
 }
 
 func (s *Syncer) addSyncPeersToPeerstore() error {
@@ -931,6 +937,9 @@ func (s *Syncer) jobProcessor(job *AccountSyncJob) error {
 					tsInfo.id(),
 				)
 				if err != nil {
+					s.logger.Debug("failed to check initial tesseract", "err", err,
+						"id", tsInfo.id(), "height", tsInfo.height())
+
 					jobState = Sleep
 
 					return nil
@@ -1899,7 +1908,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			if err = s.fetchTesseractState(
 				msg.id(),
 				msg.tesseract,
-				msg.committee.GetNodes(false),
+				msg.committee.GetNodes(),
 				transition.GetObject(msg.id()),
 			); err != nil {
 				return false, errors.Wrap(err, "failed to fetch tesseract state")
@@ -1915,6 +1924,8 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 		); err != nil {
 			return false, errors.Wrap(err, "failed to add synced tesseract")
 		}
+
+		s.consensus.DeleteLockedTSInfo(msg.tesseract, true)
 
 		if err = s.publishEventTesseractSync(msg.id(), msg.height()); err != nil {
 			s.logger.Error("Failed to publish event lattice sync", "err", err)
@@ -1989,6 +2000,8 @@ func (s *Syncer) executeAndAdd(dirty map[common.Hash][]byte, ts *common.Tesserac
 	if err = s.lattice.AddTesseractWithState(identifiers.Nil, dirty, ts, transition, true); err != nil {
 		return err
 	}
+
+	s.consensus.DeleteLockedTSInfo(ts, true)
 
 	for id, participantState := range ts.Participants() {
 		if err := s.publishEventTesseractSync(id, participantState.Height); err != nil {
@@ -2470,7 +2483,7 @@ func mergeIxns(ixHashes []common.Hash, ixns, nodeIxns []*common.Interaction) ([]
 }
 
 func (s *Syncer) FetchIxns(tsInfo *TesseractInfo) ([]*common.Interaction, error) {
-	ixns, missingIXHashes := s.ixpool.GetIxns(tsInfo.ixnsHashes)
+	ixns, missingIXHashes := s.ixpool.GetIxnsWithMissingIxns(tsInfo.ixnsHashes)
 	if len(missingIXHashes) == 0 {
 		return ixns, nil
 	}

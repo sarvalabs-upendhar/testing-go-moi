@@ -4,6 +4,7 @@ package common
 Most of the types in this file are yet to be finalized.All the below structs are temporary type definitions
 */
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 
@@ -86,6 +87,22 @@ func (h *Hash) UnmarshalText(text []byte) error {
 
 // Hashes are array of hashes
 type Hashes []Hash
+
+func (h Hashes) Len() int {
+	return len(h)
+}
+
+func (h Hashes) Less(i, j int) bool {
+	if polarity := bytes.Compare(h[i].Bytes(), h[j].Bytes()); polarity < 0 {
+		return true
+	}
+
+	return false
+}
+
+func (h Hashes) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
 
 // Bytes returns the POLO serialized bytes of all hashes
 func (h Hashes) Bytes() ([]byte, error) {

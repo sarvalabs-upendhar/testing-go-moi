@@ -82,7 +82,7 @@ func TestFullSync(t *testing.T) {
 			},
 		},
 		clientPM,
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT",
 		nil,
 	)
@@ -94,7 +94,7 @@ func TestFullSync(t *testing.T) {
 		&utils.TypeMux{},
 		newMockAgora(),
 		serverPM,
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"SERVER",
 		nil,
 	)
@@ -182,7 +182,7 @@ func TestFullSync_SyncPeers(t *testing.T) {
 			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			types.NewSlots(2, 3),
+			types.NewSlots(2, 3, hclog.NewNullLogger()),
 			"SERVER"+"-"+strconv.Itoa(i),
 			nil,
 		)
@@ -208,7 +208,7 @@ func TestFullSync_SyncPeers(t *testing.T) {
 			},
 		},
 		pm[3],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT",
 		nil,
 	)
@@ -323,7 +323,7 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 			},
 		},
 		pm[3],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT",
 		nil,
 	)
@@ -336,7 +336,7 @@ func TestFullSync_ChooseBestPeer(t *testing.T) {
 			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			types.NewSlots(2, 3),
+			types.NewSlots(2, 3, hclog.NewNullLogger()),
 			"SERVER"+"-"+strconv.Itoa(i),
 			nil,
 		)
@@ -445,7 +445,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 			},
 		},
 		pm[0],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT",
 		nil,
 	)
@@ -457,7 +457,7 @@ func TestSync_FromBroadcastedTesseract(t *testing.T) {
 		&utils.TypeMux{},
 		newMockAgora(),
 		pm[1],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"SERVER",
 		nil,
 	)
@@ -551,7 +551,7 @@ func TestSync_FromRejoining(t *testing.T) {
 			},
 		},
 		clientPM[0],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT",
 		nil,
 	)
@@ -567,7 +567,7 @@ func TestSync_FromRejoining(t *testing.T) {
 			},
 		},
 		serverPM[0],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"SERVER",
 		nil,
 	)
@@ -639,7 +639,7 @@ func TestSync_FromRejoining(t *testing.T) {
 		&utils.TypeMux{},
 		newMockAgora(),
 		clientDB,
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT-RESTART",
 		nil,
 	)
@@ -718,7 +718,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 			},
 		},
 		pm[0],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT",
 		nil,
 	)
@@ -730,7 +730,7 @@ func TestSync_ThroughExecution(t *testing.T) {
 		&utils.TypeMux{},
 		newMockAgora(),
 		pm[1],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"SERVER",
 		nil,
 	)
@@ -839,7 +839,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 			},
 		},
 		pm[2],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT",
 		func(s *Syncer) {
 			s.accountJobQueue = jq
@@ -854,7 +854,7 @@ func TestFullSync_RemoveBestPeer(t *testing.T) {
 			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			types.NewSlots(2, 3),
+			types.NewSlots(2, 3, hclog.NewNullLogger()),
 			"SERVER"+"-"+strconv.Itoa(i),
 			nil,
 		)
@@ -987,7 +987,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 			},
 		},
 		pm[2],
-		types.NewSlots(2, 3),
+		types.NewSlots(2, 3, hclog.NewNullLogger()),
 		"CLIENT",
 		nil,
 	)
@@ -1000,7 +1000,7 @@ func TestJobProcessor_checkSyncTesseractNotBlocked(t *testing.T) {
 			&utils.TypeMux{},
 			newMockAgora(),
 			pm[i],
-			types.NewSlots(2, 3),
+			types.NewSlots(2, 3, hclog.NewNullLogger()),
 			"SERVER"+"-"+strconv.Itoa(i),
 			nil,
 		)
@@ -1548,7 +1548,7 @@ func TestSyncPeerInPeerstore(t *testing.T) {
 			},
 		},
 		pm,
-		types.NewSlots(0, 0),
+		types.NewSlots(0, 0, hclog.NewNullLogger()),
 		"CLIENT",
 		nil,
 	)

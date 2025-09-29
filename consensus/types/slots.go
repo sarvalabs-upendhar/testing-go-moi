@@ -6,6 +6,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/hashicorp/go-hclog"
+
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -100,7 +102,7 @@ func (info *Slot) ClusterID() common.ClusterID {
 }
 
 func (info *Slot) ViewTimeoutDeadline() time.Time {
-	return info.cs.viewTimeoutDeadline
+	return info.cs.currentView.Deadline()
 }
 
 func (info *Slot) ClusterState() *ClusterState {
@@ -126,15 +128,24 @@ type Slots struct {
 	availableValidatorSlots int
 	activeAccounts          map[identifiers.Identifier][]*LockInfo
 	mtx                     sync.RWMutex
+	logger                  hclog.Logger
 }
 
-func NewSlots(operatorSlots, validatorSlots int) *Slots {
+func NewSlots(operatorSlots, validatorSlots int, logger hclog.Logger) *Slots {
 	return &Slots{
 		slots:                   make(map[common.ClusterID]*Slot),
 		availableOperatorSlots:  operatorSlots,
 		availableValidatorSlots: validatorSlots,
 		activeAccounts:          make(map[identifiers.Identifier][]*LockInfo, 0),
+		logger:                  logger.Named("slots"),
 	}
+}
+
+func (s *Slots) Len() int {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	return len(s.slots)
 }
 
 func (s *Slots) areAccountsActive(ids map[identifiers.Identifier]common.LockType) bool {
@@ -182,10 +193,42 @@ func (s *Slots) AddActiveAccounts(
 	}
 
 	for _, id := range ids {
+		s.logger.Debug("add account lock", "cid", clusterID, "id", id, "lock", lockType)
 		s.addActiveAccount(id, &LockInfo{lockType: lockType, clusterID: clusterID})
 	}
 
 	return true
+}
+
+func (s *Slots) removeAccount(clusterID common.ClusterID, id identifiers.Identifier) {
+	if len(s.activeAccounts[id]) == 0 {
+		return
+	}
+
+	if len(s.activeAccounts[id]) == 1 {
+		s.logger.Debug("remove account lock", "cid", clusterID, "id", id)
+
+		delete(s.activeAccounts, id)
+
+		return
+	}
+
+	infos := s.activeAccounts[id]
+
+	for i := 0; i < len(infos); i++ {
+		if infos[i].clusterID != clusterID {
+			continue
+		}
+
+		s.logger.Debug("remove account lock", "cid", clusterID, "id", id)
+
+		infos[i] = infos[len(infos)-1]
+		infos = infos[:len(infos)-1]
+
+		s.activeAccounts[id] = infos
+
+		return
+	}
 }
 
 func (s *Slots) ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier) {
@@ -193,25 +236,33 @@ func (s *Slots) ClearActiveAccounts(clusterID common.ClusterID, ids ...identifie
 	defer s.mtx.Unlock()
 
 	for _, id := range ids {
-		if len(s.activeAccounts[id]) == 0 {
-			continue
-		}
-
-		if len(s.activeAccounts[id]) == 1 {
-			delete(s.activeAccounts, id)
-		}
-
-		infos := s.activeAccounts[id]
-
-		for i := 0; i < len(infos); i++ {
-			if infos[i].clusterID != clusterID {
-				continue
-			}
-
-			infos[i] = infos[len(infos)-1]
-			infos = infos[:len(infos)-1]
-		}
+		s.removeAccount(clusterID, id)
 	}
+}
+
+func (s *Slots) CleanupSlot(cid common.ClusterID) {
+	s.mtx.Lock()
+	defer func() {
+		s.mtx.Unlock()
+	}()
+
+	if slot, ok := s.slots[cid]; ok {
+		for id := range slot.ps {
+			s.removeAccount(cid, id)
+		}
+
+		close(slot.BftInboundChan)
+		delete(s.slots, cid)
+
+		s.incrementSlots(slot.SlotType)
+	}
+}
+
+func (s *Slots) AreAccountsAvailable(locks map[identifiers.Identifier]common.LockType) bool {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
+	return !s.areAccountsActive(locks)
 }
 
 func (s *Slots) CreateSlotAndLockAccounts(
@@ -234,6 +285,7 @@ func (s *Slots) CreateSlotAndLockAccounts(
 	s.decrementSlots(slotType)
 
 	for id, lockType := range locks {
+		s.logger.Debug("add account lock", "cid", clusterID, "id", id, "lock", lockType)
 		s.addActiveAccount(id, &LockInfo{lockType: lockType, clusterID: clusterID})
 	}
 
@@ -260,24 +312,6 @@ func (s *Slots) areSlotsAvailable(slotType SlotType) bool {
 	}
 
 	return true
-}
-
-func (s *Slots) CleanupSlot(id common.ClusterID) {
-	s.mtx.Lock()
-	defer func() {
-		s.mtx.Unlock()
-	}()
-
-	if slot, ok := s.slots[id]; ok {
-		for id := range slot.ps {
-			delete(s.activeAccounts, id)
-		}
-
-		close(slot.BftInboundChan)
-		delete(s.slots, id)
-
-		s.incrementSlots(slot.SlotType)
-	}
 }
 
 func (s *Slots) decrementSlots(slotType SlotType) {

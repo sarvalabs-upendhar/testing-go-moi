@@ -248,7 +248,7 @@ func (i *IxPool) GetPendingIx(ixHash common.Hash) (*common.Interaction, bool) {
 	return i.allIxs.get(ixHash)
 }
 
-func (i *IxPool) GetIxns(ixHashes common.Hashes) ([]*common.Interaction, []common.Hash) {
+func (i *IxPool) GetIxnsWithMissingIxns(ixHashes common.Hashes) ([]*common.Interaction, []common.Hash) {
 	ixns := make([]*common.Interaction, 0)
 	missingIxnHashes := make([]common.Hash, 0)
 
@@ -264,6 +264,23 @@ func (i *IxPool) GetIxns(ixHashes common.Hashes) ([]*common.Interaction, []commo
 	}
 
 	return ixns, missingIxnHashes
+}
+
+func (i *IxPool) GetIxns(ixHashes common.Hashes) ([]*common.Interaction, bool) {
+	ixns := make([]*common.Interaction, 0)
+
+	for _, ixHash := range ixHashes {
+		ix, found := i.allIxs.get(ixHash)
+		if !found {
+			i.logger.Debug("ixn not found", "ix-hash", ixHash)
+
+			return nil, false
+		}
+
+		ixns = append(ixns, ix)
+	}
+
+	return ixns, true
 }
 
 func (i *IxPool) signalPruning() {

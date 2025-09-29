@@ -172,12 +172,15 @@ func (n *Node) Start() (err error) {
 		return errors.Wrap(err, "failed to start the p2p server")
 	}
 
-	go n.syncer.Start(forage.DefaultMinConnectedPeers)
+	if err := n.syncer.Start(forage.DefaultMinConnectedPeers); err != nil {
+		return err
+	}
 
 	if err = n.ixpool.Start(); err != nil {
 		return err
 	}
 
+	n.kramaEngine.SetRPCClient(n.syncer.RPCClient())
 	n.kramaEngine.Start()
 
 	if err = n.senatus.Start(); err != nil {

@@ -594,7 +594,7 @@ func (kt *KramaTransport) BroadcastMessage(
 
 	cr := kt.contextRouters.get(icsmsg.ClusterID)
 
-	for _, peerID := range cr.committee.GetNodes(true) {
+	for _, peerID := range cr.committee.GetNodes() {
 		if peerID == kt.selfID {
 			continue
 		}
@@ -604,8 +604,8 @@ func (kt *KramaTransport) BroadcastMessage(
 	}
 }
 
-// forwardMsgToEngine forwards a message to the krama engine message channel.
-func (kt *KramaTransport) forwardMsgToEngine(msg *types.ICSMSG) {
+// ForwardMsgToEngine forwards a message to the krama engine message channel.
+func (kt *KramaTransport) ForwardMsgToEngine(msg *types.ICSMSG) {
 	kt.msgsToEngine <- msg
 }
 
@@ -699,7 +699,7 @@ func (kt *KramaTransport) handlePeerMessage(peer *icsPeer) error {
 	case message.PROPOSAL:
 		fallthrough
 	case message.VOTEMSG:
-		kt.forwardMsgToEngine(msg)
+		kt.ForwardMsgToEngine(msg)
 	}
 
 	return nil

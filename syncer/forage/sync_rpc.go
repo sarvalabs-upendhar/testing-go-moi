@@ -172,6 +172,31 @@ func (service *SYNCRPCService) SyncBucketsSince(
 	}
 }
 
+func (service *SYNCRPCService) GetTesseract(
+	ctx context.Context,
+	tsHash common.Hash,
+	resp *networkmsg.TesseractSyncMsg,
+) error {
+	tesseract, err := service.syncer.consensus.GetLockedTSFromDB(tsHash)
+	if err != nil {
+		return err
+	}
+
+	if resp.RawTesseract, err = tesseract.Bytes(); err != nil {
+		return err
+	}
+
+	if resp.Receipts, err = tesseract.Receipts().Bytes(); err != nil {
+		return err
+	}
+
+	if resp.CommitInfo, err = tesseract.CommitInfo().Bytes(); err != nil {
+		return err
+	}
+
+	return err
+}
+
 func (service *SYNCRPCService) GetLatestAccountInfo(
 	ctx context.Context,
 	id identifiers.Identifier,
@@ -202,7 +227,7 @@ func (service *SYNCRPCService) GetIxns(
 	resp *IxnsResponse,
 ) error {
 	if req.TSHash.IsNil() {
-		ixns, _ := service.syncer.ixpool.GetIxns(req.IxnHashes)
+		ixns, _ := service.syncer.ixpool.GetIxnsWithMissingIxns(req.IxnHashes)
 
 		data, err := common.NewInteractionsWithLeaderCheck(false, ixns...).Bytes()
 		if err != nil {

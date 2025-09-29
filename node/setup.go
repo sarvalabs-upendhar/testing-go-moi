@@ -67,7 +67,7 @@ func (n *Node) setupVault() (err error) {
 
 // setupConsensusSlots creates a slots instance with the given operator and validator count
 func (n *Node) setupConsensusSlots() {
-	n.consensusSlots = ktypes.NewSlots(n.cfg.Consensus.OperatorSlotCount, n.cfg.Consensus.ValidatorSlotCount)
+	n.consensusSlots = ktypes.NewSlots(n.cfg.Consensus.OperatorSlotCount, n.cfg.Consensus.ValidatorSlotCount, n.logger)
 }
 
 // setupServer creates new server object and setups it to node
@@ -249,9 +249,12 @@ func (n *Node) setupKramaEngine(sm *state.StateManager) (err error) {
 		n.consensusSlots,
 		crypto.VerifyAggregateSignature,
 		n.compressor,
+		n.cache,
 	); err != nil {
 		return err
 	}
+
+	n.kramaEngine.Init()
 
 	return nil
 }

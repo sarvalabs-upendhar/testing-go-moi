@@ -255,6 +255,7 @@ func DefaultBabylonConfig(path string) *Config {
 			TimeoutPrecommit:      10000,
 			TimeoutPrecommitDelta: 50000,
 			TimeoutCommit:         10000,
+			TimeoutPrepare:        500,
 			Precision:             1000,
 			MessageDelay:          5500,
 			AccountWaitTime:       1500,
@@ -347,6 +348,7 @@ func DefaultDevnetConfig(path string) *Config {
 			TimeoutPrecommit:      10000,
 			TimeoutPrecommitDelta: 50000,
 			TimeoutCommit:         10000,
+			TimeoutPrepare:        500,
 			Precision:             1000,
 			MessageDelay:          5500,
 			AccountWaitTime:       1500,
@@ -456,6 +458,7 @@ type ConsensusConfig struct {
 	TimeoutPrecommit      int64      `json:"timeout_precommit"`
 	TimeoutPrecommitDelta int64      `json:"timeout_precommit_delta"`
 	TimeoutCommit         int64      `json:"timeout_commit"`
+	TimeoutPrepare        int64      `json:"timeout_prepare"`
 	SkipTimeoutCommit     bool       `json:"skip_timeout_commit"`
 	AccountWaitTime       int        `json:"wait_time"`
 	MessageDelay          int64      `json:"message_delay"`

@@ -34,7 +34,6 @@ type RPCTesseract struct {
 	Hash             common.Hash           `json:"hash"`
 	Epoch            *hexutil.Big          `json:"epoch"`
 	TimeStamp        hexutil.Uint64        `json:"time_stamp"`
-	Operator         string                `json:"operator"`
 	FuelUsed         hexutil.Uint64        `json:"fuel_used"`
 	FuelLimit        hexutil.Uint64        `json:"fuel_limit"`
 	InteractionsHash common.Hash           `json:"interactions_hash"`

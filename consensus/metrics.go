@@ -29,6 +29,9 @@ type Metrics struct {
 	CompressionRatio             metrics.Histogram
 	CompressionTime              metrics.Histogram
 	DeCompressionTime            metrics.Histogram
+	TotalJobs                    metrics.Gauge
+	JobProcessingTime            metrics.Histogram
+	JobTimeInQueue               metrics.Histogram
 }
 
 func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics {
@@ -163,6 +166,26 @@ func GetPrometheusMetrics(namespace string, labelsWithValues ...string) *Metrics
 			Help:      "Time taken to decompress proposal payload",
 			Buckets:   []float64{0.1, 0.3, 0.5, 1, 2, 5, 10, 15},
 		}, labels).With(labelsWithValues...),
+		TotalJobs: prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "krama",
+			Name:      "total_jobs",
+			Help:      "Total jobs in the queue",
+		}, labels).With(labelsWithValues...),
+		JobProcessingTime: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "krama",
+			Name:      "job_processing_time",
+			Help:      "Time taken to process the job",
+			Buckets:   []float64{100, 250, 500, 700, 850, 1000, 2000, 3000, 4000, 5000},
+		}, labels).With(labelsWithValues...),
+		JobTimeInQueue: prometheus.NewHistogramFrom(stdprometheus.HistogramOpts{
+			Namespace: namespace,
+			Subsystem: "krama",
+			Name:      "job_time_in_queue",
+			Help:      "Time spent by job in the queue",
+			Buckets:   []float64{100, 250, 500, 700, 850, 1000, 2000, 3000, 4000, 5000},
+		}, labels).With(labelsWithValues...),
 	}
 }
 
@@ -187,6 +210,9 @@ func NilMetrics() *Metrics {
 		CompressionRatio:             discard.NewHistogram(),
 		CompressionTime:              discard.NewHistogram(),
 		DeCompressionTime:            discard.NewHistogram(),
+		TotalJobs:                    discard.NewGauge(),
+		JobProcessingTime:            discard.NewHistogram(),
+		JobTimeInQueue:               discard.NewHistogram(),
 	}
 }
 
@@ -277,4 +303,16 @@ func (metrics *Metrics) captureCompressionTime(compressionTime time.Time) {
 
 func (metrics *Metrics) captureDeCompressionTime(deCompressionTime time.Time) {
 	metrics.DeCompressionTime.Observe(time.Since(deCompressionTime).Seconds())
+}
+
+func (metrics *Metrics) captureTotalJobs(delta float64) {
+	metrics.TotalJobs.Set(delta)
+}
+
+func (metrics *Metrics) captureJobProcessingTime(requestTime time.Time) {
+	metrics.JobProcessingTime.Observe(float64(time.Since(requestTime).Milliseconds()))
+}
+
+func (metrics *Metrics) captureJobTimeInQueue(requestTime time.Time) {
+	metrics.JobTimeInQueue.Observe(float64(time.Since(requestTime).Milliseconds()))
 }

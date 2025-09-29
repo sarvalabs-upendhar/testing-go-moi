@@ -437,7 +437,7 @@ func (cr *ContextRouter) handleICSHave(msg *types.ICSMSG) error {
 	if len(updatedICSHave.Votes) > 0 {
 		msg.DecodedMsg = updatedICSHave
 
-		cr.transport.forwardMsgToEngine(msg)
+		cr.transport.ForwardMsgToEngine(msg)
 
 		if len(updatedICSHave.Votes) != len(icsHave.Votes) {
 			msg.Payload, err = updatedICSHave.Bytes()

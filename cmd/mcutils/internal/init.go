@@ -174,6 +174,7 @@ func CreateConfigFile(datadir string, index int, ipAddr string) []byte {
 			TimeoutPrecommit:      10000,
 			TimeoutPrecommitDelta: 50000,
 			TimeoutCommit:         10000,
+			TimeoutPrepare:        100,
 			Precision:             1000,
 			MessageDelay:          5500,
 			AccountWaitTime:       1500,

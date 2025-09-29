@@ -340,6 +340,7 @@ func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {
 		TimeoutPrecommit:      time.Duration(p.rawCfg.Consensus.TimeoutPrecommit) * time.Millisecond,
 		TimeoutPrecommitDelta: time.Duration(p.rawCfg.Consensus.TimeoutPrecommitDelta) * time.Millisecond,
 		TimeoutCommit:         time.Duration(p.rawCfg.Consensus.TimeoutCommit) * time.Millisecond,
+		TimeoutPrepare:        time.Duration(p.rawCfg.Consensus.TimeoutPrepare) * time.Millisecond,
 		SkipTimeoutCommit:     p.rawCfg.Consensus.SkipTimeoutCommit,
 		AccountWaitTime:       time.Duration(p.rawCfg.Consensus.AccountWaitTime) * time.Millisecond,
 		MessageDelay:          time.Duration(p.rawCfg.Consensus.MessageDelay) * time.Millisecond,

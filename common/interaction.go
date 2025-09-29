@@ -516,9 +516,8 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 	cpyIxData := ixData.Copy()
 	ix := &Interaction{
 		inner: cpyIxData,
-		ops: make([]*IxOp,
-			len(cpyIxData.IxOps)),
-		ps: ixData.ParticipantsInfo(),
+		ops:   make([]*IxOp, len(cpyIxData.IxOps)),
+		ps:    ixData.ParticipantsInfo(),
 	}
 
 	ix.signatures = signatures
@@ -907,6 +906,16 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 
 func (ix *Interaction) Participants() map[identifiers.Identifier]*ParticipantInfo {
 	return ix.ps
+}
+
+func (ix *Interaction) IDs() []identifiers.Identifier {
+	ids := make([]identifiers.Identifier, 0, len(ix.ps))
+
+	for id := range ix.ps {
+		ids = append(ids, id)
+	}
+
+	return ids
 }
 
 func (ix *Interaction) LeaderCandidateAcc() identifiers.Identifier {
@@ -1300,6 +1309,26 @@ func (ixs Interactions) Hashes() Hashes {
 	}
 
 	return hashes
+}
+
+func (ixs Interactions) UniqueIds() []identifiers.Identifier {
+	ids := make(IdentifierList, 0)
+	hasID := make(map[identifiers.Identifier]struct{})
+
+	for _, ixn := range ixs.ixns {
+		for id := range ixn.ps {
+			if _, ok := hasID[id]; ok {
+				continue
+			}
+
+			ids = append(ids, id)
+			hasID[id] = struct{}{}
+		}
+	}
+
+	sort.Sort(ids)
+
+	return ids
 }
 
 func (ixs Interactions) Participants() map[identifiers.Identifier]ParticipantInfo {
