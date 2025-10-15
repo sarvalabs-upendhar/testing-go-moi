@@ -13,18 +13,16 @@ import (
 	"github.com/sarvalabs/go-polo"
 )
 
-func findWinner(msgs []*metaPrepareMsg) identifiers.KramaID {
-	senders := make([]identifiers.KramaID, len(msgs))
-
-	for i, msg := range msgs {
-		senders[i] = msg.sender
+func findWinner(prepareMsgs []*metaPrepareMsg) identifiers.KramaID {
+	for _, prepare := range prepareMsgs {
+		prepare.rankHash = prepare.Hash()
 	}
 
-	sort.Slice(senders, func(i, j int) bool {
-		return senders[i].String() < senders[j].String()
+	sort.Slice(prepareMsgs, func(i, j int) bool {
+		return prepareMsgs[i].rankHash.String() < prepareMsgs[j].rankHash.String()
 	})
 
-	return senders[0]
+	return prepareMsgs[0].sender
 }
 
 // viewTime calculates the timestamp for a given view number.
@@ -144,6 +142,12 @@ func (k *Engine) handler() {
 			k.stopPrepareMsgs = false
 
 			go k.startPrepareTimeoutTimer(prepareTimeOutDeadline)
+
+			for _, msg := range k.futureMsg {
+				k.handleConsensusMessage(msg)
+				k.dequeueFutureMsg()
+			}
+
 			go k.handleNewView(k.ctx, k.currentView)
 		case <-k.prepareTimeout:
 			k.stopPrepareMsgs = true
@@ -198,11 +202,6 @@ func (k *Engine) deleteLockedTesseractInfo(ts *common.Tesseract) bool {
 // handleNewView checks if there are any failed views to handle first. If failed views exist, it processes them.
 // Otherwise, it fetches interactions from the pool and creates a new cluster for the interactions.
 func (k *Engine) handleNewView(ctx context.Context, view *types.View) {
-	for _, msg := range k.futureMsg {
-		k.handleConsensusMessage(msg)
-		k.dequeueFutureMsg()
-	}
-
 	viewID := view.ID()
 
 	proposedTS, err := k.safety.GetFailedViewTS()

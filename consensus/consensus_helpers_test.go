@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sarvalabs/go-polo"
+
 	"github.com/hashicorp/go-hclog"
 
 	"github.com/sarvalabs/go-moi/consensus/kbft"
@@ -1637,4 +1639,13 @@ func ensureResponseMatches(t *testing.T, k *Engine,
 
 		ensureIDsMatch(t, ixns[idx].IDs(), getIDs(prepared))
 	}
+}
+
+func getHash(sender identifiers.KramaID, viewID uint64) common.Hash {
+	polorizer := polo.NewPolorizer()
+
+	polorizer.PolorizeString(string(sender))
+	polorizer.PolorizeUint(viewID)
+
+	return common.GetHash(polorizer.Bytes())
 }

@@ -73,6 +73,8 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 					k.metrics.captureICSCreationFailureCount(1)
 				}
 
+				k.logger.Debug("exiting ics handler due to timeout", "cluster-id", clusterID)
+
 				return
 			}
 
@@ -86,7 +88,7 @@ func (k *Engine) icsHandler(ctx context.Context, clusterID common.ClusterID) {
 			}
 		case err := <-slot.BftStopChan:
 			if err != nil {
-				k.logger.Error("error occurred in bft", "cluster-id", clusterID)
+				k.logger.Error("error occurred in bft", "cluster-id", clusterID, "error", err)
 
 				k.metrics.captureAgreementFailureCount(1)
 			}
@@ -593,6 +595,8 @@ func (k *Engine) handlePrepared(
 	}
 
 	if status == invalidLock {
+		k.logger.Debug("invalid lock", "cluster-id", clusterID)
+
 		slot.BftOutboundChan <- ktypes.ConsensusMessage{
 			PeerID:  slot.ClusterState().SelfKramaID(),
 			Payload: ktypes.NewProposal(preparedQc, ts),
@@ -677,7 +681,9 @@ func (k *Engine) sendPrepare(ctx context.Context, cs *ktypes.ClusterState) error
 		return nil
 	}
 
-	k.logger.Error("failed to send prepare msg", "count", failedCount)
+	if failedCount > 0 {
+		k.logger.Error("failed to send prepare msg", "count", failedCount)
+	}
 
 	if err := k.publishEventPrepare(prepareMsg); err != nil {
 		k.logger.Error("failed to publish prepare msg event", "err", err)

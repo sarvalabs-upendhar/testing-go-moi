@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/sarvalabs/go-polo"
+
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/sarvalabs/go-moi/network/rpc"
 
@@ -184,6 +186,16 @@ type metaPrepareMsg struct {
 	clusterID   common.ClusterID
 	msgSent     bool
 	shouldReply bool
+	rankHash    common.Hash
+}
+
+func (m *metaPrepareMsg) Hash() common.Hash {
+	polorizer := polo.NewPolorizer()
+
+	polorizer.PolorizeString(string(m.sender))
+	polorizer.PolorizeUint(m.msg.View)
+
+	return common.GetHash(polorizer.Bytes())
 }
 
 type Engine struct {

@@ -3695,10 +3695,14 @@ func TestProcessPrepareMsgs(t *testing.T) {
 	ids := tests.GetIdentifiers(t, 8)
 	nodes := tests.RandomKramaIDs(t, 4)
 	_, vaults := createTestNodeSet(t, 1)
+	viewID := uint64(tests.GetRandomNumber(t, 10000000000))
 
 	var winner int
 
-	if nodes[0].String() < nodes[1].String() {
+	h1 := getHash(nodes[0], viewID)
+	h2 := getHash(nodes[1], viewID)
+
+	if h1.String() < h2.String() {
 		winner = 0
 	} else {
 		winner = 1
@@ -3777,6 +3781,7 @@ func TestProcessPrepareMsgs(t *testing.T) {
 				msg := &metaPrepareMsg{
 					msg: &types.Prepare{
 						Ixns: []common.Hash{ixn.Hash()},
+						View: viewID,
 					},
 					ixns:        &prepareIxns,
 					sender:      testcase.senders[i],

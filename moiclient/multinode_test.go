@@ -176,6 +176,8 @@ func (tm *TestMultiNode) TestConnections() {
 }
 
 func (tm *TestMultiNode) TestNodeMetaInfo() {
+	time.Sleep(3 * time.Second) // Inorder to write peer entries into db, we need to wait 3-5 sec
+
 	testCases := []struct {
 		name          string
 		nodeArgs      *rpcargs.NodeMetaInfoArgs

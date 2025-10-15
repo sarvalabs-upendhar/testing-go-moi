@@ -789,7 +789,8 @@ func (kbft *KBFT) Start(slot *ktypes.Slot) {
 }
 
 func (kbft *KBFT) Close(err error) {
-	kbft.logger.Info("Closing KBFT", "err", err)
+	kbft.logger.Info("Closing KBFT", "status", kbft.Step, "err", err,
+		"isOperator", kbft.isLeader(kbft.View, kbft.id))
 
 	select {
 	case kbft.closeChan <- err:
