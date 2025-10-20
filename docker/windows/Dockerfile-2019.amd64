@@ -13,7 +13,7 @@ RUN $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine')
 
 # Install MinGW (GCC)
 RUN choco install -y git mingw
-RUN choco install -y golang --version=1.22
+RUN choco install -y golang --version=1.24.9
 # Refresh environment variables again
 RUN $env:Path = [System.Environment]::GetEnvironmentVariable('Path','Machine')
 

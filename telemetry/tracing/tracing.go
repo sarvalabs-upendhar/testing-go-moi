@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
-
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -13,12 +12,15 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 	traceapi "go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/trace/embedded"
+	"go.opentelemetry.io/otel/trace/noop"
 
 	"github.com/sarvalabs/go-moi/common/config"
 )
 
 // shutdownTracerProvider adds a shutdown method for tracer providers.
 type shutdownTracerProvider interface {
+	embedded.TracerProvider
 	Tracer(instrumentationName string, opts ...traceapi.TracerOption) traceapi.Tracer
 	Shutdown(ctx context.Context) error
 }
@@ -78,7 +80,7 @@ func NewTracerProvider(
 	kramaID identifiers.KramaID,
 ) (shutdownTracerProvider, error) {
 	if !enableTracing {
-		return &noopShutdownTracerProvider{TracerProvider: traceapi.NewNoopTracerProvider()}, nil
+		return &noopShutdownTracerProvider{TracerProvider: noop.NewTracerProvider()}, nil
 	}
 
 	exporters, err := buildExporters(ctx, otlpAddress, token)

@@ -142,7 +142,7 @@ func pingError(err error) chan PingResponse {
 
 // Ping pings the remote peer until the context is canceled, returns the RTT, KramaID or error.
 func Ping(ctx context.Context, h host.Host, p peer.ID) <-chan PingResponse {
-	s, err := h.NewStream(network.WithUseTransient(ctx, "ping"), p, config.MOIPingStream)
+	s, err := h.NewStream(network.WithAllowLimitedConn(ctx, "ping"), p, config.MOIPingStream)
 	if err != nil {
 		return pingError(err)
 	}

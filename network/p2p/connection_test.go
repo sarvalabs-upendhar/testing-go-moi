@@ -797,7 +797,7 @@ func TestConnectAndRegisterPeer_Connection_Limit(t *testing.T) {
 				servers[3].ConnManager.updateConnCount(network.DirInbound, 0, 1)
 			},
 			rtt:         50,
-			expectedErr: errors.New("stream reset"),
+			expectedErr: &network.StreamError{ErrorCode: 0, Remote: true},
 		},
 	}
 
@@ -815,7 +815,7 @@ func TestConnectAndRegisterPeer_Connection_Limit(t *testing.T) {
 
 			if test.expectedErr != nil {
 				require.Error(t, err)
-				require.Equal(t, test.expectedErr, err)
+				require.ErrorContains(t, err, test.expectedErr.Error())
 
 				return
 			}

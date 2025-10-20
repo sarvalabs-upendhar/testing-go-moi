@@ -57,7 +57,7 @@ var (
 	commitHash       = flag.String("commit-hash", "", "enter the commit hash of the repo to be deployed")
 	cleanDB          = flag.Bool("clean-db", true, "specify whether to clean the database")
 	logLevel         = flag.String("log-level", "TRACE", "enter the log level")
-	debug            = flag.Bool("debug", false, "specify whether to collect logs")
+	debug            = flag.Bool("debug", true, "specify whether to collect logs")
 	shouldExecute    = flag.Bool("should-execute", true, "specify whether to execute tesseract while syncing")
 	oldState         = flag.Bool("old-state", false, "specify whether to run on previous state")
 	enableSortition  = flag.Bool("enable-sortition", false, "specify whether to use sortition for operator selection")

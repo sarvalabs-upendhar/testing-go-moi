@@ -305,7 +305,7 @@ func (p *Params) getVaultConfig() *crypto.VaultConfig {
 }
 
 func (p *Params) getNetworkConfig() *config.NetworkConfig {
-	return &config.NetworkConfig{
+	nc := &config.NetworkConfig{
 		BootstrapPeers:     p.BootstrapPeers,
 		TrustedPeers:       p.NetworkTrustedPeers,
 		StaticPeers:        p.StaticPeers,
@@ -328,6 +328,13 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		DiscoveryInterval:  p.rawCfg.Network.DiscoveryInterval,
 		EnableIPColocation: p.rawCfg.Network.EnableIPColocation,
 	}
+
+	if p.rawCfg.NetworkID == config.Devnet || p.rawCfg.NetworkID == config.Local {
+		nc.ConnRateLimiter = config.DevnetRateLimiter
+		nc.IPV4ConnLimitPerSubnet = config.DevnetIpv4ConnLimitPerSubnet
+	}
+
+	return nc
 }
 
 func (p *Params) getConsensusConfig(path string) *config.ConsensusConfig {

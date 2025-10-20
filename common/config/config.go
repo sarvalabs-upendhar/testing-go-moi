@@ -5,6 +5,8 @@ import (
 	"net"
 	"time"
 
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
+	"github.com/libp2p/go-libp2p/x/rate"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	maddr "github.com/multiformats/go-multiaddr"
@@ -86,16 +88,19 @@ type NetworkConfig struct {
 	// this will be removed
 	NetworkSize uint64
 
-	NoDiscovery        bool
-	RefreshSenatus     bool
-	InboundConnLimit   int64
-	OutboundConnLimit  int64
-	MinimumConnections int
-	MaximumConnections int
-	AllowIPv6Addresses bool
-	DisablePrivateIP   bool
-	DiscoveryInterval  time.Duration
-	EnableIPColocation bool
+	NoDiscovery            bool
+	RefreshSenatus         bool
+	InboundConnLimit       int64
+	OutboundConnLimit      int64
+	MinimumConnections     int
+	MaximumConnections     int
+	AllowIPv6Addresses     bool
+	DisablePrivateIP       bool
+	DiscoveryInterval      time.Duration
+	EnableIPColocation     bool
+	ConnRateLimiter        *rate.Limiter
+	IPV4ConnLimitPerSubnet []rcmgr.ConnLimitPerSubnet
+	IPV6ConnLimitPerSubnet []rcmgr.ConnLimitPerSubnet
 }
 
 type ConsensusConfig struct {

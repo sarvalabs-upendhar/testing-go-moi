@@ -881,6 +881,14 @@ type mockConn struct {
 	streams      []network.Stream
 }
 
+func (m mockConn) CloseWithError(errCode network.ConnErrorCode) error {
+	panic("implement me")
+}
+
+func (m mockConn) As(target any) bool {
+	panic("implement me")
+}
+
 func (m mockConn) IsClosed() bool {
 	panic("implement me")
 }

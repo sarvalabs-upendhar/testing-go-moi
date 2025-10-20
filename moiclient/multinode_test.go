@@ -67,7 +67,7 @@ func (tm *TestMultiNode) SetupSuite() {
 
 	d := bgclient.DefaultClusterConfig()
 
-	d.WithLogs = false
+	d.WithLogs = true
 	d.WithStdout = false
 	d.LogLevel = "TRACE"
 	d.BootNodePort = 24000

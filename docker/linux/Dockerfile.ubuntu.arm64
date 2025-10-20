@@ -1,5 +1,5 @@
 # Build stage (Golang for ARM64)
-FROM --platform=linux/arm64 golang:1.22.8-bullseye AS build
+FROM --platform=linux/arm64 golang:1.24.9 AS build
 
 # Essential packages for build dependencies
 ENV DEBIAN_FRONTEND=noninteractive \

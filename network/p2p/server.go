@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
@@ -112,7 +113,7 @@ func NewServer(
 		rpcServers:          make(map[protocol.ID]*rpc.Server),
 		vault:               vault,
 		metrics:             metrics,
-		basicSeqnoValidator: pubsub.NewBasicSeqnoValidator(newpeerMsgNonceStore()),
+		basicSeqnoValidator: pubsub.NewBasicSeqnoValidator(newpeerMsgNonceStore(), slog.Default()),
 		msgs:                make(chan *networkmsg.Message, 100),
 		inboundStreams:      make(map[peer.ID]network.Stream),
 	}
@@ -225,7 +226,17 @@ func (s *Server) getLibp2pHostOptions() (libp2p.Option, error) {
 		return nil, err
 	}
 
-	resourceManager, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits))
+	rmOpts := make([]rcmgr.Option, 0)
+
+	if s.cfg.ConnRateLimiter != nil {
+		rmOpts = append(rmOpts, rcmgr.WithConnRateLimiters(s.cfg.ConnRateLimiter))
+	}
+
+	if len(s.cfg.IPV4ConnLimitPerSubnet) > 0 || len(s.cfg.IPV6ConnLimitPerSubnet) == 0 {
+		rmOpts = append(rmOpts, rcmgr.WithLimitPerSubnet(s.cfg.IPV4ConnLimitPerSubnet, s.cfg.IPV6ConnLimitPerSubnet))
+	}
+
+	resourceManager, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits), rmOpts...)
 	if err != nil {
 		return nil, err
 	}

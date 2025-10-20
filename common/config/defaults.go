@@ -2,9 +2,12 @@ package config
 
 import (
 	"math/big"
+	"net/netip"
 	"strconv"
 	"time"
 
+	rcmgr "github.com/libp2p/go-libp2p/p2p/host/resource-manager"
+	"github.com/libp2p/go-libp2p/x/rate"
 	"github.com/sarvalabs/go-moi/crypto"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -96,3 +99,54 @@ func (n NetworkID) String() string {
 func (n NetworkID) IsTestnet() bool {
 	return n != Local && n != Devnet
 }
+
+var (
+	DevnetMaxConcurrentConns = 20
+
+	DevnetIPv4SubnetLimits = []rate.SubnetLimit{
+		{
+			PrefixLength: 32,
+			Limit:        rate.Limit{RPS: 0.2, Burst: 2 * DevnetMaxConcurrentConns},
+		},
+	}
+
+	DevnetIPv6SubnetLimits = []rate.SubnetLimit{
+		{
+			PrefixLength: 56,
+			Limit:        rate.Limit{RPS: 0.2, Burst: 2 * DevnetMaxConcurrentConns},
+		},
+		{
+			PrefixLength: 48,
+			Limit:        rate.Limit{RPS: 0.5, Burst: 10 * DevnetMaxConcurrentConns},
+		},
+	}
+
+	// DevnetNetworkPrefixLimits ensure that all connections on localhost always succeed
+	DevnetNetworkPrefixLimits = []rate.PrefixLimit{
+		{
+			Prefix: netip.MustParsePrefix("127.0.0.0/8"),
+			Limit:  rate.Limit{},
+		},
+		{
+			Prefix: netip.MustParsePrefix("::1/128"),
+			Limit:  rate.Limit{},
+		},
+	}
+
+	DevnetRateLimiter = &rate.Limiter{
+		NetworkPrefixLimits: DevnetNetworkPrefixLimits,
+		GlobalLimit:         rate.Limit{},
+		SubnetRateLimiter: rate.SubnetLimiter{
+			IPv4SubnetLimits: DevnetIPv4SubnetLimits,
+			IPv6SubnetLimits: DevnetIPv6SubnetLimits,
+			GracePeriod:      1 * time.Minute,
+		},
+	}
+
+	DevnetIpv4ConnLimitPerSubnet = []rcmgr.ConnLimitPerSubnet{
+		{
+			PrefixLength: 32,
+			ConnCount:    60,
+		},
+	}
+)

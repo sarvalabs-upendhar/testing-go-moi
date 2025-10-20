@@ -5,6 +5,7 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"log"
+	"net/netip"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,8 +13,10 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
+	"github.com/libp2p/go-libp2p/x/rate"
+
 	"github.com/pkg/errors"
-	"github.com/sarvalabs/go-moi/cmd/common"
+	cmdCommon "github.com/sarvalabs/go-moi/cmd/common"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/multiformats/go-multiaddr"
@@ -44,6 +47,49 @@ var (
 	peers         string
 )
 
+var (
+	BootNodeMaxConcurrentConns = 50
+	BootNodeConnLimitForSubnet = 30
+	BootNodeIPv4SubnetLimits   = []rate.SubnetLimit{
+		{
+			PrefixLength: 32,
+			Limit:        rate.Limit{RPS: 0.2, Burst: 2 * BootNodeMaxConcurrentConns},
+		},
+	}
+
+	BootNodeIPv6SubnetLimits = []rate.SubnetLimit{
+		{
+			PrefixLength: 56,
+			Limit:        rate.Limit{RPS: 0.2, Burst: 2 * BootNodeMaxConcurrentConns},
+		},
+		{
+			PrefixLength: 48,
+			Limit:        rate.Limit{RPS: 0.5, Burst: 10 * BootNodeMaxConcurrentConns},
+		},
+	}
+
+	BootNodeNetworkPrefixLimits = []rate.PrefixLimit{
+		{
+			Prefix: netip.MustParsePrefix("127.0.0.0/8"),
+			Limit:  rate.Limit{},
+		},
+		{
+			Prefix: netip.MustParsePrefix("::1/128"),
+			Limit:  rate.Limit{},
+		},
+	}
+
+	BootNodeRateLimiter = &rate.Limiter{
+		NetworkPrefixLimits: BootNodeNetworkPrefixLimits,
+		GlobalLimit:         rate.Limit{},
+		SubnetRateLimiter: rate.SubnetLimiter{
+			IPv4SubnetLimits: BootNodeIPv4SubnetLimits,
+			IPv6SubnetLimits: BootNodeIPv6SubnetLimits,
+			GracePeriod:      1 * time.Minute,
+		},
+	}
+)
+
 func GetBootNodeCommand() *cobra.Command {
 	bootnodeCmd := &cobra.Command{
 		Use:   "bootnode",
@@ -57,9 +103,9 @@ func GetBootNodeCommand() *cobra.Command {
 }
 
 func parseBootNodeFlags(cmd *cobra.Command) {
-	ipv4Addr, err := common.GetIP()
+	ipv4Addr, err := cmdCommon.GetIP()
 	if err != nil {
-		common.Err(errors.Wrap(err, "failed to fetch IP addr"))
+		cmdCommon.Err(errors.Wrap(err, "failed to fetch IP addr"))
 	}
 
 	cmd.PersistentFlags().IntVar(&portNumber, "port", 4001, "Provide the port number.")
@@ -125,7 +171,14 @@ func startBootNode() {
 		panic(err)
 	}
 
-	resourceManager, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits))
+	resourceManager, err := rcmgr.NewResourceManager(rcmgr.NewFixedLimiter(rcmgr.InfiniteLimits),
+		rcmgr.WithConnRateLimiters(BootNodeRateLimiter),
+		rcmgr.WithLimitPerSubnet([]rcmgr.ConnLimitPerSubnet{
+			{
+				PrefixLength: 32,
+				ConnCount:    BootNodeConnLimitForSubnet,
+			},
+		}, nil))
 	if err != nil {
 		panic(err)
 	}

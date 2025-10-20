@@ -304,14 +304,16 @@ func (cm *ConnectionManager) connectToBootStrapNodes() error {
 	for _, bootstrapPeer := range cm.server.cfg.BootstrapPeers {
 		for i := 0; i < retryCount; i++ {
 			if err := cm.connectToMaddr(bootstrapPeer); err != nil {
-				cm.server.logger.Error("Bootstrap connection failed", "peer", bootstrapPeer, "err", err)
+				cm.server.logger.Error("Bootstrap connection failed", "peer", bootstrapPeer.String(), "err", err)
 
 				time.Sleep(5 * time.Second)
 
 				continue
 			}
 
-			cm.server.logger.Info("Connection established with bootstrap node", "peer", bootstrapPeer)
+			cm.server.logger.Info(
+				"Connection established with bootstrap node",
+				"peer", bootstrapPeer.String())
 
 			bootstrapConnections += 1
 
