@@ -22,6 +22,7 @@ var (
 	StateElement   = pisa.ArtifactElementState.String()
 	EventElement   = pisa.ArtifactElementEvent.String()
 	ExternElement  = pisa.ArtifactElementExtern.String()
+	AssetElement   = pisa.ArtifactElementAsset.String()
 )
 
 var ElementMetadata = map[engineio.ElementKind]struct {
@@ -36,6 +37,7 @@ var ElementMetadata = map[engineio.ElementKind]struct {
 	StateElement:   {pisa.ArtifactElementState, func() any { return new(StateSchema) }},
 	EventElement:   {pisa.ArtifactElementEvent, func() any { return new(EventSchema) }},
 	ExternElement:  {pisakind: pisa.ArtifactElementExtern, generator: func() any { return new(ExternSchema) }},
+	AssetElement:   {pisakind: pisa.ArtifactElementAsset, generator: func() any { return new(AssetSchema) }},
 }
 
 type ConstantSchema struct {
@@ -98,6 +100,10 @@ func StateModeToKind(mode string) pisa.StateKind {
 	default:
 		return -1
 	}
+}
+
+type AssetSchema struct {
+	Engine string `json:"engine" yaml:"engine"`
 }
 
 type ExternSchema struct {

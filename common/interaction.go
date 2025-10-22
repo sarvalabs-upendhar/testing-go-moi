@@ -185,7 +185,6 @@ func (ixData *IxData) ParticipantsInfo() map[identifiers.Identifier]*Participant
 		psInfo[ps.ID] = &ParticipantInfo{
 			LockType: ps.LockType,
 			ID:       ps.ID,
-			AccType:  RegularAccount,
 		}
 
 		if ps.ID == ixData.Sender.ID {
@@ -267,16 +266,6 @@ func (op *IxOp) GetAssetActionPayload() (*AssetActionPayload, error) {
 	return payload.Action, nil
 }
 
-// GetAssetSupplyPayload returns the asset supply payload if present, or an error if not found.
-func (op *IxOp) GetAssetSupplyPayload() (*AssetSupplyPayload, error) {
-	payload := op.getAssetPayload()
-	if payload == nil || payload.Supply == nil {
-		return nil, errors.New("payload not found")
-	}
-
-	return payload.Supply, nil
-}
-
 // getGuardianPayload returns the guardian payload if present, or an error if not found.
 func (op *IxOp) getGuardianPayload() *GuardianPayload {
 	// If payload has been decoded, return the guardian form
@@ -329,16 +318,6 @@ func (op *IxOp) Manifest() []byte {
 	return payload.Manifest
 }
 
-// LogicID returns the logic identifier from the logic payload.
-func (op *IxOp) LogicID() identifiers.LogicID {
-	payload, err := op.GetLogicPayload()
-	if err != nil {
-		return identifiers.Nil
-	}
-
-	return payload.Logic
-}
-
 // Target returns the id of the op beneficiary.
 func (op *IxOp) Target() identifiers.Identifier {
 	// Based on the op type return the id
@@ -346,116 +325,114 @@ func (op *IxOp) Target() identifiers.Identifier {
 		return op.target
 	}
 
-	switch op.Type() {
-	case IxParticipantCreate:
-		payload, err := op.GetParticipantCreatePayload()
-		if err != nil {
-			panic(err)
-		}
-
-		op.target = payload.ID
-	case IxAssetCreate:
-		payload, err := op.GetAssetCreatePayload()
-		if err != nil {
-			panic(err)
-		}
-
-		assetID, _ := identifiers.GenerateAssetIDv0(
-			NewAccountID(op.Sender()),
-			0,
-			uint16(payload.Standard),
-			payload.Flags()...,
-		)
-
-		op.target = assetID.AsIdentifier()
-	case IxAssetTransfer, IxAssetApprove, IxAssetRevoke, IxAssetLockup, IxAssetRelease:
-		payload, err := op.GetAssetActionPayload()
-		if err != nil {
-			panic(err)
-		}
-
-		op.target = payload.Beneficiary
-	case IXAccountInherit:
-		payload, err := op.GetAccountInheritPayload()
-		if err != nil {
-			panic(err)
-		}
-
-		op.target, _ = op.SenderID().DeriveVariant(payload.SubAccountIndex, nil, nil)
-	case IxAssetMint, IxAssetBurn:
-		payload, err := op.GetAssetSupplyPayload()
-		if err != nil {
-			panic(err)
-		}
-
-		op.target = payload.AssetID.AsIdentifier()
-	case IxLogicDeploy:
-		payload, err := op.GetLogicPayload()
-		if err != nil {
-			panic(err)
-		}
-
-		logicID, _ := identifiers.GenerateLogicIDv0(
-			NewAccountID(op.Sender()),
-			0,
-			payload.Flags()...,
-		)
-
-		op.target = logicID.AsIdentifier()
-	case IxLogicInvoke, IxLogicEnlist:
-		payload, err := op.GetLogicPayload()
-		if err != nil {
-			panic(err)
-		}
-
-		op.target = payload.Logic.AsIdentifier()
-
-	default:
-		panic(ErrInvalidInteractionType)
-	}
-
 	return op.target
-}
-
-// Benefactor returns the benefactor's id if applicable; otherwise, returns nil id.
-func (op *IxOp) Benefactor() identifiers.Identifier {
-	if op.Type() == IxAssetTransfer || op.Type() == IxAssetRelease {
-		payload, err := op.GetAssetActionPayload()
-		if err != nil {
-			panic(err)
-		}
-
-		return payload.Benefactor
-	}
-
-	return identifiers.Nil
 }
 
 // Following methods implement engineio.Action interface
 
 func (op *IxOp) Callsite() string {
-	payload, err := op.GetLogicPayload()
-	if err != nil {
-		// Panic here because the caller must ensure the op is of type IxLogicInvoke or IxLogicEnlist before calling
-		panic("failed to get logic payload")
+	callSite := ""
+
+	switch op.Type() {
+	case IxParticipantCreate:
+		payload, err := op.GetParticipantCreatePayload()
+		if err != nil {
+			panic("failed to get participant payload")
+		}
+
+		callSite = payload.Value.Callsite
+	case IxAccountInherit:
+		payload, err := op.GetAccountInheritPayload()
+		if err != nil {
+			panic("failed to get account inheritance payload")
+		}
+
+		callSite = payload.Value.Callsite
+
+	case IxAssetCreate:
+		payload, err := op.GetAssetCreatePayload()
+		if err != nil {
+			panic("failed to get asset create payload")
+		}
+
+		if payload.Logic != nil {
+			callSite = payload.Logic.Callsite
+		}
+
+	case IxAssetAction:
+		payload, err := op.GetAssetActionPayload()
+		if err != nil {
+			panic("failed to get asset action payload")
+		}
+
+		callSite = payload.Callsite
+	case IxLogicInvoke, IxLogicDeploy:
+		payload, err := op.GetLogicPayload()
+		if err != nil {
+			panic("failed to get asset action payload")
+		}
+
+		callSite = payload.Callsite
+	default:
+		return callSite
 	}
 
-	return payload.Callsite
+	return callSite
 }
 
 func (op *IxOp) Calldata() polo.Document {
-	payload, err := op.GetLogicPayload()
-	if err != nil {
-		panic("failed to get logic payload")
+	var callData []byte
+
+	switch op.Type() {
+	case IxParticipantCreate:
+		payload, err := op.GetParticipantCreatePayload()
+		if err != nil {
+			panic("failed to get participant payload")
+		}
+
+		callData = payload.Value.Calldata
+	case IxAccountInherit:
+		payload, err := op.GetAccountInheritPayload()
+		if err != nil {
+			panic("failed to get account inheritance payload")
+		}
+
+		callData = payload.Value.Calldata
+
+	case IxAssetCreate:
+		payload, err := op.GetAssetCreatePayload()
+		if err != nil {
+			panic("failed to get asset create payload")
+		}
+
+		if payload.Logic != nil {
+			callData = payload.Logic.Calldata
+		}
+
+	case IxAssetAction:
+		payload, err := op.GetAssetActionPayload()
+		if err != nil {
+			panic("failed to get asset action payload")
+		}
+
+		callData = payload.Calldata
+	case IxLogicInvoke, IxLogicDeploy:
+		payload, err := op.GetLogicPayload()
+		if err != nil {
+			panic("failed to get asset action payload")
+		}
+
+		callData = payload.Calldata
+	default:
 	}
 
 	doc := make(polo.Document)
 
-	if len(payload.Calldata) == 0 {
+	if len(callData) == 0 {
 		return doc
 	}
 
-	if err = polo.Depolorize(&doc, payload.Calldata); err != nil {
+	if err := polo.Depolorize(&doc, callData); err != nil {
 		return doc
 	}
 
@@ -471,6 +448,10 @@ func (op *IxOp) Identifier() [32]byte {
 }
 
 func (op *IxOp) Origin() [32]byte {
+	return op.Sender().ID
+}
+
+func (op *IxOp) Caller() [32]byte {
 	return op.Sender().ID
 }
 
@@ -559,7 +540,6 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			_, ok := ix.ps[SargaAccountID]
 			if !ok {
 				ix.ps[SargaAccountID] = &ParticipantInfo{
-					AccType:   SargaAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
@@ -567,16 +547,26 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				}
 			}
 
-			info, ok := ix.ps[psCreatePayload.ID]
+			_, ok = ix.ps[psCreatePayload.ID]
 			if !ok {
-				return nil, ErrMissingBeneficiary
+				ix.ps[psCreatePayload.ID] = &ParticipantInfo{
+					IsSigner:  false,
+					LockType:  MutateLock,
+					IsGenesis: true,
+					ID:        psCreatePayload.ID,
+				}
 			}
 
-			info.IsSigner = false
-			info.AccType = RegularAccount
-			info.IsGenesis = true
+			if psCreatePayload.Value == nil {
+				return nil, ErrMissingValuePayload
+			}
 
-		case IXAccountConfigure:
+			_, ok = ix.ps[psCreatePayload.Value.AssetID.AsIdentifier()]
+			if !ok {
+				return nil, ErrMissingAssetAccount
+			}
+
+		case IxAccountConfigure:
 			accConfigurePayload := new(AccountConfigurePayload)
 			if err := accConfigurePayload.FromBytes(op.Payload); err != nil {
 				return nil, err
@@ -592,14 +582,24 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				},
 			}
 
-		case IXAccountInherit:
+		case IxAccountInherit:
 			accInheritPayload := new(AccountInheritPayload)
-			if err := accInheritPayload.FromBytes(op.Payload); err != nil {
+			if err = accInheritPayload.FromBytes(op.Payload); err != nil {
+				return nil, err
+			}
+
+			if accInheritPayload.Value == nil {
+				return nil, ErrMissingValuePayload
+			}
+
+			subAccount, err := ix.SenderID().DeriveVariant(accInheritPayload.SubAccountIndex, nil, nil)
+			if err != nil {
 				return nil, err
 			}
 
 			ix.ops[idx] = &IxOp{
 				Interaction: ix,
+				target:      subAccount,
 				OpType:      op.Type,
 				Payload: &IxOpPayload{
 					participant: &ParticipantPayload{
@@ -608,16 +608,10 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				},
 			}
 
-			subAccount, err := ix.SenderID().DeriveVariant(accInheritPayload.SubAccountIndex, nil, nil)
-			if err != nil {
-				return nil, err
-			}
-
 			_, ok := ix.ps[subAccount]
 			if !ok {
 				ix.ps[subAccount] = &ParticipantInfo{
 					ID:        subAccount,
-					AccType:   RegularAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: true,
@@ -627,7 +621,6 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			_, ok = ix.ps[SargaAccountID]
 			if !ok {
 				ix.ps[SargaAccountID] = &ParticipantInfo{
-					AccType:   SargaAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
@@ -635,29 +628,10 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				}
 			}
 
-		case IxAssetTransfer:
-			assetActionPayload := new(AssetActionPayload)
-			if err = assetActionPayload.FromBytes(op.Payload); err != nil {
-				return nil, err
-			}
-
-			ix.ops[idx] = &IxOp{
-				Interaction: ix,
-				OpType:      op.Type,
-				Payload: &IxOpPayload{
-					asset: &AssetPayload{
-						Action: assetActionPayload,
-					},
-				},
-			}
-
-			info, ok := ix.ps[assetActionPayload.Beneficiary]
+			_, ok = ix.ps[accInheritPayload.Value.AssetID.AsIdentifier()]
 			if !ok {
-				return nil, ErrMissingBeneficiary
+				return nil, ErrMissingAssetAccount
 			}
-
-			info.AccType = RegularAccount
-			info.IsSigner = false
 
 		case IxAssetCreate:
 			assetCreatePayload := new(AssetCreatePayload)
@@ -689,7 +663,6 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			_, ok := ix.ps[SargaAccountID]
 			if !ok {
 				ix.ps[SargaAccountID] = &ParticipantInfo{
-					AccType:   SargaAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
@@ -700,7 +673,6 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			_, ok = ix.ps[assetID.AsIdentifier()]
 			if !ok {
 				ix.ps[assetID.AsIdentifier()] = &ParticipantInfo{
-					AccType:   AssetAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: true,
@@ -708,7 +680,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				}
 			}
 
-		case IxAssetApprove, IxAssetRevoke, IxAssetLockup, IxAssetRelease:
+		case IxAssetAction:
 			assetActionPayload := new(AssetActionPayload)
 			if err = assetActionPayload.FromBytes(op.Payload); err != nil {
 				return nil, err
@@ -716,7 +688,7 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 
 			ix.ops[idx] = &IxOp{
 				Interaction: ix,
-				target:      assetActionPayload.Beneficiary,
+				target:      assetActionPayload.AssetID.AsIdentifier(),
 				OpType:      op.Type,
 				Payload: &IxOpPayload{
 					asset: &AssetPayload{
@@ -725,47 +697,10 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 				},
 			}
 
-			if IxAssetRelease == op.Type {
-				beneficiary, ok := ix.ps[assetActionPayload.Beneficiary]
-				if !ok {
-					return nil, ErrMissingBeneficiary
-				}
-
-				beneficiary.AccType = RegularAccount
-				beneficiary.IsSigner = false
-
-				benefactor, ok := ix.ps[assetActionPayload.Benefactor]
-				if !ok {
-					return nil, ErrMissingBenefactor
-				}
-
-				benefactor.AccType = RegularAccount
-				benefactor.IsSigner = false
-			}
-
-		case IxAssetMint, IxAssetBurn:
-			assetSupplyPayload := new(AssetSupplyPayload)
-			if err = assetSupplyPayload.FromBytes(op.Payload); err != nil {
-				return nil, err
-			}
-
-			ix.ops[idx] = &IxOp{
-				Interaction: ix,
-				target:      assetSupplyPayload.AssetID.AsIdentifier(),
-				OpType:      op.Type,
-				Payload: &IxOpPayload{
-					asset: &AssetPayload{
-						Supply: assetSupplyPayload,
-					},
-				},
-			}
-
-			info, ok := ix.ps[assetSupplyPayload.AssetID.AsIdentifier()]
+			_, ok := ix.ps[assetActionPayload.AssetID.AsIdentifier()]
 			if !ok {
 				return nil, ErrMissingAssetAccount
 			}
-
-			info.AccType = AssetAccount
 
 		case IxLogicDeploy, IxLogicInvoke: // IxLogicEnlist
 			logicPayload := new(LogicPayload)
@@ -782,24 +717,21 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			}
 
 			if IxLogicDeploy != op.Type {
-				info, ok := ix.ps[logicPayload.Logic.AsIdentifier()]
+				_, ok := ix.ps[logicPayload.LogicID.AsIdentifier()]
 				if !ok {
 					return nil, ErrMissingLogicAccount
 				}
 
-				info.AccType = LogicAccount
-
 				for _, logic := range logicPayload.Interfaces {
-					account, ok := ix.ps[logic.AsIdentifier()]
+					account, ok := ix.ps[logic]
 					if !ok {
 						return nil, ErrMissingForeignLogicAccount
 					}
 
-					account.AccType = LogicAccount
 					account.IsSigner = false
 				}
 
-				ix.ops[idx].target = logicPayload.Logic.AsIdentifier()
+				ix.ops[idx].target = logicPayload.LogicID.AsIdentifier()
 
 				continue
 			}
@@ -807,7 +739,6 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			_, ok := ix.ps[SargaAccountID]
 			if !ok {
 				ix.ps[SargaAccountID] = &ParticipantInfo{
-					AccType:   SargaAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
@@ -824,7 +755,6 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			_, ok = ix.ps[logicID.AsIdentifier()]
 			if !ok {
 				ix.ps[logicID.AsIdentifier()] = &ParticipantInfo{
-					AccType:   LogicAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: true,
@@ -853,7 +783,6 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			_, ok := ix.ps[SystemAccountID]
 			if !ok {
 				ix.ps[SystemAccountID] = &ParticipantInfo{
-					AccType:   SystemAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
@@ -880,7 +809,6 @@ func NewInteraction(ixData IxData, signatures Signatures) (*Interaction, error) 
 			_, ok := ix.ps[SystemAccountID]
 			if !ok {
 				ix.ps[SystemAccountID] = &ParticipantInfo{
-					AccType:   SystemAccount,
 					IsSigner:  false,
 					LockType:  MutateLock,
 					IsGenesis: false,
@@ -963,25 +891,7 @@ func (ix *Interaction) SequenceID() uint64 {
 func (ix *Interaction) KMOITokenValue() *big.Int {
 	var tokens int64 = 0
 
-	for _, op := range ix.Ops() {
-		switch op.Type() {
-		case IxAssetTransfer:
-			payload, err := op.GetAssetActionPayload()
-			if err != nil || payload.AssetID != KMOITokenAssetID || payload.Amount == nil {
-				continue
-			}
-
-			tokens += payload.Amount.Int64()
-		case IxParticipantCreate:
-			payload, err := op.GetParticipantCreatePayload()
-			if err != nil || payload.Amount == nil {
-				continue
-			}
-
-			tokens += payload.Amount.Int64()
-		default:
-		}
-	}
+	// FIXME: We need figure this logic
 
 	return big.NewInt(tokens)
 }
@@ -1185,7 +1095,11 @@ func (ix *Interaction) UpdateLeaderCandidateID() error {
 	nonRegularAccounts := make(IdentifierList, 0, len(ix.ps))
 
 	for id, info := range ix.ps {
-		if id == SargaAccountID {
+		if info.AccountType() == InvalidAccount {
+			return ErrInvalidIdentifier
+		}
+
+		if id == SargaAccountID || id == SystemAccountID {
 			ix.leaderCandidateAcc = ix.ps[id]
 
 			return nil
@@ -1195,7 +1109,7 @@ func (ix *Interaction) UpdateLeaderCandidateID() error {
 			continue
 		}
 
-		if info.AccType == RegularAccount {
+		if info.AccountType() == RegularAccount {
 			regularAccounts = append(regularAccounts, id)
 
 			continue
@@ -1260,13 +1174,13 @@ func NewInteractionsWithLeaderCheck(checkForLeader bool, l ...*Interaction) Inte
 	regularAccounts := make(IdentifierList, 0)
 
 	for _, ixn := range ixns.ixns {
-		if ixn.leaderCandidateAcc.AccType == SargaAccount {
+		if ixn.leaderCandidateAcc.AccountType() == SystemAccount {
 			ixns.leaderCandidateID = ixn.leaderCandidateAcc.ID
 
 			return ixns
 		}
 
-		if ixn.leaderCandidateAcc.AccType == RegularAccount {
+		if ixn.leaderCandidateAcc.AccountType() == RegularAccount {
 			regularAccounts = append(regularAccounts, ixn.leaderCandidateAcc.ID)
 		} else {
 			nonRegularAccounts = append(nonRegularAccounts, ixn.leaderCandidateAcc.ID)

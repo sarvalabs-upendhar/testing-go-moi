@@ -14,15 +14,19 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
-//nolint:dupl
+//nolint:dup
 func (te *TestEnvironment) burnAsset(
 	acc tests.AccountWithMnemonic,
-	assetSupplyPayload *common.AssetSupplyPayload,
+	assetID identifiers.AssetID,
+	params *common.BurnParams,
 ) (common.Hash, error) {
 	te.logger.Debug("burn asset ",
-		"sender", acc.ID, "asset", assetSupplyPayload.AssetID, "amount", assetSupplyPayload.Amount)
+		"sender", acc.ID, "asset", assetID, "amount", params.Amount)
 
-	payload, err := assetSupplyPayload.Bytes()
+	action, err := common.GetAssetActionPayload(assetID, common.BurnEndpoint, params)
+	require.NoError(te.T(), err)
+
+	payload, err := action.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
@@ -32,15 +36,9 @@ func (te *TestEnvironment) burnAsset(
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Funds: []common.IxFund{
-			{
-				AssetID: assetSupplyPayload.AssetID,
-				Amount:  assetSupplyPayload.Amount,
-			},
-		},
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IxAssetBurn,
+				Type:    common.IxAssetAction,
 				Payload: payload,
 			},
 		},
@@ -50,7 +48,7 @@ func (te *TestEnvironment) burnAsset(
 				LockType: common.MutateLock,
 			},
 			{
-				ID:       assetSupplyPayload.AssetID.AsIdentifier(),
+				ID:       assetID.AsIdentifier(),
 				LockType: common.MutateLock,
 			},
 		},
@@ -72,17 +70,25 @@ func (te *TestEnvironment) burnAsset(
 func validateAssetBurn(
 	te *TestEnvironment,
 	sender identifiers.Identifier,
-	payload common.AssetSupplyPayload,
+	assetID identifiers.AssetID,
+	params *common.BurnParams,
 	ixHash common.Hash,
+	isSuccess bool,
 ) {
+	if !isSuccess {
+		checkForReceiptFailure(te.T(), te.moiClient, ixHash)
+
+		return
+	}
+
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 	senderHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, sender)
 
-	senderPrevBal := getBalance(te, sender, payload.AssetID, int64(senderHeight-1))
-	senderCurBal := getBalance(te, sender, payload.AssetID, args.LatestTesseractHeight)
+	senderPrevBal := getBalance(te, sender, assetID, int64(senderHeight-1))
+	senderCurBal := getBalance(te, sender, assetID, args.LatestTesseractHeight)
 
-	require.Equal(te.T(), payload.Amount.Uint64(), senderPrevBal-senderCurBal)
+	require.Equal(te.T(), params.Amount.Uint64(), senderPrevBal-senderCurBal)
 }
 
 func (te *TestEnvironment) TestAssetBurn() {
@@ -90,75 +96,61 @@ func (te *TestEnvironment) TestAssetBurn() {
 	require.NoError(te.T(), err)
 
 	sender := accs[0]
-	nonOperator := accs[1]
 
 	initialAmount := big.NewInt(1000)
 
 	// TODO CONSIDER ADDING THESE UNDER PRE-TEST
-	MAS0AssetID := createAsset(te, sender, createAssetCreatePayload(
+	MAS0AssetID := createAndMint(te, sender, createAssetCreatePayload(
 		tests.GetRandomUpperCaseString(te.T(), 8),
 		initialAmount,
 		common.MAS0,
+		sender.ID,
 		nil,
-	))
-
-	MAS1AssetID := createAsset(te, sender, createAssetCreatePayload(
-		tests.GetRandomUpperCaseString(te.T(), 8),
-		big.NewInt(1),
-		common.MAS1,
-		nil,
-	))
-
-	transferAsset(te, sender, &common.AssetActionPayload{
-		Beneficiary: nonOperator.ID,
-		AssetID:     MAS0AssetID,
-		Amount:      big.NewInt(100),
-	})
+	),
+		&common.MintParams{Beneficiary: sender.ID, Amount: initialAmount})
 
 	testcases := []struct {
-		name               string
-		sender             tests.AccountWithMnemonic
-		assetSupplyPayload *common.AssetSupplyPayload
-		postTest           func(
+		name      string
+		sender    tests.AccountWithMnemonic
+		assetID   identifiers.AssetID
+		params    *common.BurnParams
+		isSuccess bool
+		postTest  func(
 			te *TestEnvironment,
 			sender identifiers.Identifier,
-			payload common.AssetSupplyPayload,
+			assetID identifiers.AssetID,
+			payload *common.BurnParams,
 			ixHash common.Hash,
+			isSuccess bool,
 		)
 		expectedError error
 	}{
 		{
-			name:   "burn MAS0 asset",
-			sender: sender,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: MAS0AssetID,
-				Amount:  big.NewInt(100),
+			name:    "burn MAS0 asset",
+			sender:  sender,
+			assetID: MAS0AssetID,
+			params: &common.BurnParams{
+				Amount: big.NewInt(100),
 			},
-			postTest: validateAssetBurn,
+			postTest:  validateAssetBurn,
+			isSuccess: true,
 		},
+
 		{
-			name:   "burn MAS1 asset",
-			sender: sender,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: MAS1AssetID,
-				Amount:  big.NewInt(1),
+			name:    "amount is invalid",
+			sender:  sender,
+			assetID: MAS0AssetID,
+			params: &common.BurnParams{
+				Amount: big.NewInt(0),
 			},
-			expectedError: common.ErrMintOrBurnNonFungibleToken,
-		},
-		{
-			name:   "amount is invalid",
-			sender: sender,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: MAS0AssetID,
-				Amount:  big.NewInt(0),
-			},
-			expectedError: common.ErrInvalidValue,
+			isSuccess: false,
+			postTest:  validateAssetBurn,
 		},
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.burnAsset(test.sender, test.assetSupplyPayload)
+			ixHash, err := te.burnAsset(test.sender, test.assetID, test.params)
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
 
@@ -167,7 +159,7 @@ func (te *TestEnvironment) TestAssetBurn() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.ID, *test.assetSupplyPayload, ixHash)
+			test.postTest(te, test.sender.ID, test.assetID, test.params, ixHash, test.isSuccess)
 		})
 	}
 }

@@ -28,11 +28,12 @@ import (
 )
 
 const (
-	accountsFile    = "accounts.json"
-	instancesFile   = "instances.json"
-	artifactFile    = "artifact.json"
-	genesisFile     = "genesis.json"
-	bootnodeFileKey = "file.key"
+	assetArtifactFile = "./../common/artifacts/assetartifacts.json"
+	accountsFile      = "accounts.json"
+	instancesFile     = "instances.json"
+	artifactFile      = "artifact.json"
+	genesisFile       = "genesis.json"
+	bootnodeFileKey   = "file.key"
 
 	flipperManifest = "./../compute/exlogics/flipper/flipper.yaml"
 )
@@ -341,12 +342,14 @@ func (c *Cluster) generateGenesis() error {
 		"--instances-path", c.Config.Dir(instancesFile),
 		"--artifact-path", c.Config.Dir(artifactFile),
 		"--genesis-path", c.Config.Dir(genesisFile),
+		"--assetartifacts-path", c.Config.AssetArtifactPath(assetArtifactFile),
 	}
 
 	return runCommand(c.Config.McutilsBinary, args, c.Config.GetStdout("genesis"))
 }
 
 func (c *Cluster) updateGenesisWithAsset(assetInfo string, alloc string) error {
+	fmt.Println("Updating genesis with asset info:", assetInfo)
 	args := []string{
 		"genesis",
 		"premine",
@@ -372,12 +375,12 @@ func (c *Cluster) updateGenesisWithAssets() error {
 		if err != nil {
 			return errors.Wrap(err, "failed to read accounts file")
 		}
-
+		// <symbol:dimension:standard:decimals:maxsupply:manager>
 		err = c.updateGenesisWithAsset(
-			asset+":0:0:false:false:"+accounts[0].ID.String(),
-			accounts[0].ID.String()+":"+strconv.Itoa(c.Config.PremineAmount)+
+			asset+":0:0:0:"+strconv.Itoa(3*c.Config.PremineAmount)+":"+accounts[0].ID.String(),
+			accounts[1].ID.String()+":"+strconv.Itoa(c.Config.PremineAmount)+
 				","+
-				accounts[1].ID.String()+":"+strconv.Itoa(c.Config.PremineAmount),
+				accounts[2].ID.String()+":"+strconv.Itoa(c.Config.PremineAmount),
 		)
 		if err != nil {
 			return errors.Wrap(err, "failed to update genesis with asset info")

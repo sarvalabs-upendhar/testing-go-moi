@@ -17,6 +17,7 @@ var (
 	peerListFilePath       string
 	genesisFilePath        string
 	artifactFilePath       string
+	assetArtifactFilePath  string
 	writeInstancesFilePath string
 	directoryPath          string
 	readInstancesFilePath  string

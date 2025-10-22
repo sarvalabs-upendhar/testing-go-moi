@@ -10,41 +10,33 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/require"
 )
 
 func TestCreateRPCInteraction(t *testing.T) {
 	t.Helper()
 
-	assetPayload := &common.AssetCreatePayload{
+	assetCreatePaylaod := &common.AssetCreatePayload{
 		Symbol: "MOI",
 	}
 
-	assetCreatePayloadBytes, err := assetPayload.Bytes()
-	require.NoError(t, err)
-
-	transferPayload := &common.AssetActionPayload{
+	assetAction, err := common.GetAssetActionPayload(identifiers.RandomAssetIDv0(), "Transfer", &common.TransferParams{
 		Beneficiary: tests.RandomIdentifier(t),
-		AssetID:     identifiers.RandomAssetIDv0(),
-	}
-
-	transferPayloadBytes, err := transferPayload.Bytes()
-	require.NoError(t, err)
-
-	logicPayloadBytes, err := polo.Polorize(&common.LogicPayload{
-		Logic:    tests.GetLogicID(t, tests.RandomIdentifier(t)),
-		Callsite: "call site",
+		Amount:      big.NewInt(100),
 	})
 	require.NoError(t, err)
 
+	logicDeployPayload := &common.LogicPayload{
+		Manifest: tests.RandomHash(t).Bytes(),
+	}
+
+	logicInvokePayload := &common.LogicPayload{
+		LogicID:  identifiers.MustLogicID(tests.GetLogicID(t, tests.RandomIdentifier(t))),
+		Callsite: "call site",
+	}
+
 	ixData := tests.CreateIXDataWithTestData(t, func(ixData *common.IxData) {
-		ixData.IxOps = []common.IxOpRaw{
-			{
-				Type:    common.IxAssetCreate,
-				Payload: assetCreatePayloadBytes,
-			},
-		}
+		ixData.IxOps = []common.IxOpRaw{}
 	})
 
 	ixWithNilFields, err := common.NewInteraction(ixData, common.Signatures{
@@ -66,31 +58,31 @@ func TestCreateRPCInteraction(t *testing.T) {
 		{
 			name: "create rpc interaction for participant create interaction",
 			ix: CreateInteractionWithTestData(t, common.IxParticipantCreate,
-				tests.CreateRawParticipantCreatePayload(t, tests.RandomIdentifier(t))),
+				tests.CreateParticipantCreatePayload(t, tests.RandomIdentifier(t))),
 		},
 		{
 			name: "create rpc interaction for asset transfer interaction",
-			ix:   CreateInteractionWithTestData(t, common.IxAssetTransfer, transferPayloadBytes),
+			ix:   CreateInteractionWithTestData(t, common.IxAssetAction, assetAction),
 		},
 		{
 			name: "create rpc interaction for asset creation interaction",
-			ix:   CreateInteractionWithTestData(t, common.IxAssetCreate, assetCreatePayloadBytes),
+			ix:   CreateInteractionWithTestData(t, common.IxAssetCreate, assetCreatePaylaod),
 		},
 		{
 			name: "create rpc interaction for logic deploy interaction",
-			ix:   CreateInteractionWithTestData(t, common.IxLogicDeploy, logicPayloadBytes),
+			ix:   CreateInteractionWithTestData(t, common.IxLogicDeploy, logicDeployPayload),
 		},
 		{
 			name: "create rpc interaction for logic execute interaction",
-			ix:   CreateInteractionWithTestData(t, common.IxLogicInvoke, logicPayloadBytes),
+			ix:   CreateInteractionWithTestData(t, common.IxLogicInvoke, logicInvokePayload),
 		},
 		{
 			name: "create rpc interaction with nil transfer values,perceived values, perceived proofs, ",
 			ix:   ixWithNilFields,
 		},
 		{
-			name: "create rpc interaction with particpants data",
-			ix:   CreateInteractionWithTestData(t, common.IxAssetTransfer, transferPayloadBytes),
+			name: "create rpc interaction with participants data",
+			ix:   CreateInteractionWithTestData(t, common.IxAssetAction, assetAction),
 		},
 	}
 
@@ -156,13 +148,6 @@ func TestCreateRPCPoXtData(t *testing.T) {
 }
 
 func TestCreateRPCTesseract(t *testing.T) {
-	assetPayload := &common.AssetCreatePayload{
-		Symbol: "MOI",
-	}
-
-	assetPayloadBytes, err := polo.Polorize(assetPayload)
-	require.NoError(t, err)
-
 	participants := tests.CreateParticipantWithTestData(t, 2)
 
 	// make sure to fill at least one field of every field of tesseract so that we can verify that every field is copied
@@ -211,7 +196,7 @@ func TestCreateRPCTesseract(t *testing.T) {
 	}{
 		{
 			name:     "created rpc tesseract for non-genesis tesseract",
-			ixParams: GetIxParamsWithIxData(common.IxAssetCreate, assetPayloadBytes),
+			ixParams: tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t)),
 			tsParams: createTesseractParams(1),
 		},
 		{
@@ -249,7 +234,7 @@ func TestCreateRPCTesseract(t *testing.T) {
 }
 
 func TestCreateRPCReceipt(t *testing.T) {
-	ixParams := tests.GetIxParamsWithID(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t))
+	ixParams := tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t))
 	testcases := []struct {
 		name         string
 		tsHash       common.Hash

@@ -234,7 +234,7 @@ func (tn *TestSingleNode) TestDBGet() {
 			accMetaInfo := new(common.AccountMetaInfo)
 			require.NoError(tn.T(), accMetaInfo.FromBytes(common.Hex2Bytes(value)))
 			require.Equal(tn.T(), common.SargaAccountID, accMetaInfo.ID)
-			require.Equal(tn.T(), common.SargaAccount, accMetaInfo.Type)
+			require.Equal(tn.T(), common.SystemAccount, accMetaInfo.Type)
 		})
 	}
 }
@@ -311,13 +311,14 @@ func (tn *TestSingleNode) TestGetAssetInfoByAssetID() {
 
 			require.NoError(tn.T(), err)
 			require.Equal(tn.T(), assetDescriptor.Symbol, a.Symbol)
-			require.Equal(tn.T(), assetDescriptor.Operator, a.Operator)
-			require.Equal(tn.T(), assetDescriptor.Supply.ToInt().Uint64(),
-				uint64(tn.bgConfig.GenesisAccountCount*tn.bgConfig.PremineAmount))
 			require.Equal(tn.T(), assetDescriptor.Dimension, a.Dimension)
-			require.Equal(tn.T(), assetDescriptor.Standard, a.Standard)
-			require.Equal(tn.T(), assetDescriptor.IsLogical, a.IsLogical)
-			require.Equal(tn.T(), assetDescriptor.IsStateFul, a.IsStateful)
+			require.Equal(tn.T(), assetDescriptor.Decimals, a.Decimals)
+			require.Equal(tn.T(), assetDescriptor.AssetID.Standard(), a.Standard.ToInt())
+			require.Equal(tn.T(), assetDescriptor.Creator, a.Creator)
+			require.Equal(tn.T(), assetDescriptor.Manager, a.Manager)
+			require.Equal(tn.T(), assetDescriptor.MaxSupply.ToInt().Uint64(),
+				uint64(tn.bgConfig.GenesisAccountCount*tn.bgConfig.PremineAmount))
+			require.Equal(tn.T(), assetDescriptor.Metadata, a.Metadata)
 		})
 	}
 }
@@ -334,13 +335,13 @@ func (tn *TestSingleNode) TestGetBalance() {
 		{
 			name: "fetch moi token balance at latest height",
 			balanceArgs: &rpcargs.BalArgs{
-				ID:      a.Allocations[0].ID,
+				ID:      a.Allocations[1].ID,
 				AssetID: common.KMOITokenAssetID,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
 			},
-			expectedBalance: a.Allocations[0].Amount,
+			expectedBalance: a.Allocations[1].Amount,
 		},
 		{
 			name: "get balance returns error for unknown asset ID",
@@ -366,7 +367,7 @@ func (tn *TestSingleNode) TestGetBalance() {
 			}
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), test.expectedBalance, balance)
+			require.Equal(tn.T(), test.expectedBalance.ToInt(), balance.ToInt())
 		})
 	}
 }
@@ -411,7 +412,7 @@ func (tn *TestSingleNode) TestTDU() {
 			}
 
 			require.NoError(tn.T(), err)
-			require.Equal(tn.T(), 2, len(tdu))
+			require.Equal(tn.T(), 1, len(tdu))
 		})
 	}
 }
@@ -419,7 +420,7 @@ func (tn *TestSingleNode) TestTDU() {
 func (tn *TestSingleNode) TestDeeds() {
 	a := tn.genesis.AssetAccounts[1].AssetInfo
 
-	assetID := common.CreateAssetIDFromString(a.Symbol, 0, uint16(a.Standard), a.AssetDescriptor().Flags()...)
+	assetID := a.AssetID()
 
 	testcases := []struct {
 		name          string
@@ -429,7 +430,7 @@ func (tn *TestSingleNode) TestDeeds() {
 		{
 			name: "fetch registry for existing id",
 			queryArgs: &rpcargs.QueryArgs{
-				ID: a.Allocations[0].ID,
+				ID: a.Manager,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
 				},
@@ -459,7 +460,7 @@ func (tn *TestSingleNode) TestDeeds() {
 			require.NoError(tn.T(), err)
 			require.Equal(tn.T(), 1, len(deeds))
 			require.Equal(tn.T(), assetID.String(), deeds[0].AssetID)
-			require.Equal(tn.T(), a.Operator, deeds[0].AssetInfo.Operator)
+			require.Equal(tn.T(), a.Creator, deeds[0].AssetInfo.Creator)
 		})
 	}
 }
@@ -635,7 +636,7 @@ func (tn *TestSingleNode) TestAccountState() {
 
 			require.NoError(tn.T(), err)
 			require.NotNil(tn.T(), accountState.ContextHash)
-			require.Equal(tn.T(), common.SargaAccount, accountState.AccType)
+			require.Equal(tn.T(), common.SystemAccount, accountState.AccType)
 		})
 	}
 }
@@ -694,7 +695,7 @@ func (tn *TestSingleNode) TestLogicStorage() {
 		{
 			name: "fetch storage value for existing logic ID",
 			logicStorageArgs: &rpcargs.GetLogicStorageArgs{
-				LogicID:    common.SystemLogicID,
+				LogicID:    common.SystemLogicID.AsIdentifier(),
 				StorageKey: state.GenesisTimeKey,
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -704,7 +705,7 @@ func (tn *TestSingleNode) TestLogicStorage() {
 		{
 			name: "fetch storage value for non-existing logic ID",
 			logicStorageArgs: &rpcargs.GetLogicStorageArgs{
-				LogicID:    identifiers.RandomLogicIDv0(),
+				LogicID:    identifiers.RandomLogicIDv0().AsIdentifier(),
 				StorageKey: common.Hex2Bytes("e88bd757ad5b9bedf372d8d3f0cf6c962a469db61a265f6418e1ffed86da29ec"),
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -782,7 +783,7 @@ func (tn *TestSingleNode) TestLogicManifest() {
 		{
 			name: "fetch json logic manifest for existing logicID",
 			logicManifestArgs: &rpcargs.LogicManifestArgs{
-				LogicID:  bgclient.FlipperLogicID,
+				LogicID:  bgclient.FlipperLogicID.AsIdentifier(),
 				Encoding: "JSON",
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -792,7 +793,7 @@ func (tn *TestSingleNode) TestLogicManifest() {
 		{
 			name: "fetch logic manifest for non-existing logicID",
 			logicManifestArgs: &rpcargs.LogicManifestArgs{
-				LogicID:  identifiers.RandomLogicIDv0(),
+				LogicID:  identifiers.RandomLogicIDv0().AsIdentifier(),
 				Encoding: "JSON",
 				Options: rpcargs.TesseractNumberOrHash{
 					TesseractNumber: &LatestTesseractNumber,
@@ -1053,8 +1054,8 @@ func (tn *TestSingleNode) TestSendInteraction() {
 				FuelLimit: 200,
 				IxOps: []common.IxOpRaw{
 					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(tn.T(), identifiers.Nil),
+						Type:    common.IxAssetAction,
+						Payload: tests.CreateRawAssetTransferPayload(tn.T(), identifiers.Nil),
 					},
 				},
 			},
@@ -1150,7 +1151,7 @@ func (tn *TestSingleNode) TestAccountMetaInfo() {
 			require.NoError(tn.T(), err)
 
 			require.Equal(tn.T(), common.SargaAccountID, accountMetaInfoResponse.ID)
-			require.Equal(tn.T(), common.SargaAccount, accountMetaInfoResponse.Type)
+			require.Equal(tn.T(), common.SystemAccount, accountMetaInfoResponse.Type)
 		})
 	}
 }
@@ -1275,8 +1276,8 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 	id := tn.accounts[0].ID
 
 	assetCreationPayload := &common.AssetCreatePayload{
-		Symbol: "BTC",
-		Supply: big.NewInt(22100),
+		Symbol:    "BTC",
+		MaxSupply: big.NewInt(22100),
 	}
 
 	rawAssetCreatePayload, err := assetCreationPayload.Bytes()
@@ -1341,7 +1342,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 					},
 				},
 			},
-			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(100)),
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(2265)),
 		},
 		{
 			name: "retrieved fuel used in asset create ixn when fuel limit and price are not given",
@@ -1389,8 +1390,8 @@ func (tn *TestSingleNode) TestCall() {
 	invalidHeight := int64(-2)
 
 	assetCreationPayload := &common.AssetCreatePayload{
-		Symbol: "MOI",
-		Supply: big.NewInt(999),
+		Symbol:    "MOI",
+		MaxSupply: big.NewInt(999),
 	}
 
 	rawAssetPayload, err := assetCreationPayload.Bytes()
@@ -1481,7 +1482,7 @@ func (tn *TestSingleNode) TestCall() {
 	})
 
 	common.SetResultPayload(receiptWithFuelParams, common.LogicDeployResult{
-		LogicID: logicID,
+		LogicID: logicID.AsIdentifier(),
 	})
 
 	testcases := []struct {
@@ -1522,7 +1523,7 @@ func (tn *TestSingleNode) TestCall() {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				FuelUsed: hexutil.Uint64(100),
+				FuelUsed: hexutil.Uint64(2265),
 				From:     id,
 				IxOps: []*rpcargs.RPCIxOpResult{
 					{

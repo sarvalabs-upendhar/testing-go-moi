@@ -7,17 +7,11 @@ type IxOpType int
 const (
 	IxInvalid IxOpType = iota
 	IxParticipantCreate
-	IXAccountConfigure
-	IXAccountInherit
-	IxAssetTransfer
-	IxFuelSupply // TODO: Remove this
+	IxAccountConfigure
+	IxAccountInherit
+
 	IxAssetCreate
-	IxAssetApprove
-	IxAssetRevoke
-	IxAssetMint
-	IxAssetBurn
-	IxAssetLockup
-	IxAssetRelease
+	IxAssetAction
 
 	IxGuardianRegister
 	IxGuardianStake
@@ -35,16 +29,10 @@ const (
 var txTypeToString = map[IxOpType]string{
 	IxInvalid:           "IxInvalid",
 	IxParticipantCreate: "IxParticipantCreate",
-	IXAccountConfigure:  "IxAccountConfigure",
-	IXAccountInherit:    "IxAccountInherit",
-	IxAssetTransfer:     "IxAssetTransfer",
+	IxAccountConfigure:  "IxAccountConfigure",
+	IxAccountInherit:    "IxAccountInherit",
 	IxAssetCreate:       "IxAssetCreate",
-	IxAssetApprove:      "IxAssetApprove",
-	IxAssetRevoke:       "IxAssetRevoke",
-	IxAssetMint:         "IxAssetMint",
-	IxAssetBurn:         "IxAssetBurn",
-	IxAssetLockup:       "IxAssetLockup",
-	IxAssetRelease:      "IxAssetRelease",
+	IxAssetAction:       "IxAssetAction",
 	IxGuardianRegister:  "IxGuardianRegister",
 	IxGuardianStake:     "IxGuardianStake",
 	IxGuardianUnstake:   "IxGuardianUnstake",

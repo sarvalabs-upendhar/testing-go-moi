@@ -478,91 +478,6 @@ func (i *MockIXPool) IsReset(hash common.Hash) bool {
 	return false
 }
 
-type CreateIxParams struct {
-	ixDataCallback func(ix *common.IxData)
-	Sign           []byte
-}
-
-func createIX(t *testing.T, params *CreateIxParams) *common.Interaction {
-	t.Helper()
-
-	if params == nil {
-		params = &CreateIxParams{}
-	}
-
-	data := &common.IxData{
-		Participants: []common.IxParticipant{},
-	}
-
-	if params.ixDataCallback != nil {
-		params.ixDataCallback(data)
-	}
-
-	if data.Sender.ID == identifiers.Nil {
-		data.Sender.ID = tests.RandomIdentifier(t)
-	}
-
-	tests.AppendParticipantsInIxData(t, data)
-
-	if len(params.Sign) == 0 {
-		params.Sign = []byte{}
-	}
-
-	ix, err := common.NewInteraction(*data, []common.Signature{{
-		Signature: make([]byte, 0),
-	}})
-	require.NoError(t, err)
-
-	return ix
-}
-
-func createIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) common.Interactions {
-	t.Helper()
-
-	if paramsMap == nil {
-		paramsMap = map[int]*CreateIxParams{}
-	}
-
-	ixns := make([]*common.Interaction, count)
-	for i := 0; i < count; i++ {
-		ixns[i] = createIX(t, paramsMap[i])
-	}
-
-	return common.NewInteractionsWithLeaderCheck(false, ixns...)
-}
-
-func getIxParamsWithID(t *testing.T, from identifiers.Identifier, to identifiers.Identifier) *CreateIxParams {
-	t.Helper()
-
-	return &CreateIxParams{
-		ixDataCallback: func(ix *common.IxData) {
-			ix.Sender.ID = from
-			ix.IxOps = []common.IxOpRaw{
-				{
-					Type:    common.IxAssetCreate,
-					Payload: tests.CreateRawAssetCreatePayload(t),
-				},
-			}
-		},
-	}
-}
-
-func getIxParamsMapWithIDs(
-	t *testing.T,
-	from []identifiers.Identifier,
-	to []identifiers.Identifier,
-) map[int]*CreateIxParams {
-	t.Helper()
-
-	ixParams := make(map[int]*CreateIxParams, len(from))
-
-	for i := 0; i < len(from); i++ {
-		ixParams[i] = getIxParamsWithID(t, from[i], to[i])
-	}
-
-	return ixParams
-}
-
 func mockCache() *lru.Cache {
 	cache, _ := lru.New(1200)
 
@@ -716,9 +631,9 @@ func getReceipt(ixHash common.Hash) *common.Receipt {
 func getIX(t *testing.T) *common.Interaction {
 	t.Helper()
 
-	return createIX(
+	return tests.CreateIX(
 		t,
-		getIxParamsWithID(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t)),
+		tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t)),
 	)
 }
 
@@ -756,12 +671,12 @@ func getTesseractParamsMapWithIxns(t *testing.T, tsCount int) map[int]*tests.Cre
 
 	tesseractParams := make(map[int]*tests.CreateTesseractParams, tsCount)
 	ids := tests.GetIdentifiers(t, 4*tsCount) // for each interaction, sender and receiver ids needed
-	ixns := createIxns(t, 2*tsCount, getIxParamsMapWithIDs(t, ids[:2*tsCount], ids[2*tsCount:]))
+	ixns := tests.CreateIxns(t, 2*tsCount, tests.GetIxParamsMapWithIDs(t, ids[:2*tsCount], ids[2*tsCount:]))
 
 	for i := 0; i < tsCount; i++ {
 		tesseractParams[i] = &tests.CreateTesseractParams{
 			// allocate two interactions per tesseract
-			Ixns: common.NewInteractionsWithLeaderCheck(false, ixns.IxList()[i*2:i*2+2]...),
+			Ixns: common.NewInteractionsWithLeaderCheck(false, ixns[i*2:i*2+2]...),
 		}
 		tesseractParams[i].CommitInfo = &common.CommitInfo{
 			Operator: tests.RandomKramaID(t, 0),

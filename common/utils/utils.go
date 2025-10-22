@@ -200,7 +200,7 @@ func GetNetworkID(id identifiers.KramaID) (peer.ID, error) {
 
 func ValidateAccountType(acc common.AccountType) error {
 	switch acc {
-	case common.SargaAccount, common.RegularAccount, common.LogicAccount:
+	case common.SystemAccount, common.RegularAccount, common.LogicAccount:
 		return nil
 	default:
 		return common.ErrInvalidAccountType

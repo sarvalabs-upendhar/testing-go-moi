@@ -26,7 +26,7 @@ func (te *TestEnvironment) createAssetWithMultiSig(
 	notaryAccount []identifiers.Identifier,
 ) (common.Hash, error) {
 	te.logger.Debug("create asset ",
-		"sender", senderID, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.Supply)
+		"sender", senderID, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.MaxSupply)
 
 	payload, err := assetCreatePayload.Bytes()
 	te.Suite.NoError(err)
@@ -93,17 +93,20 @@ func (te *TestEnvironment) TestMultiSig() {
 				Weight:    400,
 			},
 		},
-		Amount: big.NewInt(100000),
+		Value: tests.AssetActionPayload(te.T(), common.KMOITokenAssetID, common.TransferEndpoint, &common.TransferParams{
+			Beneficiary: newAcc,
+			Amount:      big.NewInt(100000),
+		}),
 	})
 
 	assetCreatePayload := createAssetCreatePayload(
 		tests.GetRandomUpperCaseString(te.T(), 8),
 		big.NewInt(1000),
 		common.MAS0,
+		newAcc,
 		func(payload *common.AssetCreatePayload) {
 			payload.Dimension = 1
-			payload.IsStateFul = true
-			payload.IsLogical = true
+			payload.Decimals = 0
 		},
 	)
 
@@ -195,7 +198,8 @@ func (te *TestEnvironment) TestMultiSig() {
 			assetCreatePayload: createAssetCreatePayload(
 				tests.GetRandomUpperCaseString(te.T(), 8),
 				big.NewInt(1),
-				common.MAS1,
+				common.MAS0,
+				newAcc,
 				func(payload *common.AssetCreatePayload) {
 					payload.Dimension = 1
 				},

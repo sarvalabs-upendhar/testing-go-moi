@@ -2,6 +2,8 @@ package state
 
 import (
 	"context"
+	"crypto/rand"
+	"math"
 	"math/big"
 	"reflect"
 	"testing"
@@ -624,25 +626,30 @@ func createAssetObject(t *testing.T) *AssetObject {
 	t.Helper()
 
 	return &AssetObject{
-		Balance: big.NewInt(45000),
-		Lockup: map[identifiers.Identifier]*big.Int{
-			tests.RandomIdentifier(t): big.NewInt(3000),
+		Balance: tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(5000)),
+		Lockup: map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry{
+			tests.RandomIdentifier(t): tests.TokenWithExpiry(
+				t,
+				common.DefaultTokenID,
+				big.NewInt(3000),
+				0),
 		},
-		Mandate: map[identifiers.Identifier]*Mandate{
-			tests.RandomIdentifier(t): {
-				Amount:    big.NewInt(2000),
-				ExpiresAt: uint64(time.Now().Add(1 * time.Hour).Unix()),
-			},
+		Mandate: map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry{
+			tests.RandomIdentifier(t): tests.TokenWithExpiry(
+				t,
+				common.DefaultTokenID,
+				big.NewInt(2000),
+				uint64(time.Now().Add(1*time.Hour).Unix())),
 		},
 		Properties: &common.AssetDescriptor{
-			Symbol: "MOI",
-			Supply: big.NewInt(50000),
+			Symbol:            "MOI",
+			CirculatingSupply: big.NewInt(50000),
 		},
 	}
 }
 
 type createLogicObjectParams struct {
-	id            identifiers.LogicID
+	id            identifiers.Identifier
 	logicCallback func(object *LogicObject)
 }
 
@@ -661,7 +668,7 @@ func createLogicObject(t *testing.T, params *createLogicObjectParams) *LogicObje
 	return logicObject
 }
 
-func getLogicObjectParamsWithLogicID(logicID identifiers.LogicID) *createLogicObjectParams {
+func getLogicObjectParamsWithLogicID(logicID identifiers.Identifier) *createLogicObjectParams {
 	return &createLogicObjectParams{
 		id: logicID,
 		logicCallback: func(object *LogicObject) {
@@ -783,7 +790,7 @@ func createAndStoreValidators(t *testing.T, sm *StateManager, kramaIDs []identif
 	t.Helper()
 
 	so := sm.CreateSystemObject(common.SystemAccountID)
-	so.storageTreeTxns[common.SystemLogicID] = iradix.New().Txn()
+	so.storageTreeTxns[common.SystemLogicID.AsIdentifier()] = iradix.New().Txn()
 
 	sm.objectCache.Add(common.SystemAccountID, so)
 
@@ -815,7 +822,7 @@ type createStateObjectParams struct {
 	soCallback                func(so *Object)
 	metaStorageTreeCallback   func(so *Object)
 	dbCallback                func(db *MockDB)
-	activeStorageTreeCallback func(activeStorageTrees map[identifiers.LogicID]tree.MerkleTree)
+	activeStorageTreeCallback func(activeStorageTrees map[identifiers.Identifier]tree.MerkleTree)
 }
 
 func createTestStateObject(t *testing.T, params *createStateObjectParams) *Object {
@@ -927,8 +934,8 @@ func stateObjectParamsWithAssetTree(
 
 func soParamsWithStorageTreesAndTxns(
 	t *testing.T,
-	ast map[identifiers.LogicID]tree.MerkleTree,
-	txns map[identifiers.LogicID]*iradix.Txn,
+	ast map[identifiers.Identifier]tree.MerkleTree,
+	txns map[identifiers.Identifier]*iradix.Txn,
 ) *createStateObjectParams {
 	t.Helper()
 
@@ -942,7 +949,7 @@ func soParamsWithStorageTreesAndTxns(
 
 func stateObjectParamsWithASTAndMST(
 	t *testing.T,
-	ast map[identifiers.LogicID]tree.MerkleTree,
+	ast map[identifiers.Identifier]tree.MerkleTree,
 	mst tree.MerkleTree,
 ) *createStateObjectParams {
 	t.Helper()
@@ -960,7 +967,7 @@ func stateObjectParamsWithASTAndMST(
 
 func stateObjectParamsWithStorageTree(
 	t *testing.T,
-	ast map[identifiers.LogicID]tree.MerkleTree,
+	ast map[identifiers.Identifier]tree.MerkleTree,
 ) *createStateObjectParams {
 	t.Helper()
 
@@ -1104,15 +1111,24 @@ func checkForReferences(t *testing.T, sObj, copiedSO *Object) {
 	)
 }
 
-func getAssetIDsAndBalances(t *testing.T, count int) ([]identifiers.AssetID, []*big.Int) {
+func getAssetIDsAndBalances(t *testing.T, count int) ([]identifiers.AssetID, []map[common.TokenID]*big.Int) {
 	t.Helper()
 
 	ids := make([]identifiers.AssetID, count)
+	tokens := make([]map[common.TokenID]*big.Int, count)
+
 	for i := 0; i < count; i++ {
 		ids[i] = tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	}
 
-	return ids, tests.GetRandomNumbers(t, 10000, count)
+	for i := 0; i < count; i++ {
+		randBal, err := rand.Int(rand.Reader, big.NewInt(0).SetUint64(math.MaxUint64))
+		require.NoError(t, err)
+
+		tokens[i] = map[common.TokenID]*big.Int{common.DefaultTokenID: randBal}
+	}
+
+	return ids, tokens
 }
 
 func getTestDeeds(t *testing.T, entries map[identifiers.Identifier]struct{}) (*Deeds, common.Hash) {
@@ -1128,21 +1144,19 @@ func getTestDeeds(t *testing.T, entries map[identifiers.Identifier]struct{}) (*D
 	return deeds, common.GetHash(data)
 }
 
-func setAssetBalance(t *testing.T, so *Object, assetID identifiers.AssetID, amount *big.Int) {
-	t.Helper()
-
-	setAssetObject(t, so, assetID, &AssetObject{
-		Balance: amount,
-	})
-}
-
 func setAssetLockups(
-	t *testing.T, so *Object, assetIDs []identifiers.AssetID,
-	amounts []*big.Int, ids []identifiers.Identifier, lockupAmounts []*big.Int,
+	t *testing.T,
+	so *Object,
+	// Balances
+	assetIDs []identifiers.AssetID,
+	amounts []map[common.TokenID]*big.Int,
+	// Lockups
+	ids []identifiers.Identifier,
+	lockupAmounts []map[common.TokenID]*common.AmountWithExpiry,
 ) {
 	t.Helper()
 
-	lockups := make(map[identifiers.Identifier]*big.Int)
+	lockups := make(map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry)
 
 	if len(ids) > 0 {
 		for idx, id := range ids {
@@ -1151,7 +1165,7 @@ func setAssetLockups(
 	}
 
 	for idx, assetID := range assetIDs {
-		setAssetObject(t, so, assetID, &AssetObject{
+		SetAssetObject(t, so, assetID, &AssetObject{
 			Balance: amounts[idx],
 			Lockup:  lockups,
 		})
@@ -1159,24 +1173,26 @@ func setAssetLockups(
 }
 
 func setAssetMandates(
-	t *testing.T, so *Object, assetIDs []identifiers.AssetID,
-	amounts []*big.Int, ids []identifiers.Identifier, mandateAmounts []*big.Int,
+	t *testing.T, so *Object,
+	assetIDs []identifiers.AssetID,
+	amounts []map[common.TokenID]*big.Int,
+	ids []identifiers.Identifier,
+	mandateAmounts []map[common.TokenID]*common.AmountWithExpiry,
 ) {
 	t.Helper()
 
-	mandates := make(map[identifiers.Identifier]*Mandate)
+	t.Helper()
+
+	mandates := make(map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry)
 
 	if len(ids) > 0 {
 		for idx, id := range ids {
-			mandates[id] = &Mandate{
-				Amount:    mandateAmounts[idx],
-				ExpiresAt: uint64(time.Now().Add(1 * time.Hour).Unix()),
-			}
+			mandates[id] = mandateAmounts[idx]
 		}
 	}
 
 	for idx, assetID := range assetIDs {
-		setAssetObject(t, so, assetID, &AssetObject{
+		SetAssetObject(t, so, assetID, &AssetObject{
 			Balance: amounts[idx],
 			Mandate: mandates,
 		})
@@ -1186,13 +1202,13 @@ func setAssetMandates(
 func setAssetState(t *testing.T, so *Object, assetID identifiers.AssetID, state *common.AssetDescriptor) {
 	t.Helper()
 
-	setAssetObject(t, so, assetID, &AssetObject{
-		Balance:    state.Supply,
+	SetAssetObject(t, so, assetID, &AssetObject{
+		Balance:    tests.TokenWithoutExpiry(t, common.DefaultTokenID, state.CirculatingSupply),
 		Properties: state,
 	})
 }
 
-func setAssetObject(t *testing.T, so *Object, assetID identifiers.AssetID, assetObj *AssetObject) {
+func SetAssetObject(t *testing.T, so *Object, assetID identifiers.AssetID, assetObj *AssetObject) {
 	t.Helper()
 
 	assert.NoError(t, so.InsertNewAssetObject(assetID, assetObj))
@@ -1201,7 +1217,7 @@ func setAssetObject(t *testing.T, so *Object, assetID identifiers.AssetID, asset
 	require.NoError(t, err)
 }
 
-func setLogicObject(t *testing.T, so *Object, logicID identifiers.LogicID, logicObj *LogicObject) {
+func setLogicObject(t *testing.T, so *Object, logicID identifiers.Identifier, logicObj *LogicObject) {
 	t.Helper()
 
 	assert.NoError(t, so.InsertNewLogicObject(logicID, logicObj))
@@ -1215,7 +1231,7 @@ func createTestAssets(
 	id identifiers.Identifier,
 	db *MockDB,
 	assetIDs []identifiers.AssetID,
-	balances []*big.Int,
+	balances []map[common.TokenID]*big.Int,
 ) (common.AssetMap, common.Hash) {
 	t.Helper()
 
@@ -1243,10 +1259,10 @@ func createTestAssets(
 func createTestAssetInAssetAccount(
 	t *testing.T, so *Object,
 	assetInfo *common.AssetDescriptor,
-) (identifiers.AssetID, common.Hash) {
+) common.Hash {
 	t.Helper()
 
-	assetID, err := so.CreateAsset(so.Identifier(), assetInfo)
+	err := so.CreateAsset(so.Identifier(), assetInfo)
 	require.NoError(t, err)
 
 	assetRoot, err := so.commitAssets()
@@ -1255,7 +1271,7 @@ func createTestAssetInAssetAccount(
 	err = so.flushAssetTree()
 	require.NoError(t, err)
 
-	return assetID, assetRoot
+	return assetRoot
 }
 
 func createTestAssetInRegularAccount(
@@ -1264,7 +1280,7 @@ func createTestAssetInRegularAccount(
 ) common.Hash {
 	t.Helper()
 
-	err := so.InsertNewAssetObject(assetID, NewAssetObject(assetInfo.Supply, nil))
+	err := so.InsertNewAssetObject(assetID, NewAssetObject(assetInfo))
 	require.NoError(t, err)
 
 	assetRoot, err := so.commitAssets()
@@ -1375,18 +1391,33 @@ func getStateHashes(t *testing.T, so []*Object) []common.Hash {
 	return stateHashes
 }
 
-func getTestAssetDescriptor(t *testing.T, operator identifiers.Identifier, symbol string) *common.AssetDescriptor {
+func getTestAssetDescriptor(
+	t *testing.T,
+	operator identifiers.Identifier,
+	circulatingSupply uint64,
+	symbol string, standard uint16,
+) *common.AssetDescriptor {
 	t.Helper()
 
-	return &common.AssetDescriptor{
-		Symbol:     symbol,
-		Operator:   operator,
-		Supply:     big.NewInt(10000),
-		Dimension:  4,
-		IsStateFul: false,
-		IsLogical:  false,
-		LogicID:    identifiers.RandomLogicIDv0().AsIdentifier(),
+	ad := &common.AssetDescriptor{
+		Symbol:            symbol,
+		Decimals:          5,
+		Manager:           operator,
+		Creator:           operator,
+		MaxSupply:         big.NewInt(0).SetUint64(circulatingSupply),
+		CirculatingSupply: big.NewInt(0).SetUint64(circulatingSupply),
+		LogicID:           identifiers.RandomLogicIDv0(),
 	}
+
+	assetID := common.CreateAssetIDFromString(
+		symbol,
+		0,
+		standard,
+		ad.Flags()...)
+
+	ad.AssetID = assetID
+
+	return ad
 }
 
 func createMetaStorageTree(
@@ -1441,8 +1472,8 @@ func createTestKramaHashTree(
 	return kt, storageRoot
 }
 
-func copyStorageTrees(ast map[identifiers.LogicID]tree.MerkleTree) map[identifiers.LogicID]tree.MerkleTree {
-	copiedAST := make(map[identifiers.LogicID]tree.MerkleTree, len(ast))
+func copyStorageTrees(ast map[identifiers.Identifier]tree.MerkleTree) map[identifiers.Identifier]tree.MerkleTree {
+	copiedAST := make(map[identifiers.Identifier]tree.MerkleTree, len(ast))
 
 	for logic, merkleTree := range ast {
 		copiedAST[logic] = merkleTree.Copy()
@@ -1456,7 +1487,7 @@ func getStorageTreesWithDefaultEntries(
 	t *testing.T,
 	treeCount int,
 	entriesPerTree int,
-) map[identifiers.LogicID]tree.MerkleTree {
+) map[identifiers.Identifier]tree.MerkleTree {
 	t.Helper()
 
 	logicIds := tests.GetLogicIDs(t, treeCount)
@@ -1476,14 +1507,14 @@ func getMerkleTreeWithDefaultEntries(t *testing.T, entriesPerTree int) tree.Merk
 
 func getStorageTrees(
 	t *testing.T,
-	logicIds []identifiers.LogicID,
+	logicIds []identifiers.Identifier,
 	keys [][]byte,
 	values [][]byte,
-) map[identifiers.LogicID]tree.MerkleTree {
+) map[identifiers.Identifier]tree.MerkleTree {
 	t.Helper()
 
 	count := len(logicIds)
-	storageTrees := make(map[identifiers.LogicID]tree.MerkleTree, count)
+	storageTrees := make(map[identifiers.Identifier]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
 		storageTrees[logicIds[i]] = getMerkleTreeWithEntries(t, keys, values)
@@ -1494,15 +1525,15 @@ func getStorageTrees(
 
 func getStorageTreesWithCommitHook(
 	t *testing.T,
-	logicIds []identifiers.LogicID,
+	logicIds []identifiers.Identifier,
 	keys [][]byte,
 	values [][]byte,
 	commitHook func() error,
-) map[identifiers.LogicID]tree.MerkleTree {
+) map[identifiers.Identifier]tree.MerkleTree {
 	t.Helper()
 
 	count := len(logicIds)
-	activeStorageTrees := make(map[identifiers.LogicID]tree.MerkleTree, count)
+	activeStorageTrees := make(map[identifiers.Identifier]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
 		activeStorageTrees[logicIds[i]] = getMerkleTreeWithCommitHook(t, keys, values, commitHook)
@@ -1513,15 +1544,15 @@ func getStorageTreesWithCommitHook(
 
 func getActiveStorageTreesWithFlushHook(
 	t *testing.T,
-	logicIds []identifiers.LogicID,
+	logicIds []identifiers.Identifier,
 	keys [][]byte,
 	values [][]byte,
 	commitHook func() error,
-) map[identifiers.LogicID]tree.MerkleTree {
+) map[identifiers.Identifier]tree.MerkleTree {
 	t.Helper()
 
 	count := len(logicIds)
-	activeStorageTrees := make(map[identifiers.LogicID]tree.MerkleTree, count)
+	activeStorageTrees := make(map[identifiers.Identifier]tree.MerkleTree, count)
 
 	for i := 0; i < count; i++ {
 		activeStorageTrees[logicIds[i]] = getMerkleTreeWithFlushHook(t, keys, values, commitHook)
@@ -1653,21 +1684,37 @@ func checkIfStateObjectAreEqual(
 	}
 }
 
-func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int, assetID identifiers.AssetID) {
+func checkForBalances(t *testing.T, sObj *Object, expectedBalance *big.Int,
+	assetID identifiers.AssetID, tokenID common.TokenID,
+) {
 	t.Helper()
 
 	assetObject, err := sObj.getAssetObject(assetID, true)
 	require.NoError(t, err)
-	require.Equal(t, expectedBalance, assetObject.Balance)
+	require.Equal(t, expectedBalance, assetObject.Balance[tokenID])
+
+	if expectedBalance.Uint64() == 0 {
+		require.Nil(t, assetObject.TokenMetaData[tokenID])
+	}
+}
+
+func checkForTokenMetaData(t *testing.T, sObj *Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, expected *MetaData,
+) {
+	t.Helper()
+
+	assetObject, err := sObj.getAssetObject(assetID, true)
+	require.NoError(t, err)
+	require.Equal(t, expected, assetObject.TokenMetaData[tokenID])
 }
 
 func checkForMandates(
-	t *testing.T, sObj *Object, assetID identifiers.AssetID,
+	t *testing.T, sObj *Object, assetID identifiers.AssetID, tokenID common.TokenID,
 	id identifiers.Identifier, expectedAmount *big.Int,
 ) {
 	t.Helper()
 
-	mandate, err := sObj.GetMandate(assetID, id)
+	mandate, err := sObj.GetMandate(assetID, tokenID, id)
 
 	if expectedAmount.Cmp(big.NewInt(0)) == 0 {
 		require.Error(t, err)
@@ -1681,12 +1728,12 @@ func checkForMandates(
 }
 
 func checkForLockups(
-	t *testing.T, sObj *Object, assetID identifiers.AssetID,
+	t *testing.T, sObj *Object, assetID identifiers.AssetID, tokenID common.TokenID,
 	id identifiers.Identifier, expectedAmount *big.Int,
 ) {
 	t.Helper()
 
-	lockupAmount, err := sObj.GetLockup(assetID, id)
+	lockupAmount, err := sObj.GetLockup(assetID, tokenID, id)
 
 	if expectedAmount.Cmp(big.NewInt(0)) == 0 {
 		require.Error(t, err)
@@ -1696,7 +1743,7 @@ func checkForLockups(
 	}
 
 	require.NoError(t, err)
-	require.Equal(t, 0, lockupAmount.Cmp(expectedAmount))
+	require.Equal(t, 0, lockupAmount.Amount.Cmp(expectedAmount))
 }
 
 func checkForDeeds(
@@ -1773,7 +1820,7 @@ func checkForContextObject(
 func checkIfStorageTreesAreCommitted(
 	t *testing.T,
 	sObj *Object,
-	oldStorageTrees map[identifiers.LogicID]tree.MerkleTree,
+	oldStorageTrees map[identifiers.Identifier]tree.MerkleTree,
 ) {
 	t.Helper()
 
@@ -1904,7 +1951,7 @@ func checkIfMerkleTreeFlushed(t *testing.T, merkle tree.MerkleTree, isFlushed bo
 	require.Equal(t, isFlushed, m.isFlushed)
 }
 
-func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []identifiers.LogicID, s *Object, isFlushed bool) {
+func checkIfActiveStorageTreesFlushed(t *testing.T, logicIDs []identifiers.Identifier, s *Object, isFlushed bool) {
 	t.Helper()
 
 	for _, logicID := range logicIDs {
@@ -2050,31 +2097,23 @@ func CheckAssetCreation(
 	t *testing.T,
 	s *Object,
 	assetDescriptor *common.AssetDescriptor,
-	assetID identifiers.AssetID,
 ) {
 	t.Helper()
 
-	state, err := s.GetState(assetID)
+	ad, err := s.GetProperties(assetDescriptor.AssetID)
 	require.NoError(t, err)
 
-	actualDeedsData, err := state.Bytes()
-	require.NoError(t, err)
-
-	expectedDeedsData, err := assetDescriptor.Bytes()
-	require.NoError(t, err)
-
-	require.Equal(t, actualDeedsData, expectedDeedsData)
-	require.Equal(t, s.Identifier(), assetDescriptor.Operator) // check if id is assigned to operator
+	require.Equal(t, ad, assetDescriptor) // check if id is assigned to operator
 }
 
 func getStorageTxnsWithEntries(
 	t *testing.T,
-	logicIDs []identifiers.LogicID,
+	logicIDs []identifiers.Identifier,
 	keys, values [][]byte,
-) map[identifiers.LogicID]*iradix.Txn {
+) map[identifiers.Identifier]*iradix.Txn {
 	t.Helper()
 
-	txns := make(map[identifiers.LogicID]*iradix.Txn)
+	txns := make(map[identifiers.Identifier]*iradix.Txn)
 	for _, logicID := range logicIDs {
 		txns[logicID] = getTxnsWithEntries(t, keys, values)
 	}
@@ -2169,3 +2208,21 @@ func checkForMetaContextObject(
 
 
 */
+
+func WithAssetBalance(
+	t *testing.T,
+	so *Object,
+	assetID identifiers.AssetID,
+	tokenID common.TokenID,
+	amount *big.Int,
+	metadata *MetaData,
+) {
+	t.Helper()
+
+	SetAssetObject(t, so, assetID, &AssetObject{
+		Balance: map[common.TokenID]*big.Int{
+			tokenID: amount,
+		},
+		TokenMetaData: map[common.TokenID]*MetaData{tokenID: metadata},
+	})
+}

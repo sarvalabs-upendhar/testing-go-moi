@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
@@ -39,13 +40,13 @@ type Object struct {
 	assetTree       tree.MerkleTree
 	logicTree       tree.MerkleTree
 	metaStorageTree tree.MerkleTree
-	storageTrees    map[identifiers.LogicID]tree.MerkleTree
+	storageTrees    map[identifiers.Identifier]tree.MerkleTree
 	fileTree        tree.MerkleTree //nolint:unused
 
 	dirtyEntries Storage
 	receipts     common.Receipts
 
-	storageTreeTxns map[identifiers.LogicID]*iradix.Txn
+	storageTreeTxns map[identifiers.Identifier]*iradix.Txn
 	assetTreeTxn    *iradix.Txn
 	logicTreeTxn    *iradix.Txn
 
@@ -79,8 +80,8 @@ func NewStateObject(
 		files:           make(map[common.Hash][]byte),
 		dirtyEntries:    make(Storage),
 		receipts:        make(common.Receipts),
-		storageTreeTxns: make(map[identifiers.LogicID]*iradix.Txn),
-		storageTrees:    make(map[identifiers.LogicID]tree.MerkleTree),
+		storageTreeTxns: make(map[identifiers.Identifier]*iradix.Txn),
+		storageTrees:    make(map[identifiers.Identifier]tree.MerkleTree),
 		metrics:         metrics,
 		isGenesis:       isGenesis,
 	}
@@ -161,7 +162,7 @@ func (object *Object) updateAssetTree(assetID identifiers.AssetID, assetObject *
 }
 
 // updateLogicTree ensures the logic transaction tree is initialized and inserts the given logic object.
-func (object *Object) updateLogicTree(logicID identifiers.LogicID, logicObject *LogicObject) {
+func (object *Object) updateLogicTree(logicID identifiers.Identifier, logicObject *LogicObject) {
 	// Initialize logicTreeTxn if not already done
 	if object.logicTreeTxn == nil {
 		object.logicTreeTxn = iradix.New().Txn()
@@ -172,14 +173,14 @@ func (object *Object) updateLogicTree(logicID identifiers.LogicID, logicObject *
 }
 
 // Balances retrieves and returns the balances of all the assets held by the participant.
-func (object *Object) Balances() (map[identifiers.AssetID]*big.Int, error) {
+func (object *Object) Balances() (map[identifiers.AssetID]map[common.TokenID]*big.Int, error) {
 	assetTree, err := object.getAssetTree()
 	if err != nil {
 		return nil, err
 	}
 
 	it := assetTree.NewIterator()
-	balances := make(map[identifiers.AssetID]*big.Int)
+	balances := make(map[identifiers.AssetID]map[common.TokenID]*big.Int)
 
 	for it.Next() {
 		if it.Leaf() {
@@ -376,23 +377,52 @@ func (object *Object) AccountKeys() (common.AccountKeys, error) {
 }
 
 // BalanceOf returns the balance of a specific asset, identified by its asset id.
-func (object *Object) BalanceOf(id identifiers.AssetID) (*big.Int, error) {
+func (object *Object) BalanceOf(id identifiers.AssetID, tokenID common.TokenID) (*big.Int, error) {
 	assetObject, err := object.getAssetObject(id, false)
 	if err != nil {
-		return big.NewInt(0), common.ErrAssetNotFound
+		return nil, common.ErrAssetNotFound
 	}
 
-	return assetObject.Balance, nil
+	for k, v := range assetObject.Balance {
+		fmt.Println("Token ID", k, v)
+	}
+
+	amount, ok := assetObject.Balance[tokenID]
+	if !ok {
+		return nil, common.ErrTokenNotFound
+	}
+
+	return amount, nil
 }
 
 // AddBalance increments the balance of the specified asset based on the given amount.
-func (object *Object) AddBalance(assetID identifiers.AssetID, amount *big.Int) error {
-	assetObject, err := object.getAssetObject(assetID, true)
+func (object *Object) AddBalance(assetID identifiers.AssetID, tokenID common.TokenID,
+	amount *big.Int, metadata *MetaData,
+) error {
+	var (
+		assetObject *AssetObject
+		err         error
+	)
+
+	// Insert a new asset object if the asset doesn't exist
+	assetObject, err = object.getAssetObject(assetID, true)
 	if err != nil {
-		return common.ErrAssetNotFound
+		assetObject = NewAssetObject(nil)
+		if err = object.InsertNewAssetObject(assetID, assetObject); err != nil {
+			return err
+		}
 	}
 
-	assetObject.Balance.Add(assetObject.Balance, amount)
+	bal, ok := assetObject.Balance[tokenID]
+	if !ok {
+		assetObject.Balance = map[common.TokenID]*big.Int{tokenID: amount}
+	} else {
+		assetObject.Balance[tokenID].Add(bal, amount)
+	}
+
+	if metadata != nil {
+		assetObject.TokenMetaData[tokenID] = metadata
+	}
 
 	object.updateAssetTree(assetID, assetObject)
 
@@ -400,37 +430,79 @@ func (object *Object) AddBalance(assetID identifiers.AssetID, amount *big.Int) e
 }
 
 // SubBalance decrements the balance of the specified asset based the given amount.
-func (object *Object) SubBalance(assetID identifiers.AssetID, amount *big.Int) error {
+func (object *Object) SubBalance(
+	assetID identifiers.AssetID,
+	tokenID common.TokenID,
+	amount *big.Int,
+) (*MetaData, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
-		return common.ErrAssetNotFound
+		return nil, common.ErrAssetNotFound
 	}
 
-	assetObject.Balance.Sub(assetObject.Balance, amount)
+	_, ok := assetObject.Balance[tokenID]
+	if !ok {
+		return nil, common.ErrTokenNotFound
+	}
+
+	assetObject.Balance[tokenID].Sub(assetObject.Balance[tokenID], amount)
+
+	metadata := assetObject.TokenMetaData[tokenID]
+
+	if assetObject.Balance[tokenID].Cmp(big.NewInt(0)) == 0 {
+		delete(assetObject.Balance, tokenID)
+		assetObject.deleteTokenMetadata(tokenID)
+	}
 
 	object.updateAssetTree(assetID, assetObject)
 
-	return nil
+	return metadata, nil
 }
 
 // CreateLockup transfers a specified amount from the participant's asset balance into a lockup
 // associated with a specified id. The lockup represents funds reserved for a specific purpose,
 // reducing the available balance for the participant.
-func (object *Object) CreateLockup(assetID identifiers.AssetID, id identifiers.Identifier, amount *big.Int) error {
+func (object *Object) CreateLockup(assetID identifiers.AssetID,
+	tokenID common.TokenID, beneficiary identifiers.Identifier, amount *big.Int,
+) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// Deduct the amount from asset balance
-	assetObject.Balance.Sub(assetObject.Balance, amount)
+	bal, ok := assetObject.Balance[tokenID]
+	if !ok {
+		return common.ErrTokenNotFound
+	}
 
-	if _, ok := assetObject.Lockup[id]; ok {
+	// Deduct the amount from asset balance
+	bal.Sub(assetObject.Balance[tokenID], amount)
+
+	if bal.Cmp(big.NewInt(0)) == 0 {
+		delete(assetObject.Balance, tokenID)
+	}
+
+	if len(assetObject.Lockup) == 0 {
+		assetObject.Lockup = make(map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry)
+	}
+
+	if lockups, ok := assetObject.Lockup[beneficiary]; ok {
+		lockup, ok := lockups[tokenID]
+		if ok {
+			amount = new(big.Int).Add(lockup.Amount, amount)
+		}
+
 		// Increment the lockup amount if the lockup already exist
-		assetObject.Lockup[id].Add(assetObject.Lockup[id], amount)
+		assetObject.Lockup[beneficiary][tokenID] = &common.AmountWithExpiry{
+			Amount:    amount,
+			ExpiresAt: lockup.ExpiresAt,
+		}
 	} else {
 		// Create a new lockup if it doesn't exist
-		assetObject.Lockup[id] = amount
+		assetObject.Lockup[beneficiary] = make(map[common.TokenID]*common.AmountWithExpiry)
+		assetObject.Lockup[beneficiary][tokenID] = &common.AmountWithExpiry{
+			Amount: amount,
+		}
 	}
 
 	object.updateAssetTree(assetID, assetObject)
@@ -440,26 +512,34 @@ func (object *Object) CreateLockup(assetID identifiers.AssetID, id identifiers.I
 
 // ReleaseLockup reduces the lockup amount from a specified id for the given asset.
 // If the lockup amount becomes zero, the lockup entry is deleted from the asset object.
-func (object *Object) ReleaseLockup(assetID identifiers.AssetID, id identifiers.Identifier, amount *big.Int) error {
+func (object *Object) ReleaseLockup(assetID identifiers.AssetID, tokenID common.TokenID,
+	beneficiary identifiers.Identifier, amount *big.Int,
+) (*MetaData, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
-		return common.ErrAssetNotFound
+		return nil, common.ErrAssetNotFound
 	}
 
-	lockupAmount, ok := assetObject.Lockup[id]
-	if !ok {
-		return common.ErrLockupNotFound
+	lockup := assetObject.Lockup[beneficiary][tokenID]
+
+	metadata := assetObject.TokenMetaData[tokenID]
+
+	// Decrement the mandate balance by the given amount
+	lockup.Amount.Sub(lockup.Amount, amount)
+
+	// If the lockup amount is zero, remove the lockup for the specified id.
+	if lockup.Amount.Cmp(big.NewInt(0)) == 0 {
+		delete(assetObject.Lockup[beneficiary], tokenID)
+		assetObject.deleteTokenMetadata(tokenID)
 	}
 
-	lockupAmount.Sub(lockupAmount, amount)
-
-	if lockupAmount.Cmp(big.NewInt(0)) == 0 {
-		delete(assetObject.Lockup, id)
+	if len(assetObject.Lockup[beneficiary]) == 0 {
+		delete(assetObject.Lockup, beneficiary)
 	}
 
 	object.updateAssetTree(assetID, assetObject)
 
-	return nil
+	return metadata, nil
 }
 
 // Lockups retrieves all active lockups across all assets in the AssetTree.
@@ -501,13 +581,22 @@ func (object *Object) Lockups() ([]common.AssetMandateOrLockup, error) {
 }
 
 // GetLockup retrieves the lockup amount for the given logic and asset id.
-func (object *Object) GetLockup(assetID identifiers.AssetID, id identifiers.Identifier) (*big.Int, error) {
+func (object *Object) GetLockup(
+	assetID identifiers.AssetID,
+	tokenID common.TokenID,
+	operatorID identifiers.Identifier,
+) (*common.AmountWithExpiry, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return nil, common.ErrAssetNotFound
 	}
 
-	if amount, ok := assetObject.Lockup[id]; ok {
+	lockUps, ok := assetObject.Lockup[operatorID]
+	if !ok {
+		return nil, common.ErrLockupNotFound
+	}
+
+	if amount, ok := lockUps[tokenID]; ok {
 		return amount, nil
 	}
 
@@ -518,7 +607,8 @@ func (object *Object) GetLockup(assetID identifiers.AssetID, id identifiers.Iden
 // The mandate grants the recipient the authorization to spend the specified amount on behalf of the participant.
 func (object *Object) CreateMandate(
 	assetID identifiers.AssetID,
-	id identifiers.Identifier,
+	tokenID common.TokenID,
+	beneficiary identifiers.Identifier,
 	amount *big.Int,
 	expiresAt uint64,
 ) error {
@@ -527,15 +617,21 @@ func (object *Object) CreateMandate(
 		return common.ErrAssetNotFound
 	}
 
-	if mandate, ok := assetObject.Mandate[id]; ok {
+	if mandates, ok := assetObject.Mandate[beneficiary]; ok {
+		if mandate, ok := mandates[tokenID]; ok {
+			amount = new(big.Int).Add(mandate.Amount, amount)
+		}
+
 		// Increment the mandate amount if the mandate already exist
-		assetObject.Mandate[id] = &Mandate{
-			Amount:    mandate.Amount.Add(mandate.Amount, amount),
+		assetObject.Mandate[beneficiary][tokenID] = &common.AmountWithExpiry{
+			Amount:    amount,
 			ExpiresAt: expiresAt,
 		}
 	} else {
+		assetObject.Mandate = make(map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry)
 		// Create a new mandate if it doesn't exist
-		assetObject.Mandate[id] = &Mandate{
+		assetObject.Mandate[beneficiary] = make(map[common.TokenID]*common.AmountWithExpiry)
+		assetObject.Mandate[beneficiary][tokenID] = &common.AmountWithExpiry{
 			Amount:    amount,
 			ExpiresAt: expiresAt,
 		}
@@ -549,24 +645,33 @@ func (object *Object) CreateMandate(
 // SubMandateBalance decrements the mandate balance of the specified asset by the given amount
 // for the specified id.
 func (object *Object) SubMandateBalance(
-	assetID identifiers.AssetID, id identifiers.Identifier, amount *big.Int,
+	assetID identifiers.AssetID, tokenID common.TokenID, operatorID identifiers.Identifier, amount *big.Int,
 ) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	mandate, ok := assetObject.Mandate[id]
+	entries, ok := assetObject.Mandate[operatorID]
+	if !ok {
+		return common.ErrMandateNotFound
+	}
+
+	mandate, ok := entries[tokenID]
 	if !ok {
 		return common.ErrMandateNotFound
 	}
 
 	// Decrement the mandate balance by the given amount
-	mandate.Amount = mandate.Amount.Sub(mandate.Amount, amount)
+	mandate.Amount.Sub(mandate.Amount, amount)
 
 	// If the mandate amount is zero, remove the mandate for the specified id.
 	if mandate.Amount.Cmp(big.NewInt(0)) == 0 {
-		delete(assetObject.Mandate, id)
+		delete(assetObject.Mandate[operatorID], tokenID)
+	}
+
+	if len(assetObject.Mandate[operatorID]) == 0 {
+		delete(assetObject.Mandate, operatorID)
 	}
 
 	object.updateAssetTree(assetID, assetObject)
@@ -575,24 +680,33 @@ func (object *Object) SubMandateBalance(
 }
 
 // ConsumeMandate updates the benefactor's mandate entry and asset balance
-func (object *Object) ConsumeMandate(assetID identifiers.AssetID, id identifiers.Identifier, amount *big.Int) error {
-	// Deduct the mandate amount from the sender's mandate balance
-	if err := object.SubMandateBalance(assetID, id, amount); err != nil {
-		return err
+func (object *Object) ConsumeMandate(assetID identifiers.AssetID, tokenID common.TokenID,
+	operatorID identifiers.Identifier, amount *big.Int,
+) (*MetaData, error) {
+	// Deduct the mandate amount from the operator's mandate balance
+	if err := object.SubMandateBalance(assetID, tokenID, operatorID, amount); err != nil {
+		return nil, err
 	}
 
 	// Deduct the transfer amount from the sender's asset balance
-	return object.SubBalance(assetID, amount)
+	return object.SubBalance(assetID, tokenID, amount)
 }
 
 // DeleteMandate revokes a granted spending authorization from a specified id for the given asset id.
-func (object *Object) DeleteMandate(assetID identifiers.AssetID, id identifiers.Identifier) error {
+func (object *Object) DeleteMandate(
+	assetID identifiers.AssetID, tokenID common.TokenID,
+	beneficiary identifiers.Identifier,
+) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	delete(assetObject.Mandate, id)
+	delete(assetObject.Mandate[beneficiary], tokenID)
+
+	if len(assetObject.Mandate[beneficiary]) == 0 {
+		delete(assetObject.Mandate, beneficiary)
+	}
 
 	object.updateAssetTree(assetID, assetObject)
 
@@ -627,7 +741,7 @@ func (object *Object) Mandates() ([]common.AssetMandateOrLockup, error) {
 				mandates = append(mandates, common.AssetMandateOrLockup{
 					AssetID: assetID,
 					ID:      id,
-					Amount:  mandate.Amount,
+					Amount:  mandate,
 				})
 			}
 		}
@@ -637,43 +751,99 @@ func (object *Object) Mandates() ([]common.AssetMandateOrLockup, error) {
 }
 
 // GetMandate retrieves the mandate amount for the given id and asset id.
-func (object *Object) GetMandate(assetID identifiers.AssetID, id identifiers.Identifier) (*Mandate, error) {
+func (object *Object) GetMandate(assetID identifiers.AssetID,
+	tokenID common.TokenID, beneficiary identifiers.Identifier,
+) (*common.AmountWithExpiry, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return nil, common.ErrAssetNotFound
 	}
 
-	if mandate, ok := assetObject.Mandate[id]; ok {
+	mandates, ok := assetObject.Mandate[beneficiary]
+	if !ok {
+		return nil, common.ErrMandateNotFound
+	}
+
+	if mandate, ok := mandates[tokenID]; ok {
 		return mandate, nil
 	}
 
 	return nil, common.ErrMandateNotFound
 }
 
-// GetState retrieves the current properties of the specified asset,
+func (object *Object) SetMetadata(assetID identifiers.AssetID, key string, val []byte) error {
+	assetObject, err := object.getAssetObject(assetID, true)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	assetObject.Properties.Metadata[key] = val
+
+	object.updateAssetTree(assetID, assetObject)
+
+	return nil
+}
+
+func (object *Object) SetTokenMetadata(
+	assetID identifiers.AssetID,
+	tokenID common.TokenID,
+	key string, val []byte,
+) error {
+	assetObject, err := object.getAssetObject(assetID, true)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	metadata, ok := assetObject.TokenMetaData[tokenID]
+	if !ok {
+		return common.ErrTokenNotFound
+	}
+
+	if len(metadata.data) == 0 {
+		assetObject.TokenMetaData[tokenID] = &MetaData{
+			data: make(map[string][]byte),
+		}
+	}
+
+	assetObject.TokenMetaData[tokenID].data[key] = val
+
+	object.updateAssetTree(assetID, assetObject)
+
+	return nil
+}
+
+func (object *Object) GetTokenMetadata(
+	assetID identifiers.AssetID,
+	tokenID common.TokenID,
+	key string,
+) ([]byte, error) {
+	assetObject, err := object.getAssetObject(assetID, true)
+	if err != nil {
+		return nil, common.ErrAssetNotFound
+	}
+
+	metadata, ok := assetObject.TokenMetaData[tokenID]
+	if !ok {
+		return nil, common.ErrTokenNotFound
+	}
+
+	val, ok := metadata.data[key]
+	if !ok {
+		return nil, common.ErrKeyNotFound
+	}
+
+	return val, nil
+}
+
+// GetProperties retrieves the current properties of the specified asset,
 // such as its symbol and supply details.
-func (object *Object) GetState(assetID identifiers.AssetID) (*common.AssetDescriptor, error) {
+func (object *Object) GetProperties(assetID identifiers.AssetID) (*common.AssetDescriptor, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return nil, common.ErrAssetNotFound
 	}
 
 	return assetObject.Properties, nil
-}
-
-// SetState updates the properties of the specified asset, including details
-// like its symbol or supply. This modifies the asset's metadata.
-func (object *Object) SetState(assetID identifiers.AssetID, properties *common.AssetDescriptor) error {
-	assetObject, err := object.getAssetObject(assetID, true)
-	if err != nil {
-		return common.ErrAssetNotFound
-	}
-
-	assetObject.Properties = properties
-
-	object.updateAssetTree(assetID, assetObject)
-
-	return nil
 }
 
 // Copy creates and returns a new object that replicates the state and all associated data of the original state object.
@@ -1079,7 +1249,7 @@ func (object *Object) flushStorageTrees() error {
 }
 
 // CreateStorageTreeForLogic creates a storage tree for the given logic ID.
-func (object *Object) CreateStorageTreeForLogic(logicID identifiers.LogicID) error {
+func (object *Object) CreateStorageTreeForLogic(logicID identifiers.Identifier) error {
 	_, err := object.createStorageTreeForLogic(logicID)
 
 	return err
@@ -1089,51 +1259,45 @@ func (object *Object) CreateStorageTreeForLogic(logicID identifiers.LogicID) err
 func (object *Object) CreateAsset(
 	id identifiers.Identifier,
 	descriptor *common.AssetDescriptor,
-) (identifiers.AssetID, error) {
-	assetID, err := identifiers.GenerateAssetIDv0(
-		id.Fingerprint(),
-		id.Variant(),
-		uint16(descriptor.Standard),
-		descriptor.Flags()...)
-	if err != nil {
-		return identifiers.Nil, err
+) error {
+	assetObject := NewAssetObject(descriptor)
+
+	if err := object.InsertNewAssetObject(descriptor.AssetID, assetObject); err != nil {
+		return err
 	}
 
-	assetObject := NewAssetObject(big.NewInt(0), descriptor)
-
-	if err := object.InsertNewAssetObject(assetID, assetObject); err != nil {
-		return identifiers.Nil, err
-	}
-
-	return assetID, nil
+	return nil
 }
 
-// MintAsset increases the supply of the specified asset by the given amount.
-func (object *Object) MintAsset(assetID identifiers.AssetID, amount *big.Int) (big.Int, error) {
-	assetObject, err := object.getAssetObject(assetID, false)
+// MintAsset increases the supply of the specified asset by the given amount and returns the circulating supply.
+func (object *Object) MintAsset(assetID identifiers.AssetID, amount *big.Int) (*big.Int, error) {
+	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
-		return *big.NewInt(0), common.ErrAssetNotFound
+		return nil, common.ErrAssetNotFound
 	}
 
-	assetObject.Properties.Supply.Add(assetObject.Properties.Supply, amount)
+	assetObject.Properties.CirculatingSupply.Add(assetObject.Properties.CirculatingSupply, amount)
 
-	return *assetObject.Properties.Supply, nil
+	return assetObject.Properties.CirculatingSupply, nil
 }
 
-// BurnAsset decreases the supply of the specified asset by the given amount.
-func (object *Object) BurnAsset(assetID identifiers.AssetID, amount *big.Int) (big.Int, error) {
-	assetObject, err := object.getAssetObject(assetID, false)
+// BurnAsset decreases the supply of the specified asset by the given amount and returns the circulating supply.
+func (object *Object) BurnAsset(assetID identifiers.AssetID, amount *big.Int) (*big.Int, error) {
+	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
-		return *big.NewInt(0), common.ErrAssetNotFound
+		return nil, common.ErrAssetNotFound
 	}
 
-	assetObject.Properties.Supply.Sub(assetObject.Properties.Supply, amount)
+	// assetObject.Properties.MaxSupply.Sub(assetObject.Properties.MaxSupply, amount)
+	assetObject.Properties.CirculatingSupply.Sub(assetObject.Properties.CirculatingSupply, amount)
 
-	return *assetObject.Properties.Supply, nil
+	object.updateAssetTree(assetID, assetObject)
+
+	return assetObject.Properties.CirculatingSupply, nil
 }
 
 // CreateLogic creates a new logic object and returns its logic ID.
-func (object *Object) CreateLogic(descriptor engineio.LogicDescriptor) (identifiers.LogicID, error) {
+func (object *Object) CreateLogic(logicID identifiers.Identifier, descriptor engineio.LogicDescriptor) error {
 	// Generate the key for the LogicManifest from its hash
 	key := common.BytesToHex(storage.LogicManifestKey(object.Identifier(), descriptor.ManifestHash))
 	// Write the manifest into the dirty entries
@@ -1143,19 +1307,19 @@ func (object *Object) CreateLogic(descriptor engineio.LogicDescriptor) (identifi
 	logicObject := NewLogicObject(object.Identifier(), descriptor)
 	// Insert the LogicObject into the state object
 	if err := object.InsertNewLogicObject(logicObject.ID, logicObject); err != nil {
-		return identifiers.Nil, errors.Wrap(err, "could not insert logic object into state object")
+		return errors.Wrap(err, "could not insert logic object into state object")
 	}
 
 	// Initialise the logic for itself
 	if err := object.InitLogicStorage(logicObject.LogicID()); err != nil {
-		return identifiers.Nil, err
+		return err
 	}
 
-	return logicObject.ID, nil
+	return nil
 }
 
 // InitLogicStorage initializes the storage for a given logic ID.
-func (object *Object) InitLogicStorage(logicID identifiers.LogicID) error {
+func (object *Object) InitLogicStorage(logicID identifiers.Identifier) error {
 	// Initialize a storage tree for the LogicID on the state object
 	if _, err := object.createStorageTreeForLogic(logicID); err != nil {
 		return err
@@ -1177,11 +1341,19 @@ func (object *Object) AddAccountGenesisInfo(id identifiers.Identifier, ixHash co
 		return err
 	}
 
-	return object.SetStorageEntry(common.SargaLogicID, id.Bytes(), rawData)
+	return object.SetStorageEntry(common.SargaLogicID.AsIdentifier(), id.Bytes(), rawData)
+}
+
+func (object *Object) AddManifestForAsset(standard common.AssetStandard, rawManifest []byte) error {
+	return object.SetStorageEntry(common.SargaLogicID.AsIdentifier(), AssetLogicKey(standard), rawManifest)
+}
+
+func (object *Object) GetManifestForAsset(standard common.AssetStandard) ([]byte, error) {
+	return object.GetStorageEntry(common.SargaLogicID.AsIdentifier(), AssetLogicKey(standard))
 }
 
 func (object *Object) IsAccountRegistered(id identifiers.Identifier) (bool, error) {
-	_, err := object.GetStorageEntry(common.SargaLogicID, id.Bytes())
+	_, err := object.GetStorageEntry(common.SargaLogicID.AsIdentifier(), id.Bytes())
 	if errors.Is(err, common.ErrKeyNotFound) {
 		return false, nil
 	}
@@ -1305,7 +1477,7 @@ func (object *Object) loadDeeds() error {
 }
 
 // HasStorageTree checks if a storage tree for the given logic ID exists.
-func (object *Object) HasStorageTree(logicID identifiers.LogicID) (bool, error) {
+func (object *Object) HasStorageTree(logicID identifiers.Identifier) (bool, error) {
 	if _, ok := object.storageTrees[logicID]; ok {
 		return true, nil
 	}
@@ -1325,7 +1497,7 @@ func (object *Object) HasStorageTree(logicID identifiers.LogicID) (bool, error) 
 // GetStorageTree retrieves and returns the Merkle tree based on the specified logic ID.
 // If the tree is not cached, it loads it from the meta storage tree and initializes it.
 // Returns an error if loading or initialization fails.
-func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTree, error) {
+func (object *Object) GetStorageTree(logicID identifiers.Identifier) (tree.MerkleTree, error) {
 	storageTree, ok := object.storageTrees[logicID]
 	if ok {
 		return storageTree, nil
@@ -1360,7 +1532,7 @@ func (object *Object) GetStorageTree(logicID identifiers.LogicID) (tree.MerkleTr
 
 // SetStorageEntry inserts a key-value pair in the storage tree for the given logic ID.
 // Returns an error if any issues arise during the process.
-func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []byte) error {
+func (object *Object) SetStorageEntry(logicID identifiers.Identifier, key, value []byte) error {
 	_, ok := object.storageTreeTxns[logicID]
 	if !ok {
 		if _, err := object.GetStorageTree(logicID); err != nil {
@@ -1390,7 +1562,7 @@ func (object *Object) SetStorageEntry(logicID identifiers.LogicID, key, value []
 }
 
 // GetStorageEntry retrieves the value associated a specific key from the storage tree for the given logic ID.
-func (object *Object) GetStorageEntry(logicID identifiers.LogicID, key []byte) (value []byte, err error) {
+func (object *Object) GetStorageEntry(logicID identifiers.Identifier, key []byte) (value []byte, err error) {
 	activeStorageTree, ok := object.storageTreeTxns[logicID]
 	if ok {
 		v, ok := activeStorageTree.Get(key)
@@ -1440,7 +1612,7 @@ func (object *Object) getMetaStorageTree() (tree.MerkleTree, error) {
 
 // createStorageTreeForLogic initializes a new Merkle tree for the specified logic ID and updates the meta storage tree.
 // Returns the Merkle tree or an error if the creation or update fails.
-func (object *Object) createStorageTreeForLogic(logicID identifiers.LogicID) (tree.MerkleTree, error) {
+func (object *Object) createStorageTreeForLogic(logicID identifiers.Identifier) (tree.MerkleTree, error) {
 	if _, err := object.getMetaStorageTree(); err != nil {
 		return nil, err
 	}
@@ -1474,8 +1646,8 @@ func (object *Object) isAssetRegistered(assetID identifiers.AssetID) error {
 }
 
 // isAssetRegistered checks if the given logic ID is registered.
-func (object *Object) isLogicRegistered(logicID identifiers.LogicID) error {
-	_, err := object.getLogicObject(logicID.AsIdentifier())
+func (object *Object) isLogicRegistered(logicID identifiers.Identifier) error {
+	_, err := object.getLogicObject(logicID)
 	if err != nil {
 		return err
 	}
@@ -1561,6 +1733,15 @@ func (object *Object) getAssetObject(assetID identifiers.AssetID, checkTxn bool)
 	return assetObject, nil
 }
 
+func (object *Object) AssetProperties(id identifiers.AssetID) (*common.AssetDescriptor, error) {
+	assetObject, err := object.getAssetObject(id, false)
+	if err != nil {
+		return nil, err
+	}
+
+	return assetObject.Properties, nil
+}
+
 // getLogicObject retrieves the logic object for the specified logic ID.
 func (object *Object) getLogicObject(logicID identifiers.Identifier) (*LogicObject, error) {
 	if object.logicTreeTxn != nil {
@@ -1602,7 +1783,7 @@ func (object *Object) InsertNewAssetObject(assetID identifiers.AssetID, assetObj
 
 // InsertNewLogicObject inserts the logicID and logicObject into the logicsTree
 // If the logicID is registered, this returns an error
-func (object *Object) InsertNewLogicObject(logicID identifiers.LogicID, logicObject *LogicObject) error {
+func (object *Object) InsertNewLogicObject(logicID identifiers.Identifier, logicObject *LogicObject) error {
 	if err := object.isLogicRegistered(logicID); err == nil {
 		return errors.New("logic already registered")
 	}
@@ -1624,8 +1805,8 @@ func (object *Object) FetchLogicObject(logicID identifiers.Identifier) (*LogicOb
 	return object.getLogicObject(logicID)
 }
 
-// GenerateLogicStorageObject returns a LogicStorageObject
-func (object *Object) GenerateLogicStorageObject() *LogicStorageObject {
+// FetchLogicStorageObject returns a LogicStorageObject
+func (object *Object) FetchLogicStorageObject() *LogicStorageObject {
 	return NewLogicStorageObject(object)
 }
 
@@ -1635,7 +1816,10 @@ func (object *Object) HasSufficientFuel(amount *big.Int) (bool, error) {
 	}
 
 	// Fetch sender balance object
-	balance, _ := object.BalanceOf(common.KMOITokenAssetID)
+	balance, err := object.BalanceOf(common.KMOITokenAssetID, common.DefaultTokenID)
+	if err != nil {
+		return false, err
+	}
 
 	// Check if sender has sufficient balance
 	if balance.Cmp(amount) == -1 {
@@ -1647,7 +1831,7 @@ func (object *Object) HasSufficientFuel(amount *big.Int) (bool, error) {
 
 func (object *Object) DeductFuel(amount *big.Int) {
 	// Remove amount from sender balance for asset
-	_ = object.SubBalance(common.KMOITokenAssetID, amount)
+	_, _ = object.SubBalance(common.KMOITokenAssetID, common.DefaultTokenID, amount)
 }
 
 func (object *Object) ConsensusNodes() []identifiers.KramaID {
@@ -1668,8 +1852,6 @@ func (object *Object) ConsensusNodesHash() common.Hash {
 
 func (object *Object) InheritAccount(payload *common.AccountInheritPayload, sender *Object) {
 	_ = object.UpdateInheritedAccount(payload.TargetAccount)
-
-	_ = object.InsertNewAssetObject(common.KMOITokenAssetID, NewAssetObject(payload.Amount, nil))
 
 	accountKeys, _ := sender.AccountKeys()
 	object.UpdateKeys(accountKeys.CopyForInheritAccount())

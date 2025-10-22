@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"os"
 	"sort"
 	"strconv"
@@ -355,10 +356,7 @@ func (m *MockLattice) AddTesseractWithState(
 		m.setTesseractByHeight(id, p.Height, ts)
 		m.setTesseractHeightEntry(id, p.Height, ts.Hash())
 
-		accountType, err := common.AccountTypeFromID(ts.AnyAccountID())
-		if err != nil {
-			return err
-		}
+		accountType := common.AccountTypeFromID(ts.AnyAccountID())
 
 		if _, _, err := m.db.UpdateAccMetaInfo(
 			id,
@@ -425,10 +423,7 @@ func (m *MockLattice) AddAccountMetaInfo(tesseracts ...*common.Tesseract) error 
 		for id, s := range ts.Participants() {
 			m.logger.Trace("adding account meta info ", "accountID", id, "height", s.Height)
 
-			accountType, err := common.AccountTypeFromID(ts.AnyAccountID())
-			if err != nil {
-				return err
-			}
+			accountType := common.AccountTypeFromID(ts.AnyAccountID())
 
 			if _, _, err := m.db.UpdateAccMetaInfo(
 				id,
@@ -590,7 +585,7 @@ func (m *MockStateManager) LoadTransitionObjects(
 
 	for id, p := range ps {
 		if p.IsGenesis {
-			objects[id] = m.CreateStateObject(id, p.AccType, true)
+			objects[id] = m.CreateStateObject(id, true)
 
 			continue
 		}
@@ -608,11 +603,10 @@ func (m *MockStateManager) LoadTransitionObjects(
 	return state.NewTransition(nil, objects, nil), nil
 }
 
-func (m *MockStateManager) CreateStateObject(id identifiers.Identifier,
-	accountType common.AccountType, isGenesis bool,
+func (m *MockStateManager) CreateStateObject(id identifiers.Identifier, isGenesis bool,
 ) *state.Object {
 	return state.NewStateObject(id, nil, nil, nil,
-		common.Account{AccType: accountType}, state.NilMetrics(), isGenesis)
+		common.Account{AccType: common.AccountTypeFromID(id)}, state.NilMetrics(), isGenesis)
 }
 
 func (m *MockStateManager) GetLatestStateObject(id identifiers.Identifier) (*state.Object, error) {
@@ -1290,15 +1284,6 @@ func generateTesseracts(
 			heights = append(heights, uint64(i))
 		}
 
-		txns := make([]common.IxOpRaw, len(ids))
-
-		for i, id := range ids {
-			txns[i] = common.IxOpRaw{
-				Type:    common.IxAssetTransfer,
-				Payload: tests.CreateRawAssetActionPayload(t, id),
-			}
-		}
-
 		tesseractParams := &tests.CreateTesseractParams{
 			IDs:          ids,
 			Heights:      heights,
@@ -1316,7 +1301,12 @@ func generateTesseracts(
 				false,
 				tests.CreateIX(t, &tests.CreateIxParams{
 					IxDataCallback: func(ix *common.IxData) {
-						ix.IxOps = txns
+						for _, id := range ids {
+							tests.AddIxOp(t, ix, common.IxAssetAction, common.KMOITokenAssetID, &common.TransferParams{
+								Beneficiary: id,
+								Amount:      big.NewInt(1),
+							})
+						}
 					},
 				}),
 			),

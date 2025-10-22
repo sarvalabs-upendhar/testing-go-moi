@@ -20,7 +20,6 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/VictoriaMetrics/fastcache"
-
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/assert"
@@ -256,14 +255,23 @@ func GetRandomAssetInfo(t *testing.T, id identifiers.Identifier) *common.AssetDe
 	}
 
 	asset := &common.AssetDescriptor{
-		Operator:   id,
-		Dimension:  1,
-		Supply:     big.NewInt(1000),
-		Symbol:     symbol,
-		IsStateFul: true,
-		IsLogical:  false,
-		LogicID:    identifiers.RandomLogicIDv0().AsIdentifier(),
+		Creator:   id,
+		Manager:   id,
+		Decimals:  4,
+		MaxSupply: big.NewInt(1000),
+		Symbol:    symbol,
+		LogicID:   identifiers.RandomLogicIDv0(),
 	}
+
+	assetID, err := identifiers.GenerateAssetIDv0(
+		id.Fingerprint(),
+		id.Variant(),
+		uint16(0),
+		asset.Flags()...,
+	)
+	require.NoError(t, err)
+
+	asset.AssetID = assetID
 
 	return asset
 }
@@ -272,16 +280,8 @@ func CreateTestAsset(t *testing.T, id identifiers.Identifier) (identifiers.Asset
 	t.Helper()
 
 	asset := GetRandomAssetInfo(t, id)
-	assetID, err := identifiers.GenerateAssetIDv0(
-		id.Fingerprint(),
-		id.Variant(),
-		uint16(asset.Standard),
-		asset.Flags()...,
-	)
 
-	require.NoError(t, err)
-
-	return assetID, asset
+	return asset.AssetID, asset
 }
 
 func CreateTestAssets(t *testing.T, count int) ([]identifiers.AssetID, []*common.AssetDescriptor) {
@@ -313,6 +313,15 @@ func GetRandomNumbers(t *testing.T, ceil int, count int) []*big.Int {
 	}
 
 	return numbers
+}
+
+func GetRandomTokenID(t *testing.T) common.TokenID {
+	t.Helper()
+
+	randUint, err := rand.Int(rand.Reader, big.NewInt(0).SetUint64(math.MaxUint64))
+	require.NoError(t, err)
+
+	return common.TokenID(randUint.Uint64())
 }
 
 func GetRandomAssetID(t *testing.T, id identifiers.Identifier) identifiers.AssetID {
@@ -634,6 +643,17 @@ func XORBytes(t *testing.T, arrays ...[32]byte) [32]byte {
 	return result
 }
 
+func AssetActionPayload(
+	t *testing.T, assetID identifiers.AssetID, callsite string, params any,
+) *common.AssetActionPayload {
+	t.Helper()
+
+	action, err := common.GetAssetActionPayload(assetID, callsite, params)
+	require.NoError(t, err)
+
+	return action
+}
+
 type CreateIxParams struct {
 	IxDataCallback     func(ix *common.IxData)
 	SenderSign         []byte
@@ -650,10 +670,224 @@ func IsPresent(participants []common.IxParticipant, id identifiers.Identifier) b
 	return false
 }
 
-func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
+func AddParticipants(t *testing.T, ixData *common.IxData, participants ...common.IxParticipant) {
 	t.Helper()
 
-	var err error
+	for _, p := range participants {
+		found := false
+
+		for index, oldParticipant := range ixData.Participants {
+			if oldParticipant.ID == p.ID {
+				found = true
+				ixData.Participants[index] = p
+			}
+		}
+
+		if !found {
+			ixData.Participants = append(ixData.Participants, p)
+		}
+	}
+}
+
+func AddIxOp(t *testing.T, ixData *common.IxData, ixOpType common.IxOpType, assetID identifiers.AssetID, payload any) {
+	t.Helper()
+
+	switch ixOpType {
+	case common.IxInvalid:
+		return
+	case common.IxAccountInherit:
+		ai, ok := payload.(*common.AccountInheritPayload)
+		require.True(t, ok, "failed to type cast payload")
+
+		ixData.IxOps = append(ixData.IxOps, common.IxOpRaw{
+			Type: ixOpType,
+			Payload: func() []byte {
+				b, err := ai.Bytes()
+				require.NoError(t, err)
+
+				return b
+			}(),
+		})
+
+		if ai.Value != nil && !IsPresent(ixData.Participants, ai.Value.AssetID.AsIdentifier()) {
+			ixData.Participants = append(ixData.Participants, common.IxParticipant{
+				ID:       ai.Value.AssetID.AsIdentifier(),
+				LockType: common.NoLock,
+			})
+		}
+
+	case common.IxAccountConfigure:
+		acp, ok := payload.(*common.AccountConfigurePayload)
+		require.True(t, ok, "failed to type cast payload")
+
+		ixData.IxOps = append(ixData.IxOps, common.IxOpRaw{
+			Type: ixOpType,
+			Payload: func() []byte {
+				b, err := acp.Bytes()
+				require.NoError(t, err)
+
+				return b
+			}(),
+		})
+
+	case common.IxAssetCreate:
+		acp, ok := payload.(*common.AssetCreatePayload)
+		require.True(t, ok, "failed to type cast payload")
+
+		ixData.IxOps = append(ixData.IxOps, common.IxOpRaw{
+			Type: ixOpType,
+			Payload: func() []byte {
+				b, err := acp.Bytes()
+				require.NoError(t, err)
+
+				return b
+			}(),
+		})
+
+	case common.IxParticipantCreate:
+		cp, ok := payload.(*common.ParticipantCreatePayload)
+		require.True(t, ok, "failed to type cast payload")
+
+		if !IsPresent(ixData.Participants, cp.ID) {
+			ixData.Participants = append(ixData.Participants, common.IxParticipant{
+				ID:       cp.ID,
+				LockType: common.MutateLock,
+			})
+		}
+
+		if cp.Value != nil && !IsPresent(ixData.Participants, cp.Value.AssetID.AsIdentifier()) {
+			ixData.Participants = append(ixData.Participants, common.IxParticipant{
+				ID:       cp.Value.AssetID.AsIdentifier(),
+				LockType: common.NoLock,
+			})
+		}
+
+		ixData.IxOps = append(ixData.IxOps, common.IxOpRaw{
+			Type: ixOpType,
+			Payload: func() []byte {
+				b, err := cp.Bytes()
+				require.NoError(t, err)
+
+				return b
+			}(),
+		})
+
+	case common.IxAssetAction:
+		x := payload
+
+		var err error
+
+		if action, ok := payload.(*common.AssetActionPayload); ok {
+			x, _, err = common.GetParamsFromActionPayload(action)
+
+			require.NoError(t, err)
+
+			assetID = action.AssetID
+		}
+
+		switch y := x.(type) {
+		case *common.TransferParams:
+			if !IsPresent(ixData.Participants, assetID.AsIdentifier()) {
+				ixData.Participants = append(ixData.Participants, common.IxParticipant{
+					ID:       assetID.AsIdentifier(),
+					LockType: common.NoLock,
+				})
+			}
+
+			tp := y
+
+			ap, err := common.GetAssetActionPayload(assetID, common.TransferEndpoint, tp)
+			require.NoError(t, err)
+
+			if !tp.Beneficiary.IsNil() && !IsPresent(ixData.Participants, tp.Beneficiary) {
+				ixData.Participants = append(ixData.Participants, common.IxParticipant{
+					ID:       tp.Beneficiary,
+					LockType: common.MutateLock,
+				})
+			}
+
+			ixData.IxOps = append(ixData.IxOps, common.IxOpRaw{
+				Type: ixOpType,
+				Payload: func() []byte {
+					b, err := ap.Bytes()
+					require.NoError(t, err)
+
+					return b
+				}(),
+			})
+
+		case *common.MintParams:
+			if !IsPresent(ixData.Participants, assetID.AsIdentifier()) {
+				ixData.Participants = append(ixData.Participants, common.IxParticipant{
+					ID:       assetID.AsIdentifier(),
+					LockType: common.MutateLock,
+				})
+			}
+
+			mp := y
+
+			ap, err := common.GetAssetActionPayload(assetID, common.TransferEndpoint, mp)
+			require.NoError(t, err)
+
+			if !IsPresent(ixData.Participants, mp.Beneficiary) {
+				ixData.Participants = append(ixData.Participants, common.IxParticipant{
+					ID:       mp.Beneficiary,
+					LockType: common.MutateLock,
+				})
+			}
+
+			ixData.IxOps = append(ixData.IxOps, common.IxOpRaw{
+				Type: ixOpType,
+				Payload: func() []byte {
+					b, err := ap.Bytes()
+					require.NoError(t, err)
+
+					return b
+				}(),
+			})
+		default:
+			require.NoError(t, common.ErrInvalidInteractionType)
+		}
+
+	case common.IxLogicDeploy, common.IxLogicInvoke:
+		lp, ok := payload.(*common.LogicPayload)
+		require.True(t, ok)
+
+		if common.IxLogicDeploy != ixOpType {
+			if !IsPresent(ixData.Participants, lp.LogicID.AsIdentifier()) {
+				ixData.Participants = append(ixData.Participants, common.IxParticipant{
+					ID:       lp.LogicID.AsIdentifier(),
+					LockType: common.MutateLock,
+				})
+			}
+		}
+
+		for _, logic := range lp.Interfaces {
+			if !IsPresent(ixData.Participants, logic) {
+				ixData.Participants = append(ixData.Participants, common.IxParticipant{
+					ID:       logic,
+					LockType: common.MutateLock,
+				})
+			}
+		}
+
+		ixData.IxOps = append(ixData.IxOps, common.IxOpRaw{
+			Type: ixOpType,
+			Payload: func() []byte {
+				b, err := lp.Bytes()
+				require.NoError(t, err)
+
+				return b
+			}(),
+		})
+
+	default:
+		require.NoError(t, common.ErrInvalidInteractionType)
+	}
+}
+
+func AppendDefaultParticipants(t *testing.T, data *common.IxData) {
+	t.Helper()
 
 	if !data.Payer.IsNil() {
 		if !IsPresent(data.Participants, data.Payer) {
@@ -670,76 +904,6 @@ func AppendParticipantsInIxData(t *testing.T, data *common.IxData) {
 			LockType: common.MutateLock,
 		})
 	}
-
-	for _, op := range data.IxOps {
-		switch op.Type {
-		case common.IxParticipantCreate:
-			participantCreatePayload := new(common.ParticipantCreatePayload)
-			err = participantCreatePayload.FromBytes(op.Payload)
-			require.NoError(t, err)
-
-			if !IsPresent(data.Participants, participantCreatePayload.ID) {
-				data.Participants = append(data.Participants, common.IxParticipant{
-					ID:       participantCreatePayload.ID,
-					LockType: common.MutateLock,
-				})
-			}
-
-		case common.IxAssetCreate:
-		case common.IxAssetTransfer:
-			assetActionPayload := new(common.AssetActionPayload)
-			err = assetActionPayload.FromBytes(op.Payload)
-			require.NoError(t, err)
-
-			if !IsPresent(data.Participants, assetActionPayload.Beneficiary) {
-				data.Participants = append(data.Participants, common.IxParticipant{
-					ID:       assetActionPayload.Beneficiary,
-					LockType: common.MutateLock,
-				})
-			}
-
-		case common.IxAssetMint, common.IxAssetBurn:
-			assetSupplyPayload := new(common.AssetSupplyPayload)
-			err = assetSupplyPayload.FromBytes(op.Payload)
-			require.NoError(t, err)
-
-			if !IsPresent(data.Participants, assetSupplyPayload.AssetID.AsIdentifier()) {
-				data.Participants = append(data.Participants, common.IxParticipant{
-					ID:       assetSupplyPayload.AssetID.AsIdentifier(),
-					LockType: common.MutateLock,
-				})
-			}
-
-		case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
-			logicPayload := new(common.LogicPayload)
-
-			err = logicPayload.FromBytes(op.Payload)
-			require.NoError(t, err)
-
-			if common.IxLogicDeploy != op.Type {
-				if !IsPresent(data.Participants, logicPayload.Logic.AsIdentifier()) {
-					data.Participants = append(data.Participants, common.IxParticipant{
-						ID:       logicPayload.Logic.AsIdentifier(),
-						LockType: common.MutateLock,
-					})
-				}
-
-				for _, logic := range logicPayload.Interfaces {
-					if !IsPresent(data.Participants, logic.AsIdentifier()) {
-						data.Participants = append(data.Participants, common.IxParticipant{
-							ID:       logic.AsIdentifier(),
-							LockType: common.MutateLock,
-						})
-					}
-				}
-
-				continue
-			}
-
-		default:
-			require.NoError(t, common.ErrInvalidInteractionType)
-		}
-	}
 }
 
 func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
@@ -750,12 +914,7 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 	}
 
 	data := &common.IxData{
-		IxOps: []common.IxOpRaw{
-			{
-				Type:    common.IxAssetTransfer,
-				Payload: CreateRawAssetActionPayload(t, DefaultTestBeneficiaryID),
-			},
-		},
+		IxOps:        []common.IxOpRaw{},
 		Participants: []common.IxParticipant{},
 	}
 
@@ -767,7 +926,7 @@ func CreateIX(t *testing.T, params *CreateIxParams) *common.Interaction {
 		data.Sender.ID = RandomIdentifierWithZeroVariant(t)
 	}
 
-	AppendParticipantsInIxData(t, data)
+	AppendDefaultParticipants(t, data)
 
 	if len(params.SenderSign) == 0 {
 		params.SenderSign = []byte{}
@@ -807,14 +966,15 @@ func CreateIXWithParticipants(t *testing.T, ps []identifiers.Identifier,
 	}
 
 	data := &common.IxData{
-		IxOps: []common.IxOpRaw{
-			{
-				Type:    common.IxAssetTransfer,
-				Payload: CreateRawAssetActionPayload(t, ps[1]),
-			},
-		},
+		IxOps: []common.IxOpRaw{},
+
 		Participants: []common.IxParticipant{},
 	}
+
+	AddIxOp(t, data, common.IxAssetAction, common.KMOITokenAssetID, &common.TransferParams{
+		Beneficiary: ps[1],
+		Amount:      big.NewInt(1),
+	})
 
 	if params.IxDataCallback != nil {
 		params.IxDataCallback(data)
@@ -823,9 +983,18 @@ func CreateIXWithParticipants(t *testing.T, ps []identifiers.Identifier,
 	if data.Sender.ID == identifiers.Nil {
 		data.Sender.ID = ps[0]
 		data.Sender.SequenceID = sequenceID
+		data.Participants = append(data.Participants, common.IxParticipant{
+			ID:       data.Sender.ID,
+			LockType: common.MutateLock,
+		})
 	}
 
-	AppendParticipantsInIxData(t, data)
+	// for _, id := range ps {
+	//	AddParticipants(t, data, common.IxParticipant{
+	//		ID:       id,
+	//		LockType: common.MutateLock,
+	//	})
+	//}
 
 	for _, id := range ps[2:] {
 		data.Participants = append(data.Participants, common.IxParticipant{
@@ -881,6 +1050,7 @@ func Max24Byte(t *testing.T) [24]byte {
 	return maxValue
 }
 
+// TODO: Check this usage for manual ixOp updation
 func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) []*common.Interaction {
 	t.Helper()
 
@@ -897,28 +1067,16 @@ func CreateIxns(t *testing.T, count int, paramsMap map[int]*CreateIxParams) []*c
 	return ixns
 }
 
-func GetIxParamsWithID(t *testing.T, from identifiers.Identifier, to identifiers.Identifier) *CreateIxParams {
+func GetIxParamsForTransfer(t *testing.T, from identifiers.Identifier, to identifiers.Identifier) *CreateIxParams {
 	t.Helper()
 
 	return &CreateIxParams{
 		IxDataCallback: func(ix *common.IxData) {
 			ix.Sender.ID = from
-			ix.IxOps = []common.IxOpRaw{
-				{
-					Type:    common.IxAssetTransfer,
-					Payload: CreateRawAssetActionPayload(t, to),
-				},
-			}
-			ix.Participants = []common.IxParticipant{
-				{
-					ID:       from,
-					LockType: common.MutateLock,
-				},
-				{
-					ID:       to,
-					LockType: common.MutateLock,
-				},
-			}
+			AddIxOp(t, ix, common.IxAssetAction, common.KMOITokenAssetID, &common.TransferParams{
+				Beneficiary: to,
+				Amount:      big.NewInt(10),
+			})
 		},
 		SenderSign: nil,
 	}
@@ -935,7 +1093,7 @@ func GetIxParamsMapWithIDs(
 	ixParams := make(map[int]*CreateIxParams, count)
 
 	for i := 0; i < count; i++ {
-		ixParams[i] = GetIxParamsWithID(t, from[i], to[i])
+		ixParams[i] = GetIxParamsForTransfer(t, from[i], to[i])
 	}
 
 	return ixParams
@@ -1236,20 +1394,20 @@ func GetIXSignature(t *testing.T, ixData *common.IxData, mnemonic string) []byte
 	return rawSign
 }
 
-func GetLogicID(t *testing.T, id identifiers.Identifier) identifiers.LogicID {
+func GetLogicID(t *testing.T, id identifiers.Identifier) identifiers.Identifier {
 	t.Helper()
 
 	logicID, err := identifiers.GenerateLogicIDv0(id.Fingerprint(), 0)
 
 	require.NoError(t, err)
 
-	return logicID
+	return logicID.AsIdentifier()
 }
 
-func GetLogicIDs(t *testing.T, count int) []identifiers.LogicID {
+func GetLogicIDs(t *testing.T, count int) []identifiers.Identifier {
 	t.Helper()
 
-	logicIDs := make([]identifiers.LogicID, count)
+	logicIDs := make([]identifiers.Identifier, count)
 
 	for i := 0; i < count; i++ {
 		logicIDs[i] = GetLogicID(t, RandomIdentifier(t))
@@ -1349,7 +1507,6 @@ func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
 	for i := 0; i < count; i++ {
 		ids[i] = RandomIdentifier(t)
 		ps[ids[i]] = common.ParticipantInfo{
-			AccType:   common.RegularAccount,
 			IsSigner:  true,
 			LockType:  common.MutateLock,
 			IsGenesis: false,
@@ -1359,7 +1516,6 @@ func CreateTestIxParticipants(t *testing.T, count int, genesisAccCount int) (
 	for i := 0; i < genesisAccCount; i++ {
 		ids[i] = RandomIdentifier(t)
 		ps[ids[i]] = common.ParticipantInfo{
-			AccType:   common.RegularAccount,
 			IsSigner:  true,
 			LockType:  common.MutateLock,
 			IsGenesis: true,
@@ -1399,10 +1555,10 @@ func CreateTxPayload(t *testing.T, ixType common.IxOpType, beneficiary identifie
 		return CreateRawParticipantCreatePayload(t, beneficiary)
 	case common.IxAssetCreate:
 		return CreateRawAssetCreatePayload(t)
-	case common.IxAssetTransfer:
-		return CreateRawAssetActionPayload(t, beneficiary)
-	case common.IxAssetMint, common.IxAssetBurn:
-		return CreateRawAssetSupplyPayload(t, beneficiary)
+	case common.IxAssetAction:
+		return CreateRawAssetTransferPayload(t, beneficiary)
+	// case common.IxAssetMint, common.IxAssetBurn:
+	//	return CreateRawAssetSupplyPayload(t, beneficiary)
 	case common.IxLogicDeploy, common.IxLogicInvoke, common.IxLogicEnlist:
 		return CreateRawLogicPayload(t, identifiers.RandomLogicIDv0())
 	default:
@@ -1410,67 +1566,57 @@ func CreateTxPayload(t *testing.T, ixType common.IxOpType, beneficiary identifie
 	}
 }
 
-func CreateParticipantCreatePayload(t *testing.T, id identifiers.Identifier) common.ParticipantCreatePayload {
+func CreateParticipantCreatePayload(t *testing.T, id identifiers.Identifier) *common.ParticipantCreatePayload {
 	t.Helper()
 
 	if id.IsNil() {
 		id = RandomIdentifier(t)
 	}
 
-	return common.ParticipantCreatePayload{
+	return &common.ParticipantCreatePayload{
 		ID: id,
 		KeysPayload: []common.KeyAddPayload{
 			{
 				Weight: 1000,
 			},
 		},
-		Amount: big.NewInt(1),
+		Value: CreateAssetTransferPayload(t, id),
 	}
 }
 
-func CreateAssetCreatePayload(t *testing.T) common.AssetCreatePayload {
+func CreateAssetCreatePayload(t *testing.T) *common.AssetCreatePayload {
 	t.Helper()
 
-	return common.AssetCreatePayload{
-		Symbol:   GetRandomUpperCaseString(t, 5),
-		Supply:   big.NewInt(2000),
-		Standard: common.MAS0,
+	return &common.AssetCreatePayload{
+		Symbol:    GetRandomUpperCaseString(t, 5),
+		MaxSupply: big.NewInt(2000),
+		Standard:  common.MAS0,
 	}
 }
 
-func CreateAssetActionPayload(t *testing.T, id identifiers.Identifier) common.AssetActionPayload {
+func CreateAssetTransferPayload(t *testing.T, id identifiers.Identifier) *common.AssetActionPayload {
 	t.Helper()
 
 	if id.IsNil() {
 		id = RandomIdentifierWithZeroVariant(t)
 	}
 
-	return common.AssetActionPayload{
+	payload, err := common.GetAssetActionPayload(common.KMOITokenAssetID, common.TransferEndpoint, &common.TransferParams{
 		Beneficiary: id,
-		AssetID:     common.KMOITokenAssetID,
 		Amount:      big.NewInt(1),
-	}
+	})
+
+	require.NoError(t, err)
+
+	return payload
 }
 
-func CreateAssetSupplyPayload(t *testing.T, id identifiers.Identifier) common.AssetSupplyPayload {
+func CreateLogicPayload(t *testing.T, id identifiers.LogicID) *common.LogicPayload {
 	t.Helper()
 
-	if id.IsNil() {
-		id = RandomIdentifier(t)
-	}
-
-	return common.AssetSupplyPayload{
-		AssetID: GetRandomAssetID(t, id),
-		Amount:  big.NewInt(1),
-	}
-}
-
-func CreateLogicPayload(t *testing.T, id identifiers.LogicID) common.LogicPayload {
-	t.Helper()
-
-	return common.LogicPayload{
+	return &common.LogicPayload{
 		Manifest: []byte{1, 2, 3},
-		Logic:    id,
+		LogicID:  id,
 		Callsite: "hello",
 	}
 }
@@ -1497,21 +1643,10 @@ func CreateRawParticipantCreatePayload(t *testing.T, id identifiers.Identifier) 
 	return rawPayload
 }
 
-func CreateRawAssetActionPayload(t *testing.T, id identifiers.Identifier) []byte {
+func CreateRawAssetTransferPayload(t *testing.T, id identifiers.Identifier) []byte {
 	t.Helper()
 
-	payload := CreateAssetActionPayload(t, id)
-
-	rawPayload, err := payload.Bytes()
-	require.NoError(t, err)
-
-	return rawPayload
-}
-
-func CreateRawAssetSupplyPayload(t *testing.T, id identifiers.Identifier) []byte {
-	t.Helper()
-
-	payload := CreateAssetSupplyPayload(t, id)
+	payload := CreateAssetTransferPayload(t, id)
 
 	rawPayload, err := payload.Bytes()
 	require.NoError(t, err)
@@ -1540,7 +1675,7 @@ func GetTestAssetIDFromAssetDescriptor(
 	assetID, err := identifiers.GenerateAssetIDv0(
 		id.Fingerprint(),
 		id.Variant(),
-		uint16(asset.Standard),
+		uint16(0),
 		asset.Flags()...)
 	require.NoError(t, err)
 
@@ -1675,4 +1810,32 @@ func GetPrivKeysForTest(t *testing.T, seed []byte) ([]byte, []byte, error) {
 	aggPrivKey = append(aggPrivKey, ntwPrivKeyInBytes...)
 
 	return aggPrivKey, moiIDPubBytes, nil
+}
+
+func TokenWithExpiry(
+	t *testing.T,
+	tokenID common.TokenID,
+	amount *big.Int,
+	expiry uint64,
+) map[common.TokenID]*common.AmountWithExpiry {
+	t.Helper()
+
+	return map[common.TokenID]*common.AmountWithExpiry{
+		tokenID: {
+			Amount:    amount,
+			ExpiresAt: expiry,
+		},
+	}
+}
+
+func TokenWithoutExpiry(
+	t *testing.T,
+	tokenID common.TokenID,
+	amount *big.Int,
+) map[common.TokenID]*big.Int {
+	t.Helper()
+
+	return map[common.TokenID]*big.Int{
+		tokenID: amount,
+	}
 }

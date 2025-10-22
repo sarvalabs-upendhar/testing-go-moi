@@ -35,6 +35,7 @@ type QueryArgs struct {
 type BalArgs struct {
 	ID      identifiers.Identifier `json:"id"`       // ID for which to retrieve the balance
 	AssetID identifiers.AssetID    `json:"asset_id"` // AssetID for which to retrieve balance
+	TokenID common.TokenID         `json:"token_id"`
 	Options TesseractNumberOrHash  `json:"options"`
 }
 
@@ -85,7 +86,7 @@ type SubAccountCountArgs struct {
 
 type GetLogicStorageArgs struct {
 	ID         identifiers.Identifier `json:"id"`
-	LogicID    identifiers.LogicID    `json:"logic_id"`
+	LogicID    identifiers.Identifier `json:"logic_id"`
 	StorageKey hexutil.Bytes          `json:"storage_key"`
 	Options    TesseractNumberOrHash  `json:"options"`
 }
@@ -95,9 +96,9 @@ type GetValidatorsArgs struct {
 }
 
 type LogicManifestArgs struct {
-	LogicID  identifiers.LogicID   `json:"logic_id"`
-	Encoding string                `json:"encoding"`
-	Options  TesseractNumberOrHash `json:"options"`
+	LogicID  identifiers.Identifier `json:"logic_id"`
+	Encoding string                 `json:"encoding"`
+	Options  TesseractNumberOrHash  `json:"options"`
 }
 
 type CallArgs struct {
@@ -215,56 +216,51 @@ type GetLogicIDArgs struct {
 }
 
 type RPCAssetCreation struct {
-	Symbol string       `json:"symbol"`
-	Supply *hexutil.Big `json:"supply"`
-
-	Dimension *hexutil.Uint8  `json:"dimension"`
-	Standard  *hexutil.Uint16 `json:"standard"`
-
-	IsLogical  bool `json:"is_logical"`
-	IsStateful bool `json:"is_stateful"`
+	Symbol       string                   `json:"symbol"`
+	Dimension    hexutil.Uint8            `json:"dimension"`
+	Decimals     hexutil.Uint8            `json:"decimals"`
+	Standard     hexutil.Uint16           `json:"standard"`
+	EnableEvents bool                     `json:"enable_events"`
+	Manager      identifiers.Identifier   `json:"manager"`
+	MaxSupply    *hexutil.Big             `json:"max_supply"`
+	Metadata     map[string]hexutil.Bytes `json:"metadata"`
 
 	Logic *RPCLogicPayload `json:"logic_code,omitempty"`
 }
 
-type RPCAssetSupply struct {
-	AssetID identifiers.AssetID `json:"asset_id"`
-	Amount  *hexutil.Big        `json:"amount"`
-}
-
 type RPCParticipantCreate struct {
-	ID     identifiers.Identifier `json:"id"`
-	Amount *hexutil.Big           `json:"amount"`
+	ID    identifiers.Identifier `json:"id"`
+	Value *RPCAssetAction        `json:"value"`
 }
 
 type RPCAccountInheritPayload struct {
 	TargetAccount   identifiers.Identifier `json:"target_account"`
-	Amount          *hexutil.Big           `json:"amount"`
 	SubAccountIndex hexutil.Uint64         `json:"target_sub_account_count"`
+	Value           *RPCAssetAction        `json:"value"`
 }
 
-type KeyAddPayload struct {
+type RPCKeyAddPayload struct {
 	PublicKey          hexutil.Bytes  `json:"public_key"`
 	Weight             hexutil.Uint64 `json:"weight"`
 	SignatureAlgorithm hexutil.Uint64 `json:"signature_algorithm"`
 }
 
-type KeyRevokePayload struct {
+type RPCKeyRevokePayload struct {
 	KeyID hexutil.Uint64 `json:"key_id"`
 }
 
 type RPCAccountConfigurePayload struct {
-	Add    []KeyAddPayload
-	Revoke []KeyRevokePayload
+	Add    []RPCKeyAddPayload
+	Revoke []RPCKeyRevokePayload
 }
 
 func GetRPCAccountConfigurePayload(payload *common.AccountConfigurePayload) *RPCAccountConfigurePayload {
 	rpcPayload := &RPCAccountConfigurePayload{}
 
 	if payload.Add != nil {
-		rpcPayload.Add = make([]KeyAddPayload, len(payload.Add))
+		rpcPayload.Add = make([]RPCKeyAddPayload, len(payload.Add))
 		for i, add := range payload.Add {
-			rpcPayload.Add[i] = KeyAddPayload{
+			rpcPayload.Add[i] = RPCKeyAddPayload{
 				PublicKey:          add.PublicKey,
 				Weight:             hexutil.Uint64(add.Weight),
 				SignatureAlgorithm: hexutil.Uint64(add.SignatureAlgorithm),
@@ -273,9 +269,9 @@ func GetRPCAccountConfigurePayload(payload *common.AccountConfigurePayload) *RPC
 	}
 
 	if payload.Revoke != nil {
-		rpcPayload.Revoke = make([]KeyRevokePayload, len(payload.Revoke))
+		rpcPayload.Revoke = make([]RPCKeyRevokePayload, len(payload.Revoke))
 		for i, revoke := range payload.Revoke {
-			rpcPayload.Revoke[i] = KeyRevokePayload{
+			rpcPayload.Revoke[i] = RPCKeyRevokePayload{
 				KeyID: hexutil.Uint64(revoke.KeyID),
 			}
 		}
@@ -285,11 +281,10 @@ func GetRPCAccountConfigurePayload(payload *common.AccountConfigurePayload) *RPC
 }
 
 type RPCAssetAction struct {
-	Benefactor  identifiers.Identifier `json:"benefactor"`
-	Beneficiary identifiers.Identifier `json:"beneficiary"`
-	AssetID     identifiers.AssetID    `json:"asset_id"`
-	Amount      *hexutil.Big           `json:"amount"`
-	Timestamp   *hexutil.Uint64        `json:"timestamp"`
+	AssetID  identifiers.AssetID                  `json:"asset_id"`
+	Callsite string                               `json:"callsite"`
+	Calldata hexutil.Bytes                        `json:"calldata"`
+	Funds    map[identifiers.AssetID]*hexutil.Big `json:"funds,omitempty"`
 }
 
 type RPCLogicPayload struct {
@@ -301,7 +296,7 @@ type RPCLogicPayload struct {
 
 func (l *RPCLogicPayload) LogicPayload() *common.LogicPayload {
 	return &common.LogicPayload{
-		Logic:    identifiers.MustLogicIDFromHex(l.LogicID),
+		LogicID:  identifiers.MustLogicIDFromHex(l.LogicID),
 		Calldata: l.Calldata,
 		Callsite: l.Callsite,
 	}
@@ -314,8 +309,56 @@ func RPCLogicPayloadFromLogicPayload(payload *common.LogicPayload) *RPCLogicPayl
 
 	return &RPCLogicPayload{
 		Manifest: payload.Manifest,
-		LogicID:  payload.Logic.String(),
+		LogicID:  payload.LogicID.String(),
 		Callsite: payload.Callsite,
 		Calldata: payload.Calldata,
 	}
+}
+
+func RPCAssetActionFromAssetAction(action *common.AssetActionPayload) *RPCAssetAction {
+	if action == nil {
+		return nil
+	}
+
+	var funds map[identifiers.AssetID]*hexutil.Big
+	if action.Funds != nil {
+		funds = make(map[identifiers.AssetID]*hexutil.Big)
+		for assetID, amount := range action.Funds {
+			funds[assetID] = (*hexutil.Big)(amount)
+		}
+	}
+
+	return &RPCAssetAction{
+		AssetID:  action.AssetID,
+		Callsite: action.Callsite,
+		Calldata: action.Calldata,
+		Funds:    funds,
+	}
+}
+
+func RPCAssetCreationFromAssetCreation(ac *common.AssetCreatePayload) *RPCAssetCreation {
+	if ac == nil {
+		return nil
+	}
+
+	res := &RPCAssetCreation{
+		Symbol:       ac.Symbol,
+		Dimension:    hexutil.Uint8(ac.Dimension),
+		Decimals:     hexutil.Uint8(ac.Decimals),
+		Standard:     hexutil.Uint16(ac.Standard),
+		EnableEvents: ac.EnableEvents,
+		Manager:      ac.Manager,
+		MaxSupply:    (*hexutil.Big)(ac.MaxSupply),
+		Logic:        RPCLogicPayloadFromLogicPayload(ac.Logic),
+	}
+
+	if len(ac.MetaData) > 0 {
+		res.Metadata = make(map[string]hexutil.Bytes, len(ac.MetaData))
+	}
+
+	for k, v := range ac.MetaData {
+		res.Metadata[k] = v
+	}
+
+	return res
 }

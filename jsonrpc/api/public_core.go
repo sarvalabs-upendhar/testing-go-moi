@@ -239,7 +239,7 @@ func (p *PublicCoreAPI) Balance(args *rpcargs.BalArgs) (*hexutil.Big, error) {
 		return nil, err
 	}
 
-	balance, err := p.sm.GetBalance(args.ID, args.AssetID, stateHash)
+	balance, err := p.sm.GetBalance(args.ID, args.AssetID, args.TokenID, stateHash)
 	if err != nil {
 		return nil, err
 	}
@@ -261,11 +261,14 @@ func (p *PublicCoreAPI) TDU(args *rpcargs.QueryArgs) ([]rpcargs.TDU, error) {
 
 	tdu := make([]rpcargs.TDU, 0, len(data))
 
-	for key, value := range data {
-		tdu = append(tdu, rpcargs.TDU{
-			AssetID: key,
-			Amount:  (*hexutil.Big)(value),
-		})
+	for key, entry := range data {
+		for tokenID, value := range entry {
+			tdu = append(tdu, rpcargs.TDU{
+				AssetID: key,
+				TokenID: hexutil.Uint64(tokenID),
+				Amount:  (*hexutil.Big)(value),
+			})
+		}
 	}
 
 	return tdu, nil
@@ -470,12 +473,12 @@ func (p *PublicCoreAPI) LogicEnlisted(args *rpcargs.LogicEnlistedArgs) (bool, er
 		return false, err
 	}
 
-	return obj.HasStorageTree(args.LogicID)
+	return obj.HasStorageTree(args.LogicID.AsIdentifier())
 }
 
 // LogicManifest returns the manifest associated with the given logic id
 func (p *PublicCoreAPI) LogicManifest(args *rpcargs.LogicManifestArgs) (hexutil.Bytes, error) {
-	stateHash, err := p.getStateHash(getTesseractArgs(args.LogicID.AsIdentifier(), args.Options))
+	stateHash, err := p.getStateHash(getTesseractArgs(args.LogicID, args.Options))
 	if err != nil {
 		return nil, err
 	}
@@ -521,7 +524,7 @@ func (p *PublicCoreAPI) LogicManifest(args *rpcargs.LogicManifestArgs) (hexutil.
 func (p *PublicCoreAPI) LogicStorage(args *rpcargs.GetLogicStorageArgs) (hexutil.Bytes, error) {
 	id := args.ID
 	if args.ID.IsNil() {
-		id = args.LogicID.AsIdentifier()
+		id = args.LogicID
 	}
 
 	stateHash, err := p.getStateHash(getTesseractArgs(id, args.Options))
@@ -555,11 +558,15 @@ func (p *PublicCoreAPI) Mandates(args *rpcargs.GetAssetMandateOrLockupArgs) ([]r
 	entries := make([]rpcargs.RPCMandateOrLockup, 0, len(mandates))
 
 	for _, mandate := range mandates {
-		entries = append(entries, rpcargs.RPCMandateOrLockup{
-			AssetID: mandate.AssetID.String(),
-			ID:      mandate.ID,
-			Amount:  (*hexutil.Big)(mandate.Amount),
-		})
+		for tokenID, entry := range mandate.Amount {
+			entries = append(entries, rpcargs.RPCMandateOrLockup{
+				AssetID: mandate.AssetID,
+				TokenID: hexutil.Uint64(tokenID),
+				ID:      mandate.ID,
+				Amount:  (*hexutil.Big)(entry.Amount),
+				Expiry:  hexutil.Uint64(entry.ExpiresAt),
+			})
+		}
 	}
 
 	return entries, nil
@@ -584,18 +591,22 @@ func (p *PublicCoreAPI) Lockups(args *rpcargs.GetAssetMandateOrLockupArgs) ([]rp
 	entries := make([]rpcargs.RPCMandateOrLockup, 0, len(lockups))
 
 	for _, lockup := range lockups {
-		entries = append(entries, rpcargs.RPCMandateOrLockup{
-			AssetID: lockup.AssetID.String(),
-			ID:      lockup.ID,
-			Amount:  (*hexutil.Big)(lockup.Amount),
-		})
+		for tokenID, entry := range lockup.Amount {
+			entries = append(entries, rpcargs.RPCMandateOrLockup{
+				AssetID: lockup.AssetID,
+				ID:      lockup.ID,
+				TokenID: hexutil.Uint64(tokenID),
+				Amount:  (*hexutil.Big)(entry.Amount),
+				Expiry:  hexutil.Uint64(entry.ExpiresAt),
+			})
+		}
 	}
 
 	return entries, nil
 }
 
 // LogicIDs will fetch the logic IDs from the logic tree
-func (p *PublicCoreAPI) LogicIDs(args *rpcargs.GetAccountArgs) ([]identifiers.LogicID, error) {
+func (p *PublicCoreAPI) LogicIDs(args *rpcargs.GetAccountArgs) ([]identifiers.Identifier, error) {
 	stateHash, err := p.getStateHash(getTesseractArgs(args.ID, args.Options))
 	if err != nil {
 		return nil, err

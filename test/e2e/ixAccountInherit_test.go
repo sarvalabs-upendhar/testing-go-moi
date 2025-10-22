@@ -10,7 +10,6 @@ import (
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/compute"
 	"github.com/sarvalabs/go-moi/jsonrpc/args"
 	"github.com/sarvalabs/go-moi/moiclient"
 	"github.com/stretchr/testify/require"
@@ -19,11 +18,10 @@ import (
 func validateKMOIAssetTransfer(
 	te *TestEnvironment,
 	sender identifiers.Identifier,
-	payload *common.AssetActionPayload,
-	fuelKMOI uint64,
+	payload *common.PayoutDetails,
 	ixHash common.Hash,
 ) {
-	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
+	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 	senderHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, sender)
 	receiverHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, payload.Beneficiary)
@@ -34,7 +32,7 @@ func validateKMOIAssetTransfer(
 	receiverPrevBal := getBalance(te, payload.Beneficiary, payload.AssetID, int64(receiverHeight-1))
 	receiverCurBal := getBalance(te, payload.Beneficiary, payload.AssetID, args.LatestTesseractHeight)
 
-	require.Equal(te.T(), payload.Amount.Uint64()+fuelKMOI, senderPrevBal-senderCurBal)
+	require.Equal(te.T(), payload.Amount.Uint64()+receipt.FuelUsed.ToUint64(), senderPrevBal-senderCurBal)
 	require.Equal(te.T(), payload.Amount.Uint64(), receiverCurBal-receiverPrevBal)
 }
 
@@ -44,11 +42,19 @@ func validateKMOIAssetTransfer(
 // 4. ensure amount transferred from sender to sub account
 func validateAccountInherit(
 	te *TestEnvironment,
+	isFailure bool,
 	sender identifiers.Identifier,
 	ixHash common.Hash,
 	txnID int,
 	payload *common.AccountInheritPayload,
+	amount *big.Int,
 ) {
+	if isFailure {
+		checkForReceiptFailure(te.T(), te.moiClient, ixHash)
+
+		return
+	}
+
 	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 	var accountInheritResult common.AccountInheritResult
@@ -118,11 +124,11 @@ func validateAccountInherit(
 
 	receiverCurBal := getBalance(te, subAccount, common.KMOITokenAssetID, args.LatestTesseractHeight)
 
-	require.Equal(te.T(), payload.Amount.Uint64()+compute.FuelAccountInherit, senderPrevBal-senderCurBal)
-	require.Equal(te.T(), payload.Amount.Uint64(), receiverCurBal)
+	require.Equal(te.T(), amount.Uint64()+receipt.FuelUsed.ToUint64(), senderPrevBal-senderCurBal)
+	require.Equal(te.T(), amount.Uint64(), receiverCurBal)
 }
 
-//nolint:dupl
+//nolint:dup
 func (te *TestEnvironment) inheritAccount(
 	senderID identifiers.Identifier,
 	senderKeyID uint64,
@@ -144,7 +150,7 @@ func (te *TestEnvironment) inheritAccount(
 		FuelLimit: DefaultFuelLimit,
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IXAccountInherit,
+				Type:    common.IxAccountInherit,
 				Payload: payload,
 			},
 		},
@@ -152,6 +158,10 @@ func (te *TestEnvironment) inheritAccount(
 			{
 				ID:       senderID,
 				LockType: common.MutateLock,
+			},
+			{
+				ID:       common.KMOITokenAccountID,
+				LockType: common.NoLock,
 			},
 		},
 	}
@@ -188,22 +198,28 @@ func (te *TestEnvironment) TestIXAccountInherit() {
 	require.NoError(te.T(), err)
 
 	testcases := []struct {
-		name                  string
-		senderAddr            identifiers.Identifier
-		senderKeyID           uint64
-		accountInheritPayload *common.AccountInheritPayload
-		signers               []moiclient.AccountKeyWithMnemonic
-		expectedError         error
+		name            string
+		senderAddr      identifiers.Identifier
+		senderKeyID     uint64
+		TargetAccount   identifiers.Identifier
+		SubAccountIndex uint32
+		Amount          *big.Int
+		AssetID         identifiers.AssetID
+		TokenID         common.TokenID
+		signers         []moiclient.AccountKeyWithMnemonic
+		expectedError   error
+		isFailure       bool
 	}{
 		{
-			name:        "inherit context of logic to sub account",
-			senderAddr:  sender.ID,
-			senderKeyID: 0,
-			accountInheritPayload: &common.AccountInheritPayload{
-				TargetAccount:   ledgerLogicID.AsIdentifier(),
-				Amount:          big.NewInt(1000),
-				SubAccountIndex: uint32(senderSubAccountCount.ToUint64()) + 1,
-			},
+			name:            "inherit context of logic to sub account",
+			senderAddr:      sender.ID,
+			senderKeyID:     0,
+			TargetAccount:   ledgerLogicID.AsIdentifier(),
+			SubAccountIndex: uint32(senderSubAccountCount.ToUint64()) + 1,
+			AssetID:         common.KMOITokenAssetID,
+			TokenID:         common.DefaultTokenID,
+			Amount:          big.NewInt(1000),
+
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
 					ID:       sender.ID,
@@ -213,14 +229,14 @@ func (te *TestEnvironment) TestIXAccountInherit() {
 			},
 		},
 		{
-			name:        "invalid target account",
-			senderAddr:  sender.ID,
-			senderKeyID: 0,
-			accountInheritPayload: &common.AccountInheritPayload{
-				TargetAccount:   invalidTarget.ID,
-				Amount:          big.NewInt(1000),
-				SubAccountIndex: uint32(senderSubAccountCount.ToUint64()) + 1,
-			},
+			name:            "invalid target account",
+			senderAddr:      sender.ID,
+			senderKeyID:     0,
+			TargetAccount:   invalidTarget.ID,
+			SubAccountIndex: uint32(senderSubAccountCount.ToUint64()) + 1,
+			AssetID:         common.KMOITokenAssetID,
+			TokenID:         common.DefaultTokenID,
+			Amount:          big.NewInt(1000),
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
 					ID:       sender.ID,
@@ -231,14 +247,14 @@ func (te *TestEnvironment) TestIXAccountInherit() {
 			expectedError: common.ErrInvalidTargetAccount,
 		},
 		{
-			name:        "invalid amount",
-			senderAddr:  sender.ID,
-			senderKeyID: 0,
-			accountInheritPayload: &common.AccountInheritPayload{
-				TargetAccount:   ledgerLogicID.AsIdentifier(),
-				Amount:          big.NewInt(0),
-				SubAccountIndex: uint32(senderSubAccountCount.ToUint64()) + 2,
-			},
+			name:            "invalid amount",
+			senderAddr:      sender.ID,
+			senderKeyID:     0,
+			TargetAccount:   ledgerLogicID.AsIdentifier(),
+			SubAccountIndex: uint32(senderSubAccountCount.ToUint64()) + 2,
+			AssetID:         common.KMOITokenAssetID,
+			TokenID:         common.DefaultTokenID,
+			Amount:          big.NewInt(0),
 			signers: []moiclient.AccountKeyWithMnemonic{
 				{
 					ID:       sender.ID,
@@ -246,14 +262,29 @@ func (te *TestEnvironment) TestIXAccountInherit() {
 					Mnemonic: sender.Mnemonic,
 				},
 			},
-			expectedError: common.ErrInvalidValue,
+			isFailure: true,
 		},
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.inheritAccount(test.senderAddr, test.senderKeyID,
-				test.accountInheritPayload, test.signers)
+			subAccountID, err := test.senderAddr.DeriveVariant(test.SubAccountIndex, nil, nil)
+			require.NoError(te.T(), err)
+
+			action, err := common.GetAssetActionPayload(test.AssetID, common.TransferEndpoint, &common.TransferParams{
+				Beneficiary: subAccountID,
+				Amount:      test.Amount,
+			})
+			require.NoError(te.T(), err)
+
+			payload := &common.AccountInheritPayload{
+				TargetAccount:   test.TargetAccount,
+				SubAccountIndex: test.SubAccountIndex,
+				Value:           action,
+			}
+
+			ixHash, err = te.inheritAccount(test.senderAddr, test.senderKeyID,
+				payload, test.signers)
 
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
@@ -262,7 +293,7 @@ func (te *TestEnvironment) TestIXAccountInherit() {
 			}
 
 			require.NoError(te.T(), err)
-			validateAccountInherit(te, sender.ID, ixHash, 0, test.accountInheritPayload)
+			validateAccountInherit(te, test.isFailure, sender.ID, ixHash, 0, payload, test.Amount)
 		})
 	}
 }
@@ -276,13 +307,24 @@ func (te *TestEnvironment) createSubAccount(
 	})
 	require.NoError(te.T(), err)
 
-	accInheritPayload := &common.AccountInheritPayload{
+	subAccountIndex := uint32(senderSubAccountCount.ToUint64()) + 1
+
+	subAccountID, err := sender.ID.DeriveVariant(subAccountIndex, nil, nil)
+	require.NoError(te.T(), err)
+
+	action, err := common.GetAssetActionPayload(common.KMOITokenAssetID, common.TransferEndpoint, &common.TransferParams{
+		Beneficiary: subAccountID,
+		Amount:      big.NewInt(100000),
+	})
+	require.NoError(te.T(), err)
+
+	payload := &common.AccountInheritPayload{
 		TargetAccount:   logicID.AsIdentifier(),
-		Amount:          big.NewInt(100000),
-		SubAccountIndex: uint32(senderSubAccountCount.ToUint64()) + 1,
+		SubAccountIndex: subAccountIndex,
+		Value:           action,
 	}
 
-	ixHash, err := te.inheritAccount(sender.ID, 0, accInheritPayload, []moiclient.AccountKeyWithMnemonic{
+	ixHash, err := te.inheritAccount(sender.ID, 0, payload, []moiclient.AccountKeyWithMnemonic{
 		{
 			ID:       sender.ID,
 			KeyID:    0,
@@ -291,7 +333,7 @@ func (te *TestEnvironment) createSubAccount(
 	})
 	require.NoError(te.T(), err)
 
-	validateAccountInherit(te, sender.ID, ixHash, 0, accInheritPayload)
+	validateAccountInherit(te, false, sender.ID, ixHash, 0, payload, big.NewInt(100000))
 
 	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
@@ -310,16 +352,17 @@ func (te *TestEnvironment) TestSubAccountInteractions() {
 	transferAsset := func(t *testing.T, sender, receiver tests.AccountWithMnemonic) {
 		t.Helper()
 
-		assetActionPayload := &common.AssetActionPayload{
+		payload := &common.PayoutDetails{
 			Beneficiary: receiver.ID,
 			AssetID:     common.KMOITokenAssetID,
+			TokenID:     common.DefaultTokenID,
 			Amount:      big.NewInt(2),
 		}
 
-		ixHash, err := te.transferAsset(sender, assetActionPayload)
+		ixHash, err := te.transferAsset(sender, payload)
 		require.NoError(t, err)
 
-		validateKMOIAssetTransfer(te, sender.ID, assetActionPayload, compute.FuelSimpleAssetTransfer, ixHash)
+		validateKMOIAssetTransfer(te, sender.ID, payload, ixHash)
 	}
 
 	// generates one  logic invoke ixns for each sub account
@@ -335,7 +378,7 @@ func (te *TestEnvironment) TestSubAccountInteractions() {
 			}).Bytes()
 
 			logicPayload := &common.LogicPayload{
-				Logic:    logicID,
+				LogicID:  logicID,
 				Callsite: "BalanceOf",
 				Calldata: invokeCalldata,
 			}
@@ -409,7 +452,7 @@ func (te *TestEnvironment) getLogicInvoke(
 ) (*args.SendIX, error) {
 	te.logger.Debug("invoke logic ",
 		"sender", sender.ID,
-		"logicID", logicPayload.Logic,
+		"logicID", logicPayload.LogicID,
 		"callsite", logicPayload.Callsite,
 		"calldata", logicPayload.Calldata,
 	)
@@ -436,7 +479,7 @@ func (te *TestEnvironment) getLogicInvoke(
 				LockType: common.MutateLock,
 			},
 			{
-				ID:       logicPayload.Logic.AsIdentifier(),
+				ID:       logicPayload.LogicID.AsIdentifier(),
 				LockType: common.MutateLock,
 			},
 		},

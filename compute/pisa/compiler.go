@@ -7,6 +7,7 @@ import (
 	"github.com/manishmeganathan/depgraph"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"golang.org/x/exp/constraints"
 
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -73,20 +74,37 @@ var ErrInsufficientCompileFuel = errors.New("insufficient fuel for manifest comp
 //
 // manifestCompiler internally uses the tools and validation rules provided by pisa.ArtifactBuilder
 type ManifestCompiler struct {
-	manifest   engineio.Manifest
-	fuel       engineio.FuelGauge
-	dependency *depgraph.DependencyGraph
-
-	builder *pisa.ArtifactBuilder
+	manifest     engineio.Manifest
+	manifestKind engineio.ManifestKind
+	fuel         engineio.FuelGauge
+	dependency   *depgraph.DependencyGraph
+	logicID      identifiers.Identifier
+	builder      *pisa.ArtifactBuilder
 }
 
-func NewManifestCompiler(fuel engineio.FuelGauge, manifest engineio.Manifest) *ManifestCompiler {
-	return &ManifestCompiler{
-		fuel:       fuel,
-		manifest:   manifest,
-		dependency: depgraph.NewDependencyGraph(),
-		builder:    pisa.NewArtifactBuilder(common.Hash(manifest.Hash()).String()),
+func NewManifestCompiler(
+	manifestKind engineio.ManifestKind,
+	logicID identifiers.Identifier,
+	fuel engineio.FuelGauge,
+	manifest engineio.Manifest,
+) *ManifestCompiler {
+	mc := &ManifestCompiler{
+		fuel:         fuel,
+		manifest:     manifest,
+		manifestKind: manifestKind,
+		dependency:   depgraph.NewDependencyGraph(),
+		builder:      pisa.NewArtifactBuilder(common.Hash(manifest.Hash()).String()),
+		logicID:      logicID,
 	}
+
+	if manifestKind == engineio.AssetKind {
+		err := mc.builder.SetArtifactKind("asset")
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	return mc
 }
 
 func (compiler *ManifestCompiler) CompileArtifact() ([]byte, error) {
@@ -156,6 +174,19 @@ func (compiler *ManifestCompiler) CompileArtifact() ([]byte, error) {
 		case ExternElement:
 			if err := compiler.compileExternElement(element); err != nil {
 				return nil, errors.Wrapf(err, "extern element [%#v] compile failed", ptr)
+			}
+
+		case AssetElement:
+			schema, ok := element.Data.(*AssetSchema)
+			if !ok {
+				return nil, errors.New("invalid element data for 'extern' kind")
+			}
+
+			if err := compiler.builder.AddAsset(ptr, pisa.AssetDef{
+				AssetID: compiler.logicID,
+				Engine:  schema.Engine,
+			}); err != nil {
+				return nil, errors.Wrapf(err, "asset element [%#v] compile failed", ptr)
 			}
 
 		default:

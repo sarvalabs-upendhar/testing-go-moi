@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"gopkg.in/yaml.v3"
 
 	"github.com/sarvalabs/go-polo"
@@ -13,13 +14,36 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
+type ManifestKind string
+
+const (
+	AssetKind ManifestKind = "asset"
+	LogicKind ManifestKind = "logic"
+)
+
+func IsValidManifestKind(str string) bool {
+	if str == string(AssetKind) || str == string(LogicKind) {
+		return true
+	}
+
+	return false
+}
+
+func ManifestKindFromIdentifier(id identifiers.Identifier) ManifestKind {
+	if id.IsAsset() {
+		return AssetKind
+	}
+
+	return LogicKind
+}
+
 // Manifest is the canonical deployment artifact for logics in MOI.
 // It is a composite artifact that describes the bytecode, the binary interface (ABI) and
 // other parameters for the runtime of choice. The spec for LogicManifests is available at
 // https://sarvalabs.notion.site/Logic-Manifest-Standard-93f5fee1af8d4c3cad155b9827b97930?pvs=4
 type Manifest interface {
 	// Kind returns the kind of engine of the Manifest
-	Kind() EngineKind
+	EngineKind() EngineKind
 	// Hash returns the 256-bit digest of the Manifest.
 	Hash() [32]byte
 	// Size returns the number of elements in the Manifest
@@ -129,12 +153,14 @@ type manifestSyntaxHeader struct {
 type ManifestHeader struct {
 	Syntax uint64         `yaml:"syntax" json:"syntax"`
 	Engine ManifestEngine `yaml:"engine" json:"engine"`
+	Kind   ManifestKind   `yaml:"kind" json:"kind"`
 }
 
 // ManifestEngine describes the engine specification in the Manifest
 type ManifestEngine struct {
-	Kind  EngineKind `yaml:"kind" json:"kind"`
-	Flags []string   `yaml:"flags" json:"flags"`
+	Kind    EngineKind `yaml:"kind" json:"kind"`
+	Flags   []string   `yaml:"flags" json:"flags"`
+	Version string     `yaml:"version" json:"version"`
 }
 
 // ManifestElement describes a single element in the Manifest.

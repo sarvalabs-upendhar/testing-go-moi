@@ -271,7 +271,10 @@ func (m *MockStateManager) GetBalances(id identifiers.Identifier, stateHash comm
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetBalance(id identifiers.Identifier, assetID identifiers.AssetID, stateHash common.Hash,
+func (m *MockStateManager) GetBalance(
+	id identifiers.Identifier,
+	assetID identifiers.AssetID, tokenID common.TokenID,
+	stateHash common.Hash,
 ) (*big.Int, error) {
 	// TODO implement me
 	panic("implement me")
@@ -287,18 +290,20 @@ func (m *MockStateManager) GetAccountState(id identifiers.Identifier, stateHash 
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetLogicManifest(_ identifiers.LogicID, _ common.Hash) ([]byte, error) {
+func (m *MockStateManager) GetLogicManifest(id identifiers.Identifier, hash common.Hash) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (m *MockStateManager) GetPersistentStorageEntry(_ identifiers.LogicID, _ []byte, _ common.Hash) ([]byte, error) {
+func (m *MockStateManager) GetPersistentStorageEntry(
+	logicID identifiers.Identifier, slot []byte, state common.Hash,
+) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
 }
 
 func (m *MockStateManager) GetEphemeralStorageEntry(
-	_ identifiers.Identifier, _ identifiers.LogicID, _ []byte, _ common.Hash,
+	_ identifiers.Identifier, _ identifiers.Identifier, _ []byte, _ common.Hash,
 ) ([]byte, error) {
 	// TODO implement me
 	panic("implement me")
@@ -326,7 +331,7 @@ func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*commo
 func (m *MockStateManager) GetLogicIDs(
 	id identifiers.Identifier,
 	stateHash common.Hash,
-) ([]identifiers.LogicID, error) {
+) ([]identifiers.Identifier, error) {
 	// TODO implement me
 	panic("implement me")
 }

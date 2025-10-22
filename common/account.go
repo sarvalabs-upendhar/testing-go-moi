@@ -10,28 +10,43 @@ import (
 type AccountType int
 
 const (
-	SargaAccount AccountType = iota + 1
-	SystemAccount
+	SystemAccount AccountType = iota + 1
 	LogicAccount
 	AssetAccount
 	RegularAccount
+	InvalidAccount
 )
 
-func AccountTypeFromID(id identifiers.Identifier) (AccountType, error) {
-	if id == SargaAccountID {
-		return SargaAccount, nil
+func AccountTypeFromID(id identifiers.Identifier) AccountType {
+	if id == SystemAccountID || id == SargaAccountID {
+		return SystemAccount
 	}
 
 	switch id.Tag().Kind() {
 	case identifiers.KindParticipant:
-		return RegularAccount, nil
+		return RegularAccount
 	case identifiers.KindAsset:
-		return AssetAccount, nil
+		return AssetAccount
 	case identifiers.KindLogic:
-		return LogicAccount, nil
+		return LogicAccount
+	default:
+		return InvalidAccount
 	}
+}
 
-	return 0, ErrAccountNotFound
+func (at AccountType) String() string {
+	switch at {
+	case SystemAccount:
+		return "SystemAccount"
+	case LogicAccount:
+		return "LogicAccount"
+	case AssetAccount:
+		return "AssetAccount"
+	case RegularAccount:
+		return "RegularAccount"
+	default:
+		return "InvalidAccount"
+	}
 }
 
 const MinWeight = 1000

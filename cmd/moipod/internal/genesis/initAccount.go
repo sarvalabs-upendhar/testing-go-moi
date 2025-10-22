@@ -36,7 +36,7 @@ func parseInitAccountFlags(cmd *cobra.Command) {
 		&accountType,
 		"account-type",
 		int(common.RegularAccount),
-		"Type of account. SargaAccount = 1, RegularAccount = 2, LogicAccount = 3, AssetAccount = 4",
+		"Type of account. SystemAccount = 1, RegularAccount = 2, LogicAccount = 3, AssetAccount = 4",
 	)
 	cmd.Flags().StringVar(
 		&moiID,
@@ -76,7 +76,6 @@ func initAccount() {
 
 	genesis.AddAccount(common.AccountSetupArgs{
 		ID:             decodedParticipantID.AsIdentifier(),
-		AccType:        common.AccountType(accountType),
 		MoiID:          moiID,
 		ConsensusNodes: utils.KramaIDFromString(consensusNodes),
 	})

@@ -14,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//nolint:dupl
+//nolint:dup
 func (te *TestEnvironment) configureAccount(
 	senderID identifiers.Identifier,
 	senderKeyID uint64,
@@ -36,7 +36,7 @@ func (te *TestEnvironment) configureAccount(
 		FuelLimit: DefaultFuelLimit,
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IXAccountConfigure,
+				Type:    common.IxAccountConfigure,
 				Payload: payload,
 			},
 		},
@@ -56,6 +56,15 @@ func (te *TestEnvironment) configureAccount(
 func (te *TestEnvironment) TestIXAccountConfigure() {
 	newAcc := tests.RandomIdentifierWithZeroVariant(te.T())
 	acc := te.chooseRandomAccount()
+
+	action, err := common.GetAssetActionPayload(
+		common.KMOITokenAssetID,
+		common.TransferEndpoint,
+		&common.TransferParams{
+			Beneficiary: newAcc,
+			Amount:      big.NewInt(InitialKMOITokens * 0.8),
+		})
+	require.NoError(te.T(), err)
 
 	keysWithMnemonic, err := cmdCommon.GetAccountsWithMnemonic(4)
 	require.NoError(te.T(), err)
@@ -80,7 +89,7 @@ func (te *TestEnvironment) TestIXAccountConfigure() {
 				Weight:    1001,
 			},
 		},
-		Amount: big.NewInt(InitialKMOITokens * 0.8),
+		Value: action,
 	})
 
 	ixHash, err := te.configureAccount(newAcc, 0,

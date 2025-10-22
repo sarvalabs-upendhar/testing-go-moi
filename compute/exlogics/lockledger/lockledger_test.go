@@ -36,7 +36,7 @@ func (suite *LockLedgerTestSuite) SetupSuite() {
 	suite.Require().NoErrorf(err, "could not read manifest file")
 
 	// Initialise the test suite
-	_, err = suite.Initialise(engineio.PISA, manifest, SeederID)
+	_, err = suite.Initialise(engineio.PISA, nil, manifest, SeederID)
 	suite.Require().NoErrorf(err, "could not read initialise test")
 
 	inputs := InputSeed{

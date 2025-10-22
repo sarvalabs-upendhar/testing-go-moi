@@ -2,7 +2,6 @@ package common
 
 import (
 	"math/big"
-	"time"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -32,8 +31,6 @@ type AssetPayload struct {
 	Create *AssetCreatePayload
 	// Action contains the payload for IxAssetTransfer, IxAssetApprove and IxAssetRevoke
 	Action *AssetActionPayload
-	// Supply contains the payload for IxAssetMint and IxAssetBurn
-	Supply *AssetSupplyPayload
 }
 
 // Bytes serializes AssetPayload to bytes.
@@ -57,16 +54,16 @@ func (asset *AssetPayload) FromBytes(data []byte) error {
 
 // AssetCreatePayload holds data for creating an asset.
 type AssetCreatePayload struct {
-	Symbol string
-	Supply *big.Int
+	Symbol       string
+	Dimension    uint8
+	Decimals     uint8
+	Standard     AssetStandard
+	EnableEvents bool
+	Manager      identifiers.Identifier
+	MaxSupply    *big.Int
+	MetaData     map[string][]byte
 
-	Standard  AssetStandard
-	Dimension uint8
-
-	IsStateFul bool
-	IsLogical  bool
-
-	LogicPayload *LogicPayload
+	Logic *LogicPayload
 }
 
 // Bytes serializes AssetCreatePayload to bytes.
@@ -91,74 +88,31 @@ func (ac *AssetCreatePayload) FromBytes(data []byte) error {
 func (ac *AssetCreatePayload) Flags() []identifiers.Flag {
 	flags := make([]identifiers.Flag, 0)
 
-	if ac.IsLogical {
-		flags = append(flags, identifiers.AssetLogical)
-	}
+	flags = append(flags, identifiers.AssetLogical)
 
-	if ac.IsStateFul {
-		flags = append(flags, identifiers.AssetStateful)
-	}
+	flags = append(flags, identifiers.AssetStateful)
 
 	return flags
 }
 
 // Validate checks if the AssetCreatePayload is valid.
 func (ac *AssetCreatePayload) Validate() error {
-	// asset standard should be mas1 or mas2
-	if ac.Standard != MAS1 && ac.Standard != MAS0 {
+	if ac.Symbol == "" {
+		return ErrInvalidAssetSymbol
+	}
+
+	if _, ok := ValidAssetStandards[ac.Standard]; !ok {
 		return ErrInvalidAssetStandard
 	}
 
-	// supply should be one if asset standard is mas1
-	if ac.Standard == MAS1 {
-		if ac.Supply == nil || ac.Supply.Uint64() != 1 {
-			return ErrInvalidAssetSupply
+	if ac.Standard == MASX {
+		if ac.Logic == nil {
+			return ErrInvalidLogicPayload
 		}
-	}
 
-	return nil
-}
-
-// AssetSupplyPayload holds data for minting or burning an asset.
-type AssetSupplyPayload struct {
-	// AssetID is used to specify the AssetID for which to mint/burn
-	AssetID identifiers.AssetID
-	// Amount is used for mint/burn
-	Amount *big.Int
-}
-
-// Bytes serializes AssetSupplyPayload to bytes.
-func (supply *AssetSupplyPayload) Bytes() ([]byte, error) {
-	data, err := polo.Polorize(supply)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to polorize asset supply payload")
-	}
-
-	return data, nil
-}
-
-// FromBytes deserializes AssetSupplyPayload from bytes.
-func (supply *AssetSupplyPayload) FromBytes(data []byte) error {
-	if err := polo.Depolorize(supply, data); err != nil {
-		return errors.Wrap(err, "failed to depolorize asset supply payload")
-	}
-
-	return nil
-}
-
-// Validate checks if the AssetSupplyPayload is valid.
-func (supply *AssetSupplyPayload) Validate() error {
-	if err := supply.AssetID.Validate(); err != nil {
-		return ErrInvalidAssetID
-	}
-
-	// can not mint asset standard mas1
-	if AssetStandard(supply.AssetID.Standard()) == MAS1 {
-		return ErrMintOrBurnNonFungibleToken
-	}
-
-	if supply.Amount == nil || supply.Amount.Sign() <= 0 {
-		return ErrInvalidValue
+		if len(ac.Logic.Manifest) == 0 {
+			return ErrEmptyManifest
+		}
 	}
 
 	return nil
@@ -178,7 +132,7 @@ type KeyRevokePayload struct {
 type ParticipantCreatePayload struct {
 	ID          identifiers.Identifier
 	KeysPayload []KeyAddPayload
-	Amount      *big.Int
+	Value       *AssetActionPayload
 }
 
 func (register *ParticipantCreatePayload) Weight() uint64 {
@@ -226,7 +180,15 @@ func (register *ParticipantCreatePayload) Validate(senderID identifiers.Identifi
 		return ErrInvalidIdentifier
 	}
 
-	if register.Amount == nil || register.Amount.Sign() <= 0 {
+	if register.Value == nil {
+		return ErrInvalidValue
+	}
+
+	if register.Value.AssetID != KMOITokenAssetID {
+		return ErrInvalidAssetID
+	}
+
+	if len(register.Value.Callsite) == 0 {
 		return ErrInvalidValue
 	}
 
@@ -285,7 +247,7 @@ func (configure *AccountConfigurePayload) Validate() error {
 
 type AccountInheritPayload struct {
 	TargetAccount   identifiers.Identifier
-	Amount          *big.Int
+	Value           *AssetActionPayload
 	SubAccountIndex uint32
 }
 
@@ -322,8 +284,16 @@ func (inherit *AccountInheritPayload) Validate(senderID identifiers.Identifier) 
 		return ErrInvalidTargetAccount
 	}
 
-	if inherit.Amount.Sign() <= 0 {
+	if inherit.Value == nil {
 		return ErrInvalidValue
+	}
+
+	if inherit.Value.AssetID != KMOITokenAssetID {
+		return ErrInvalidAssetID
+	}
+
+	if len(inherit.Value.Callsite) == 0 {
+		return ErrInvalidCallSite
 	}
 
 	return nil
@@ -331,16 +301,16 @@ func (inherit *AccountInheritPayload) Validate(senderID identifiers.Identifier) 
 
 // AssetActionPayload holds data for transferring, approving, or revoking an asset.
 type AssetActionPayload struct {
-	// Benefactor is the id that authorized access to his asset funds.
-	Benefactor identifiers.Identifier
-	// Beneficiary is the recipient id for the transfer/approve/revoke operation
-	Beneficiary identifiers.Identifier
-	// AssetID is used to specify the AssetID for which to transfer/approve/revoke
+	// AssetID
 	AssetID identifiers.AssetID
-	// Amount is used to specify the Amount for transfer/approve/revoke
-	Amount *big.Int
-	// Timestamp is used to specify the validity of the mandate
-	Timestamp uint64
+
+	// Callsite specifies the method name to deploy and invoke.
+	Callsite string
+
+	// Calldata specifies the input call data.
+	Calldata []byte
+
+	Funds map[identifiers.AssetID]*big.Int
 }
 
 // Bytes serializes AssetActionPayload to bytes.
@@ -364,134 +334,12 @@ func (action *AssetActionPayload) FromBytes(data []byte) error {
 
 // Validate checks if the AssetActionPayload has a valid beneficiary.
 func (action *AssetActionPayload) Validate() error {
-	if action.Beneficiary.IsNil() {
-		return ErrBeneficiaryMissing
+	if err := action.AssetID.Validate(); err != nil {
+		return ErrInvalidAssetID
 	}
 
-	// Reject genesis account interaction
-	if action.Beneficiary == SargaAccountID {
-		return ErrGenesisAccount
-	}
-
-	return nil
-}
-
-// ValidateAssetApprove checks if the AssetActionPayload payload for approval is valid.
-func (action *AssetActionPayload) ValidateAssetApprove(senderID identifiers.Identifier) error {
-	if err := action.Validate(); err != nil {
-		return err
-	}
-
-	if !isValidParticipantID(action.Beneficiary) && !isValidLogicID(action.Beneficiary) {
-		return ErrInvalidBeneficiary
-	}
-
-	if senderID == action.Beneficiary {
-		return ErrInvalidBeneficiary
-	}
-
-	if action.Amount == nil || action.Amount.Sign() <= 0 {
-		return ErrInvalidValue
-	}
-
-	if action.Timestamp < uint64(time.Now().Unix()) {
-		return ErrInvalidTimestamp
-	}
-
-	return nil
-}
-
-// ValidateAssetRevoke checks if the AssetActionPayload payload for revoke is valid.
-func (action *AssetActionPayload) ValidateAssetRevoke(senderID identifiers.Identifier) error {
-	if err := action.Validate(); err != nil {
-		return err
-	}
-
-	if !isValidParticipantID(action.Beneficiary) && !isValidLogicID(action.Beneficiary) {
-		return ErrInvalidBeneficiary
-	}
-
-	if senderID == action.Beneficiary {
-		return ErrInvalidBeneficiary
-	}
-
-	return nil
-}
-
-// ValidateAssetTransfer checks if the AssetActionPayload payload for transfer is valid.
-func (action *AssetActionPayload) ValidateAssetTransfer(senderID identifiers.Identifier) error {
-	if err := action.Validate(); err != nil {
-		return err
-	}
-
-	if action.Benefactor.IsNil() {
-		if !isValidParticipantID(action.Beneficiary) || senderID == action.Beneficiary {
-			return ErrInvalidBeneficiary
-		}
-	} else {
-		if !isValidParticipantID(action.Benefactor) || senderID == action.Benefactor {
-			return ErrInvalidBenefactor
-		}
-
-		// Reject genesis account interaction
-		if action.Benefactor == SargaAccountID {
-			return ErrGenesisAccount
-		}
-	}
-
-	if action.Amount == nil || action.Amount.Sign() <= 0 {
-		return ErrInvalidValue
-	}
-
-	return nil
-}
-
-// ValidateAssetLockup checks if the AssetActionPayload payload for lockup is valid.
-func (action *AssetActionPayload) ValidateAssetLockup(senderID identifiers.Identifier) error {
-	if err := action.Validate(); err != nil {
-		return err
-	}
-
-	if !isValidParticipantID(action.Beneficiary) && !isValidLogicID(action.Beneficiary) {
-		return ErrInvalidBeneficiary
-	}
-
-	if senderID == action.Beneficiary {
-		return ErrInvalidBeneficiary
-	}
-
-	if action.Amount == nil || action.Amount.Sign() <= 0 {
-		return ErrInvalidValue
-	}
-
-	return nil
-}
-
-// ValidateAssetRelease checks if the AssetActionPayload payload for release is valid.
-func (action *AssetActionPayload) ValidateAssetRelease(senderID identifiers.Identifier) error {
-	if err := action.Validate(); err != nil {
-		return err
-	}
-
-	if !isValidParticipantID(action.Beneficiary) {
-		return ErrInvalidBeneficiary
-	}
-
-	if action.Benefactor.IsNil() {
-		return ErrBenefactorMissing
-	}
-
-	if !isValidParticipantID(action.Benefactor) || senderID == action.Benefactor {
-		return ErrInvalidBenefactor
-	}
-
-	// Reject genesis account interaction
-	if action.Benefactor == SargaAccountID {
-		return ErrGenesisAccount
-	}
-
-	if action.Amount == nil || action.Amount.Sign() <= 0 {
-		return ErrInvalidValue
+	if action.Callsite == "" {
+		return ErrInvalidCallSite
 	}
 
 	return nil
@@ -629,9 +477,9 @@ type LogicPayload struct {
 	// Required for IxLogicDeploy, TxLogicUpgrade
 	Manifest []byte
 
-	// Logic specifies the Logic ID to execute a method on.
+	// LogicID specifies the Logic ID to execute a method on.
 	// Required for IxLogicInvoke, TxLogicInteract, IxLogicEnlist, TxLogicUpgrade
-	Logic identifiers.LogicID
+	LogicID identifiers.LogicID
 
 	// Callsite specifies the method name to deploy and invoke.
 	Callsite string
@@ -640,7 +488,7 @@ type LogicPayload struct {
 	Calldata []byte
 
 	// Interfaces specifies the foreign logics
-	Interfaces map[string]identifiers.LogicID
+	Interfaces map[string]identifiers.Identifier
 }
 
 // Bytes serializes LogicPayload to bytes.
@@ -685,15 +533,15 @@ func (payload *LogicPayload) ValidateLogicDeploy() error {
 func (payload *LogicPayload) ValidateLogicInteract() error {
 	// Callsite cannot be empty
 	if len(payload.Callsite) == 0 {
-		return ErrEmptyCallSite
+		return ErrInvalidCallSite
 	}
 
 	// LogicID cannot be empty
-	if payload.Logic.AsIdentifier().IsNil() {
+	if payload.LogicID.AsIdentifier().IsNil() {
 		return ErrMissingLogicID
 	}
 
-	if err := payload.Logic.Validate(); err != nil {
+	if err := payload.LogicID.Validate(); err != nil {
 		return ErrInvalidLogicID
 	}
 
@@ -703,15 +551,6 @@ func (payload *LogicPayload) ValidateLogicInteract() error {
 // isValidParticipantID checks if the participant id is valid.
 func isValidParticipantID(id identifiers.Identifier) bool {
 	if _, err := id.AsParticipantID(); err != nil {
-		return false
-	}
-
-	return true
-}
-
-// isValidParticipantID checks if the logic id is valid.
-func isValidLogicID(id identifiers.Identifier) bool {
-	if _, err := id.AsLogicID(); err != nil {
 		return false
 	}
 

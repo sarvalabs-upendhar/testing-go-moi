@@ -14,18 +14,33 @@ const (
 	NoLock
 )
 
+func (lt LockType) String() string {
+	switch lt {
+	case MutateLock:
+		return "MutateLock"
+	case ReadLock:
+		return "ReadLock"
+	case NoLock:
+		return "NoLock"
+	default:
+		return "Unknown"
+	}
+}
+
 // ParticipantInfo holds all basic information of the participant account
 type ParticipantInfo struct {
 	ID        identifiers.Identifier
-	AccType   AccountType
 	IsSigner  bool
 	LockType  LockType
 	IsGenesis bool
 }
 
+func (pi *ParticipantInfo) AccountType() AccountType {
+	return AccountTypeFromID(pi.ID)
+}
+
 // Participant holds all the information required to achieve consensus on the participants state
 type Participant struct {
-	AccType            AccountType
 	ID                 identifiers.Identifier
 	IsGenesis          bool
 	IsSigner           bool
@@ -42,6 +57,10 @@ type Participant struct {
 	ConsensusQuorum uint32
 	CommitHash      Hash
 	ExcludeFromICS  bool
+}
+
+func (p *Participant) AccountType() AccountType {
+	return AccountTypeFromID(p.ID)
 }
 
 func (p *Participant) NewHeight() uint64 {
@@ -62,7 +81,7 @@ func (p *Participant) IsContextUpdateRequired() bool {
 		return false
 	}
 
-	if !p.IsSigner && !p.IsGenesis && p.AccType == RegularAccount {
+	if !p.IsSigner && !p.IsGenesis && p.AccountType() == RegularAccount {
 		return false
 	}
 
@@ -82,7 +101,6 @@ func (ps Participants) IxnParticipants() map[identifiers.Identifier]ParticipantI
 		ixnParticipants[k] = ParticipantInfo{
 			IsGenesis: v.IsGenesis,
 			IsSigner:  v.IsSigner,
-			AccType:   v.AccType,
 		}
 	}
 

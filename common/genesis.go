@@ -18,6 +18,7 @@ type GenesisFile struct {
 	Accounts      []AccountSetupArgs      `json:"accounts"`
 	Logics        []LogicSetupArgs        `json:"logics"`
 	AssetAccounts []AssetAccountSetupArgs `json:"asset_accounts"`
+	AssetLogics   []AssetLogicArgs        `json:"asset_logics"`
 }
 
 type AssetAccountSetupArgs struct {
@@ -26,36 +27,77 @@ type AssetAccountSetupArgs struct {
 }
 
 type AssetCreationArgs struct {
-	Symbol      string                 `json:"symbol"`
-	Dimension   hexutil.Uint8          `json:"dimension"`
-	Standard    hexutil.Uint16         `json:"standard"`
-	IsLogical   bool                   `json:"is_logical"`
-	IsStateful  bool                   `json:"is_stateful"`
-	Operator    identifiers.Identifier `json:"operator"`
-	Allocations []Allocation           `json:"allocations"`
+	Symbol            string                   `json:"symbol"`
+	Dimension         hexutil.Uint8            `json:"dimension"`
+	Decimals          hexutil.Uint8            `json:"decimals"`
+	Standard          hexutil.Uint16           `json:"standard"`
+	Creator           identifiers.Identifier   `json:"creator"`
+	Manager           identifiers.Identifier   `json:"manager"`
+	MaxSupply         hexutil.Big              `json:"max_supply"`
+	CirculatingSupply hexutil.Big              `json:"circulating_supply"`
+	Metadata          map[string]hexutil.Bytes `json:"metadata"`
+	LogicPayload      LogicSetupArgs           `json:"logic_payload"`
+	Allocations       []Allocation             `json:"allocations"`
+	descriptor        *AssetDescriptor
+}
+
+func (ac *AssetCreationArgs) AssetID() identifiers.AssetID {
+	return ac.AssetDescriptor().AssetID
 }
 
 func (ac *AssetCreationArgs) AssetDescriptor() *AssetDescriptor {
-	totalSupply := big.NewInt(0)
-
-	for _, allocation := range ac.Allocations {
-		totalSupply.Add(totalSupply, allocation.Amount.ToInt())
+	if ac.descriptor != nil {
+		return ac.descriptor
 	}
 
-	return &AssetDescriptor{
-		Symbol:     ac.Symbol,
-		Operator:   ac.Operator,
-		Supply:     totalSupply,
-		Dimension:  ac.Dimension.ToInt(),
-		Standard:   AssetStandard(ac.Standard.ToInt()),
-		IsLogical:  ac.IsLogical,
-		IsStateFul: ac.IsStateful,
+	logicID := CreateLogicIDFromString(ac.Symbol, 0, identifiers.AssetLogical, identifiers.Systemic)
+
+	ad := &AssetDescriptor{
+		Symbol:            ac.Symbol,
+		Decimals:          ac.Decimals.ToInt(),
+		Creator:           ac.Creator,
+		Manager:           ac.Manager,
+		MaxSupply:         ac.MaxSupply.ToInt(),
+		CirculatingSupply: big.NewInt(0),
+		Metadata:          make(map[string][]byte),
+		LogicID:           logicID,
 	}
+
+	for k, v := range ac.Metadata {
+		ad.Metadata[k] = v.Bytes()
+	}
+
+	assetID := CreateAssetIDFromString(ac.Symbol, 0, uint16(ac.Standard), ad.Flags()...)
+
+	ad.AssetID = assetID
+
+	return ad
 }
 
 type Allocation struct {
 	ID     identifiers.Identifier `json:"id"`
 	Amount *hexutil.Big           `json:"amount"`
+}
+
+type PayoutDetails struct {
+	Beneficiary identifiers.Identifier
+	AssetID     identifiers.AssetID
+	TokenID     TokenID
+	Amount      *big.Int
+}
+
+func PayoutsFromAllocations(allocs []Allocation) []PayoutDetails {
+	allocations := make([]PayoutDetails, len(allocs))
+	for i, alloc := range allocs {
+		allocations[i] = PayoutDetails{
+			Beneficiary: alloc.ID,
+			Amount:      alloc.Amount.ToInt(),
+			AssetID:     KMOITokenAssetID,
+			TokenID:     DefaultTokenID,
+		}
+	}
+
+	return allocations
 }
 
 func (g *GenesisFile) AddSargaAccount(info AccountSetupArgs) {
@@ -72,6 +114,10 @@ func (g *GenesisFile) AddAccount(info AccountSetupArgs) {
 
 func (g *GenesisFile) AddLogic(logic LogicSetupArgs) {
 	g.Logics = append(g.Logics, logic)
+}
+
+func (g *GenesisFile) AddAssetLogic(info AssetLogicArgs) {
+	g.AssetLogics = append(g.AssetLogics, info)
 }
 
 func (g *GenesisFile) AddAssetInfo(info AssetAccountSetupArgs) {
@@ -115,7 +161,6 @@ type KeyArgs struct {
 type AccountSetupArgs struct {
 	ID             identifiers.Identifier `json:"id"`
 	Keys           []KeyArgs              `json:"keys"`
-	AccType        AccountType            `json:"type"`
 	MoiID          string                 `json:"moi-id"`
 	ConsensusNodes []identifiers.KramaID  `json:"consensus_nodes"`
 }
@@ -123,7 +168,11 @@ type AccountSetupArgs struct {
 type SystemAccountSetupArgs struct {
 	ID             identifiers.Identifier `json:"id"`
 	Keys           []KeyArgs              `json:"keys"`
-	AccType        AccountType            `json:"type"`
 	ConsensusNodes []identifiers.KramaID  `json:"consensus_nodes"`
 	Validators     []*Validator           `json:"validators"`
+}
+
+type AssetLogicArgs struct {
+	Standard hexutil.Uint16 `json:"standard"`
+	Manifest hexutil.Bytes  `json:"manifest"`
 }

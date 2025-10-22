@@ -1,5 +1,6 @@
 package compute
 
+/*
 import (
 	"github.com/pkg/errors"
 
@@ -25,7 +26,7 @@ func validateGuardianRegister(
 	}
 
 	// Check if the sender has enough balance to cover the required amount
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
+	if assetObject.Balance.Cmp(payload.amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -38,7 +39,7 @@ func registerGuardian(sender *state.Object, system *state.SystemObject, payload 
 	err := sender.CreateLockup(
 		common.KMOITokenAssetID,
 		common.SystemAccountID,
-		payload.Amount,
+		payload.amount,
 	)
 	if err != nil {
 		return err
@@ -47,7 +48,7 @@ func registerGuardian(sender *state.Object, system *state.SystemObject, payload 
 	// Append the new validator entry to the validator registry
 	err = system.AppendValidator(common.NewValidator(
 		common.ValidatorIndex(system.TotalValidators()),
-		payload.KramaID, payload.Amount, payload.WalletID,
+		payload.KramaID, payload.amount, payload.WalletID,
 		payload.ConsensusKey, payload.KYCProof, common.KYCStatus(1)),
 	)
 	if err != nil {
@@ -75,7 +76,7 @@ func validateGuardianStake(
 	}
 
 	// Check if the sender has enough balance to stake the requested amount
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
+	if assetObject.Balance.Cmp(payload.amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -88,7 +89,7 @@ func stakeGuardian(sender *state.Object, system *state.SystemObject, payload *co
 	err := sender.CreateLockup(
 		common.KMOITokenAssetID,
 		common.SystemAccountID,
-		payload.Amount,
+		payload.amount,
 	)
 	if err != nil {
 		return err
@@ -103,7 +104,7 @@ func stakeGuardian(sender *state.Object, system *state.SystemObject, payload *co
 	copiedValidator := validator.Copy()
 
 	// Increment the pending stake amount for the validator
-	copiedValidator.PendingStakeAdditions.Add(copiedValidator.PendingStakeAdditions, payload.Amount)
+	copiedValidator.PendingStakeAdditions.Add(copiedValidator.PendingStakeAdditions, payload.amount)
 
 	// Update the validator entry in the system with the new stake value
 	if err = system.UpdateValidator(uint64(copiedValidator.ID), copiedValidator); err != nil {
@@ -122,7 +123,7 @@ func validateGuardianUnstake(system *state.SystemObject, payload *common.Guardia
 	}
 
 	// Ensure the validator has enough active stake to cover the unstake request
-	if validator.ActiveStake.Cmp(payload.Amount) < 0 {
+	if validator.ActiveStake.Cmp(payload.amount) < 0 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -141,7 +142,7 @@ func unstakeGuardian(system *state.SystemObject, payload *common.GuardianActionP
 
 	// Schedule the stake removal for a future epoch
 	// Todo: The EPOCH value has to be updated later once the epoch logic is implemented
-	copiedValidator.PendingStakeRemovals[common.Epoch(0)] = payload.Amount
+	copiedValidator.PendingStakeRemovals[common.Epoch(0)] = payload.amount
 
 	// Update the validator entry in the system with the updated stake removal record
 	if err = system.UpdateValidator(uint64(copiedValidator.ID), copiedValidator); err != nil {
@@ -169,7 +170,7 @@ func validateGuardianWithdraw(
 	}
 
 	// Ensure the validator has enough inactive stake to withdraw
-	if validator.InactiveStake.Cmp(payload.Amount) == -1 {
+	if validator.InactiveStake.Cmp(payload.amount) == -1 {
 		return errors.New("insufficient inactive stake")
 	}
 
@@ -180,7 +181,7 @@ func validateGuardianWithdraw(
 	}
 
 	// Check if the sender has sufficient amount locked up
-	if lockupAmount.Cmp(payload.Amount) == -1 {
+	if lockupAmount.Cmp(payload.amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -192,7 +193,7 @@ func withdrawStake(sender *state.Object, system *state.SystemObject, payload *co
 	// Release the specified amount of KMOI tokens locked under the GuardianAccount
 	err := sender.ReleaseLockup(
 		common.KMOITokenAssetID, common.SystemAccountID,
-		payload.Amount,
+		payload.amount,
 	)
 	if err != nil {
 		return err
@@ -207,7 +208,7 @@ func withdrawStake(sender *state.Object, system *state.SystemObject, payload *co
 	copiedValidator := validator.Copy()
 
 	// Deduct the withdrawn amount from the validator's inactive stake
-	copiedValidator.InactiveStake.Sub(copiedValidator.InactiveStake, payload.Amount)
+	copiedValidator.InactiveStake.Sub(copiedValidator.InactiveStake, payload.amount)
 
 	// Update the validator's state with the new inactive stake amount
 	if err = system.UpdateValidator(uint64(copiedValidator.ID), copiedValidator); err != nil {
@@ -215,7 +216,7 @@ func withdrawStake(sender *state.Object, system *state.SystemObject, payload *co
 	}
 
 	// Add the withdrawn amount back to the sender's available balance
-	if err = sender.AddBalance(common.KMOITokenAssetID, payload.Amount); err != nil {
+	if err = sender.AddBalance(common.KMOITokenAssetID, payload.amount); err != nil {
 		return err
 	}
 
@@ -240,7 +241,7 @@ func validateGuardianClaim(
 	}
 
 	// Ensure if the validator has sufficient rewards to cover the claim
-	if validator.Rewards.Cmp(payload.Amount) == -1 {
+	if validator.Rewards.Cmp(payload.amount) == -1 {
 		return errors.New("insufficient rewards")
 	}
 
@@ -251,7 +252,7 @@ func validateGuardianClaim(
 	}
 
 	// Check if the system has sufficient KMOI tokens to cover the claim
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
+	if assetObject.Balance.Cmp(payload.amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -260,7 +261,7 @@ func validateGuardianClaim(
 
 func claimRewards(sender *state.Object, system *state.SystemObject, payload *common.GuardianActionPayload) error {
 	// Deduct the transfer amount from the system's asset balance
-	if err := system.SubBalance(common.KMOITokenAssetID, payload.Amount); err != nil {
+	if err := system.SubBalance(common.KMOITokenAssetID, payload.amount); err != nil {
 		return err
 	}
 
@@ -273,7 +274,7 @@ func claimRewards(sender *state.Object, system *state.SystemObject, payload *com
 	copiedValidator := validator.Copy()
 
 	// Deduct the claimed amount from the validator's accumulated rewards
-	copiedValidator.Rewards.Sub(copiedValidator.Rewards, payload.Amount)
+	copiedValidator.Rewards.Sub(copiedValidator.Rewards, payload.amount)
 
 	// Update the validator state with the new rewards balance
 	if err = system.UpdateValidator(uint64(copiedValidator.ID), copiedValidator); err != nil {
@@ -281,7 +282,7 @@ func claimRewards(sender *state.Object, system *state.SystemObject, payload *com
 	}
 
 	// Add the claimed rewards amount to the sender's balance
-	if err = sender.AddBalance(common.KMOITokenAssetID, payload.Amount); err != nil {
+	if err = sender.AddBalance(common.KMOITokenAssetID, payload.amount); err != nil {
 		return err
 	}
 
@@ -299,7 +300,7 @@ func RunGuardianRegister(
 	payload, _ := op.GetGuardianRegisterPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
+	sender, _ := transition.GetObject(op.SenderID())
 	system := transition.GetSystemObject()
 
 	// Create a new result for the op
@@ -332,7 +333,7 @@ func RunGuardianStake(
 	payload, _ := op.GetGuardianActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
+	sender, _ := transition.GetObject(op.SenderID())
 	system := transition.GetSystemObject()
 
 	// Create a new result for the op
@@ -397,7 +398,7 @@ func RunGuardianWithdraw(
 	payload, _ := op.GetGuardianActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
+	sender, _ := transition.GetObject(op.SenderID())
 	system := transition.GetSystemObject()
 
 	// Create a new result for the op
@@ -430,7 +431,7 @@ func RunGuardianClaim(
 	payload, _ := op.GetGuardianActionPayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
+	sender, _ := transition.GetObject(op.SenderID())
 	system := transition.GetSystemObject()
 
 	// Create a new result for the op
@@ -451,3 +452,4 @@ func RunGuardianClaim(
 
 	return opResult.WithStatus(common.ResultOk)
 }
+*/

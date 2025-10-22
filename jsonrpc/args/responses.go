@@ -20,11 +20,36 @@ type RPCDeeds struct {
 	AssetID   string             `json:"asset_id"`
 	AssetInfo RPCAssetDescriptor `json:"asset_info"`
 }
+type SortedRPCMandatesOrLockup []RPCMandateOrLockup
+
+func (a SortedRPCMandatesOrLockup) Len() int {
+	return len(a)
+}
+
+func (a SortedRPCMandatesOrLockup) Less(i, j int) bool {
+	assetI, assetJ := a[i].AssetID.String(), a[j].AssetID.String()
+	if assetI != assetJ {
+		return assetI < assetJ
+	}
+
+	tokenI, tokenJ := a[i].TokenID.String(), a[j].TokenID.String()
+	if tokenI != tokenJ {
+		return tokenI < tokenJ
+	}
+
+	return a[i].Amount.ToInt().Cmp(a[j].Amount.ToInt()) == -1
+}
+
+func (a SortedRPCMandatesOrLockup) Swap(i, j int) {
+	a[i], a[j] = a[j], a[i]
+}
 
 type RPCMandateOrLockup struct {
 	ID      identifiers.Identifier `json:"id"`
-	AssetID string                 `json:"asset_id"`
+	AssetID identifiers.AssetID    `json:"asset_id"`
+	TokenID hexutil.Uint64         `json:"token_id"`
 	Amount  *hexutil.Big           `json:"amount"`
+	Expiry  hexutil.Uint64         `json:"expiry"`
 }
 
 type RPCInteractions []*RPCInteraction
@@ -58,34 +83,47 @@ type ContextResponse struct {
 }
 
 type RPCAssetDescriptor struct {
-	Symbol   string                 `json:"symbol"`
-	Operator identifiers.Identifier `json:"operator"`
-	Supply   hexutil.Big            `json:"supply"`
-
-	Dimension hexutil.Uint8  `json:"dimension"`
-	Standard  hexutil.Uint16 `json:"standard"`
-
-	IsLogical  bool `json:"is_logical"`
-	IsStateFul bool `json:"is_stateful"`
-
-	LogicID identifiers.Identifier `json:"logic_id,omitempty"`
+	AssetID           identifiers.AssetID      `json:"asset_id"`
+	Symbol            string                   `json:"symbol"`
+	Dimension         hexutil.Uint8            `json:"dimension"`
+	Decimals          hexutil.Uint8            `json:"decimals"`
+	Creator           identifiers.Identifier   `json:"creator"`
+	Manager           identifiers.Identifier   `json:"manager"`
+	MaxSupply         *hexutil.Big             `json:"max_supply"`
+	CirculatingSupply *hexutil.Big             `json:"circulating_supply"`
+	EnableEvents      bool                     `json:"enable_events"`
+	Metadata          map[string]hexutil.Bytes `json:"metadata,omitempty"`
+	LogicID           string                   `json:"logic_id,omitempty"`
 }
 
 func GetRPCAssetDescriptor(ad *common.AssetDescriptor) *RPCAssetDescriptor {
+	metadata := make(map[string]hexutil.Bytes)
+	for k, v := range ad.Metadata {
+		metadata[k] = v
+	}
+
+	var logicID string
+	if ad.LogicID != identifiers.Nil {
+		logicID = ad.LogicID.String()
+	}
+
 	return &RPCAssetDescriptor{
-		Symbol:     ad.Symbol,
-		Operator:   ad.Operator,
-		Dimension:  hexutil.Uint8(ad.Dimension),
-		Standard:   hexutil.Uint16(ad.Standard),
-		Supply:     (hexutil.Big)(*ad.Supply),
-		IsLogical:  ad.IsLogical,
-		IsStateFul: ad.IsStateFul,
-		LogicID:    ad.LogicID,
+		AssetID:           ad.AssetID,
+		Symbol:            ad.Symbol,
+		Decimals:          hexutil.Uint8(ad.Decimals),
+		Creator:           ad.Creator,
+		Manager:           ad.Manager,
+		MaxSupply:         (*hexutil.Big)(ad.MaxSupply),
+		CirculatingSupply: (*hexutil.Big)(ad.CirculatingSupply),
+		EnableEvents:      ad.EnableEvents,
+		Metadata:          metadata,
+		LogicID:           logicID,
 	}
 }
 
 type TDU struct {
 	AssetID identifiers.AssetID `json:"asset_id"`
+	TokenID hexutil.Uint64      `json:"token_id"`
 	Amount  *hexutil.Big        `json:"amount"`
 }
 
@@ -215,7 +253,7 @@ type SyncStatusResponse struct {
 
 type RPCLog struct {
 	ID      identifiers.Identifier `json:"id"`
-	LogicID identifiers.LogicID    `json:"logic_id,omitempty"`
+	LogicID identifiers.Identifier `json:"logic_id,omitempty"`
 	Topics  []common.Hash          `json:"topics"`
 	Data    hexutil.Bytes          `json:"data"`
 

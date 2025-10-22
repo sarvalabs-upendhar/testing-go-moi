@@ -96,7 +96,8 @@ type stateManager interface {
 	LoadTransitionObjects(
 		ps map[identifiers.Identifier]common.ParticipantInfo, psState common.ParticipantsState,
 	) (*state.Transition, error)
-	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
+	CreateStateObject(identifiers.Identifier, bool) *state.Object
+	CreateStateObjectWithAccountType(identifiers.Identifier, common.AccountType, bool) *state.Object
 	GetLatestContextAndPublicKeys(id identifiers.Identifier) (
 		latestContextHash common.Hash,
 		consensusNodesHash common.Hash,
@@ -662,7 +663,6 @@ func (k *Engine) fetchParticipantsAndCommittee(
 			}
 
 			participants[id] = &common.Participant{
-				AccType:       accInfo.Type,
 				ID:            id,
 				IsGenesis:     info.IsGenesis,
 				Height:        accInfo.Height,
@@ -676,7 +676,6 @@ func (k *Engine) fetchParticipantsAndCommittee(
 		}
 
 		participants[id] = &common.Participant{
-			AccType:       info.AccType,
 			ID:            id,
 			IsGenesis:     info.IsGenesis,
 			Height:        0,

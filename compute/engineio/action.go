@@ -1,6 +1,12 @@
 package engineio
 
-import "github.com/sarvalabs/go-polo"
+import (
+	"math"
+
+	"github.com/sarvalabs/go-polo"
+)
+
+var MaxFuelGauge = NewFuelGauge(math.MaxUint64, math.MaxUint64)
 
 type FuelGauge struct {
 	Compute uint64
@@ -36,6 +42,7 @@ type Action interface {
 	Timestamp() uint64
 	Identifier() [32]byte
 	Origin() [32]byte
+	Caller() [32]byte
 	Access(id [32]byte) (bool, error)
 	AccessList() map[[32]byte]bool
 	Parameters() map[string][]byte

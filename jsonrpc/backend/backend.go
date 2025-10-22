@@ -47,7 +47,6 @@ type ChainManager interface {
 type StateManager interface {
 	GetAccountKeys(id identifiers.Identifier, stateHash common.Hash) (common.AccountKeys, error)
 	GetLatestStateObject(identifiers.Identifier) (*state.Object, error)
-	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
 	FetchIxStateObjects(common.Interactions, map[identifiers.Identifier]common.Hash) (*state.Transition, error)
 
 	GetSequenceID(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) (uint64, error)
@@ -56,15 +55,15 @@ type StateManager interface {
 	IsAccountRegistered(identifiers.Identifier) (bool, error)
 	GetAssetInfo(identifiers.AssetID, common.Hash) (*common.AssetDescriptor, error)
 	GetBalances(identifiers.Identifier, common.Hash) (common.AssetMap, error)
-	GetBalance(identifiers.Identifier, identifiers.AssetID, common.Hash) (*big.Int, error)
+	GetBalance(identifiers.Identifier, identifiers.AssetID, common.TokenID, common.Hash) (*big.Int, error)
 	GetDeeds(identifiers.Identifier, common.Hash) (map[identifiers.Identifier]*common.AssetDescriptor, error)
 	GetMandates(identifiers.Identifier, common.Hash) ([]common.AssetMandateOrLockup, error)
 	GetLockups(identifiers.Identifier, common.Hash) ([]common.AssetMandateOrLockup, error)
 
-	GetLogicIDs(identifiers.Identifier, common.Hash) ([]identifiers.LogicID, error)
-	GetLogicManifest(identifiers.LogicID, common.Hash) ([]byte, error)
-	GetPersistentStorageEntry(identifiers.LogicID, []byte, common.Hash) ([]byte, error)
-	GetEphemeralStorageEntry(identifiers.Identifier, identifiers.LogicID, []byte, common.Hash) ([]byte, error)
+	GetLogicIDs(identifiers.Identifier, common.Hash) ([]identifiers.Identifier, error)
+	GetLogicManifest(identifiers.Identifier, common.Hash) ([]byte, error)
+	GetPersistentStorageEntry(identifiers.Identifier, []byte, common.Hash) ([]byte, error)
+	GetEphemeralStorageEntry(identifiers.Identifier, identifiers.Identifier, []byte, common.Hash) ([]byte, error)
 	GetSubAccountCount(id identifiers.Identifier) (uint64, error)
 	GetMetaContextObject(id identifiers.Identifier, hash common.Hash) (*state.MetaContextObject, error)
 

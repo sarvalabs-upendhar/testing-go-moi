@@ -12,42 +12,42 @@ state logic:
 
 endpoint deploy Seed(name, symbol String, supply U256):
     // Set the name, symbol and supply of the asset
-    mutate name -> Logic.LockLedger.Name
-    mutate symbol -> Logic.LockLedger.Symbol
-    mutate supply -> Logic.LockLedger.Supply
+    mutate name -> LockLedger.Logic.Name
+    mutate symbol -> LockLedger.Logic.Symbol
+    mutate supply -> LockLedger.Logic.Supply
 
     // Set the owner as the sender and set the supply to their spendable balance
-    mutate Identifier(Sender) -> Logic.LockLedger.Owner
-    mutate supply -> Sender.LockLedger.Spendable
+    mutate Identifier(Sender) -> LockLedger.Logic.Owner
+    mutate supply -> LockLedger.Sender.Spendable
 
 endpoint enlist Register():
-    mutate 0 -> Sender.LockLedger.Spendable
-    mutate 0 -> Sender.LockLedger.Lockedup
+    mutate 0 -> LockLedger.Sender.Spendable
+    mutate 0 -> LockLedger.Sender.Lockedup
 
 endpoint dynamic Lockup(amount U256):
-    mutate spendable <- Sender.LockLedger.Spendable:
+    mutate spendable <- LockLedger.Sender.Spendable:
         if spendable < amount: 
             throw "insufficient balance"
 
         spendable -= amount
 
-    mutate lockup <- Sender.LockLedger.Lockedup:
+    mutate lockup <- LockLedger.Sender.Lockedup:
         lockup += amount
 
 // todo: interact is not supported yet
 // endpoint interact ephemeral Transfer(amount U256, addr Identifier):
-//     mutate spendable <- Sender.LockLedger.Spendable:
+//     mutate spendable <- LockLedger.Sender.Spendable:
 //         if spendable < amount: 
 //             throw "insufficient balance"
 
 //         spendable -= amount
 
-//     mutate spendable <- Participant(addr).LockLedger.Spendable:
+//     mutate spendable <- LockLedger.Participant(addr).Spendable:
 //         spendable += amount
 
 endpoint dynamic Mint(amount U256):
-    mutate supply <- Logic.LockLedger.Supply:
+    mutate supply <- LockLedger.Logic.Supply:
         supply += amount
 
-    mutate spendable <- Sender.LockLedger.Spendable:
+    mutate spendable <- LockLedger.Sender.Spendable:
         spendable += amount

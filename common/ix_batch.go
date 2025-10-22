@@ -53,7 +53,7 @@ func (ib *IxBatch) Add(ixn *Interaction, consensusNodesHashes map[identifiers.Id
 	ib.ixs = append(ib.ixs, ixn)
 
 	for id, info := range ixn.ps {
-		if info.IsGenesis {
+		if info.IsGenesis || info.LockType == NoLock {
 			continue
 		}
 

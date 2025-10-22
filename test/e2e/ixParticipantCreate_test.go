@@ -18,13 +18,13 @@ import (
 
 func (te *TestEnvironment) createParticipant(
 	sender tests.AccountWithMnemonic,
-	participantCreatePayload *common.ParticipantCreatePayload,
+	payload *common.ParticipantCreatePayload,
 ) (common.Hash, error) {
 	te.logger.Debug("register participant ", "sender", sender.ID,
-		"address", participantCreatePayload.ID, "amount", participantCreatePayload.Amount,
+		"address", payload.ID,
 	)
 
-	payload, err := participantCreatePayload.Bytes()
+	rawPayload, err := payload.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
@@ -37,7 +37,7 @@ func (te *TestEnvironment) createParticipant(
 		IxOps: []common.IxOpRaw{
 			{
 				Type:    common.IxParticipantCreate,
-				Payload: payload,
+				Payload: rawPayload,
 			},
 		},
 		Participants: []common.IxParticipant{
@@ -46,8 +46,8 @@ func (te *TestEnvironment) createParticipant(
 				LockType: common.MutateLock,
 			},
 			{
-				ID:       participantCreatePayload.ID,
-				LockType: common.MutateLock,
+				ID:       payload.Value.AssetID.AsIdentifier(),
+				LockType: common.NoLock,
 			},
 		},
 	}
@@ -88,9 +88,17 @@ func checkForKeys(t *testing.T, keysPayload []common.KeyAddPayload, rpcAccountKe
 func validateParticipantCreate(
 	te *TestEnvironment,
 	sender identifiers.Identifier,
+	amount *big.Int,
 	payload *common.ParticipantCreatePayload,
 	ixHash common.Hash,
+	isSuccess bool,
 ) {
+	if !isSuccess {
+		checkForReceiptFailure(te.T(), te.moiClient, ixHash)
+
+		return
+	}
+
 	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 	senderHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, sender)
@@ -100,8 +108,8 @@ func validateParticipantCreate(
 
 	receiverCurBal := getBalance(te, payload.ID, common.KMOITokenAssetID, args.LatestTesseractHeight)
 
-	require.Equal(te.T(), payload.Amount.Uint64()+receipt.FuelUsed.ToUint64(), senderPrevBal-senderCurBal)
-	require.Equal(te.T(), payload.Amount.Uint64(), receiverCurBal)
+	require.Equal(te.T(), amount.Uint64()+receipt.FuelUsed.ToUint64(), senderPrevBal-senderCurBal)
+	require.Equal(te.T(), amount.Uint64(), receiverCurBal)
 
 	accountKeys, err := te.moiClient.AccountKeys(context.Background(), &args.GetAccountKeysArgs{
 		ID: payload.ID,
@@ -124,96 +132,108 @@ func (te *TestEnvironment) TestParticipantCreate() {
 	id := tests.RandomIdentifierWithZeroVariant(te.T())
 
 	testcases := []struct {
-		name                     string
-		sender                   tests.AccountWithMnemonic
-		participantCreatePayload *common.ParticipantCreatePayload
-		postTest                 func(
+		name        string
+		sender      tests.AccountWithMnemonic
+		id          identifiers.Identifier
+		keysPayload []common.KeyAddPayload
+		amount      *big.Int
+		isSuccess   bool
+		postTest    func(
 			te *TestEnvironment,
 			sender identifiers.Identifier,
+			amount *big.Int,
 			payload *common.ParticipantCreatePayload,
 			ixHash common.Hash,
+			isSuccess bool,
 		)
 		expectedError error
 	}{
 		{
 			name:   "participant registered successfully",
 			sender: sender,
-			participantCreatePayload: &common.ParticipantCreatePayload{
-				ID: id,
-				KeysPayload: []common.KeyAddPayload{
-					{
-						PublicKey:          id.Bytes(),
-						Weight:             1000,
-						SignatureAlgorithm: 0,
-					},
+			id:     id,
+			keysPayload: []common.KeyAddPayload{
+				{
+					PublicKey:          id.Bytes(),
+					Weight:             1000,
+					SignatureAlgorithm: 0,
 				},
-				Amount: big.NewInt(10),
 			},
-			postTest: validateParticipantCreate,
+			amount:    big.NewInt(10),
+			isSuccess: true,
+			postTest:  validateParticipantCreate,
 		},
 		{
 			name:   "register participants with multiple keys",
 			sender: sender,
-			participantCreatePayload: &common.ParticipantCreatePayload{
-				ID: tests.RandomIdentifierWithZeroVariant(te.T()),
-				KeysPayload: []common.KeyAddPayload{
-					{
-						PublicKey:          id.Bytes(),
-						Weight:             200,
-						SignatureAlgorithm: 0,
-					},
-					{
-						PublicKey:          tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
-						Weight:             800,
-						SignatureAlgorithm: 0,
-					},
+			id:     tests.RandomIdentifierWithZeroVariant(te.T()),
+			keysPayload: []common.KeyAddPayload{
+				{
+					PublicKey:          id.Bytes(),
+					Weight:             200,
+					SignatureAlgorithm: 0,
 				},
-				Amount: big.NewInt(10),
+				{
+					PublicKey:          tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
+					Weight:             800,
+					SignatureAlgorithm: 0,
+				},
 			},
-			postTest: validateParticipantCreate,
+			amount:    big.NewInt(10),
+			postTest:  validateParticipantCreate,
+			isSuccess: true,
 		},
 		{
 			name:   "invalid weight of keys",
 			sender: sender,
-			participantCreatePayload: &common.ParticipantCreatePayload{
-				ID: id,
-				KeysPayload: []common.KeyAddPayload{
-					{
-						PublicKey:          id.Bytes(),
-						Weight:             600,
-						SignatureAlgorithm: 0,
-					},
-					{
-						PublicKey:          tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
-						Weight:             299,
-						SignatureAlgorithm: 0,
-					},
+			id:     id,
+			keysPayload: []common.KeyAddPayload{
+				{
+					PublicKey:          id.Bytes(),
+					Weight:             600,
+					SignatureAlgorithm: 0,
 				},
-				Amount: big.NewInt(10),
+				{
+					PublicKey:          tests.RandomIdentifierWithZeroVariant(te.T()).Bytes(),
+					Weight:             299,
+					SignatureAlgorithm: 0,
+				},
 			},
+			amount:        big.NewInt(10),
 			expectedError: common.ErrInvalidWeight,
 		},
 		{
 			name:   "insufficient funds",
 			sender: sender,
-			participantCreatePayload: &common.ParticipantCreatePayload{
-				ID: receiver.ID,
-				KeysPayload: []common.KeyAddPayload{
-					{
-						PublicKey:          receiver.ID.Bytes(),
-						Weight:             1000,
-						SignatureAlgorithm: 0,
-					},
+			id:     receiver.ID,
+			keysPayload: []common.KeyAddPayload{
+				{
+					PublicKey:          receiver.ID.Bytes(),
+					Weight:             1000,
+					SignatureAlgorithm: 0,
 				},
-				Amount: big.NewInt(1000000000000),
 			},
-			expectedError: common.ErrInsufficientFunds,
+			amount:    big.NewInt(1000000000000),
+			isSuccess: false,
+			postTest:  validateParticipantCreate,
 		},
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.createParticipant(test.sender, test.participantCreatePayload)
+			action, err := common.GetAssetActionPayload(common.KMOITokenAssetID, common.TransferEndpoint, &common.TransferParams{
+				Beneficiary: test.id,
+				Amount:      test.amount,
+			})
+			require.NoError(te.T(), err)
+
+			payload := &common.ParticipantCreatePayload{
+				ID:          test.id,
+				KeysPayload: test.keysPayload,
+				Value:       action,
+			}
+
+			ixHash, err := te.createParticipant(test.sender, payload)
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
 
@@ -222,7 +242,7 @@ func (te *TestEnvironment) TestParticipantCreate() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.ID, test.participantCreatePayload, ixHash)
+			test.postTest(te, test.sender.ID, test.amount, payload, ixHash, test.isSuccess)
 		})
 	}
 }

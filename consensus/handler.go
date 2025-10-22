@@ -246,7 +246,11 @@ func (k *Engine) handleNewView(ctx context.Context, view *types.View) {
 			continue
 		}
 
-		k.logger.Debug("Operator is eligible", "view", viewID)
+		k.logger.Debug("Creator is eligible", "view", viewID)
+
+		for _, ixn := range ixs.IxList() {
+			k.logger.Debug("Creating ICS for cluster", ixn.Hash())
+		}
 
 		slot, activeCluster, err := k.createICS(ctx, clusterID, ixs, ixs.Locks(), view)
 		if err != nil {

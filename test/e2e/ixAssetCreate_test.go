@@ -21,7 +21,7 @@ func (te *TestEnvironment) createAsset(
 	assetCreatePayload *common.AssetCreatePayload,
 ) (common.Hash, error) {
 	te.logger.Debug("create asset ",
-		"sender", acc.ID, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.Supply)
+		"sender", acc.ID, "symbol", assetCreatePayload.Symbol, "supply", assetCreatePayload.MaxSupply)
 
 	payload, err := assetCreatePayload.Bytes()
 	te.Suite.NoError(err)
@@ -82,14 +82,31 @@ func validateAssetCreation(
 			TesseractNumber: &args.LatestTesseractHeight,
 		},
 	})
-	te.Suite.NoError(err)
 
+	te.Suite.NoError(err)
+	require.Equal(te.T(), sender, assetDescriptor.Creator)
 	require.Equal(te.T(), assetCreatePayload.Symbol, assetDescriptor.Symbol)
-	require.Equal(te.T(), assetCreatePayload.Supply.Uint64(), assetDescriptor.Supply.ToInt().Uint64())
-	require.Equal(te.T(), uint16(assetCreatePayload.Standard), assetDescriptor.Standard.ToInt())
+	require.Equal(te.T(), assetCreatePayload.MaxSupply.Uint64(), assetDescriptor.MaxSupply.ToInt().Uint64())
+	require.Equal(te.T(), uint16(assetCreatePayload.Standard), assetDescriptor.AssetID.Standard())
 	require.Equal(te.T(), assetCreatePayload.Dimension, assetDescriptor.Dimension.ToInt())
-	require.Equal(te.T(), assetCreatePayload.IsStateFul, assetDescriptor.IsStateFul)
-	require.Equal(te.T(), assetCreatePayload.IsLogical, assetDescriptor.IsLogical)
+	require.Equal(te.T(), assetCreatePayload.Decimals, assetDescriptor.Decimals.ToInt())
+	require.Equal(te.T(), assetCreatePayload.Manager, assetDescriptor.Manager)
+
+	for k, v := range assetCreatePayload.MetaData {
+		require.Equal(te.T(), v, assetDescriptor.Metadata[k].Bytes())
+	}
+
+	manifestBytes, err := te.moiClient.LogicManifest(context.Background(), &args.LogicManifestArgs{
+		LogicID:  assetReceipt.AssetID.AsIdentifier(),
+		Encoding: "JSON",
+		Options: args.TesseractNumberOrHash{
+			TesseractNumber: &args.LatestTesseractHeight,
+		},
+	})
+
+	require.NoError(te.T(), err)
+	require.Greater(te.T(), len(manifestBytes), 0)
+
 	// TODO compare logic payload
 
 	ts, err := te.moiClient.Tesseract(context.Background(), &args.TesseractArgs{
@@ -102,17 +119,6 @@ func validateAssetCreation(
 
 	require.True(te.T(), ts.HasParticipant(assetReceipt.AssetID.AsIdentifier()))
 	require.Equal(te.T(), uint64(0), ts.Height(assetReceipt.AssetID.AsIdentifier()))
-
-	bal, err := te.moiClient.Balance(context.Background(), &args.BalArgs{
-		ID:      sender,
-		AssetID: assetReceipt.AssetID,
-		Options: args.TesseractNumberOrHash{
-			TesseractNumber: &args.LatestTesseractHeight,
-		},
-	})
-	te.Suite.NoError(err)
-
-	require.Equal(te.T(), assetCreatePayload.Supply.Uint64(), bal.ToInt().Uint64())
 }
 
 func (te *TestEnvironment) TestAssetCreate() {
@@ -130,51 +136,33 @@ func (te *TestEnvironment) TestAssetCreate() {
 		)
 		expectedError error
 	}{
+		// TODO: add more test cases
 		{
 			name: "create valid asset of type MAS0",
 			assetCreatePayload: createAssetCreatePayload(
 				tests.GetRandomUpperCaseString(te.T(), 8),
 				big.NewInt(1000),
 				common.MAS0,
+				acc.ID,
 				func(payload *common.AssetCreatePayload) {
-					payload.Dimension = 1
-					payload.IsStateFul = true
-					payload.IsLogical = true
+					payload.Dimension = 0
+					payload.MetaData = map[string][]byte{
+						"key1": []byte("value1"),
+					}
 				},
 			),
 			postTest: validateAssetCreation,
 		},
 		{
-			name: "create valid asset of type MAS1",
-			assetCreatePayload: createAssetCreatePayload(
-				tests.GetRandomUpperCaseString(te.T(), 8),
-				big.NewInt(1),
-				common.MAS1,
-				func(payload *common.AssetCreatePayload) {
-					payload.Dimension = 1
-				},
-			),
-			postTest: validateAssetCreation,
-		},
-		{
-			name: "invalid asset standard",
+			name: "invalid asset details",
 			assetCreatePayload: createAssetCreatePayload(
 				tests.GetRandomUpperCaseString(te.T(), 8),
 				big.NewInt(1000),
 				2,
+				acc.ID,
 				nil,
 			),
 			expectedError: common.ErrInvalidAssetStandard,
-		},
-		{
-			name: "invalid asset supply for MAS1 asset standard",
-			assetCreatePayload: createAssetCreatePayload(
-				tests.GetRandomUpperCaseString(te.T(), 8),
-				big.NewInt(1000),
-				common.MAS1,
-				nil,
-			),
-			expectedError: common.ErrInvalidAssetSupply,
 		},
 	}
 

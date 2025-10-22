@@ -11,7 +11,7 @@
 //    - endpointLogicAnswer (42)    // answer's logic state, read through a getter
 //    - endpointActorAnswer (123)   // Sender's actor state, read through a getter
 //    - logicActorAnswer (321)      // answer's actor state, written on "question" logic
-coco question
+coco Question
 
 interface answer:
     state logic:
@@ -28,18 +28,18 @@ endpoint dynamic SetActorAnswer(answerLogicId Identifier, new_answer U64):
     memory answer_iface = answer(answerLogicId)
     answer_iface.SetActorAnswer(actorId: Sender, new_answer)
 
-// sets the actor answer on this logic (question)
+// sets the actor answer on this logic (Question)
 endpoint dynamic SetMyAnswer(answerLogicId Identifier, new_answer U64):
     memory answer_iface = answer(answerLogicId)
-    answer_iface.SetActorAnswer(actorId: Identifier(question), new_answer)
+    answer_iface.SetActorAnswer(actorId: Identifier(Question), new_answer)
     
 // gets all answers
 endpoint dynamic GetAnswers(answerLogicId Identifier) -> (
     logicAnswer, actorAnswer, endpointLogicAnswer, endpointActorAnswer, logicActorAnswer U64
 ):
     memory answer_iface = answer(answerLogicId)
-    observe logicAnswer <- Logic.answer_iface.Answer // should be 42, if answerLogic was deployed by A()
-    observe actorAnswer <- Sender.answer_iface.ActorAnswer // should be the value from calling SetActorAnswer, i.e. 123
+    observe logicAnswer <- answer_iface.Logic.Answer // should be 42, if answerLogic was deployed by A()
+    observe actorAnswer <- answer_iface.Sender.ActorAnswer // should be the value from calling SetActorAnswer, i.e. 123
     endpointLogicAnswer = (answer) <- answer_iface.GetLogicAnswer() // 42
     endpointActorAnswer = (answer) <- answer_iface.GetActorAnswer(actorId: Sender) // 123
-    observe logicActorAnswer <- Actor(question).answer_iface.ActorAnswer // 321
+    observe logicActorAnswer <- answer_iface.Actor(Question).ActorAnswer // 321

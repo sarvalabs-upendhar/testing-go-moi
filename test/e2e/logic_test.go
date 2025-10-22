@@ -8,6 +8,7 @@ import (
 
 	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/exlogics/questions/answer"
 
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/blake2b"
@@ -53,7 +54,7 @@ func (te *TestEnvironment) TestEphemeralLogic() {
 
 	// Invoke the Toggle Callsite
 	te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
-		Logic: logicID, Callsite: "Toggle", Calldata: nil,
+		LogicID: logicID, Callsite: "Toggle", Calldata: nil,
 	}))
 
 	// Check State for SenderID
@@ -125,7 +126,7 @@ func (te *TestEnvironment) TestHybridStateLogic() {
 
 		// Invoke the Lockup Callsite
 		te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
-			Logic: logicID, Callsite: "Lockup", Calldata: func() []byte {
+			LogicID: logicID, Callsite: "Lockup", Calldata: func() []byte {
 				inputs := lockledger.InputLockup{Amount: 1000}
 
 				encoded, err := polo.Polorize(inputs, polo.DocStructs())
@@ -209,7 +210,7 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 
 	// Invoke the Transfer Callsite
 	te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
-		Logic: logicID, Callsite: "Transfer", Calldata: func() []byte {
+		LogicID: logicID, Callsite: "Transfer", Calldata: func() []byte {
 			inputs := tokenledger.InputTransfer{
 				Receiver: another.ID,
 				Amount:   10000,
@@ -244,7 +245,7 @@ func (te *TestEnvironment) TestLogicWithEvent() {
 	require.Len(te.T(), logs, 1) // Expect 1 log in the latest tesseract
 
 	log := logs[0]
-	require.Equal(te.T(), logicID, log.LogicID)
+	require.Equal(te.T(), logicID.AsIdentifier(), log.LogicID)
 	require.Equal(te.T(), logicID.AsIdentifier(), log.ID)
 	require.Equal(te.T(), []common.Hash{
 		blake2b.Sum256(must(polo.Polorize("Transfer"))),
@@ -271,7 +272,7 @@ func (te *TestEnvironment) TestLogicInterfaces() {
 	calleeManifest := func() []byte {
 		engineio.RegisterEngine(pisa.NewEngine())
 
-		file, err := engineio.NewManifestFromFile("./../../compute/exlogics/questions/answer.yaml")
+		file, err := engineio.NewManifestFromFile("./../../compute/exlogics/questions/answer/answer.yaml")
 		if err != nil {
 			panic(err)
 		}
@@ -334,38 +335,38 @@ func (te *TestEnvironment) TestLogicInterfaces() {
 	QuestionLogicID := te.GetLogicID(sender.ID)
 
 	te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
-		Logic:    QuestionLogicID,
+		LogicID:  QuestionLogicID,
 		Callsite: "SetActorAnswer",
 		Calldata: must(polo.Polorize(questions.InputExternAnswer{
 			LogicID: AnswerLogicID.AsIdentifier(),
 			Answer:  50,
 		}, polo.DocStructs())),
-		Interfaces: map[string]identifiers.LogicID{
-			"AnswerLogic": AnswerLogicID,
+		Interfaces: map[string]identifiers.Identifier{
+			"AnswerLogic": AnswerLogicID.AsIdentifier(),
 		},
 	}))
 
 	reader := te.moiClient.NewStorageReader(sender.ID, AnswerLogicID)
 
-	output, err := questions.GetActorAnswer(reader)
+	output, err := answer.GetActorAnswer(reader)
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), uint64(50), output)
 
 	te.CallAndCheckReceipt(te.logicInvoke(sender, &common.LogicPayload{
-		Logic:    QuestionLogicID,
+		LogicID:  QuestionLogicID,
 		Callsite: "SetMyAnswer",
 		Calldata: must(polo.Polorize(questions.InputExternAnswer{
 			LogicID: AnswerLogicID.AsIdentifier(),
 			Answer:  70,
 		}, polo.DocStructs())),
-		Interfaces: map[string]identifiers.LogicID{
-			"AnswerLogic": AnswerLogicID,
+		Interfaces: map[string]identifiers.Identifier{
+			"AnswerLogic": AnswerLogicID.AsIdentifier(),
 		},
 	}))
 
 	reader = te.moiClient.NewStorageReader(QuestionLogicID.AsIdentifier(), AnswerLogicID)
 
-	output, err = questions.GetActorAnswer(reader)
+	output, err = answer.GetActorAnswer(reader)
 	require.NoError(te.T(), err)
 	require.Equal(te.T(), uint64(70), output)
 }

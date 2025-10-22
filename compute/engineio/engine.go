@@ -1,9 +1,11 @@
 package engineio
 
 import (
+	"math/big"
 	"strings"
 
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 )
 
 // EngineFuel is a measure of execution effort
@@ -62,6 +64,8 @@ type Engine interface {
 	Runtime(timestamp uint64) Runtime
 
 	CompileManifest(
+		manifestKind ManifestKind,
+		logicID identifiers.Identifier,
 		manifest Manifest,
 		fuel FuelGauge,
 	) (
@@ -74,10 +78,19 @@ type Engine interface {
 }
 
 type Runtime interface {
-	CreateLogic(logicID [32]byte, artifact []byte, storage Storage, params map[string][]byte) error
+	SpawnLogic(logicID [32]byte, artifact []byte, storage Storage, params map[string][]byte) error
+	CreateAsset(
+		ixHash common.Hash,
+		assetID identifiers.AssetID,
+		symbol string, decimals uint8, dimension uint8,
+		manager, creator identifiers.Identifier,
+		maxSupply *big.Int, metadata map[string][]byte,
+		enableEvents bool, logicID identifiers.LogicID,
+	) (uint64, error)
 	ActorExists(logicID [32]byte) bool
 	CreateActor(id [32]byte, storage Storage, params map[string][]byte) error
-	Call(logicID [32]byte, action Action, limit *FuelGauge) *CallResult
+	Call(logicID [32]byte, action Action, transition Transition, limit *FuelGauge) *CallResult
+	BindAssetEngine(ae AssetEngine)
 }
 
 // registry is an in-memory registry of supported EngineRuntime instances.
@@ -99,6 +112,10 @@ func FetchEngine(kind EngineKind) (Engine, bool) {
 	}
 
 	return runtime, true
+}
+
+type Transition interface {
+	GetLogicStorageObject(logicID identifiers.Identifier) (Storage, error)
 }
 
 func EngineKindFromString(str string) EngineKind {

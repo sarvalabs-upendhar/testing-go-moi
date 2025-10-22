@@ -16,12 +16,12 @@ func TestIxBatch_Add(t *testing.T) {
 	ixns := tests.CreateIxns(t, 2, map[int]*tests.CreateIxParams{
 		1: {
 			IxDataCallback: func(ix *common.IxData) {
-				ix.IxOps = []common.IxOpRaw{
-					{
-						Type:    common.IxAssetCreate,
-						Payload: tests.CreateRawAssetCreatePayload(t),
-					},
-				}
+				tests.AddIxOp(
+					t,
+					ix, common.IxAssetCreate,
+					tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+					tests.CreateAssetCreatePayload(t),
+				)
 			},
 		},
 	})
@@ -46,7 +46,7 @@ func TestIxBatch_Add(t *testing.T) {
 			ix:                              ixns[0],
 			expectedAdd:                     true,
 			expectedIxCount:                 1,
-			expectedConsensusNodesHashCount: 2,
+			expectedConsensusNodesHashCount: 1,
 		},
 		{
 			name: "add ixn with same participants mutiple times successfully",
@@ -57,7 +57,7 @@ func TestIxBatch_Add(t *testing.T) {
 			ix:                              ixns[0],
 			expectedAdd:                     true,
 			expectedIxCount:                 3,
-			expectedConsensusNodesHashCount: 2,
+			expectedConsensusNodesHashCount: 1,
 		},
 		{
 			name:                            "add ixn where participant is genesis account",

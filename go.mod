@@ -43,7 +43,7 @@ require (
 	github.com/prometheus/client_golang v1.22.0
 	github.com/protolambda/eth2-shuffle v1.1.0
 	github.com/sarvalabs/battleground v0.3.1
-	github.com/sarvalabs/go-pisa v0.5.0-rc.5.0.20250807091305-cf7082ae8358
+	github.com/sarvalabs/go-pisa v0.5.0
 	github.com/sarvalabs/go-polo v0.4.9
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.11.1

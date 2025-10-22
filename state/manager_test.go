@@ -24,11 +24,12 @@ import (
 )
 
 func TestStateManager_CreateStateObject(t *testing.T) {
-	id := tests.RandomIdentifier(t)
+	id := identifiers.RandomLogicIDv0().AsIdentifier()
+
 	accType := common.LogicAccount
 
 	sm := createTestStateManager(t, nil)
-	so := sm.CreateStateObject(id, accType, true)
+	so := sm.CreateStateObject(id, true)
 
 	validateStateObject(t, so, accType, id, true)
 }
@@ -654,12 +655,12 @@ func TestStateManager_IsInitialTesseract_Without_Sarga(t *testing.T) {
 	ids := tests.GetIdentifiers(t, 2)
 
 	so := NewStateObject(common.SargaAccountID, mockCache(t), nil, db, common.Account{
-		AccType: common.SargaAccount,
+		AccType: common.SystemAccount,
 	}, NilMetrics(), false)
 
-	so.storageTreeTxns[common.SargaLogicID] = iradix.New().Txn()
+	so.storageTreeTxns[common.SargaLogicID.AsIdentifier()] = iradix.New().Txn()
 
-	err := so.SetStorageEntry(common.SargaLogicID, ids[0].Bytes(), []byte{0x01})
+	err := so.SetStorageEntry(common.SargaLogicID.AsIdentifier(), ids[0].Bytes(), []byte{0x01})
 	assert.NoError(t, err)
 
 	smParams := &createStateManagerParams{
@@ -889,7 +890,11 @@ func TestStateManager_FetchIxStateObjects(t *testing.T) {
 
 			require.NoError(t, err)
 			require.NotNil(t, transisition)
-			require.NotNil(t, transisition.GetObject(so[0].id))
+
+			obj, err := transisition.GetObject(so[0].id)
+			require.NoError(t, err)
+
+			require.NotNil(t, obj)
 		})
 	}
 }
@@ -1131,12 +1136,12 @@ func TestStateManager_IsAccountRegistered_With_SargaObject(t *testing.T) {
 	id := tests.RandomIdentifier(t)
 
 	so := NewStateObject(common.SargaAccountID, mockCache(t), nil, db, common.Account{
-		AccType: common.SargaAccount,
+		AccType: common.SystemAccount,
 	}, NilMetrics(), false)
 
-	so.storageTreeTxns[common.SargaLogicID] = iradix.New().Txn()
+	so.storageTreeTxns[common.SargaLogicID.AsIdentifier()] = iradix.New().Txn()
 
-	err := so.SetStorageEntry(common.SargaLogicID, id.Bytes(), []byte{0x01})
+	err := so.SetStorageEntry(common.SargaLogicID.AsIdentifier(), id.Bytes(), []byte{0x01})
 	assert.NoError(t, err)
 
 	smParams := &createStateManagerParams{
@@ -1286,7 +1291,7 @@ func TestStateManager_GetBalance(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			balance, err := sm.GetBalance(test.id, test.assetID, test.stateHash)
+			balance, err := sm.GetBalance(test.id, test.assetID, common.DefaultTokenID, test.stateHash)
 			if test.expectedError != nil {
 				require.Equal(t, big.NewInt(0), balance)
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1295,7 +1300,7 @@ func TestStateManager_GetBalance(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.assets[test.assetID], balance)
+			require.Equal(t, test.assets[test.assetID][common.DefaultTokenID], balance)
 		})
 	}
 }
@@ -1306,13 +1311,13 @@ func TestStateManager_SyncLogicStorageTree(t *testing.T) {
 
 	soParams := map[int]*createStateObjectParams{
 		0: {
-			id: logicIDs[0].AsIdentifier(),
+			id: logicIDs[0],
 		},
 		1: {
-			id: logicIDs[1].AsIdentifier(),
+			id: logicIDs[1],
 		},
 		2: {
-			id: logicIDs[2].AsIdentifier(),
+			id: logicIDs[2],
 		},
 	}
 
@@ -1343,7 +1348,7 @@ func TestStateManager_SyncLogicStorageTree(t *testing.T) {
 	testcases := []struct {
 		name          string
 		stateObject   *Object
-		logicID       identifiers.LogicID
+		logicID       identifiers.Identifier
 		newRoot       *common.RootNode
 		expectedError error
 	}{
@@ -1370,7 +1375,7 @@ func TestStateManager_SyncLogicStorageTree(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sm.syncLogicStorageTree(test.stateObject, test.logicID, test.newRoot)
+			err = sm.syncLogicStorageTree(test.stateObject, test.logicID, test.newRoot)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -1391,16 +1396,16 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 
 	soParams := map[int]*createStateObjectParams{
 		0: {
-			id: logicIDs[1].AsIdentifier(),
+			id: logicIDs[1],
 		},
 		1: {
-			id: logicIDs[2].AsIdentifier(),
+			id: logicIDs[2],
 		},
 	}
 
 	so := createTestStateObjects(t, 2, soParams)
 
-	stateObject := NewStateObject(logicIDs[0].AsIdentifier(), mockCache(t), nil, db,
+	stateObject := NewStateObject(logicIDs[0], mockCache(t), nil, db,
 		common.Account{}, NilMetrics(), false)
 
 	storageTree, err := stateObject.createStorageTreeForLogic(logicIDs[0])
@@ -1429,7 +1434,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 	testcases := []struct {
 		name                  string
 		newRoot               *common.RootNode
-		logicID               identifiers.LogicID
+		logicID               identifiers.Identifier
 		logicStorageTreeRoots map[string]*common.RootNode
 		stateObject           *Object
 		expectedError         error
@@ -1480,7 +1485,7 @@ func TestStateManager_SyncStorageTrees(t *testing.T) {
 	}
 }
 
-//nolint:dupl
+//nolint:dup
 func TestStateManager_SyncAssetTree(t *testing.T) {
 	db := mockDB()
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
@@ -1546,13 +1551,13 @@ func TestStateManager_SyncAssetTree(t *testing.T) {
 	}
 }
 
-//nolint:dupl
+//nolint:dup
 func TestStateManager_SyncLogicTree(t *testing.T) {
 	db := mockDB()
 	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 	rawData := logicID.Bytes()
 
-	logicTree, err := tree.NewKramaHashTree(logicID.AsIdentifier(), common.NilHash, db, blake256.New(),
+	logicTree, err := tree.NewKramaHashTree(logicID, common.NilHash, db, blake256.New(),
 		storage.Logic, nil, tree.NilMetrics())
 	require.NoError(t, err)
 
@@ -1560,7 +1565,7 @@ func TestStateManager_SyncLogicTree(t *testing.T) {
 	require.NoError(t, err)
 
 	soParams := map[int]*createStateObjectParams{
-		0: stateObjectParamsWithLogicTree(t, logicID.AsIdentifier(), db, logicTree, common.NilHash, nil),
+		0: stateObjectParamsWithLogicTree(t, logicID, db, logicTree, common.NilHash, nil),
 	}
 
 	so := createTestStateObjects(t, 1, soParams)
@@ -1674,9 +1679,9 @@ func TestStateManager_GetICSNodeSetFromRawContext(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithID(t, ids[0], identifiers.Nil),
-		1: tests.GetIxParamsWithID(t, tests.RandomIdentifier(t), ids[1]),
-		2: tests.GetIxParamsWithID(t, tests.RandomIdentifier(t), common.SargaAccountID),
+		0: tests.GetIxParamsForTransfer(t, ids[0], identifiers.Nil),
+		1: tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), ids[1]),
+		2: tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), common.SargaAccountID),
 	}
 
 	ixs := tests.CreateIxns(t, 3, ixParams)
@@ -1914,7 +1919,7 @@ func TestStateManager_GetPersistentStorageEntry(t *testing.T) {
 	db := mockDB()
 	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 
-	so := NewStateObject(logicID.AsIdentifier(), mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
+	so := NewStateObject(logicID, mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
 
 	_, err := so.createStorageTreeForLogic(logicID)
 	assert.NoError(t, err)
@@ -1937,7 +1942,7 @@ func TestStateManager_GetPersistentStorageEntry(t *testing.T) {
 
 	testcases := []struct {
 		name                 string
-		logicID              identifiers.LogicID
+		logicID              identifiers.Identifier
 		slot                 []byte
 		stateHash            common.Hash
 		expectedStorageEntry []byte
@@ -2010,7 +2015,7 @@ func TestStateManager_GetEphemeralStorageEntry(t *testing.T) {
 	testcases := []struct {
 		name                 string
 		id                   identifiers.Identifier
-		logicID              identifiers.LogicID
+		logicID              identifiers.Identifier
 		slot                 []byte
 		stateHash            common.Hash
 		expectedStorageEntry []byte
@@ -2064,7 +2069,7 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 
 	engineio.RegisterEngine(pisa.NewEngine())
 
-	so := NewStateObject(logicID.AsIdentifier(), mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
+	so := NewStateObject(logicID, mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
 
 	err := so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
@@ -2085,7 +2090,7 @@ func TestStateManager_IsLogicRegistered(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		logicID       identifiers.LogicID
+		logicID       identifiers.Identifier
 		expectedError error
 	}{
 		{
@@ -2125,7 +2130,7 @@ func TestStateManager_GetAssetInfo(t *testing.T) {
 		id: assetAddrs,
 	})
 
-	assetID, assetRoot := createTestAssetInAssetAccount(t, sObj, assetInfo)
+	assetRoot := createTestAssetInAssetAccount(t, sObj, assetInfo)
 
 	accounts, stateHashes := getTestAccounts(t, []common.Hash{assetRoot}, 1)
 
@@ -2151,7 +2156,7 @@ func TestStateManager_GetAssetInfo(t *testing.T) {
 		},
 		{
 			name:              "asset info fetched successfully",
-			assetID:           assetID,
+			assetID:           assetInfo.AssetID,
 			stateHash:         stateHashes[0],
 			expectedAssetInfo: assetInfo,
 		},
@@ -2199,7 +2204,7 @@ func TestStateManager_GetDeeds(t *testing.T) {
 		},
 	})
 
-	assetID, assetRoot := createTestAssetInAssetAccount(t, sObj[0], assetInfo)
+	assetRoot := createTestAssetInAssetAccount(t, sObj[0], assetInfo)
 	assetRoot1 := createTestAssetInRegularAccount(t, sObj[1], assetID, assetInfo)
 
 	deeds, deedsHash := getTestDeeds(
@@ -2300,7 +2305,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 	logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 	logicObject.Manifest = manifest.Hash()
 
-	so := NewStateObject(logicID.AsIdentifier(), mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
+	so := NewStateObject(logicID, mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
 
 	err = so.InsertNewLogicObject(logicID, logicObject)
 	require.NoError(t, err)
@@ -2319,7 +2324,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 		acc.LogicRoot = tests.RandomHash(t)
 	})
 
-	err = db.CreateEntry(storage.LogicManifestKey(logicID.AsIdentifier(), logicObject.ManifestHash()), encodedManifest)
+	err = db.CreateEntry(storage.LogicManifestKey(logicID, logicObject.ManifestHash()), encodedManifest)
 	require.NoError(t, err)
 
 	smParams := &createStateManagerParams{
@@ -2334,7 +2339,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 
 	testcases := []struct {
 		name             string
-		logicID          identifiers.LogicID
+		logicID          identifiers.Identifier
 		stateHash        common.Hash
 		expectedManifest []byte
 		expectedError    error
@@ -2377,7 +2382,7 @@ func TestStateManager_GetLogicManifest(t *testing.T) {
 func TestStateManager_GetLogicIDs(t *testing.T) {
 	var err error
 
-	expectedLogicIDs := make([]identifiers.LogicID, 0)
+	expectedLogicIDs := make([]identifiers.Identifier, 0)
 	db := mockDB()
 	id := tests.RandomIdentifier(t)
 	so := NewStateObject(id, mockCache(t), nil, db, common.Account{}, NilMetrics(), false)
@@ -2386,7 +2391,7 @@ func TestStateManager_GetLogicIDs(t *testing.T) {
 		logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
 		logicObject := createLogicObject(t, getLogicObjectParamsWithLogicID(logicID))
 
-		err := so.InsertNewLogicObject(logicID, logicObject)
+		err = so.InsertNewLogicObject(logicID, logicObject)
 		require.NoError(t, err)
 
 		expectedLogicIDs = append(expectedLogicIDs, logicID)
@@ -2420,7 +2425,7 @@ func TestStateManager_GetLogicIDs(t *testing.T) {
 		name             string
 		id               identifiers.Identifier
 		stateHash        common.Hash
-		expectedLogicIDs []identifiers.LogicID
+		expectedLogicIDs []identifiers.Identifier
 		expectedError    error
 	}{
 		{
@@ -2522,8 +2527,8 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	ts := tests.CreateTesseract(t, tesseractParams)
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithID(identifiers.Nil, ts.AnyAccountID()),
-		1: tests.GetIxParamsWithID(identifiers.Nil, tests.RandomIdentifier(t)),
+		0: tests.GetIxParamsForTransfer(identifiers.Nil, ts.AnyAccountID()),
+		1: tests.GetIxParamsForTransfer(identifiers.Nil, tests.RandomIdentifier(t)),
 	}
 
 	ixs := tests.CreateIxns(t, 2, ixParams)
@@ -2532,7 +2537,7 @@ func TestStateManager_GetReceiverContext_RegisteredAccount(t *testing.T) {
 	assert.NoError(t, err)
 
 	so := NewStateObject(common.SargaAccountID, cache, nil, db, common.Account{
-		AccType: common.SargaAccount,
+		AccType: common.SystemAccount,
 	}, NilMetrics())
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)
 	assert.NoError(t, err)
@@ -2638,8 +2643,8 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithID(identifiers.Nil, tests.RandomIdentifier(t)),
-		1: tests.GetIxParamsWithID(identifiers.Nil, tests.RandomIdentifier(t)),
+		0: tests.GetIxParamsForTransfer(identifiers.Nil, tests.RandomIdentifier(t)),
+		1: tests.GetIxParamsForTransfer(identifiers.Nil, tests.RandomIdentifier(t)),
 	}
 
 	ixs := tests.CreateIxns(t, 3, ixParams)
@@ -2648,7 +2653,7 @@ func TestStateManager_GetReceiverContext_Non_RegisteredAccount(t *testing.T) {
 	assert.NoError(t, err)
 
 	so := NewStateObject(common.SargaAccountID, cache, nil, db, common.Account{
-		AccType:     common.SargaAccount,
+		AccType:     common.SystemAccount,
 		ContextHash: mHash[0],
 	}, NilMetrics())
 
@@ -2748,7 +2753,7 @@ func TestStateManager_FetchICSNodeSet(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithID(t, id, tests.RandomIdentifier(t)),
+		0: tests.GetIxParamsForTransfer(t, id, tests.RandomIdentifier(t)),
 	}
 
 	ixs := tests.CreateIxns(t, 1, ixParams)
@@ -2863,8 +2868,8 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, cHash)
 
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithID(ids[0], ids[1]),
-		1: tests.GetIxParamsWithID(identifiers.Nil, identifiers.Nil),
+		0: tests.GetIxParamsForTransfer(ids[0], ids[1]),
+		1: tests.GetIxParamsForTransfer(identifiers.Nil, identifiers.Nil),
 	}
 
 	ixs := tests.CreateIxns(t, 2, ixParams)
@@ -2873,7 +2878,7 @@ func TestStateManager_FetchInteractionContext(t *testing.T) {
 	assert.NoError(t, err)
 
 	so := NewStateObject(common.SargaAccountID, cache, nil, db, common.Account{
-		AccType: common.SargaAccount,
+		AccType: common.SystemAccount,
 	}, NilMetrics())
 
 	_, err = so.createStorageTreeForLogic(common.SargaLogicID)

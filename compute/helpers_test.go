@@ -13,6 +13,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func getCirculatingSupply(t *testing.T, assetAcc *state.Object, assetID identifiers.AssetID) *big.Int {
+	t.Helper()
+
+	assetObject, err := assetAcc.FetchAssetObject(assetID, true)
+	require.NoError(t, err)
+
+	return assetObject.Properties.CirculatingSupply
+}
+
+func assetObjectWithToken(t *testing.T, tokenID common.TokenID, balance *big.Int) *state.AssetObject {
+	t.Helper()
+
+	ao := &state.AssetObject{
+		Balance: tests.TokenWithoutExpiry(t, tokenID, balance),
+	}
+
+	return ao
+}
+
 func createTestStateObject(t *testing.T) *state.Object {
 	t.Helper()
 
@@ -24,13 +43,9 @@ func createTestStateObject(t *testing.T) *state.Object {
 	)
 }
 
-func createTestSystemObject(t *testing.T) *state.SystemObject {
-	t.Helper()
-
-	return state.NewSystemObject(createTestStateObject(t))
-}
-
-func createTestAsset(t *testing.T, supply *big.Int) (*state.Object, *state.Object, identifiers.AssetID) {
+func createTestAsset(
+	t *testing.T, maxSupply, circulatingSupply *big.Int,
+) (*state.Object, *state.Object, identifiers.AssetID) {
 	t.Helper()
 
 	creator := state.NewStateObject(
@@ -43,11 +58,19 @@ func createTestAsset(t *testing.T, supply *big.Int) (*state.Object, *state.Objec
 		nil, common.Account{}, state.NilMetrics(), false,
 	)
 
-	assetID, err := createAsset(creator, asset, &common.AssetCreatePayload{
-		Symbol: "MOI",
-		Supply: supply,
-	})
+	assetID := identifiers.RandomAssetIDv0()
 
+	assetID, err := createAsset(creator, asset, &common.AssetDescriptor{
+		AssetID:           assetID,
+		Symbol:            "MOI",
+		MaxSupply:         maxSupply,
+		CirculatingSupply: big.NewInt(0),
+		Creator:           creator.Identifier(),
+		Manager:           creator.Identifier(),
+	})
+	require.NoError(t, err)
+
+	err = mintAsset(creator, asset, assetID, common.DefaultTokenID, circulatingSupply)
 	require.NoError(t, err)
 
 	_, err = creator.Commit()
@@ -62,25 +85,25 @@ func createTestAsset(t *testing.T, supply *big.Int) (*state.Object, *state.Objec
 func checkAssetCreate(
 	t *testing.T, assetID identifiers.AssetID,
 	creatorAcc, assetAcc *state.Object,
-	payload *common.AssetCreatePayload,
+	payload *common.AssetDescriptor,
 ) {
 	t.Helper()
-
-	creatorObject, err := creatorAcc.FetchAssetObject(assetID, true)
-
-	require.NoError(t, err)
-	require.Equal(t, creatorObject.Balance, payload.Supply)
 
 	assetObject, err := assetAcc.FetchAssetObject(assetID, true)
 
 	require.NoError(t, err)
-	require.Equal(t, assetObject.Properties.Supply, payload.Supply)
+	deeds, err := creatorAcc.Deeds()
+	require.NoError(t, err)
+
+	_, ok := deeds.Entries[payload.AssetID.AsIdentifier()]
+	require.True(t, ok, "Deed entry not found")
+
+	require.Equal(t, assetObject.Properties.AssetID, payload.AssetID)
 	require.Equal(t, assetObject.Properties.Symbol, payload.Symbol)
-	require.Equal(t, assetObject.Properties.Standard, payload.Standard)
 }
 
 func checkAssetTransfer(
-	t *testing.T, assetID identifiers.AssetID,
+	t *testing.T, assetID identifiers.AssetID, tokenID common.TokenID,
 	sender, target *state.Object,
 	expectedSenderBalance, expectedTargetBalance *big.Int,
 ) {
@@ -92,12 +115,12 @@ func checkAssetTransfer(
 	targetObject, err := target.FetchAssetObject(assetID, true)
 	require.NoError(t, err)
 
-	require.Equal(t, 0, expectedSenderBalance.Cmp(senderObject.Balance))
-	require.Equal(t, 0, expectedTargetBalance.Cmp(targetObject.Balance))
+	require.Equal(t, 0, expectedSenderBalance.Cmp(senderObject.GetBalance(tokenID)))
+	require.Equal(t, 0, expectedTargetBalance.Cmp(targetObject.Balance[tokenID]))
 }
 
 func checkMandateConsumption(
-	t *testing.T, assetID identifiers.AssetID, sender, target, benefactor *state.Object,
+	t *testing.T, assetID identifiers.AssetID, tokenID common.TokenID, sender, target, benefactor *state.Object,
 	expectedBenefactorBalance, expectedTargetBalance, expectedMandateBalance *big.Int,
 ) {
 	t.Helper()
@@ -108,75 +131,79 @@ func checkMandateConsumption(
 	benefactorObject, err := benefactor.FetchAssetObject(assetID, true)
 	require.NoError(t, err)
 
-	require.Equal(t, 0, expectedBenefactorBalance.Cmp(benefactorObject.Balance))
-	require.Equal(t, 0, expectedTargetBalance.Cmp(targetObject.Balance))
+	require.Equal(t, 0, expectedBenefactorBalance.Cmp(benefactorObject.Balance[tokenID]))
+	require.Equal(t, 0, expectedTargetBalance.Cmp(targetObject.Balance[tokenID]))
 
 	require.NotNil(t, benefactorObject.Mandate[sender.Identifier()])
-	require.Equal(t, 0, expectedMandateBalance.Cmp(benefactorObject.Mandate[sender.Identifier()].Amount))
+	require.Equal(t, 0, expectedMandateBalance.Cmp(benefactorObject.Mandate[sender.Identifier()][tokenID].Amount))
 }
 
-func checkAssetApprove(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
+func checkAssetApprove(
+	t *testing.T,
+	sender *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID,
+	beneficiary identifiers.Identifier, amount *big.Int,
+) {
 	t.Helper()
 
-	mandate, err := sender.GetMandate(payload.AssetID, payload.Beneficiary)
+	mandate, err := sender.GetMandate(assetID, tokenID, beneficiary)
 	require.NoError(t, err)
-	require.Equal(t, payload.Amount, mandate.Amount)
+	require.Equal(t, amount, mandate.Amount)
 }
 
-func checkAssetLockup(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
+func checkAssetLockup(t *testing.T,
+	sender *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID,
+	beneficiary identifiers.Identifier, amount *big.Int,
+) {
 	t.Helper()
 
-	lockupAmount, err := sender.GetLockup(payload.AssetID, payload.Beneficiary)
+	lockup, err := sender.GetLockup(assetID, tokenID, beneficiary)
 	require.NoError(t, err)
-	require.Equal(t, payload.Amount, lockupAmount)
+	require.Equal(t, amount, lockup.Amount)
 }
 
-func checkAssetRevoke(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
+func checkAssetRevoke(t *testing.T,
+	sender *state.Object,
+	assetID identifiers.AssetID,
+	tokenID common.TokenID,
+	beneficiary identifiers.Identifier,
+) {
 	t.Helper()
 
-	_, err := sender.GetMandate(payload.AssetID, payload.Beneficiary)
+	_, err := sender.GetMandate(assetID, tokenID, beneficiary)
 	require.Error(t, err)
 }
 
 func checkAssetRelease(
 	t *testing.T, sender, beneficiary, benefactor *state.Object,
-	payload *common.AssetActionPayload, expectedAmount *big.Int,
+	amount *big.Int, assetID identifiers.AssetID, tokenID common.TokenID, expectedAmount *big.Int,
 ) {
 	t.Helper()
 
 	// Check the beneficiary account
-	ao, err := beneficiary.FetchAssetObject(payload.AssetID, true)
+	ao, err := beneficiary.FetchAssetObject(assetID, true)
 	require.NoError(t, err)
-	require.Equal(t, payload.Amount, ao.Balance)
+	require.Equal(t, amount, ao.Balance[common.DefaultTokenID])
 
 	// Check whether the lockup amount got deducted
-	lockupAmount, err := benefactor.GetLockup(payload.AssetID, sender.Identifier())
+	lockup, err := benefactor.GetLockup(assetID, tokenID, sender.Identifier())
 	require.NoError(t, err)
-	require.Equal(t, expectedAmount, lockupAmount)
+	require.Equal(t, expectedAmount, lockup.Amount)
 }
 
-func createTestAssetID(
-	t *testing.T, id identifiers.Identifier,
-	payload *common.AssetCreatePayload,
-) identifiers.AssetID {
+func createMandate(
+	t *testing.T,
+	sender *state.Object,
+	beneficiary identifiers.Identifier,
+	assetID identifiers.AssetID,
+	tokenID common.TokenID,
+	amount *big.Int,
+	timestamp uint64,
+) {
 	t.Helper()
 
-	assetID, err := identifiers.GenerateAssetIDv0(
-		id.Fingerprint(),
-		id.Variant(),
-		uint16(payload.Standard),
-		payload.Flags()...,
-	)
-
-	require.NoError(t, err)
-
-	return assetID
-}
-
-func createMandate(t *testing.T, sender *state.Object, payload *common.AssetActionPayload) {
-	t.Helper()
-
-	err := sender.CreateMandate(payload.AssetID, payload.Beneficiary, payload.Amount, payload.Timestamp)
+	err := sender.CreateMandate(assetID, tokenID, beneficiary, amount, timestamp)
 	assert.NoError(t, err)
 }
 
@@ -190,7 +217,7 @@ func insertTestAssetObject(
 	assert.NoError(t, err)
 }
 
-func insertGuardianEntry(
+func insertGuardianEntry( //nolint
 	t *testing.T, system *state.SystemObject, validator *common.Validator,
 ) {
 	t.Helper()
@@ -200,21 +227,12 @@ func insertGuardianEntry(
 }
 
 func createTestDeedsEntry(
-	t *testing.T, id identifiers.Identifier,
-	creatorAcc *state.Object, payload *common.AssetCreatePayload,
+	t *testing.T,
+	creatorAcc *state.Object, payload *common.AssetDescriptor,
 ) {
 	t.Helper()
 
-	assetID, err := identifiers.GenerateAssetIDv0(
-		id.Fingerprint(),
-		id.Variant(),
-		uint16(payload.Standard),
-		payload.Flags()...,
-	)
-
-	require.NoError(t, err)
-
-	err = creatorAcc.CreateDeedsEntry(assetID.AsIdentifier())
+	err := creatorAcc.CreateDeedsEntry(payload.AssetID.AsIdentifier())
 	assert.NoError(t, err)
 }
 
@@ -222,10 +240,10 @@ func createTestSargaStateObject(t *testing.T) *state.Object {
 	t.Helper()
 
 	sarga := state.NewStateObject(common.SargaAccountID, nil, nil, nil, common.Account{
-		AccType: common.SargaAccount,
+		AccType: common.SystemAccount,
 	}, state.NilMetrics(), false)
 
-	err := sarga.CreateStorageTreeForLogic(common.SargaLogicID)
+	err := sarga.CreateStorageTreeForLogic(common.SargaLogicID.AsIdentifier())
 	require.NoError(t, err)
 
 	return sarga
@@ -234,55 +252,45 @@ func createTestSargaStateObject(t *testing.T) *state.Object {
 func registerParticipant(t *testing.T, sarga *state.Object, id identifiers.Identifier) {
 	t.Helper()
 
-	err := sarga.SetStorageEntry(common.SargaLogicID, id.Bytes(), id.Bytes())
+	err := sarga.SetStorageEntry(common.SargaLogicID.AsIdentifier(), id.Bytes(), id.Bytes())
 	assert.NoError(t, err)
 }
 
 func createTestMandate(
-	t *testing.T, sender, beneficiary *state.Object,
-	assetID identifiers.AssetID, amount *big.Int, timestamp uint64,
+	t *testing.T, benefactor, beneficiary *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int, timestamp uint64,
 ) {
 	t.Helper()
 
-	err := approveAsset(sender, &common.AssetActionPayload{
-		Beneficiary: beneficiary.Identifier(),
-		AssetID:     assetID,
-		Amount:      amount,
-		Timestamp:   timestamp,
-	})
+	err := approveAsset(benefactor, assetID, tokenID, beneficiary.Identifier(), amount, timestamp)
 	assert.NoError(t, err)
 }
 
 func createLockup(
 	t *testing.T, sender *state.Object, beneficiary identifiers.Identifier,
-	assetID identifiers.AssetID, amount *big.Int,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
 ) {
 	t.Helper()
 
-	err := lockupAsset(sender, &common.AssetActionPayload{
-		Beneficiary: beneficiary,
-		AssetID:     assetID,
-		Amount:      amount,
-	})
+	err := lockupAsset(sender, beneficiary, assetID, tokenID, amount)
+
 	assert.NoError(t, err)
 }
 
-func setupAssetAccount(t *testing.T, operator, assetAcc *state.Object, assetID identifiers.AssetID) {
+func setupAssetAccount(t *testing.T, operator, assetAcc *state.Object, assetID identifiers.AssetID) { //nolint
 	t.Helper()
 
 	insertTestAssetObject(
-		t, assetAcc, assetID, state.NewAssetObject(big.NewInt(5000), nil),
-	)
-
-	err := assetAcc.SetState(
-		assetID,
-		common.NewAssetDescriptor(operator.Identifier(), common.AssetCreatePayload{}),
-	)
-
-	assert.NoError(t, err)
+		t, assetAcc, assetID, state.NewAssetObject(common.NewAssetDescriptor(
+			assetID,
+			"MOI",
+			0,
+			0,
+			operator.Identifier(), operator.Identifier(),
+			big.NewInt(5000), nil, false, identifiers.Nil)))
 }
 
-func checkGuardianRegister(t *testing.T, system *state.SystemObject, payload *common.GuardianRegisterPayload) {
+func checkGuardianRegister(t *testing.T, system *state.SystemObject, payload *common.GuardianRegisterPayload) { //nolint
 	t.Helper()
 
 	validator, err := system.ValidatorByKramaID(payload.KramaID)
@@ -296,7 +304,7 @@ func checkGuardianRegister(t *testing.T, system *state.SystemObject, payload *co
 	require.Equal(t, payload.KYCProof, validator.KYCProof)
 }
 
-func checkStakeGuardian(t *testing.T, system *state.SystemObject, payload *common.GuardianActionPayload) {
+func checkStakeGuardian(t *testing.T, system *state.SystemObject, payload *common.GuardianActionPayload) { //nolint
 	t.Helper()
 
 	validator, err := system.ValidatorByKramaID(payload.KramaID)
@@ -307,7 +315,7 @@ func checkStakeGuardian(t *testing.T, system *state.SystemObject, payload *commo
 	require.Equal(t, payload.Amount, validator.PendingStakeAdditions)
 }
 
-func checkUnstakeGuardian(t *testing.T, system *state.SystemObject, payload *common.GuardianActionPayload) {
+func checkUnstakeGuardian(t *testing.T, system *state.SystemObject, payload *common.GuardianActionPayload) { //nolint
 	t.Helper()
 
 	validator, err := system.ValidatorByKramaID(payload.KramaID)
@@ -318,7 +326,7 @@ func checkUnstakeGuardian(t *testing.T, system *state.SystemObject, payload *com
 	require.Equal(t, payload.Amount, validator.PendingStakeRemovals[common.Epoch(0)])
 }
 
-func checkGuardianWithdraw(
+func checkGuardianWithdraw( //nolint
 	t *testing.T, sender *state.Object, system *state.SystemObject,
 	payload *common.GuardianActionPayload, expectedStake *big.Int, expectedBalance *big.Int,
 ) {
@@ -334,10 +342,10 @@ func checkGuardianWithdraw(
 	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
 	require.NoError(t, err)
 
-	require.True(t, expectedBalance.Cmp(assetObject.Balance) == 0)
+	require.True(t, expectedBalance.Cmp(assetObject.Balance[common.DefaultTokenID]) == 0)
 }
 
-func checkGuardianClaim(
+func checkGuardianClaim( //nolint
 	t *testing.T, sender *state.Object, system *state.SystemObject,
 	payload *common.GuardianActionPayload, expectedBalance *big.Int,
 ) {
@@ -353,5 +361,5 @@ func checkGuardianClaim(
 	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
 	require.NoError(t, err)
 
-	require.True(t, expectedBalance.Cmp(assetObject.Balance) == 0)
+	require.True(t, expectedBalance.Cmp(assetObject.Balance[common.DefaultTokenID]) == 0)
 }

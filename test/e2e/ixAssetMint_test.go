@@ -14,15 +14,19 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
-//nolint:dupl
+//nolint:dup
 func (te *TestEnvironment) mintAsset(
 	acc tests.AccountWithMnemonic,
-	assetSupplyPayload *common.AssetSupplyPayload,
+	assetID identifiers.AssetID,
+	params *common.MintParams,
 ) (common.Hash, error) {
 	te.logger.Debug("mint asset ",
-		"sender", acc.ID, "asset", assetSupplyPayload.AssetID, "amount", assetSupplyPayload.Amount)
+		"sender", acc.ID, "asset", assetID, "amount", params.Amount)
 
-	payload, err := assetSupplyPayload.Bytes()
+	action, err := common.GetAssetActionPayload(assetID, common.MintEndpoint, params)
+	te.Suite.NoError(err)
+
+	payload, err := action.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
@@ -32,15 +36,9 @@ func (te *TestEnvironment) mintAsset(
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Funds: []common.IxFund{
-			{
-				AssetID: assetSupplyPayload.AssetID,
-				Amount:  assetSupplyPayload.Amount,
-			},
-		},
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IxAssetMint,
+				Type:    common.IxAssetAction,
 				Payload: payload,
 			},
 		},
@@ -50,7 +48,11 @@ func (te *TestEnvironment) mintAsset(
 				LockType: common.MutateLock,
 			},
 			{
-				ID:       assetSupplyPayload.AssetID.AsIdentifier(),
+				ID:       assetID.AsIdentifier(),
+				LockType: common.MutateLock,
+			},
+			{
+				ID:       params.Beneficiary,
 				LockType: common.MutateLock,
 			},
 		},
@@ -71,18 +73,27 @@ func (te *TestEnvironment) mintAsset(
 // 2. make sure asset minted on senders side by payload amount
 func validateAssetMint(
 	te *TestEnvironment,
-	sender identifiers.Identifier,
-	payload common.AssetSupplyPayload,
+	assetID identifiers.AssetID,
+	payload *common.MintParams,
 	ixHash common.Hash,
+	isSuccess bool,
 ) {
+	if !isSuccess {
+		checkForReceiptFailure(te.T(), te.moiClient, ixHash)
+
+		return
+	}
+
+	beneficiary := payload.Beneficiary
+
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	senderHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, sender)
+	beneficiaryHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, beneficiary)
 
-	senderPrevBal := getBalance(te, sender, payload.AssetID, int64(senderHeight-1))
-	senderCurBal := getBalance(te, sender, payload.AssetID, args.LatestTesseractHeight)
+	beneficiaryPrevBal := getBalance(te, beneficiary, assetID, int64(beneficiaryHeight-1))
+	beneficiaryCurBal := getBalance(te, beneficiary, assetID, args.LatestTesseractHeight)
 
-	require.Equal(te.T(), payload.Amount.Uint64(), senderCurBal-senderPrevBal)
+	require.Equal(te.T(), payload.Amount.Uint64(), beneficiaryCurBal-beneficiaryPrevBal)
 }
 
 func (te *TestEnvironment) TestAssetMint() {
@@ -90,7 +101,7 @@ func (te *TestEnvironment) TestAssetMint() {
 	require.NoError(te.T(), err)
 
 	sender := accs[0]
-	nonOperator := accs[1]
+	beneficiary := accs[1]
 	initialAmount := big.NewInt(1000)
 
 	// TODO CONSIDER ADDING THESE UNDER PRE-TEST
@@ -98,66 +109,52 @@ func (te *TestEnvironment) TestAssetMint() {
 		tests.GetRandomUpperCaseString(te.T(), 8),
 		initialAmount,
 		common.MAS0,
+		sender.ID,
 		nil,
 	))
-
-	MAS1AssetID := createAsset(te, sender, createAssetCreatePayload(
-		tests.GetRandomUpperCaseString(te.T(), 8),
-		big.NewInt(1),
-		common.MAS1,
-		nil,
-	))
-
-	transferAsset(te, sender, &common.AssetActionPayload{
-		Beneficiary: nonOperator.ID,
-		AssetID:     MAS0AssetID,
-		Amount:      big.NewInt(100),
-	})
 
 	testcases := []struct {
-		name               string
-		sender             tests.AccountWithMnemonic
-		assetSupplyPayload *common.AssetSupplyPayload
-		postTest           func(
+		name     string
+		sender   tests.AccountWithMnemonic
+		assetID  identifiers.AssetID
+		params   *common.MintParams
+		postTest func(
 			te *TestEnvironment,
-			sender identifiers.Identifier,
-			payload common.AssetSupplyPayload,
+			assetID identifiers.AssetID,
+			payload *common.MintParams,
 			ixHash common.Hash,
+			isSuccess bool,
 		)
 		expectedError error
+		isSuccess     bool
 	}{
 		{
-			name:   "mint MAS0 asset",
-			sender: sender,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: MAS0AssetID,
-				Amount:  big.NewInt(100),
+			name:    "mint MAS0 asset",
+			sender:  sender,
+			assetID: MAS0AssetID,
+			params: &common.MintParams{
+				Beneficiary: beneficiary.ID,
+				Amount:      big.NewInt(100),
 			},
-			postTest: validateAssetMint,
+			isSuccess: true,
+			postTest:  validateAssetMint,
 		},
 		{
-			name:   "cannot mint MAS1 asset",
-			sender: sender,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: MAS1AssetID,
-				Amount:  big.NewInt(1),
+			name:    "sender should be asset manager",
+			sender:  beneficiary,
+			assetID: MAS0AssetID,
+			params: &common.MintParams{
+				Beneficiary: beneficiary.ID,
+				Amount:      big.NewInt(1),
 			},
-			expectedError: common.ErrMintOrBurnNonFungibleToken,
-		},
-		{
-			name:   "amount is invalid",
-			sender: nonOperator,
-			assetSupplyPayload: &common.AssetSupplyPayload{
-				AssetID: MAS0AssetID,
-				Amount:  big.NewInt(-1),
-			},
-			expectedError: common.ErrInvalidValue,
+			isSuccess: false,
+			postTest:  validateAssetMint,
 		},
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.mintAsset(test.sender, test.assetSupplyPayload)
+			ixHash, err := te.mintAsset(test.sender, test.assetID, test.params)
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
 
@@ -166,7 +163,7 @@ func (te *TestEnvironment) TestAssetMint() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.ID, *test.assetSupplyPayload, ixHash)
+			test.postTest(te, test.assetID, test.params, ixHash, test.isSuccess)
 		})
 	}
 }

@@ -106,8 +106,16 @@ func NewStateManager(
 }
 
 func (sm *StateManager) CreateStateObject(
-	id identifiers.Identifier,
-	accType common.AccountType, isGenesis bool,
+	id identifiers.Identifier, isGenesis bool,
+) *Object {
+	stateObject := NewStateObject(id, sm.cache, sm.treeCache, sm.db,
+		common.Account{AccType: common.AccountTypeFromID(id)}, sm.metrics, isGenesis)
+
+	return stateObject
+}
+
+func (sm *StateManager) CreateStateObjectWithAccountType(
+	id identifiers.Identifier, accType common.AccountType, isGenesis bool,
 ) *Object {
 	stateObject := NewStateObject(id, sm.cache, sm.treeCache, sm.db,
 		common.Account{AccType: accType}, sm.metrics, isGenesis)
@@ -116,7 +124,7 @@ func (sm *StateManager) CreateStateObject(
 }
 
 func (sm *StateManager) CreateSystemObject(id identifiers.Identifier) *SystemObject {
-	systemObject := NewSystemObject(sm.CreateStateObject(id, common.SystemAccount, true))
+	systemObject := NewSystemObject(sm.CreateStateObject(id, true))
 
 	sm.systemRegistry.SetSystemObject(systemObject)
 
@@ -126,7 +134,7 @@ func (sm *StateManager) CreateSystemObject(id identifiers.Identifier) *SystemObj
 func (sm *StateManager) initSystemStateObject(id identifiers.Identifier) (*SystemObject, error) {
 	stateObject, err := sm.GetLatestStateObject(id)
 	if err != nil {
-		stateObject = sm.CreateStateObject(id, common.SystemAccount, true)
+		stateObject = sm.CreateStateObject(id, true)
 	}
 
 	systemObject := NewSystemObject(stateObject)
@@ -274,13 +282,15 @@ func (sm *StateManager) GetSubAccountCount(id identifiers.Identifier) (uint64, e
 	return uint64(len(mCtx.SubAccounts)), nil
 }
 
-func (sm *StateManager) GetLogicIDs(id identifiers.Identifier, stateHash common.Hash) ([]identifiers.LogicID, error) {
+func (sm *StateManager) GetLogicIDs(
+	id identifiers.Identifier, stateHash common.Hash,
+) ([]identifiers.Identifier, error) {
 	obj, err := sm.getStateObject(id, stateHash)
 	if err != nil {
 		return nil, err
 	}
 
-	logicIDs := make([]identifiers.LogicID, 0)
+	logicIDs := make([]identifiers.Identifier, 0)
 
 	logicTree, err := obj.getLogicTree()
 	if err != nil {
@@ -296,7 +306,7 @@ func (sm *StateManager) GetLogicIDs(id identifiers.Identifier, stateHash common.
 				return nil, err
 			}
 
-			logicIDs = append(logicIDs, identifiers.LogicID(logicID))
+			logicIDs = append(logicIDs, identifiers.LogicID(logicID).AsIdentifier())
 		}
 	}
 
@@ -528,7 +538,7 @@ func (sm *StateManager) IsAccountRegistered(id identifiers.Identifier) (bool, er
 	}
 
 	// Fetch the account info from genesis state
-	_, err = sargaObject.GetStorageEntry(common.SargaLogicID, id.Bytes())
+	_, err = sargaObject.GetStorageEntry(common.SargaLogicID.AsIdentifier(), id.Bytes())
 	if errors.Is(err, common.ErrKeyNotFound) {
 		return false, nil
 	}
@@ -547,7 +557,7 @@ func (sm *StateManager) IsAccountRegisteredAt(id identifiers.Identifier, tessera
 		return false, err
 	}
 
-	_, err = sargaObject.GetStorageEntry(common.SargaLogicID, id.Bytes())
+	_, err = sargaObject.GetStorageEntry(common.SargaLogicID.AsIdentifier(), id.Bytes())
 	if errors.Is(err, common.ErrKeyNotFound) {
 		return false, nil
 	}
@@ -614,7 +624,7 @@ func (sm *StateManager) GetDeeds(
 			return nil, errors.Wrap(err, "failed to fetch state object")
 		}
 
-		entries[aid], err = stateObject.GetState(assetID)
+		entries[aid], err = stateObject.GetProperties(assetID)
 		if err != nil {
 			return nil, err
 		}
@@ -657,6 +667,7 @@ func (sm *StateManager) GetAccountKeys(id identifiers.Identifier, stateHash comm
 func (sm *StateManager) GetBalance(
 	id identifiers.Identifier,
 	assetID identifiers.AssetID,
+	tokenID common.TokenID,
 	stateHash common.Hash,
 ) (*big.Int, error) {
 	so, err := sm.getStateObject(id, stateHash)
@@ -664,7 +675,7 @@ func (sm *StateManager) GetBalance(
 		return big.NewInt(0), errors.Wrap(err, "failed to fetch state object")
 	}
 
-	return so.BalanceOf(assetID)
+	return so.BalanceOf(assetID, tokenID)
 }
 
 func (sm *StateManager) GetAssetInfo(assetID identifiers.AssetID, state common.Hash) (*common.AssetDescriptor, error) {
@@ -673,7 +684,7 @@ func (sm *StateManager) GetAssetInfo(assetID identifiers.AssetID, state common.H
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	return stateObject.GetState(assetID)
+	return stateObject.GetProperties(assetID)
 }
 
 func (sm *StateManager) GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error) {
@@ -718,8 +729,8 @@ func (sm *StateManager) GetPublicKeys(ids ...identifiers.KramaID) ([][]byte, err
 
 // IsLogicRegistered checks if the logicID is registered with the account.
 // If the logicID is not registered, this returns an error
-func (sm *StateManager) IsLogicRegistered(logicID identifiers.LogicID) error {
-	so, err := sm.GetLatestStateObject(logicID.AsIdentifier())
+func (sm *StateManager) IsLogicRegistered(logicID identifiers.Identifier) error {
+	so, err := sm.GetLatestStateObject(logicID)
 	if err != nil {
 		return err
 	}
@@ -751,7 +762,7 @@ func (sm *StateManager) SyncStorageTrees(
 		g.Go(func() error {
 			return sm.syncLogicStorageTree(
 				so,
-				identifiers.LogicID(logicID),
+				identifiers.Identifier(logicID),
 				storageRoot,
 			)
 		})
@@ -767,7 +778,7 @@ func (sm *StateManager) SyncStorageTrees(
 
 func (sm *StateManager) syncLogicStorageTree(
 	so *Object,
-	logicID identifiers.LogicID,
+	logicID identifiers.Identifier,
 	newRoot *common.RootNode,
 ) error {
 	storageTree, err := so.GetStorageTree(logicID)
@@ -858,9 +869,9 @@ func (sm *StateManager) SyncLogicTree(
 
 // GetPersistentStorageEntry returns the storage data associated with the given slot and logicID
 func (sm *StateManager) GetPersistentStorageEntry(
-	logicID identifiers.LogicID, slot []byte, state common.Hash,
+	logicID identifiers.Identifier, slot []byte, state common.Hash,
 ) ([]byte, error) {
-	so, err := sm.getStateObject(logicID.AsIdentifier(), state)
+	so, err := sm.getStateObject(logicID, state)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
@@ -871,7 +882,7 @@ func (sm *StateManager) GetPersistentStorageEntry(
 // GetEphemeralStorageEntry returns the storage data associated with the given slot and logicID
 func (sm *StateManager) GetEphemeralStorageEntry(
 	id identifiers.Identifier,
-	logicID identifiers.LogicID,
+	logicID identifiers.Identifier,
 	slot []byte,
 	state common.Hash,
 ) ([]byte, error) {
@@ -884,18 +895,18 @@ func (sm *StateManager) GetEphemeralStorageEntry(
 }
 
 // GetLogicManifest returns the manifest associated with the given logicID
-func (sm *StateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash common.Hash) ([]byte, error) {
-	so, err := sm.getStateObject(logicID.AsIdentifier(), stateHash)
+func (sm *StateManager) GetLogicManifest(logicID identifiers.Identifier, stateHash common.Hash) ([]byte, error) {
+	so, err := sm.getStateObject(logicID, stateHash)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch state object")
 	}
 
-	logicObject, err := so.getLogicObject(logicID.AsIdentifier())
+	logicObject, err := so.getLogicObject(logicID)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch logic object")
 	}
 
-	logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID.AsIdentifier(), logicObject.ManifestHash()))
+	logicManifest, err := sm.db.ReadEntry(storage.LogicManifestKey(logicID, logicObject.ManifestHash()))
 	if err != nil {
 		return nil, errors.Wrap(err, common.ErrFetchingLogicManifest.Error())
 	}
@@ -951,7 +962,7 @@ func (sm *StateManager) LoadTransitionObjects(
 		}
 
 		if p.IsGenesis {
-			objects[id] = sm.CreateStateObject(id, p.AccType, true)
+			objects[id] = sm.CreateStateObject(id, true)
 
 			continue
 		}
@@ -1020,7 +1031,7 @@ func (sm *StateManager) FetchIxStateObjects(
 		}
 
 		if p.IsGenesis {
-			objects[id] = sm.CreateStateObject(id, p.AccType, true)
+			objects[id] = sm.CreateStateObject(id, true)
 
 			continue
 		}

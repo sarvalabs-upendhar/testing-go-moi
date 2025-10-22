@@ -72,6 +72,8 @@ func (executor *IxExecutor) executeInteraction(
 	ctx *engineio.RuntimeContext,
 	snapshot *state.Transition,
 ) error {
+	ctx.Runtime.BindAssetEngine(NewAssetEngine(executor.transition))
+
 	if err := AddActorsToRuntime(ix, ctx.Runtime, executor.transition); err != nil {
 		return err
 	}
@@ -266,7 +268,7 @@ func (executor *IxExecutor) CommitStateObjects() error {
 		if id == common.SystemAccountID {
 			object = executor.transition.GetSystemObject()
 		} else {
-			object = executor.transition.GetObject(id)
+			object, _ = executor.transition.GetObject(id)
 		}
 
 		err := executor.commitObject(ps, object, isSuccess)

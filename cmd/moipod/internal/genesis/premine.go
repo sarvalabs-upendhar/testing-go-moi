@@ -2,6 +2,7 @@ package genesis
 
 import (
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -39,7 +40,7 @@ func parsePremineFlags(cmd *cobra.Command) {
 		&assetInfo,
 		"asset-info",
 		"",
-		"Asset information. Format: <symbol:dimension:standard:isLogical:isMintable:operator>",
+		"Asset information. Format: <symbol:dimension:standard:decimals:maxsupply:manager>",
 	)
 	cmd.Flags().StringSliceVar(
 		&allocations,
@@ -97,6 +98,7 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 	if len(params) != AssetInfoParamsNumber {
 		return nil, common.ErrInvalidAssetInfoParams
 	}
+	// <symbol:dimension:standard:decimals:maxsupply:manager>
 
 	symbol := strings.TrimSpace(params[0])
 	if symbol == "" {
@@ -113,13 +115,13 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 		return nil, common.ErrInvalidAssetInfoParams
 	}
 
-	isLogical, err := strconv.ParseBool(strings.TrimSpace(params[3]))
-	if err != nil {
+	decimals, err := strconv.ParseUint(strings.TrimSpace(params[3]), 10, 8)
+	if err != nil || decimals > math.MaxUint8 {
 		return nil, common.ErrInvalidAssetInfoParams
 	}
 
-	isStateFul, err := strconv.ParseBool(strings.TrimSpace(params[4]))
-	if err != nil {
+	maxSupply, success := new(big.Int).SetString(strings.TrimSpace(params[4]), 10)
+	if !success {
 		return nil, common.ErrInvalidAssetInfoParams
 	}
 
@@ -134,9 +136,10 @@ func parseAssetInfoAndAllocations(assetInfo string, allocations []string) (*comm
 		Symbol:      symbol,
 		Dimension:   hexutil.Uint8(dimension),
 		Standard:    hexutil.Uint16(standard),
-		IsLogical:   isLogical,
-		IsStateful:  isStateFul,
-		Operator:    operatorID.AsIdentifier(),
+		Decimals:    hexutil.Uint8(decimals),
+		MaxSupply:   (hexutil.Big)(*maxSupply),
+		Creator:     operatorID.AsIdentifier(),
+		Manager:     operatorID.AsIdentifier(),
 		Allocations: make([]common.Allocation, 0),
 	}
 

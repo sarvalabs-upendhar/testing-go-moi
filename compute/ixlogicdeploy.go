@@ -1,7 +1,10 @@
 package compute
 
 import (
+	"fmt"
+
 	"github.com/pkg/errors"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/compute/engineio"
@@ -23,11 +26,11 @@ func RunLogicDeploy(
 	opResult := common.NewIxOpResult(op.Type())
 
 	// Obtain the deployer and logic account state objects
-	deployer := transition.GetObject(op.SenderID())
-	logicacc := transition.GetObject(op.Target())
+	deployer, _ := transition.GetObject(op.SenderID())
+	logicacc, _ := transition.GetObject(op.Target())
 
 	// Create an event stream to emit the events on
-	consumption, receiptPayload, logs, err := DeployLogic(ctx, op, logicacc, deployer, tank)
+	consumption, receiptPayload, logs, err := DeployLogic(ctx, op, op.Manifest(), logicacc, deployer, transition, tank)
 
 	// Exhaust fuel from tank
 	if !tank.Exhaust(consumption.Compute, consumption.Storage) {
@@ -66,15 +69,17 @@ func RunLogicDeploy(
 func DeployLogic(
 	ctx *engineio.RuntimeContext,
 	op *common.IxOp,
+	manifest []byte,
 	logicState *state.Object,
 	deployerState *state.Object,
+	transition *state.Transition,
 	fueltank *FuelTank,
 ) (
 	*engineio.FuelGauge, *common.LogicDeployResult, []common.Log, error,
 ) {
 	// Generate basic deployment config
 	deployer := &logicDeployer{
-		manifest:      op.Manifest(),
+		manifest:      manifest,
 		logicState:    logicState,
 		deployerState: deployerState,
 		fuel:          NewFuelTank(fueltank.Level()),
@@ -87,7 +92,7 @@ func DeployLogic(
 	}
 
 	// Generate the logic object and deploy it to state
-	logicObject, err := deployer.deployLogicObject(descriptor)
+	logicObject, err := deployer.deployLogicObject(logicState.Identifier(), descriptor)
 	if err != nil {
 		return engineio.NewFuelGauge(deployer.fuel.Consumed()), nil, nil, err
 	}
@@ -99,10 +104,10 @@ func DeployLogic(
 			nil, nil
 	}
 
-	if err = ctx.Runtime.CreateLogic(
+	if err = ctx.Runtime.SpawnLogic(
 		logicObject.LogicID(),
 		descriptor.Artifact,
-		logicState.GenerateLogicStorageObject(),
+		logicState.FetchLogicStorageObject(),
 		nil,
 	); err != nil {
 		return engineio.NewFuelGauge(deployer.fuel.Consumed()),
@@ -111,7 +116,7 @@ func DeployLogic(
 	}
 
 	// Call the logic deployer to set up logic state
-	result := ctx.Runtime.Call(logicObject.LogicID(), op, engineio.NewFuelGauge(deployer.fuel.Level()))
+	result := ctx.Runtime.Call(logicObject.LogicID(), op, transition, engineio.NewFuelGauge(deployer.fuel.Level()))
 
 	if !deployer.fuel.Exhaust(result.ComputeEffort, result.StorageEffort) {
 		return engineio.NewFuelGauge(deployer.fuel.Consumed()), nil, nil, errors.New("insufficient fuel")
@@ -122,6 +127,8 @@ func DeployLogic(
 		return engineio.NewFuelGauge(deployer.fuel.Consumed()), &common.LogicDeployResult{Error: result.Err}, result.Logs, nil
 	}
 
+	fmt.Println("logic successfully invoked", logicState.Identifier())
+
 	// Return the total fuel consumed and the logic ID
 	return engineio.NewFuelGauge(deployer.fuel.Consumed()),
 		&common.LogicDeployResult{LogicID: logicObject.ID},
@@ -130,8 +137,7 @@ func DeployLogic(
 }
 
 type logicDeployer struct {
-	manifest []byte
-
+	manifest      []byte
 	fuel          *FuelTank
 	logicState    *state.Object
 	deployerState *state.Object
@@ -155,13 +161,18 @@ func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, erro
 		return nil, errors.New("invalid manifest: manifest engine is not PISA")
 	}
 
-	rawArtifact, consumed, err := engine.CompileManifest(manifest, *engineio.NewFuelGauge(deployer.fuel.Level()))
-	if err != nil {
-		return nil, errors.Wrap(err, "could not compile manifest")
-	}
+	rawArtifact, consumed, err := engine.CompileManifest(
+		engineio.ManifestKindFromIdentifier(deployer.logicState.Identifier()),
+		deployer.logicState.Identifier(),
+		manifest,
+		*engineio.NewFuelGauge(deployer.fuel.Level()))
 
 	if !deployer.fuel.Exhaust(consumed.Compute, consumed.Storage) {
 		return nil, errors.New("insufficient fuel: could not compile manifest")
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "could not compile manifest")
 	}
 
 	// Create a new manifest compiler
@@ -173,15 +184,18 @@ func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, erro
 	}, nil
 }
 
-func (deployer logicDeployer) deployLogicObject(descriptor *engineio.LogicDescriptor) (*state.LogicObject, error) {
+func (deployer logicDeployer) deployLogicObject(
+	logicID identifiers.Identifier,
+	descriptor *engineio.LogicDescriptor,
+) (*state.LogicObject, error) {
 	// Create a logic object and attach it to the state object
-	logicID, err := deployer.logicState.CreateLogic(*descriptor)
+	err := deployer.logicState.CreateLogic(logicID, *descriptor)
 	if err != nil {
 		return nil, err
 	}
 
 	// Fetch the logic object from the state object
-	logicObject, err := deployer.logicState.FetchLogicObject(logicID.AsIdentifier())
+	logicObject, err := deployer.logicState.FetchLogicObject(logicID)
 	if err != nil {
 		return nil, err
 	}

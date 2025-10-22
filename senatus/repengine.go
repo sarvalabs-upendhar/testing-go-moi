@@ -34,7 +34,7 @@ type senatusStore interface {
 
 type stateManager interface {
 	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
-	GetPersistentStorageEntry(logicID identifiers.LogicID, slot []byte, state common.Hash) ([]byte, error)
+	GetPersistentStorageEntry(logicID identifiers.Identifier, slot []byte, state common.Hash) ([]byte, error)
 }
 
 type chainManager interface {

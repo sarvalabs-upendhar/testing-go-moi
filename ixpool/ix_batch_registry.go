@@ -46,7 +46,7 @@ func (r *IxBatchRegistry) addIxToBatch(batchID int, ixn *common.Interaction) boo
 	}
 
 	for id, info := range ixn.Participants() {
-		if info.IsGenesis {
+		if info.IsGenesis || info.LockType == common.NoLock {
 			continue
 		}
 

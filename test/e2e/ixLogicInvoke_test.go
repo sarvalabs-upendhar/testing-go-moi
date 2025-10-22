@@ -22,40 +22,25 @@ func (te *TestEnvironment) logicInvoke(
 ) (common.Hash, error) {
 	te.logger.Debug("invoke logic ",
 		"sender", acc.ID,
-		"logicID", logicPayload.Logic,
+		"logicID", logicPayload.LogicID,
 		"callsite", logicPayload.Callsite,
 		"calldata", logicPayload.Calldata,
 	)
-
-	payload, err := logicPayload.Bytes()
-	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
 			ID:         acc.ID,
 			SequenceID: moiclient.GetLatestSequenceID(te.T(), te.moiClient, acc.ID, 0),
 		},
-		FuelPrice: DefaultFuelPrice,
-		FuelLimit: DefaultFuelLimit,
-		IxOps: []common.IxOpRaw{
-			{
-				Type:    common.IxLogicInvoke,
-				Payload: payload,
-			},
-		},
-		Participants: []common.IxParticipant{
-			{
-				ID:       acc.ID,
-				LockType: common.MutateLock,
-			},
-			{
-				ID:       logicPayload.Logic.AsIdentifier(),
-				LockType: common.MutateLock,
-			},
-		},
+		FuelPrice:    DefaultFuelPrice,
+		FuelLimit:    DefaultFuelLimit,
+		IxOps:        []common.IxOpRaw{},
+		Participants: []common.IxParticipant{},
 	}
 
-	tests.AppendParticipantsInIxData(te.T(), ixData)
+	tests.AddIxOp(te.T(), ixData, common.IxLogicInvoke, common.KMOITokenAssetID, logicPayload)
+
+	tests.AppendDefaultParticipants(te.T(), ixData)
 
 	sendIX := moiclient.CreateSendIXFromIxData(te.T(), ixData, []moiclient.AccountKeyWithMnemonic{
 		{
@@ -89,7 +74,10 @@ func validateLogicInvoke(
 	// make sure interaction executed successfully
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
-	state := moiclient.GetTokenLedgerState(te.T(), te.moiClient, payload.Logic, []identifiers.Identifier{sender, receiver})
+	state := moiclient.GetTokenLedgerState(
+		te.T(), te.moiClient,
+		payload.LogicID, []identifiers.Identifier{sender, receiver},
+	)
 	senderBalance, ok := state.Balances[sender]
 	require.True(te.T(), ok)
 
@@ -142,27 +130,27 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "valid logic invoke",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    ledgerLogicID,
+				LogicID:  ledgerLogicID,
 				Callsite: "Transfer",
 				Calldata: invokeCalldata,
 			},
 			postTest: validateLogicInvoke,
 		},
 		{
-			name:   "empty logic id",
+			name:   "invalid logic id",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    identifiers.Nil,
+				LogicID:  identifiers.Nil,
 				Callsite: "Transfer",
 				Calldata: invokeCalldata,
 			},
-			expectedError: common.ErrMissingLogicID,
+			expectedError: common.ErrInvalidIdentifier,
 		},
 		{
 			name:   "empty call data",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    ledgerLogicID,
+				LogicID:  ledgerLogicID,
 				Callsite: "Transfer",
 				Calldata: make(polo.Document).Bytes(),
 			},
@@ -172,17 +160,17 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "empty callsite",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    ledgerLogicID,
+				LogicID:  ledgerLogicID,
 				Callsite: "",
 				Calldata: invokeCalldata,
 			},
-			expectedError: common.ErrEmptyCallSite,
+			expectedError: common.ErrInvalidCallSite,
 		},
 		{
 			name:   "logic isn't registered",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    identifiers.RandomLogicIDv0(),
+				LogicID:  identifiers.RandomLogicIDv0(),
 				Callsite: "Transfer",
 				Calldata: invokeCalldata,
 			},
@@ -192,7 +180,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "invalid callsite",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    ledgerLogicID,
+				LogicID:  ledgerLogicID,
 				Callsite: "abcd",
 				Calldata: []byte{},
 			},
@@ -202,7 +190,7 @@ func (te *TestEnvironment) TestLogicInvoke() {
 			name:   "invalid call data",
 			sender: sender,
 			logicPayload: &common.LogicPayload{
-				Logic:    ledgerLogicID,
+				LogicID:  ledgerLogicID,
 				Callsite: "Transfer",
 				Calldata: []byte{1, 2, 3},
 			},

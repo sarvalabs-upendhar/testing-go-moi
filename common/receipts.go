@@ -32,7 +32,7 @@ const (
 
 type Log struct {
 	ID      identifiers.Identifier
-	LogicID identifiers.LogicID
+	LogicID identifiers.Identifier
 	Topics  []Hash
 	Data    []byte
 }
@@ -365,12 +365,13 @@ func PrintReceipts(receipts Receipts) any {
 
 type OperationResultPayload interface {
 	AssetCreationResult | AssetSupplyResult | LogicDeployResult |
-		LogicInvokeResult | LogicEnlistResult | AccountInheritResult
+		LogicInvokeResult | LogicEnlistResult | AccountInheritResult | AccountCreationResult
 }
 
 // AssetCreationResult holds the result of asset creation operation.
 type AssetCreationResult struct {
 	AssetID identifiers.AssetID `json:"asset_id"`
+	Error   hexutil.Bytes       `json:"error"`
 }
 
 // AssetSupplyResult holds the result of asset mint or burn operation.
@@ -380,8 +381,8 @@ type AssetSupplyResult struct {
 
 // LogicDeployResult holds the result of logic deploy operation.
 type LogicDeployResult struct {
-	LogicID identifiers.LogicID `json:"logic_id,omitempty"`
-	Error   hexutil.Bytes       `json:"error"`
+	LogicID identifiers.Identifier `json:"logic_id,omitempty"`
+	Error   hexutil.Bytes          `json:"error"`
 }
 
 // LogicInvokeResult holds the result of logic invoke operation.
@@ -399,4 +400,10 @@ type LogicEnlistResult struct {
 // AccountInheritResult holds the result of account inherit operation.
 type AccountInheritResult struct {
 	SubAccount identifiers.Identifier `json:"sub_account"`
+	Error      hexutil.Bytes          `json:"error"`
+}
+
+type AccountCreationResult struct {
+	AccountID identifiers.Identifier `json:"account_id"`
+	Error     hexutil.Bytes          `json:"error"`
 }

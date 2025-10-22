@@ -139,9 +139,7 @@ func (m *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*commo
 }
 
 func (m *MockStateManager) GetPersistentStorageEntry(
-	logicID identifiers.LogicID,
-	slot []byte,
-	state common.Hash,
+	logicID identifiers.Identifier, slot []byte, state common.Hash,
 ) ([]byte, error) {
 	store, ok := m.logicStorage[hex.EncodeToString(logicID.Bytes())]
 	if !ok {

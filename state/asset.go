@@ -2,6 +2,7 @@ package state
 
 import (
 	"math/big"
+	"strconv"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -11,26 +12,29 @@ import (
 	"github.com/sarvalabs/go-moi/common"
 )
 
-type Mandate struct {
-	Amount    *big.Int
-	ExpiresAt uint64
+const AssetLogicPrefix = "Asset_Logic_"
+
+type MetaData struct {
+	data map[string][]byte
 }
 
 // AssetObject represents an asset's state, including balance, lockups, mandates, and properties.
 type AssetObject struct {
-	Balance    *big.Int
-	Lockup     map[identifiers.Identifier]*big.Int
-	Mandate    map[identifiers.Identifier]*Mandate
-	Properties *common.AssetDescriptor
+	Balance       map[common.TokenID]*big.Int
+	TokenMetaData map[common.TokenID]*MetaData
+	Lockup        map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry
+	Mandate       map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry
+	Properties    *common.AssetDescriptor
 }
 
 // NewAssetObject initializes a new AssetObject with the given balance and properties.
-func NewAssetObject(balance *big.Int, properties *common.AssetDescriptor) *AssetObject {
+func NewAssetObject(properties *common.AssetDescriptor) *AssetObject {
 	return &AssetObject{
-		Balance:    balance,
-		Lockup:     make(map[identifiers.Identifier]*big.Int),
-		Mandate:    make(map[identifiers.Identifier]*Mandate),
-		Properties: properties,
+		Balance:       make(map[common.TokenID]*big.Int),
+		TokenMetaData: make(map[common.TokenID]*MetaData),
+		Lockup:        make(map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry),
+		Mandate:       make(map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry),
+		Properties:    properties,
 	}
 }
 
@@ -51,4 +55,53 @@ func (ao *AssetObject) FromBytes(bytes []byte) error {
 	}
 
 	return nil
+}
+
+func (ao *AssetObject) hasTokenID(tokenID common.TokenID) bool {
+	if _, ok := ao.Balance[tokenID]; !ok {
+		return true
+	}
+
+	for _, tokens := range ao.Lockup {
+		if _, hasTokenID := tokens[tokenID]; hasTokenID {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (ao *AssetObject) deleteTokenMetadata(tokenID common.TokenID) {
+	if !ao.hasTokenID(tokenID) {
+		delete(ao.TokenMetaData, tokenID)
+	}
+}
+
+func (ao *AssetObject) GetBalance(tokenID common.TokenID) *big.Int {
+	bal, ok := ao.Balance[tokenID]
+	if !ok {
+		return big.NewInt(0)
+	}
+
+	return bal
+}
+
+func (ao *AssetObject) HasBalance(tokenID common.TokenID, amount *big.Int) error {
+	bal, ok := ao.Balance[tokenID]
+	if !ok {
+		return common.ErrTokenNotFound
+	}
+
+	// Check if sender has sufficient balance
+	if bal.Cmp(amount) == -1 {
+		return common.ErrInsufficientFunds
+	}
+
+	return nil
+}
+
+func AssetLogicKey(standard common.AssetStandard) []byte {
+	str := AssetLogicPrefix + strconv.FormatUint(uint64(standard), 10)
+
+	return []byte(str)
 }

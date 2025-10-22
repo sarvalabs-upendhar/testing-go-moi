@@ -25,11 +25,12 @@ func TestBalanceOf(t *testing.T) {
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	balance := big.NewInt(123)
 
-	setAssetBalance(t, sObj, assetID, balance)
+	WithAssetBalance(t, sObj, assetID, common.DefaultTokenID, balance, nil)
 
 	testcases := []struct {
 		name          string
 		assetID       identifiers.AssetID
+		tokenID       common.TokenID
 		expectedError error
 	}{
 		{
@@ -38,13 +39,19 @@ func TestBalanceOf(t *testing.T) {
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
+			name:          "should return error if token not found",
+			assetID:       assetID,
+			tokenID:       tests.GetRandomTokenID(t),
+			expectedError: common.ErrTokenNotFound,
+		},
+		{
 			name:    "fetched balance successfully",
 			assetID: assetID,
 		},
 	}
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualBalance, err := sObj.BalanceOf(test.assetID)
+			actualBalance, err := sObj.BalanceOf(test.assetID, test.tokenID)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -60,33 +67,43 @@ func TestBalanceOf(t *testing.T) {
 func TestAddBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
-	setAssetBalance(t, sObj, assetID, big.NewInt(123))
+	tokenID := tests.GetRandomTokenID(t)
+	tokenMetaData := &MetaData{data: map[string][]byte{"URL": []byte("https://moi.technology")}}
+	WithAssetBalance(
+		t, sObj,
+		assetID, tokenID, big.NewInt(123),
+		tokenMetaData,
+	)
 
 	testcases := []struct {
 		name            string
 		assetID         identifiers.AssetID
+		tokenID         common.TokenID
 		amount          *big.Int
 		expectedBalance *big.Int
 		expectError     error
+		metaData        *MetaData
 	}{
 		{
 			name:            "balance gets incremented if asset already exists",
 			assetID:         assetID,
+			tokenID:         tokenID,
 			amount:          big.NewInt(123),
 			expectedBalance: big.NewInt(246),
 		},
 		{
-			name:            "should return error if asset doesn't exist",
-			assetID:         tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
-			amount:          big.NewInt(50),
-			expectedBalance: big.NewInt(0), // no balance set
-			expectError:     common.ErrAssetNotFound,
+			name:            "balance and metadata for the given tokenID should be updated",
+			assetID:         assetID,
+			tokenID:         1,
+			amount:          big.NewInt(123),
+			expectedBalance: big.NewInt(123),
+			metaData:        &MetaData{map[string][]byte{"URL": []byte("https://sarva.ai")}},
 		},
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.AddBalance(test.assetID, test.amount)
+			err := sObj.AddBalance(test.assetID, test.tokenID, test.amount, test.metaData)
 			if test.expectError != nil {
 				require.Error(t, err)
 				require.Equal(t, err, test.expectError)
@@ -95,26 +112,35 @@ func TestAddBalance(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForBalances(t, sObj, test.expectedBalance, test.assetID)
+			checkForBalances(t, sObj, test.expectedBalance, test.assetID, test.tokenID)
+
+			if test.metaData != nil {
+				checkForTokenMetaData(t, sObj, test.assetID, test.tokenID, test.metaData)
+			}
 		})
 	}
 }
 
 func TestSubBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
-	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
-	setAssetBalance(t, sObj, assetID, big.NewInt(124))
+	assetIDs, _ := tests.CreateTestAssets(t, 2)
+	tokenID := tests.GetRandomTokenID(t)
+	tokenMetaData := &MetaData{data: map[string][]byte{"URL": []byte("https://moi.technology")}}
+	WithAssetBalance(t, sObj, assetIDs[0], tokenID, big.NewInt(124), tokenMetaData)
+	WithAssetBalance(t, sObj, assetIDs[1], tokenID, big.NewInt(124), tokenMetaData)
 
 	testcases := []struct {
 		name            string
 		assetID         identifiers.AssetID
+		tokenID         common.TokenID
 		amount          *big.Int
 		expectedBalance *big.Int
 		expectError     error
 	}{
 		{
 			name:            "balance gets decremented if asset already exists",
-			assetID:         assetID,
+			assetID:         assetIDs[0],
+			tokenID:         tokenID,
 			amount:          big.NewInt(123),
 			expectedBalance: big.NewInt(1),
 			expectError:     nil,
@@ -122,7 +148,24 @@ func TestSubBalance(t *testing.T) {
 		{
 			name:            "should return error if asset doesn't exist",
 			assetID:         tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			tokenID:         tokenID,
 			amount:          big.NewInt(50),
+			expectedBalance: big.NewInt(0), // no balance set
+			expectError:     common.ErrAssetNotFound,
+		},
+		{
+			name:            "should return error if token doesn't exist",
+			assetID:         assetIDs[1],
+			tokenID:         tests.GetRandomTokenID(t),
+			amount:          big.NewInt(50),
+			expectedBalance: big.NewInt(0), // no balance set
+			expectError:     common.ErrTokenNotFound,
+		},
+		{
+			name:            "should delete token meta data if balance is zero",
+			assetID:         tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			tokenID:         tokenID,
+			amount:          big.NewInt(124),
 			expectedBalance: big.NewInt(0), // no balance set
 			expectError:     common.ErrAssetNotFound,
 		},
@@ -130,7 +173,7 @@ func TestSubBalance(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.SubBalance(test.assetID, test.amount)
+			metaData, err := sObj.SubBalance(test.assetID, test.tokenID, test.amount)
 
 			if test.expectError != nil {
 				require.Error(t, err)
@@ -140,7 +183,8 @@ func TestSubBalance(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForBalances(t, sObj, test.expectedBalance, test.assetID)
+			require.Equal(t, metaData, tokenMetaData)
+			checkForBalances(t, sObj, test.expectedBalance, test.assetID, test.tokenID)
 		})
 	}
 }
@@ -148,6 +192,7 @@ func TestSubBalance(t *testing.T) {
 func TestIsAccountRegistered(t *testing.T) {
 	id := tests.RandomIdentifier(t)
 	db := mockDB()
+
 	logicTree, _ := createTestKramaHashTree(t,
 		db,
 		common.SargaAccountID,
@@ -158,8 +203,8 @@ func TestIsAccountRegistered(t *testing.T) {
 
 	sObj := createTestStateObject(t, stateObjectParamsWithStorageTree(
 		t,
-		map[identifiers.LogicID]tree.MerkleTree{
-			common.SargaLogicID: logicTree,
+		map[identifiers.Identifier]tree.MerkleTree{
+			common.SargaLogicID.AsIdentifier(): logicTree,
 		},
 	))
 
@@ -183,14 +228,19 @@ func TestCreateLockup(t *testing.T) {
 	assetIDs, _ := tests.CreateTestAssets(t, 3)
 
 	setAssetLockups(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(50000), big.NewInt(500)},
-		[]identifiers.Identifier{}, []*big.Int{},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(50000)),
+			tests.TokenWithoutExpiry(t, common.TokenID(1), big.NewInt(50000)),
+			tests.TokenWithoutExpiry(t, common.TokenID(2), big.NewInt(50000)),
+		},
+		nil, nil,
 	)
 
 	testcases := []struct {
 		name                 string
 		assetID              identifiers.AssetID
-		id                   identifiers.Identifier
+		tokenID              common.TokenID
+		beneficiary          identifiers.Identifier
 		amount               *big.Int
 		preTestFn            func(id identifiers.Identifier)
 		expectedBalance      *big.Int
@@ -200,21 +250,24 @@ func TestCreateLockup(t *testing.T) {
 		{
 			name:                 "creates a new lockup",
 			assetID:              assetIDs[0],
-			id:                   tests.RandomIdentifier(t),
+			tokenID:              common.DefaultTokenID,
+			beneficiary:          tests.RandomIdentifier(t),
 			amount:               big.NewInt(5000),
 			expectedBalance:      big.NewInt(45000),
 			expectedLockupAmount: big.NewInt(5000),
 		},
 		{
-			name:    "increments existing lockup balance",
-			assetID: assetIDs[1],
-			id:      tests.RandomIdentifier(t),
-			amount:  big.NewInt(5000),
+			name:        "increments existing lockup balance",
+			assetID:     assetIDs[1],
+			tokenID:     common.TokenID(1),
+			beneficiary: tests.RandomIdentifier(t),
+			amount:      big.NewInt(5000),
 			preTestFn: func(id identifiers.Identifier) {
 				assert.NoError(
 					t,
 					sObj.CreateLockup(
 						assetIDs[1],
+						common.TokenID(1),
 						id,
 						big.NewInt(3000),
 					),
@@ -226,7 +279,7 @@ func TestCreateLockup(t *testing.T) {
 		{
 			name:          "should return error if asset not found",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
-			id:            tests.RandomIdentifier(t),
+			beneficiary:   tests.RandomIdentifier(t),
 			amount:        big.NewInt(5000),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -235,10 +288,10 @@ func TestCreateLockup(t *testing.T) {
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
 			if test.preTestFn != nil {
-				test.preTestFn(test.id)
+				test.preTestFn(test.beneficiary)
 			}
 
-			err := sObj.CreateLockup(test.assetID, test.id, test.amount)
+			err := sObj.CreateLockup(test.assetID, test.tokenID, test.beneficiary, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -250,9 +303,9 @@ func TestCreateLockup(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify if the balance is debited
-			checkForBalances(t, sObj, test.expectedBalance, test.assetID)
+			checkForBalances(t, sObj, test.expectedBalance, test.assetID, test.tokenID)
 			// Verify the updated lockup amount
-			checkForLockups(t, sObj, test.assetID, test.id, test.expectedLockupAmount)
+			checkForLockups(t, sObj, test.assetID, test.tokenID, test.beneficiary, test.expectedLockupAmount)
 		})
 	}
 }
@@ -263,14 +316,22 @@ func TestReleaseLockup(t *testing.T) {
 
 	ids := tests.GetIdentifiers(t, 2)
 	setAssetLockups(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(1000)},
-		ids, []*big.Int{big.NewInt(5000), big.NewInt(1000)},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(5000)),
+			tests.TokenWithoutExpiry(t, common.TokenID(1), big.NewInt(1000)),
+		},
+
+		ids, []map[common.TokenID]*common.AmountWithExpiry{
+			tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(5000), 0),
+			tests.TokenWithExpiry(t, common.TokenID(1), big.NewInt(1000), 0),
+		},
 	)
 
 	testcases := []struct {
 		name                 string
 		assetID              identifiers.AssetID
-		id                   identifiers.Identifier
+		tokenID              common.TokenID
+		operator             identifiers.Identifier
 		amount               *big.Int
 		expectedLockupAmount *big.Int
 		expectedError        error
@@ -278,36 +339,32 @@ func TestReleaseLockup(t *testing.T) {
 		{
 			name:                 "successfully releases lockup",
 			assetID:              assetIDs[0],
-			id:                   ids[0],
+			tokenID:              common.DefaultTokenID,
+			operator:             ids[0],
 			amount:               big.NewInt(2000),
 			expectedLockupAmount: big.NewInt(3000), // 5000 - 2000
 		},
 		{
 			name:                 "remove lockup when balance reaches zero",
 			assetID:              assetIDs[1],
-			id:                   ids[1],
+			tokenID:              common.TokenID(1),
+			operator:             ids[1],
 			amount:               big.NewInt(1000),
 			expectedLockupAmount: big.NewInt(0),
 		},
 		{
 			name:          "should return error if asset not found",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
-			id:            ids[0],
+			operator:      ids[0],
 			amount:        big.NewInt(2000),
 			expectedError: common.ErrAssetNotFound,
 		},
-		{
-			name:          "should return error if lockup not found",
-			assetID:       assetIDs[1],
-			id:            tests.RandomIdentifier(t),
-			amount:        big.NewInt(500),
-			expectedError: common.ErrLockupNotFound,
-		},
+		// TODO: Add test case for checking meta data
 	}
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.ReleaseLockup(test.assetID, test.id, test.amount)
+			_, err := sObj.ReleaseLockup(test.assetID, test.tokenID, test.operator, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -319,24 +376,29 @@ func TestReleaseLockup(t *testing.T) {
 			require.NoError(t, err)
 
 			// Verify the updated lockup amount
-			checkForLockups(t, sObj, test.assetID, test.id, test.expectedLockupAmount)
+			checkForLockups(t, sObj, test.assetID, test.tokenID, test.operator, test.expectedLockupAmount)
 		})
 	}
 }
 
-func TestGetLockup(t *testing.T) {
+func TestGetLockup(t *testing.T) { //nolint
 	sObj := createTestStateObject(t, nil)
 	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 1)
 
 	setAssetLockups(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(50000)},
-		ids, []*big.Int{big.NewInt(500)},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(5000)),
+		},
+		ids, []map[common.TokenID]*common.AmountWithExpiry{
+			tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(500), 0),
+		},
 	)
 
 	testcases := []struct {
 		name           string
 		assetID        identifiers.AssetID
+		tokenID        common.TokenID
 		id             identifiers.Identifier
 		expectedAmount *big.Int
 		expectedError  error
@@ -344,18 +406,21 @@ func TestGetLockup(t *testing.T) {
 		{
 			name:           "retrieves existing lockup amount",
 			assetID:        assetIDs[0],
+			tokenID:        common.DefaultTokenID,
 			id:             ids[0],
 			expectedAmount: big.NewInt(500),
 		},
 		{
 			name:          "should return error if asset doesn't exist",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			tokenID:       common.DefaultTokenID,
 			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
 			name:          "should return error if lockup doesn't exist",
 			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
 			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrLockupNotFound,
 		},
@@ -363,7 +428,7 @@ func TestGetLockup(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			amount, err := sObj.GetLockup(test.assetID, test.id)
+			lockup, err := sObj.GetLockup(test.assetID, test.tokenID, test.id)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -373,7 +438,7 @@ func TestGetLockup(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, amount, test.expectedAmount)
+			require.Equal(t, lockup.Amount, test.expectedAmount)
 		})
 	}
 }
@@ -383,13 +448,17 @@ func TestCreateMandate(t *testing.T) {
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
 
 	setAssetMandates(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(50000)},
-		[]identifiers.Identifier{}, []*big.Int{},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(5000)),
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(1000)),
+		},
+		nil, nil,
 	)
 
 	testcases := []struct {
 		name           string
 		assetID        identifiers.AssetID
+		tokenID        common.TokenID
 		id             identifiers.Identifier
 		amount         *big.Int
 		preTestFn      func(id identifiers.Identifier)
@@ -399,6 +468,7 @@ func TestCreateMandate(t *testing.T) {
 		{
 			name:           "creates a new mandate successfully",
 			assetID:        assetIDs[0],
+			tokenID:        common.DefaultTokenID,
 			id:             tests.RandomIdentifier(t),
 			amount:         big.NewInt(5000),
 			expectedAmount: big.NewInt(5000),
@@ -406,6 +476,7 @@ func TestCreateMandate(t *testing.T) {
 		{
 			name:    "increments existing mandate amount",
 			assetID: assetIDs[1],
+			tokenID: common.DefaultTokenID,
 			id:      tests.RandomIdentifier(t),
 			amount:  big.NewInt(3000),
 			preTestFn: func(id identifiers.Identifier) {
@@ -413,6 +484,7 @@ func TestCreateMandate(t *testing.T) {
 					t,
 					sObj.CreateMandate(
 						assetIDs[1],
+						common.DefaultTokenID,
 						id,
 						big.NewInt(1000),
 						uint64(time.Now().Add(1*time.Hour).Unix()),
@@ -436,7 +508,7 @@ func TestCreateMandate(t *testing.T) {
 				test.preTestFn(test.id)
 			}
 
-			err := sObj.CreateMandate(test.assetID, test.id, test.amount, uint64(time.Now().Unix()))
+			err := sObj.CreateMandate(test.assetID, test.tokenID, test.id, test.amount, uint64(time.Now().Unix()))
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -446,7 +518,7 @@ func TestCreateMandate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForMandates(t, sObj, test.assetID, test.id, test.expectedAmount)
+			checkForMandates(t, sObj, test.assetID, test.tokenID, test.id, test.expectedAmount)
 		})
 	}
 }
@@ -457,13 +529,20 @@ func TestSubMandateAmount(t *testing.T) {
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
 
 	setAssetMandates(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(50000), big.NewInt(1000)},
-		ids, []*big.Int{big.NewInt(500), big.NewInt(1000)},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(50000)),
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(1000)),
+		},
+		ids, []map[common.TokenID]*common.AmountWithExpiry{
+			tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(500), 0),
+			tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(1000), 0),
+		},
 	)
 
 	testcases := []struct {
 		name           string
 		assetID        identifiers.AssetID
+		tokenID        common.TokenID
 		id             identifiers.Identifier
 		amount         *big.Int
 		expectedAmount *big.Int
@@ -472,6 +551,7 @@ func TestSubMandateAmount(t *testing.T) {
 		{
 			name:           "deducts mandate amount successfully",
 			assetID:        assetIDs[0],
+			tokenID:        common.DefaultTokenID,
 			id:             ids[0],
 			amount:         big.NewInt(200),
 			expectedAmount: big.NewInt(300),
@@ -479,6 +559,7 @@ func TestSubMandateAmount(t *testing.T) {
 		{
 			name:           "remove mandate when balance reaches zero",
 			assetID:        assetIDs[1],
+			tokenID:        common.DefaultTokenID,
 			id:             ids[1],
 			amount:         big.NewInt(1000),
 			expectedAmount: big.NewInt(0),
@@ -486,6 +567,7 @@ func TestSubMandateAmount(t *testing.T) {
 		{
 			name:          "fails to deduct from nonexistent mandate",
 			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
 			id:            tests.RandomIdentifier(t),
 			amount:        big.NewInt(100),
 			expectedError: common.ErrMandateNotFound,
@@ -494,6 +576,7 @@ func TestSubMandateAmount(t *testing.T) {
 			name:          "fails to deduct from nonexistent asset",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 			id:            ids[0],
+			tokenID:       common.DefaultTokenID,
 			amount:        big.NewInt(100),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -501,7 +584,7 @@ func TestSubMandateAmount(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.SubMandateBalance(test.assetID, test.id, test.amount)
+			err := sObj.SubMandateBalance(test.assetID, test.tokenID, test.id, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -511,7 +594,7 @@ func TestSubMandateAmount(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForMandates(t, sObj, test.assetID, test.id, test.expectedAmount)
+			checkForMandates(t, sObj, test.assetID, test.tokenID, test.id, test.expectedAmount)
 		})
 	}
 }
@@ -522,13 +605,20 @@ func TestConsumeMandate(t *testing.T) {
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
 
 	setAssetMandates(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(2000), big.NewInt(1000)},
-		ids, []*big.Int{big.NewInt(500), big.NewInt(1000)},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(2000)),
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(1000)),
+		},
+		ids, []map[common.TokenID]*common.AmountWithExpiry{
+			tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(500), 0),
+			tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(1000), 0),
+		},
 	)
 
 	testcases := []struct {
 		name            string
 		assetID         identifiers.AssetID
+		tokenID         common.TokenID
 		id              identifiers.Identifier
 		amount          *big.Int
 		expectedMandate *big.Int
@@ -538,6 +628,7 @@ func TestConsumeMandate(t *testing.T) {
 		{
 			name:            "consumes mandate and balance successfully",
 			assetID:         assetIDs[0],
+			tokenID:         common.DefaultTokenID,
 			id:              ids[0],
 			amount:          big.NewInt(200),
 			expectedMandate: big.NewInt(300),
@@ -546,6 +637,7 @@ func TestConsumeMandate(t *testing.T) {
 		{
 			name:          "fails to deduct mandate balance",
 			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
 			id:            tests.RandomIdentifier(t),
 			amount:        big.NewInt(100),
 			expectedError: common.ErrMandateNotFound,
@@ -553,6 +645,7 @@ func TestConsumeMandate(t *testing.T) {
 		{
 			name:          "fails to deduct asset balance",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			tokenID:       common.DefaultTokenID,
 			id:            ids[0],
 			amount:        big.NewInt(100),
 			expectedError: common.ErrAssetNotFound,
@@ -561,7 +654,7 @@ func TestConsumeMandate(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.ConsumeMandate(test.assetID, test.id, test.amount)
+			_, err := sObj.ConsumeMandate(test.assetID, test.tokenID, test.id, test.amount)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -571,8 +664,8 @@ func TestConsumeMandate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForMandates(t, sObj, test.assetID, test.id, test.expectedMandate)
-			checkForBalances(t, sObj, test.expectedBalance, test.assetID)
+			checkForMandates(t, sObj, test.assetID, test.tokenID, test.id, test.expectedMandate)
+			checkForBalances(t, sObj, test.expectedBalance, test.assetID, test.tokenID)
 		})
 	}
 }
@@ -583,24 +676,31 @@ func TestDeleteMandate(t *testing.T) {
 	assetIDs, _ := getAssetIDsAndBalances(t, 1)
 
 	setAssetMandates(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(50000)},
-		ids, []*big.Int{big.NewInt(500)},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(50000)),
+		},
+		ids, []map[common.TokenID]*common.AmountWithExpiry{
+			tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(500), 0),
+		},
 	)
 
 	testcases := []struct {
 		name          string
 		assetID       identifiers.AssetID
+		tokenID       common.TokenID
 		id            identifiers.Identifier
 		expectedError error
 	}{
 		{
 			name:    "deletes existing mandate successfully",
 			assetID: assetIDs[0],
+			tokenID: common.DefaultTokenID,
 			id:      ids[0],
 		},
 		{
 			name:          "fails to delete mandate for nonexistent asset",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			tokenID:       common.DefaultTokenID,
 			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrAssetNotFound,
 		},
@@ -608,7 +708,7 @@ func TestDeleteMandate(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := sObj.DeleteMandate(test.assetID, test.id)
+			err := sObj.DeleteMandate(test.assetID, test.tokenID, test.id)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -618,24 +718,29 @@ func TestDeleteMandate(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			checkForMandates(t, sObj, test.assetID, test.id, big.NewInt(0))
+			checkForMandates(t, sObj, test.assetID, test.tokenID, test.id, big.NewInt(0))
 		})
 	}
 }
 
-func TestGetMandate(t *testing.T) {
+func TestGetMandate(t *testing.T) { //nolint
 	sObj := createTestStateObject(t, nil)
 	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 1)
 
 	setAssetMandates(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(50000)},
-		ids, []*big.Int{big.NewInt(500)},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(50000)),
+		},
+		ids, []map[common.TokenID]*common.AmountWithExpiry{
+			tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(500), 0),
+		},
 	)
 
 	testcases := []struct {
 		name           string
 		assetID        identifiers.AssetID
+		tokenID        common.TokenID
 		id             identifiers.Identifier
 		expectedAmount *big.Int
 		expectedError  error
@@ -643,18 +748,21 @@ func TestGetMandate(t *testing.T) {
 		{
 			name:           "valid mandate returns correct amount",
 			assetID:        assetIDs[0],
+			tokenID:        common.DefaultTokenID,
 			id:             ids[0],
 			expectedAmount: big.NewInt(500),
 		},
 		{
 			name:          "should return error if asset not found",
 			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			tokenID:       common.DefaultTokenID,
 			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrAssetNotFound,
 		},
 		{
 			name:          "should return error if mandate not found",
 			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
 			id:            tests.RandomIdentifier(t),
 			expectedError: common.ErrMandateNotFound,
 		},
@@ -662,7 +770,7 @@ func TestGetMandate(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			mandate, err := sObj.GetMandate(test.assetID, test.id)
+			mandate, err := sObj.GetMandate(test.assetID, test.tokenID, test.id)
 
 			if test.expectedError != nil {
 				require.Error(t, err)
@@ -682,11 +790,17 @@ func TestMandates(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
+	tokens := tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(1000), 0)
 
 	// Set mandates for the test assets and ids
 	setAssetMandates(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(10000), big.NewInt(20000)},
-		ids, []*big.Int{big.NewInt(1000)},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(10000)),
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(20000)),
+		},
+		ids, []map[common.TokenID]*common.AmountWithExpiry{
+			tokens,
+		},
 	)
 
 	testcases := []struct {
@@ -703,12 +817,12 @@ func TestMandates(t *testing.T) {
 				{
 					AssetID: assetIDs[0],
 					ID:      ids[0],
-					Amount:  big.NewInt(1000),
+					Amount:  tokens,
 				},
 				{
 					AssetID: assetIDs[1],
 					ID:      ids[0],
-					Amount:  big.NewInt(1000),
+					Amount:  tokens,
 				},
 			},
 		},
@@ -741,11 +855,17 @@ func TestLockups(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	ids := tests.GetIdentifiers(t, 1)
 	assetIDs, _ := getAssetIDsAndBalances(t, 2)
+	tokens := tests.TokenWithExpiry(t, common.DefaultTokenID, big.NewInt(1500), 0)
 
 	// Set lockups for the test assets and ids
 	setAssetLockups(
-		t, sObj, assetIDs, []*big.Int{big.NewInt(14000), big.NewInt(22000)},
-		ids, []*big.Int{big.NewInt(1500)},
+		t, sObj, assetIDs, []map[common.TokenID]*big.Int{
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(14000)),
+			tests.TokenWithoutExpiry(t, common.DefaultTokenID, big.NewInt(22000)),
+		},
+		ids, []map[common.TokenID]*common.AmountWithExpiry{
+			tokens,
+		},
 	)
 
 	testcases := []struct {
@@ -762,12 +882,12 @@ func TestLockups(t *testing.T) {
 				{
 					AssetID: assetIDs[0],
 					ID:      ids[0],
-					Amount:  big.NewInt(1500),
+					Amount:  tokens,
 				},
 				{
 					AssetID: assetIDs[1],
 					ID:      ids[0],
-					Amount:  big.NewInt(1500),
+					Amount:  tokens,
 				},
 			},
 		},
@@ -867,24 +987,24 @@ func TestCommitActiveStorageTrees(t *testing.T) {
 
 	testcases := []struct {
 		name            string
-		storageTxns     map[identifiers.LogicID]*iradix.Txn
-		storageTrees    map[identifiers.LogicID]tree.MerkleTree
+		storageTxns     map[identifiers.Identifier]*iradix.Txn
+		storageTrees    map[identifiers.Identifier]tree.MerkleTree
 		metaStorageTree *MockMerkleTree
 		expectedError   error
 	}{
 		{
 			name: "commit active storage trees successfully",
-			storageTxns: map[identifiers.LogicID]*iradix.Txn{
+			storageTxns: map[identifiers.Identifier]*iradix.Txn{
 				logicIDs[0]: getTxnsWithEntries(t, newKeys, newValues),
 			},
-			storageTrees: map[identifiers.LogicID]tree.MerkleTree{
+			storageTrees: map[identifiers.Identifier]tree.MerkleTree{
 				logicIDs[0]: getMerkleTreeWithEntries(t, keys, values),
 			},
 			metaStorageTree: mockMerkleTreeWithDB(),
 		},
 		{
 			name: "should return error if storage tree doesn't exists",
-			storageTxns: map[identifiers.LogicID]*iradix.Txn{
+			storageTxns: map[identifiers.Identifier]*iradix.Txn{
 				logicIDs[0]: getTxnsWithEntries(t, newKeys, newValues),
 			},
 			metaStorageTree: mockMerkleTreeWithDB(),
@@ -892,10 +1012,10 @@ func TestCommitActiveStorageTrees(t *testing.T) {
 		},
 		{
 			name: "should return error if fail to commit storage tree",
-			storageTxns: map[identifiers.LogicID]*iradix.Txn{
+			storageTxns: map[identifiers.Identifier]*iradix.Txn{
 				logicIDs[0]: getTxnsWithEntries(t, newKeys, newValues),
 			},
-			storageTrees: map[identifiers.LogicID]tree.MerkleTree{
+			storageTrees: map[identifiers.Identifier]tree.MerkleTree{
 				logicIDs[0]: getMerkleTreeWithCommitHook(t,
 					nil,
 					nil,
@@ -909,10 +1029,10 @@ func TestCommitActiveStorageTrees(t *testing.T) {
 		},
 		{
 			name: "should return error if fail to update meta storage tree",
-			storageTxns: map[identifiers.LogicID]*iradix.Txn{
+			storageTxns: map[identifiers.Identifier]*iradix.Txn{
 				logicIDs[0]: getTxnsWithEntries(t, newKeys, newValues),
 			},
-			storageTrees: map[identifiers.LogicID]tree.MerkleTree{
+			storageTrees: map[identifiers.Identifier]tree.MerkleTree{
 				logicIDs[0]: getMerkleTreeWithHook(t,
 					nil,
 					nil,
@@ -1045,7 +1165,7 @@ func TestCommitStorage(t *testing.T) {
 			name: "should return error if failed to commit active storage trees",
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
-					so.storageTreeTxns = map[identifiers.LogicID]*iradix.Txn{
+					so.storageTreeTxns = map[identifiers.Identifier]*iradix.Txn{
 						logicIds[0]: getTxnsWithEntries(t, keys, values),
 					}
 					// create a meta storage tree with no entry for logicID[0].
@@ -1060,10 +1180,10 @@ func TestCommitStorage(t *testing.T) {
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
 					// We set storage tree and txn, so that commitActiveStorageTress will not fail
-					so.storageTreeTxns = map[identifiers.LogicID]*iradix.Txn{
+					so.storageTreeTxns = map[identifiers.Identifier]*iradix.Txn{
 						logicIds[0]: getTxnsWithEntries(t, keys, values),
 					}
-					so.storageTrees = map[identifiers.LogicID]tree.MerkleTree{
+					so.storageTrees = map[identifiers.Identifier]tree.MerkleTree{
 						logicIds[0]: mockMerkleTreeWithDB(),
 					}
 					// set a commit hook
@@ -1080,7 +1200,7 @@ func TestCommitStorage(t *testing.T) {
 				soCallback: func(so *Object) {
 					// We set storage tree and txn, so that commitActiveStorageTress will not fail
 					so.storageTreeTxns = getStorageTxnsWithEntries(t, logicIds, keys, values)
-					so.storageTrees = map[identifiers.LogicID]tree.MerkleTree{
+					so.storageTrees = map[identifiers.Identifier]tree.MerkleTree{
 						logicIds[0]: mockMerkleTreeWithDB(),
 					}
 					so.metaStorageTree = mockMerkleTreeWithDB()
@@ -1571,9 +1691,9 @@ func TestStateManager_FlushDirtyObject(t *testing.T) {
 func TestUpdateAssetTree(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
-	assetObject := NewAssetObject(big.NewInt(500), nil)
+	assetObject := NewAssetObject(&common.AssetDescriptor{AssetID: assetID})
 
-	setAssetObject(t, sObj, assetID, assetObject)
+	SetAssetObject(t, sObj, assetID, assetObject)
 
 	testcases := []struct {
 		name          string
@@ -1609,13 +1729,13 @@ func TestUpdateAssetTree(t *testing.T) {
 func TestUpdateLogicTree(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
-	logicObject := NewLogicObject(logicID.AsIdentifier(), engineio.LogicDescriptor{Engine: engineio.PISA})
+	logicObject := NewLogicObject(logicID, engineio.LogicDescriptor{Engine: engineio.PISA})
 
 	setLogicObject(t, sObj, logicID, logicObject)
 
 	testcases := []struct {
 		name          string
-		logicID       identifiers.LogicID
+		logicID       identifiers.Identifier
 		logicObject   *LogicObject
 		expectedValue *LogicObject
 	}{
@@ -1651,7 +1771,7 @@ func TestStorageTrees(t *testing.T) {
 	testcases := []struct {
 		name          string
 		mst           tree.MerkleTree
-		ast           map[identifiers.LogicID]tree.MerkleTree
+		ast           map[identifiers.Identifier]tree.MerkleTree
 		isMSTNil      bool
 		shouldFlush   bool
 		expectedError error
@@ -1711,11 +1831,11 @@ func TestCreateAsset(t *testing.T) {
 
 	sObj := createTestStateObject(t, nil)
 
-	assetDescriptor := getTestAssetDescriptor(t, sObj.id, "btc")
+	assetDescriptor := getTestAssetDescriptor(t, sObj.id, 1000, "btc", 0)
 
-	assetID := tests.GetTestAssetIDFromAssetDescriptor(t, assetAddress2, assetDescriptor)
+	// assetID := tests.GetTestAssetIDFromAssetDescriptor(t, assetAddress2, assetDescriptor)
 
-	setAssetState(t, sObj, assetID, assetDescriptor)
+	setAssetState(t, sObj, assetDescriptor.AssetID, assetDescriptor)
 
 	testcases := []struct {
 		name            string
@@ -1726,7 +1846,7 @@ func TestCreateAsset(t *testing.T) {
 		{
 			name:            "asset created successfully",
 			assetAddress:    assetAddress1,
-			assetDescriptor: getTestAssetDescriptor(t, sObj.id, "moi"),
+			assetDescriptor: getTestAssetDescriptor(t, sObj.id, 1000, "moi", 0),
 		},
 		{
 			name:            "should return error if asset already exists",
@@ -1738,7 +1858,7 @@ func TestCreateAsset(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			actualAssetID, err := sObj.CreateAsset(test.assetAddress, test.assetDescriptor)
+			err := sObj.CreateAsset(test.assetAddress, test.assetDescriptor)
 			if test.expectedError != nil {
 				require.Error(t, err)
 				require.ErrorContains(t, err, test.expectedError.Error())
@@ -1748,12 +1868,7 @@ func TestCreateAsset(t *testing.T) {
 
 			require.NoError(t, err)
 
-			expectedAssetID := tests.GetTestAssetIDFromAssetDescriptor(t, test.assetAddress, test.assetDescriptor)
-
-			require.NoError(t, err)
-			require.Equal(t, expectedAssetID, actualAssetID)
-
-			CheckAssetCreation(t, sObj, test.assetDescriptor, expectedAssetID)
+			CheckAssetCreation(t, sObj, test.assetDescriptor)
 		})
 	}
 }
@@ -1762,28 +1877,22 @@ func TestCreateAsset(t *testing.T) {
 func TestMintAsset(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 
-	assetDescriptor := getTestAssetDescriptor(t, sObj.id, "btc")
+	assetDescriptor := getTestAssetDescriptor(t, sObj.id, 10000, "btc", 0)
 
-	assetID := common.CreateAssetIDFromString(
-		assetDescriptor.Symbol,
-		0,
-		uint16(assetDescriptor.Standard),
-		assetDescriptor.Flags()...)
-
-	setAssetState(t, sObj, assetID, assetDescriptor)
+	setAssetState(t, sObj, assetDescriptor.AssetID, assetDescriptor)
 
 	testcases := []struct {
-		name           string
-		assetID        identifiers.AssetID
-		amount         *big.Int
-		expectedSupply *big.Int
-		expectedError  error
+		name                      string
+		assetID                   identifiers.AssetID
+		amount                    *big.Int
+		expectedCirculatingSupply *big.Int
+		expectedError             error
 	}{
 		{
-			name:           "asset minted successfully",
-			assetID:        assetID,
-			amount:         big.NewInt(1000),
-			expectedSupply: big.NewInt(11000),
+			name:                      "asset minted successfully",
+			assetID:                   assetDescriptor.AssetID,
+			amount:                    big.NewInt(1000),
+			expectedCirculatingSupply: big.NewInt(11000),
 		},
 		{
 			name:          "should return error if asset doesn't exists",
@@ -1795,7 +1904,7 @@ func TestMintAsset(t *testing.T) {
 
 	for _, test := range testcases {
 		t.Run(test.name, func(t *testing.T) {
-			supply, err := sObj.MintAsset(test.assetID, test.amount)
+			circulatingSupply, err := sObj.MintAsset(test.assetID, test.amount)
 			if test.expectedError != nil {
 				require.Error(t, err)
 				require.ErrorContains(t, test.expectedError, err.Error())
@@ -1804,7 +1913,8 @@ func TestMintAsset(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedSupply, &supply)
+
+			require.Equal(t, test.expectedCirculatingSupply, circulatingSupply)
 		})
 	}
 }
@@ -1813,14 +1923,9 @@ func TestMintAsset(t *testing.T) {
 func TestBurnAsset(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 
-	assetDescriptor := getTestAssetDescriptor(t, sObj.id, "eth")
+	assetDescriptor := getTestAssetDescriptor(t, sObj.id, 10000, "eth", 0)
 
-	assetID := common.CreateAssetIDFromString(
-		assetDescriptor.Symbol,
-		0,
-		uint16(assetDescriptor.Standard),
-		assetDescriptor.Flags()...)
-	setAssetState(t, sObj, assetID, assetDescriptor)
+	setAssetState(t, sObj, assetDescriptor.AssetID, assetDescriptor)
 
 	testcases := []struct {
 		name           string
@@ -1831,7 +1936,7 @@ func TestBurnAsset(t *testing.T) {
 	}{
 		{
 			name:           "asset burned successfully",
-			assetID:        assetID,
+			assetID:        assetDescriptor.AssetID,
 			amount:         big.NewInt(1000),
 			expectedSupply: big.NewInt(9000),
 		},
@@ -1854,7 +1959,7 @@ func TestBurnAsset(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			require.Equal(t, test.expectedSupply, &supply)
+			require.Equal(t, test.expectedSupply, supply)
 		})
 	}
 }
@@ -2181,7 +2286,7 @@ func TestHasFuel(t *testing.T) {
 			amount: big.NewInt(200),
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
-					setAssetBalance(t, so, common.KMOITokenAssetID, big.NewInt(1000))
+					WithAssetBalance(t, so, common.KMOITokenAssetID, common.DefaultTokenID, big.NewInt(1000), nil)
 				},
 			},
 			hasFuel: true,
@@ -2191,7 +2296,7 @@ func TestHasFuel(t *testing.T) {
 			amount: big.NewInt(200),
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
-					setAssetBalance(t, so, common.KMOITokenAssetID, big.NewInt(100))
+					WithAssetBalance(t, so, common.KMOITokenAssetID, common.DefaultTokenID, big.NewInt(100), nil)
 				},
 			},
 			hasFuel: false,
@@ -2202,9 +2307,10 @@ func TestHasFuel(t *testing.T) {
 			expectedError: errors.New("invalid transfer amount"),
 		},
 		{
-			name:    "failed to load balance",
-			amount:  big.NewInt(200),
-			hasFuel: false,
+			name:          "failed to load balance",
+			amount:        big.NewInt(200),
+			hasFuel:       false,
+			expectedError: common.ErrAssetNotFound,
 		},
 	}
 	for _, test := range testcases {
@@ -2284,12 +2390,12 @@ func TestGetStorageTree(t *testing.T) {
 	testcases := []struct {
 		name          string
 		soParams      *createStateObjectParams
-		logicID       identifiers.LogicID
+		logicID       identifiers.Identifier
 		expectedError error
 	}{
 		{
 			name:     "fetched storage tree from active storage trees",
-			soParams: stateObjectParamsWithStorageTree(t, getStorageTrees(t, []identifiers.LogicID{logicID}, keys, values)),
+			soParams: stateObjectParamsWithStorageTree(t, getStorageTrees(t, []identifiers.Identifier{logicID}, keys, values)),
 			logicID:  logicID,
 		},
 		{
@@ -2317,7 +2423,7 @@ func TestGetStorageTree(t *testing.T) {
 					)
 				},
 			},
-			logicID: common.SargaLogicID,
+			logicID: common.SargaLogicID.AsIdentifier(),
 		},
 		{
 			name: "should return error if failed to initiate logic storage tree",
@@ -2333,7 +2439,7 @@ func TestGetStorageTree(t *testing.T) {
 					)
 				},
 			},
-			logicID:       common.SargaLogicID,
+			logicID:       common.SargaLogicID.AsIdentifier(),
 			expectedError: errors.New("failed to initiate logic storage tree"),
 		},
 	}
@@ -2374,7 +2480,7 @@ func TestSetStorageEntry(t *testing.T) {
 			name: "should add storage entry",
 			soParams: stateObjectParamsWithASTAndMST(
 				t,
-				map[identifiers.LogicID]tree.MerkleTree{
+				map[identifiers.Identifier]tree.MerkleTree{
 					logicID[0]: mockMerkleTreeWithDB(),
 				},
 				mockMerkleTreeWithDB(),
@@ -2417,7 +2523,7 @@ func TestAddAccountGenesisInfo(t *testing.T) {
 			id:     tests.RandomIdentifier(t),
 			ixHash: tests.RandomHash(t),
 			soParams: stateObjectParamsWithStorageTree(t, getStorageTrees(
-				t, []identifiers.LogicID{common.SargaLogicID}, keys, values,
+				t, []identifiers.Identifier{common.SargaLogicID.AsIdentifier()}, keys, values,
 			)),
 		},
 	}
@@ -2436,7 +2542,7 @@ func TestAddAccountGenesisInfo(t *testing.T) {
 			expectedValue, err := accInfo.Bytes()
 			require.NoError(t, err)
 
-			actualValue, err := sObj.GetStorageEntry(common.SargaLogicID, test.id.Bytes())
+			actualValue, err := sObj.GetStorageEntry(common.SargaLogicID.AsIdentifier(), test.id.Bytes())
 			require.NoError(t, err)
 
 			require.Equal(t, expectedValue, actualValue)
@@ -2663,7 +2769,7 @@ func TestGetLogicObject(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			sObj := createTestStateObject(t, test.soParams)
 
-			actualLogicObject, err := sObj.getLogicObject(logicID.AsIdentifier())
+			actualLogicObject, err := sObj.getLogicObject(logicID)
 			if test.expectedError != nil {
 				require.ErrorContains(t, err, test.expectedError.Error())
 
@@ -2844,7 +2950,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 		name          string
 		logicTree     tree.MerkleTree
 		logicRoot     common.Hash
-		logicID       identifiers.LogicID
+		logicID       identifiers.Identifier
 		expectedError error
 	}{
 		{
@@ -2883,7 +2989,7 @@ func TestInsertNewLogicObject(t *testing.T) {
 
 			require.NoError(t, err)
 
-			actualLogicObject, err := sObj.getLogicObject(logicID.AsIdentifier())
+			actualLogicObject, err := sObj.getLogicObject(logicID)
 			require.NoError(t, err)
 			require.Equal(t, logicObject, actualLogicObject)
 		})
@@ -2895,7 +3001,7 @@ func TestCreateStorageTreeForLogic(t *testing.T) {
 
 	testcases := []struct {
 		name          string
-		logicID       identifiers.LogicID
+		logicID       identifiers.Identifier
 		soParams      *createStateObjectParams
 		expectedError error
 	}{

@@ -34,13 +34,13 @@ type (
 )
 
 func NewValidator(
-	id ValidatorIndex, kramaID identifiers.KramaID, pendingStake *big.Int,
+	id ValidatorIndex, kramaID identifiers.KramaID, pendingStake, activeStake *big.Int,
 	walletAddress identifiers.Identifier, consensusPubKey []byte,
 	kycProof []byte, kycStatus KYCStatus,
 ) *Validator {
 	return &Validator{
 		ID:                    id,
-		ActiveStake:           big.NewInt(0),
+		ActiveStake:           activeStake,
 		InactiveStake:         big.NewInt(0),
 		SocialTokens:          big.NewInt(0),
 		BehaviourTokens:       big.NewInt(0),

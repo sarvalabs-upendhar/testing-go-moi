@@ -21,7 +21,7 @@ type manifestV1 struct {
 func (manifest manifestV1) Header() ManifestHeader { return manifest.header }
 func (manifest manifestV1) Engine() ManifestEngine { return manifest.header.Engine }
 func (manifest manifestV1) Syntax() uint64         { return manifest.header.Syntax }
-func (manifest manifestV1) Kind() EngineKind       { return manifest.header.Engine.Kind }
+func (manifest manifestV1) EngineKind() EngineKind { return manifest.header.Engine.Kind }
 
 func (manifest manifestV1) Size() uint64                { return uint64(len(manifest.elements)) }
 func (manifest manifestV1) Elements() []ManifestElement { return manifest.elements }
@@ -89,8 +89,12 @@ func (manifest manifestV1) Polorize() (*polo.Polorizer, error) {
 
 	// Encode the flags into the engine buffer
 	engine.PolorizePacked(flags) // [1][1] flags
+	// Encode the engine version into the engine buffer
+	engine.PolorizeString(manifest.header.Engine.Version) // [1][2]
 	// Encode the engine into the main buffer
 	buffer.PolorizePacked(engine) // [1] engine
+
+	buffer.PolorizeString(string(manifest.header.Kind)) // [2] kind
 
 	// Create a new buffer for the elements
 	elements := polo.NewPolorizer()
@@ -154,12 +158,29 @@ func (manifest *manifestV1) Depolorize(depolorizer *polo.Depolorizer) (err error
 	flags := make([]string, 0)
 	if err = engineHeader.Depolorize(&flags); err != nil { // [1][1] flags
 		return err
+	} // [1][1] flags
+
+	version, err := engineHeader.DepolorizeString() // [2] version
+	if err != nil {
+		return errors.Wrap(err, "failed to decode engine version")
 	}
 
 	manifest.header.Engine = ManifestEngine{
-		Kind:  engine.Kind(),
-		Flags: flags,
+		Kind:    engine.Kind(),
+		Flags:   flags,
+		Version: version,
 	}
+
+	manifestKind, err := depolorizer.DepolorizeString()
+	if err != nil {
+		return errors.Wrap(err, "failed to decode manifest kind")
+	}
+
+	if !IsValidManifestKind(manifestKind) {
+		return errors.New("manifest kind invalid")
+	}
+
+	manifest.header.Kind = ManifestKind(manifestKind)
 
 	// Obtain the elements data pack from the main buffer
 	elements, err := depolorizer.DepolorizePacked() // [2] elements
@@ -224,9 +245,11 @@ func (manifest *manifestV1) Depolorize(depolorizer *polo.Depolorizer) (err error
 type manifestV1JSON struct {
 	Syntax uint64 `json:"syntax"`
 	Engine struct {
-		Kind  string   `json:"kind"`
-		Flags []string `json:"flags"`
+		Kind    string   `json:"kind"`
+		Flags   []string `json:"flags"`
+		Version string   `json:"version"`
 	} `json:"engine"`
+	Kind     string                  `json:"kind"`
 	Elements []manifestElementV1JSON `json:"elements"`
 }
 
@@ -241,8 +264,10 @@ func (manifest manifestV1) MarshalJSON() ([]byte, error) {
 	raw := new(manifestV1JSON)
 
 	raw.Syntax = manifest.header.Syntax
-	raw.Engine.Kind = manifest.Kind().String()
+	raw.Engine.Kind = manifest.EngineKind().String()
 	raw.Engine.Flags = manifest.header.Engine.Flags
+	raw.Engine.Version = manifest.header.Engine.Version
+	raw.Kind = string(manifest.header.Kind)
 	raw.Elements = make([]manifestElementV1JSON, 0, len(manifest.elements))
 
 	for _, element := range manifest.elements {
@@ -275,12 +300,18 @@ func (manifest *manifestV1) UnmarshalJSON(data []byte) error {
 		return errors.New("manifest engine unavailable")
 	}
 
+	if IsValidManifestKind(raw.Engine.Kind) {
+		return errors.New("invalid manifest kind")
+	}
+
 	manifest.header = ManifestHeader{
 		Syntax: raw.Syntax,
 		Engine: ManifestEngine{
-			Kind:  engine.Kind(),
-			Flags: raw.Engine.Flags,
+			Kind:    engine.Kind(),
+			Flags:   raw.Engine.Flags,
+			Version: raw.Engine.Version,
 		},
+		Kind: ManifestKind(raw.Kind),
 	}
 
 	manifest.elements = make([]ManifestElement, 0, len(raw.Elements))
@@ -311,9 +342,11 @@ func (manifest *manifestV1) UnmarshalJSON(data []byte) error {
 type manifestV1YAML struct {
 	Syntax uint64 `yaml:"syntax"`
 	Engine struct {
-		Kind  string   `yaml:"kind"`
-		Flags []string `yaml:"flags"`
+		Kind    string   `yaml:"kind"`
+		Flags   []string `yaml:"flags"`
+		Version string   `yaml:"version"`
 	} `yaml:"engine"`
+	Kind     string                  `yaml:"kind"`
 	Elements []manifestElementV1YAML `yaml:"elements"`
 }
 
@@ -328,8 +361,10 @@ func (manifest manifestV1) MarshalYAML() (interface{}, error) {
 	raw := new(manifestV1YAML)
 
 	raw.Syntax = manifest.header.Syntax
-	raw.Engine.Kind = manifest.Kind().String()
+	raw.Engine.Kind = manifest.EngineKind().String()
 	raw.Engine.Flags = manifest.header.Engine.Flags
+	raw.Engine.Version = manifest.header.Engine.Version
+	raw.Kind = string(manifest.header.Kind)
 	raw.Elements = make([]manifestElementV1YAML, 0, len(manifest.elements))
 
 	for _, element := range manifest.elements {
@@ -362,12 +397,18 @@ func (manifest *manifestV1) UnmarshalYAML(value *yaml.Node) error {
 		return errors.New("manifest engine unavailable")
 	}
 
+	if IsValidManifestKind(raw.Engine.Kind) {
+		return errors.New("invalid manifest kind")
+	}
+
 	manifest.header = ManifestHeader{
 		Syntax: raw.Syntax,
 		Engine: ManifestEngine{
-			Kind:  engine.Kind(),
-			Flags: raw.Engine.Flags,
+			Kind:    engine.Kind(),
+			Flags:   raw.Engine.Flags,
+			Version: raw.Engine.Version,
 		},
+		Kind: ManifestKind(raw.Kind),
 	}
 
 	manifest.elements = make([]ManifestElement, 0, len(raw.Elements))

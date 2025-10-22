@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 
 	"github.com/pkg/errors"
@@ -22,8 +21,6 @@ func ReadArtifactFile(path string) (*Artifact, error) {
 
 	file, err := os.ReadFile(path)
 	if err != nil {
-		log.Println("path : ", path)
-
 		return nil, errors.New("error reading artifact file")
 	}
 
@@ -32,4 +29,26 @@ func ReadArtifactFile(path string) (*Artifact, error) {
 	}
 
 	return ar, nil
+}
+
+type AssetArtifact struct {
+	Standard hexutil.Uint16 `json:"standard"`
+	Manifest hexutil.Bytes  `json:"manifest"`
+}
+
+type AssetArtifacts []AssetArtifact
+
+func ReadAssetArtifactFile(path string) (AssetArtifacts, error) {
+	assetArtifacts := make(AssetArtifacts, 0)
+
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return nil, errors.New("error reading asset artifact file")
+	}
+
+	if err = json.Unmarshal(file, &assetArtifacts); err != nil {
+		return nil, errors.New("error unmarshalling into asset artifact")
+	}
+
+	return assetArtifacts, nil
 }

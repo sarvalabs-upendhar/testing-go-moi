@@ -177,6 +177,7 @@ func (te *TestEnvironment) TestZFullSyncForOneNode() {
 		tests.GetRandomUpperCaseString(te.T(), 8),
 		big.NewInt(1),
 		common.MAS0,
+		sender.ID,
 		nil,
 	))
 
@@ -200,6 +201,7 @@ func (te *TestEnvironment) TestZFullSyncForOneNode() {
 					tests.GetRandomUpperCaseString(te.T(), 8),
 					initialAmount,
 					common.MAS0,
+					sender.ID,
 					nil,
 				))
 			},

@@ -15,7 +15,7 @@ import (
 // Its fields are exported for to make it serializable.
 type LogicObject struct {
 	// Represents the Logic ID
-	ID identifiers.LogicID
+	ID identifiers.Identifier
 	// Represents the Logic Engine
 	EngineKind engineio.EngineKind
 	// Represents the hash of the Logic Manifest
@@ -28,7 +28,7 @@ type LogicObject struct {
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
 func NewLogicObject(id identifiers.Identifier, descriptor engineio.LogicDescriptor) *LogicObject {
 	return &LogicObject{
-		ID:         identifiers.MustLogicID(id),
+		ID:         id,
 		EngineKind: descriptor.Engine,
 		Manifest:   descriptor.ManifestHash,
 		Artifact:   descriptor.Artifact,
@@ -36,10 +36,10 @@ func NewLogicObject(id identifiers.Identifier, descriptor engineio.LogicDescript
 	}
 }
 
-func (logic LogicObject) LogicID() identifiers.LogicID { return logic.ID }
-func (logic LogicObject) Engine() engineio.EngineKind  { return logic.EngineKind }
-func (logic LogicObject) ManifestHash() [32]byte       { return logic.Manifest }
-func (logic LogicObject) IsSealed() bool               { return logic.Sealed }
+func (logic LogicObject) LogicID() identifiers.Identifier { return logic.ID }
+func (logic LogicObject) Engine() engineio.EngineKind     { return logic.EngineKind }
+func (logic LogicObject) ManifestHash() [32]byte          { return logic.Manifest }
+func (logic LogicObject) IsSealed() bool                  { return logic.Sealed }
 
 func (logic *LogicObject) Bytes() ([]byte, error) {
 	data, err := polo.Polorize(logic)

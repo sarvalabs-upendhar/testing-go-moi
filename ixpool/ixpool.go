@@ -5,9 +5,11 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"testing"
 	"time"
 
 	lru "github.com/hashicorp/golang-lru"
+	"github.com/stretchr/testify/require"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -53,8 +55,13 @@ type stateManager interface {
 	GetPublicKey(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) ([]byte, error)
 	GetSequenceID(id identifiers.Identifier, KeyID uint64, stateHash common.Hash) (uint64, error)
 	IsAccountRegistered(id identifiers.Identifier) (bool, error)
-	IsLogicRegistered(logicID identifiers.LogicID) error
-	GetBalance(id identifiers.Identifier, assetID identifiers.AssetID, stateHash common.Hash) (*big.Int, error)
+	IsLogicRegistered(logicID identifiers.Identifier) error
+	GetBalance(
+		id identifiers.Identifier,
+		assetID identifiers.AssetID,
+		tokenID common.TokenID,
+		stateHash common.Hash,
+	) (*big.Int, error)
 	GetAssetInfo(assetID identifiers.AssetID, hash common.Hash) (*common.AssetDescriptor, error)
 	GetLatestStateObject(id identifiers.Identifier) (*state.Object, error)
 	RefreshCachedObject(id identifiers.Identifier, sysObj *state.SystemObject)
@@ -662,7 +669,7 @@ func (i *IxPool) isEligibleForProposal(
 	}
 
 	for _, participant := range ixn.Participants() {
-		if participant.IsGenesis {
+		if participant.IsGenesis || participant.LockType == common.NoLock {
 			continue
 		}
 
@@ -700,7 +707,7 @@ func (i *IxPool) isEligibleForProposal(
 	}
 
 	for _, participant := range ixn.Participants() {
-		if participant.IsGenesis {
+		if participant.IsGenesis || participant.LockType == common.NoLock {
 			continue
 		}
 
@@ -993,17 +1000,22 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 		}
 	*/
 
-	moiBal, _ := i.sm.GetBalance(ix.SenderID(), common.KMOITokenAssetID, common.NilHash)
+	moiBal, _ := i.sm.GetBalance(ix.SenderID(), common.KMOITokenAssetID, common.DefaultTokenID, common.NilHash)
 
 	if moiBal.Cmp(ix.Cost()) < 0 {
 		return common.ErrInsufficientFunds
 	}
 
-	if err := i.verifySignatures(ix); err != nil {
+	if err = i.verifySignatures(ix); err != nil {
 		return err
 	}
 
-	if err = i.validateFunds(ix); err != nil {
+	// TODO: Check if this is required
+	// if err = i.validateFunds(ix); err != nil {
+	//	return err
+	// }
+
+	if err = i.checkForParticipants(ix); err != nil {
 		return err
 	}
 
@@ -1014,48 +1026,58 @@ func (i *IxPool) validateIx(ix *common.Interaction) error {
 	return nil
 }
 
-func (i *IxPool) validateFunds(ix *common.Interaction) error {
-	for _, fund := range ix.Funds() {
-		if fund.Amount.Sign() < 0 {
-			return common.ErrInvalidValue
+func (i *IxPool) checkForParticipants(ix *common.Interaction) error {
+	for _, ps := range ix.Participants() {
+		if ps.IsGenesis {
+			continue
 		}
 
-		currentBalance, err := i.sm.GetBalance(ix.SenderID(), fund.AssetID, common.NilHash)
-		if err != nil {
-			return err
+		if ps.ID.IsNil() {
+			return common.ErrInvalidIdentifier
 		}
 
-		if currentBalance.Cmp(fund.Amount) < 0 {
-			return common.ErrInsufficientFunds
+		ok, err := i.sm.IsAccountRegistered(ps.ID)
+
+		if !ok || err != nil {
+			return common.ErrAccountNotFound
 		}
 	}
 
 	return nil
 }
 
+// func (i *IxPool) validateFunds(ix *common.Interaction) error {
+//	for _, fund := range ix.Funds() {
+//		if fund.Amount.Sign() < 0 {
+//			return common.ErrInvalidValue
+//		}
+//
+//		currentBalance, err := i.sm.GetBalance(ix.SenderID(), fund.AssetID, common.NilHash)
+//		if err != nil {
+//			return err
+//		}
+//
+//		if currentBalance.Cmp(fund.Amount) < 0 {
+//			return common.ErrInsufficientFunds
+//		}
+//	}
+//
+//	return nil
+// }
+
 func (i *IxPool) validateOperations(ix *common.Interaction) error {
 	for idx, op := range ix.Ops() {
 		switch op.Type() {
 		case common.IxParticipantCreate:
 			return i.validateParticipantCreate(ix, idx)
-		case common.IXAccountConfigure:
+		case common.IxAccountConfigure:
 			return i.validateAccountConfigure(ix, idx)
-		case common.IXAccountInherit:
+		case common.IxAccountInherit:
 			return i.validateAccountInherit(ix, idx)
+		case common.IxAssetAction:
+			return i.validateAssetAction(ix, idx)
 		case common.IxAssetCreate:
 			return i.validateAssetCreate(ix, idx)
-		case common.IxAssetApprove:
-			return i.validateAssetApprove(ix, idx)
-		case common.IxAssetRevoke:
-			return i.validateAssetRevoke(ix, idx)
-		case common.IxAssetTransfer:
-			return i.validateAssetTransfer(ix, idx)
-		case common.IxAssetLockup:
-			return i.validateAssetLockup(ix, idx)
-		case common.IxAssetRelease:
-			return i.validateAssetRelease(ix, idx)
-		case common.IxAssetMint, common.IxAssetBurn:
-			return i.validateAssetSupply(ix, idx)
 		case common.IxGuardianRegister:
 			return i.validateGuardianRegister(ix, idx)
 		case common.IxGuardianStake, common.IxGuardianUnstake,
@@ -1111,53 +1133,8 @@ func (i *IxPool) validateAccountConfigure(ix *common.Interaction, txnID int) err
 	return payload.Validate()
 }
 
-func (i *IxPool) validateAssetApprove(ix *common.Interaction, txnID int) error {
+func (i *IxPool) validateAssetAction(ix *common.Interaction, txnID int) error {
 	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
-	if err != nil {
-		return err
-	}
-
-	return payload.ValidateAssetApprove(ix.SenderID())
-}
-
-func (i *IxPool) validateAssetRevoke(ix *common.Interaction, txnID int) error {
-	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
-	if err != nil {
-		return err
-	}
-
-	return payload.ValidateAssetRevoke(ix.SenderID())
-}
-
-func (i *IxPool) validateAssetTransfer(ix *common.Interaction, txnID int) error {
-	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
-	if err != nil {
-		return err
-	}
-
-	return payload.ValidateAssetTransfer(ix.SenderID())
-}
-
-func (i *IxPool) validateAssetLockup(ix *common.Interaction, txnID int) error {
-	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
-	if err != nil {
-		return err
-	}
-
-	return payload.ValidateAssetLockup(ix.SenderID())
-}
-
-func (i *IxPool) validateAssetRelease(ix *common.Interaction, txnID int) error {
-	payload, err := ix.GetIxOp(txnID).GetAssetActionPayload()
-	if err != nil {
-		return err
-	}
-
-	return payload.ValidateAssetRelease(ix.SenderID())
-}
-
-func (i *IxPool) validateAssetSupply(ix *common.Interaction, txnID int) error {
-	payload, err := ix.GetIxOp(txnID).GetAssetSupplyPayload()
 	if err != nil {
 		return err
 	}
@@ -1209,7 +1186,7 @@ func (i *IxPool) validateLogicInteractPayload(ix *common.Interaction, txnID int)
 	}
 
 	// Check if logic is registered
-	if err = i.sm.IsLogicRegistered(payload.Logic); err != nil {
+	if err = i.sm.IsLogicRegistered(payload.LogicID.AsIdentifier()); err != nil {
 		return err
 	}
 
@@ -1403,7 +1380,9 @@ func getIxsSize(ixs []*common.Interaction) (uint64, error) {
 }
 
 // getIxParticipants returns the unique participants involved in the interaction
-func getIxParticipants(ix *common.Interaction) map[identifiers.Identifier]struct{} {
+func getIxParticipants(t *testing.T, ix *common.Interaction) map[identifiers.Identifier]struct{} {
+	t.Helper()
+
 	participants := make(map[identifiers.Identifier]struct{})
 
 	participants[ix.SenderID()] = struct{}{}
@@ -1415,6 +1394,18 @@ func getIxParticipants(ix *common.Interaction) map[identifiers.Identifier]struct
 	for idx, op := range ix.Ops() {
 		if op.Type() == common.IxAssetCreate || op.Type() == common.IxLogicDeploy {
 			continue
+		}
+
+		if op.Type() == common.IxAssetAction {
+			action, err := op.GetAssetActionPayload()
+			require.NoError(t, err)
+
+			_, ps, err := common.GetParamsFromActionPayload(action)
+			require.NoError(t, err)
+
+			for _, id := range ps {
+				participants[id] = struct{}{}
+			}
 		}
 
 		participants[ix.GetIxOp(idx).Target()] = struct{}{}

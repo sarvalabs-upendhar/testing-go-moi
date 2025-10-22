@@ -83,7 +83,7 @@ type stateManager interface {
 		ps map[identifiers.Identifier]common.ParticipantInfo,
 		psState common.ParticipantsState,
 	) (*state.Transition, error)
-	CreateStateObject(identifiers.Identifier, common.AccountType, bool) *state.Object
+	CreateStateObject(identifiers.Identifier, bool) *state.Object
 	GetLatestStateObject(id identifiers.Identifier) (*state.Object, error)
 	GetAccountMetaInfo(id identifiers.Identifier) (*common.AccountMetaInfo, error)
 	SyncStorageTrees(
@@ -1885,13 +1885,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 
 		ps := make(map[identifiers.Identifier]common.ParticipantInfo)
 
-		accountType, err := common.AccountTypeFromID(msg.id())
-		if err != nil {
-			return false, err
-		}
-
 		ps[msg.id()] = common.ParticipantInfo{
-			AccType:   accountType,
 			IsGenesis: msg.tesseract.TransitiveLink(msg.id()).IsNil(),
 		}
 
@@ -1909,7 +1903,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 				msg.id(),
 				msg.tesseract,
 				msg.committee.GetNodes(),
-				transition.GetObject(msg.id()),
+				transition.MustGetObject(msg.id()),
 			); err != nil {
 				return false, errors.Wrap(err, "failed to fetch tesseract state")
 			}

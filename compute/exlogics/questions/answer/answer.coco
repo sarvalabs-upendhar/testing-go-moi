@@ -1,4 +1,4 @@
-coco answer
+coco Answer
 
 state logic:
     Answer U64
@@ -7,13 +7,13 @@ state actor:
     ActorAnswer U64
 
 endpoint deploy Init():
-    mutate 42 -> Logic.answer.Answer
+    mutate 42 -> Answer.Logic.Answer
 
 endpoint GetLogicAnswer() -> (logic_answer U64):
-    observe logic_answer <- Logic.answer.Answer
+    observe logic_answer <- Answer.Logic.Answer
 
 endpoint GetActorAnswer(actorId Identifier) -> (actor_answer U64):
-    observe actor_answer <- Actor(actorId).answer.ActorAnswer
+    observe actor_answer <- Answer.Actor(actorId).ActorAnswer
 
 endpoint dynamic SetActorAnswer(actorId Identifier, new_answer U64):
-    mutate new_answer -> Actor(actorId).answer.ActorAnswer
+    mutate new_answer -> Answer.Actor(actorId).ActorAnswer

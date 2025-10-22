@@ -234,7 +234,10 @@ func GetLogicID(
 	err = json.Unmarshal(receipt.IxOps[txnID].Data, &logicReceipt)
 	require.NoError(t, err)
 
-	return logicReceipt.LogicID
+	logicID, err := logicReceipt.LogicID.AsLogicID()
+	require.NoError(t, err)
+
+	return logicID
 }
 
 // GetLogicManifestByEncodingType returns the manifest according to the given encoding type POLO, JSON or YAML
@@ -279,13 +282,13 @@ type TokenLedgerState struct {
 
 func GetTokenLedgerState(t *testing.T, moiClient *Client,
 	logicID identifiers.LogicID,
-	idesses []identifiers.Identifier,
+	ids []identifiers.Identifier,
 ) TokenLedgerState {
 	t.Helper()
 
 	getLatestStorage := func(key [32]byte) hexutil.Bytes {
 		s, err := moiClient.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
-			LogicID:    logicID,
+			LogicID:    logicID.AsIdentifier(),
 			StorageKey: key[:],
 			Options: rpcargs.TesseractNumberOrHash{
 				TesseractNumber: &rpcargs.LatestTesseractHeight,
@@ -308,7 +311,7 @@ func GetTokenLedgerState(t *testing.T, moiClient *Client,
 	err = polo.Depolorize(&state.Supply, rawSupply)
 	require.NoError(t, err)
 
-	for _, id := range idesses {
+	for _, id := range ids {
 		encoded, _ := polo.Polorize(id)
 		hashed := blake2b.Sum256(encoded)
 
@@ -481,7 +484,7 @@ func (reader StorageReader) Root() [32]byte {
 
 func (reader StorageReader) ReadPersistentStorage(logicID [32]byte, key [32]byte) ([]byte, error) {
 	content, err := reader.client.LogicStorage(context.Background(), &rpcargs.GetLogicStorageArgs{
-		LogicID:    reader.logicID,
+		LogicID:    reader.logicID.AsIdentifier(),
 		ID:         reader.id,
 		StorageKey: key[:],
 		Options: rpcargs.TesseractNumberOrHash{

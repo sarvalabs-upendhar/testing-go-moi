@@ -105,6 +105,10 @@ func (c *ClusterConfig) FlipperPathDir(name string) string {
 	return filepath.Join(c.FlipperPath, name)
 }
 
+func (c *ClusterConfig) AssetArtifactPath(name string) string {
+	return filepath.Join(c.FlipperPath, name)
+}
+
 func (c *ClusterConfig) initLogsDir() {
 	logsDir := c.Dir(fmt.Sprintf("e2e-logs-%d", time.Now().UTC().UnixMilli()))
 

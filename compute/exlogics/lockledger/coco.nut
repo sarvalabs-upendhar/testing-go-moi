@@ -1,5 +1,5 @@
 [coco]
-version = "0.7.0"
+version = "0.7.0-rc.3"
 
 [module]
 name = "LockLedger"
@@ -17,7 +17,7 @@ format = "YAML"
 output = "lockledger"
 
 [target.pisa]
-format = "ASM"
+format = "BIN"
 version = "0.5.0"
 
 [lab.render]
@@ -27,3 +27,9 @@ bytes_as_hex = false
 [lab.config.default]
 url = "http://127.0.0.1:6060"
 env = "main"
+
+[lab.scripts]
+test-toggle = ["engines", "users", "logics"]
+
+[scripts]
+test-script = "coco compile .; pwd; uname -a"

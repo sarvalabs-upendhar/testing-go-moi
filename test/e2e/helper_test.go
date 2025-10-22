@@ -3,6 +3,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -23,12 +24,14 @@ func createAssetCreatePayload(
 	symbol string,
 	supply *big.Int,
 	standard common.AssetStandard,
+	manager identifiers.Identifier,
 	payloadCallBack func(payload *common.AssetCreatePayload),
 ) *common.AssetCreatePayload {
 	payload := &common.AssetCreatePayload{
-		Symbol:   symbol,
-		Supply:   supply,
-		Standard: standard,
+		Symbol:    symbol,
+		MaxSupply: supply,
+		Standard:  standard,
+		Manager:   manager,
 	}
 
 	if payloadCallBack != nil {
@@ -38,12 +41,12 @@ func createAssetCreatePayload(
 	return payload
 }
 
-func transferAsset(
+func approveAsset(
 	te *TestEnvironment,
 	sender tests.AccountWithMnemonic,
-	payload *common.AssetActionPayload,
+	assetID identifiers.AssetID, payload *common.ApproveParams,
 ) {
-	ixHash, err := te.transferAsset(sender, payload)
+	ixHash, err := te.approveAsset(sender, assetID, payload)
 	require.NoError(te.T(), err)
 
 	// make sure interaction executed successfully
@@ -54,19 +57,7 @@ func transferAsset(
 	require.Equal(te.T(), common.ReceiptOk, receipt.Status)
 }
 
-func approveAsset(te *TestEnvironment, sender tests.AccountWithMnemonic, payload *common.AssetActionPayload) {
-	ixHash, err := te.approveAsset(sender, payload)
-	require.NoError(te.T(), err)
-
-	// make sure interaction executed successfully
-	ctx, cancel := context.WithTimeout(context.Background(), DefaultConfirmIxTimeout)
-	defer cancel()
-
-	receipt := moiclient.RetryFetchReceipt(te.T(), ctx, te.moiClient, ixHash)
-	require.Equal(te.T(), common.ReceiptOk, receipt.Status)
-}
-
-func lockupAsset(te *TestEnvironment, sender tests.AccountWithMnemonic, payload *common.AssetActionPayload) {
+func lockupAsset(te *TestEnvironment, sender tests.AccountWithMnemonic, payload *common.PayoutDetails) {
 	ixHash, err := te.lockupAsset(sender, payload)
 	require.NoError(te.T(), err)
 
@@ -96,6 +87,20 @@ func createAsset(
 	return assetReceipt.AssetID
 }
 
+func createAndMint(te *TestEnvironment, sender tests.AccountWithMnemonic,
+	createPayload *common.AssetCreatePayload,
+	mintPayload *common.MintParams,
+) identifiers.AssetID {
+	assetID := createAsset(te, sender, createPayload)
+
+	ixHash, err := te.mintAsset(sender, assetID, mintPayload)
+	require.NoError(te.T(), err)
+
+	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
+
+	return assetID
+}
+
 func createParticipant(
 	te *TestEnvironment,
 	sender tests.AccountWithMnemonic,
@@ -107,6 +112,7 @@ func createParticipant(
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 }
 
+/*
 func deployLogic(
 	te *TestEnvironment,
 	sender tests.AccountWithMnemonic,
@@ -122,8 +128,9 @@ func deployLogic(
 	err = json.Unmarshal(receipt.IxOps[0].Data, &logicDeployReceipt)
 	require.NoError(te.T(), err)
 
-	return logicDeployReceipt.LogicID
+	return must(logicDeployReceipt.LogicID.AsLogicID())
 }
+*/
 
 func getBalance(te *TestEnvironment, id identifiers.Identifier, assetID identifiers.AssetID, height int64) uint64 {
 	senderBal, err := te.moiClient.Balance(context.Background(), &rpcargs.BalArgs{
@@ -133,6 +140,11 @@ func getBalance(te *TestEnvironment, id identifiers.Identifier, assetID identifi
 			TesseractNumber: &height,
 		},
 	})
+
+	if err != nil && err.Error() == common.ErrAssetNotFound.Error() {
+		return 0
+	}
+
 	te.Suite.NoError(err)
 
 	return senderBal.ToInt().Uint64()
@@ -159,7 +171,7 @@ func checkForReceiptSuccess(t *testing.T, client *moiclient.Client, ixHash commo
 
 	receipt := moiclient.RetryFetchReceipt(t, ctx, client, ixHash)
 
-	require.Equal(t, common.ReceiptOk, receipt.Status, "Interaction failed")
+	require.Equal(t, common.ReceiptOk, receipt.Status, fmt.Sprintf("Interaction failed %s", receipt.IxOps[0].Data))
 
 	require.NotEqual(t, uint64(0), receipt.FuelUsed.ToUint64())
 

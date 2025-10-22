@@ -1,15 +1,20 @@
 package pisa
 
 import (
+	"math/big"
+
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	pisa "github.com/sarvalabs/go-pisa"
 	"github.com/sarvalabs/go-pisa/metering"
+	pstorage "github.com/sarvalabs/go-pisa/storage"
 )
 
 type RuntimeWrapper struct {
 	rn *pisa.Runtime
+	as engineio.AssetEngine
 }
 
 type Pisa struct{}
@@ -34,10 +39,18 @@ func (p *Pisa) Kind() engineio.EngineKind {
 func (p *Pisa) Version() string { return pisa.Version }
 
 func (p *Pisa) Runtime(timestamp uint64) engineio.Runtime {
-	return NewRuntimeWrapper(pisa.NewRuntime(timestamp, 0, 0, pisa.WithCryptography(Crypto(0))))
+	r := NewRuntimeWrapper(
+		pisa.NewRuntime(
+			timestamp,
+			0, 0,
+			pisa.WithCryptography(Crypto(0))))
+
+	return r
 }
 
 func (p *Pisa) CompileManifest(
+	manifestKind engineio.ManifestKind,
+	logicID identifiers.Identifier,
 	manifest engineio.Manifest,
 	fuel engineio.FuelGauge,
 ) (
@@ -47,11 +60,11 @@ func (p *Pisa) CompileManifest(
 ) {
 	// Check that the Manifest Instance is PISA
 	if manifest.Engine().Kind != engineio.PISA {
-		return nil, nil, errors.New("invalid manifest: manifest engine is not PISA")
+		return nil, fuel.Consumed(fuel), errors.New("invalid manifest: manifest engine is not PISA")
 	}
 
 	// Create a new manifest compiler
-	compiler := NewManifestCompiler(fuel, manifest)
+	compiler := NewManifestCompiler(manifestKind, logicID, fuel, manifest)
 	// Compile the manifest
 	descriptor, err := compiler.CompileArtifact()
 	if err != nil {
@@ -65,7 +78,12 @@ func NewRuntimeWrapper(rn *pisa.Runtime) *RuntimeWrapper {
 	return &RuntimeWrapper{rn: rn}
 }
 
-func (rw *RuntimeWrapper) CreateLogic(
+func (rw *RuntimeWrapper) BindAssetEngine(ae engineio.AssetEngine) {
+	rw.as = ae
+	rw.rn.BindAssetEngine(&AssetEngineWrapper{ae: ae})
+}
+
+func (rw *RuntimeWrapper) SpawnLogic(
 	logicID [32]byte,
 	artifact []byte,
 	storage engineio.Storage,
@@ -84,6 +102,20 @@ func (rw *RuntimeWrapper) CreateLogic(
 	return rw.rn.Spawn(art, logicID, storage, nil, ops...)
 }
 
+func (rw *RuntimeWrapper) CreateAsset(
+	ixHash common.Hash,
+	assetID identifiers.AssetID,
+	symbol string, decimals uint8, dimension uint8,
+	manager, creator identifiers.Identifier,
+	maxSupply *big.Int,
+	metadata map[string][]byte,
+	enableEvents bool,
+	logicID identifiers.LogicID,
+) (uint64, error) {
+	return rw.as.CreateAsset(
+		ixHash, assetID, symbol, decimals, dimension, manager, creator, maxSupply, metadata, enableEvents, logicID)
+}
+
 func (rw *RuntimeWrapper) ActorExists(logicID [32]byte) bool {
 	return rw.rn.ActorExists(logicID)
 }
@@ -100,11 +132,13 @@ func (rw *RuntimeWrapper) CreateActor(id [32]byte, storage engineio.Storage, par
 func (rw *RuntimeWrapper) Call(
 	logicID [32]byte,
 	action engineio.Action,
+	transition engineio.Transition,
 	limit *engineio.FuelGauge,
 ) *engineio.CallResult {
 	result := rw.rn.Call(
 		logicID,
 		action,
+		NewTransitionWrapper(transition),
 		metering.SetEffortLimit(metering.ComputeEffort(limit.Compute)),
 		metering.SetVolumeLimit(metering.StorageVolume(limit.Storage)),
 	)
@@ -152,4 +186,261 @@ func callResult(result *pisa.CallResult) *engineio.CallResult {
 	}
 
 	return cr
+}
+
+type TransitionWrapper struct {
+	t engineio.Transition
+}
+
+func (t *TransitionWrapper) Storage(id [32]byte) (pstorage.Observable, error) {
+	return t.t.GetLogicStorageObject(id)
+}
+
+func NewTransitionWrapper(t engineio.Transition) *TransitionWrapper {
+	return &TransitionWrapper{t: t}
+}
+
+type AssetEngineWrapper struct {
+	ae engineio.AssetEngine
+}
+
+func (aew *AssetEngineWrapper) DefineAsset(
+	assetID [32]byte,
+	senderID [32]byte,
+	symbol string, decimals uint8,
+	manager [32]byte,
+	maxSupply *big.Int,
+	enableEvents bool,
+) (uint64, error) {
+	return 0, errors.New("DefineAsset not implemented in PISA AssetEngineWrapper")
+}
+
+func (aew *AssetEngineWrapper) Transfer(
+	assetID [32]byte, tokenID uint64, operatorID [32]byte, benefactorID [32]byte,
+	beneficiaryID [32]byte, amount *big.Int,
+) (uint64, error) {
+	return aew.ae.Transfer(
+		assetID,
+		common.TokenID(tokenID),
+		operatorID,
+		benefactorID,
+		beneficiaryID,
+		amount,
+	)
+}
+
+func (aew *AssetEngineWrapper) Mint(
+	assetID [32]byte, tokenID uint64, senderID, beneficiaryID [32]byte, amount *big.Int,
+) (uint64, error) {
+	return aew.ae.Mint(
+		assetID,
+		common.TokenID(tokenID),
+		senderID,
+		beneficiaryID,
+		amount,
+	)
+}
+
+func (aew *AssetEngineWrapper) Burn(
+	assetID [32]byte, tokenID uint64, benefactorID [32]byte, amount *big.Int,
+) (uint64, error) {
+	return aew.ae.Burn(
+		assetID,
+		common.TokenID(tokenID),
+		benefactorID,
+		amount,
+	)
+}
+
+func (aew *AssetEngineWrapper) Approve(
+	assetID [32]byte, tokenID uint64,
+	benefactorID, beneficiaryID [32]byte, amount *big.Int, expiresAt uint64,
+) (uint64, error) {
+	return aew.ae.Approve(
+		assetID,
+		common.TokenID(tokenID),
+		benefactorID,
+		beneficiaryID,
+		amount,
+		expiresAt,
+	)
+}
+
+func (aew *AssetEngineWrapper) Revoke(
+	assetID [32]byte, tokenID uint64,
+	benefactorID, beneficiaryID [32]byte,
+) (uint64, error) {
+	return aew.ae.Revoke(
+		assetID,
+		common.TokenID(tokenID),
+		benefactorID,
+		beneficiaryID,
+	)
+}
+
+func (aew *AssetEngineWrapper) Lockup(
+	assetID [32]byte, tokenID uint64,
+	benefactorID, beneficiaryID [32]byte, amount *big.Int,
+) (uint64, error) {
+	return aew.ae.Lockup(
+		assetID,
+		common.TokenID(tokenID),
+		benefactorID,
+		beneficiaryID,
+		amount,
+	)
+}
+
+func (aew *AssetEngineWrapper) Release(
+	assetID [32]byte, tokenID uint64,
+	operatorID, benefactorID, beneficiaryID [32]byte, amount *big.Int,
+) (uint64, error) {
+	return aew.ae.Release(
+		assetID,
+		common.TokenID(tokenID),
+		operatorID,
+		benefactorID,
+		beneficiaryID,
+		amount,
+	)
+}
+
+func (aew *AssetEngineWrapper) Symbol(assetID [32]byte) (string, uint64, error) {
+	symbol, err := aew.ae.Symbol(assetID)
+	if err != nil {
+		return "", 5, err
+	}
+
+	return symbol, 5, nil
+}
+
+func (aew *AssetEngineWrapper) BalanceOf(
+	assetID [32]byte, tokenID uint64, address [32]byte,
+) (*big.Int, uint64, error) {
+	balance, err := aew.ae.BalanceOf(
+		address,
+		assetID,
+		common.TokenID(tokenID),
+	)
+	if err != nil {
+		return nil, 5, err
+	}
+
+	return balance, 5, nil
+}
+
+func (aew *AssetEngineWrapper) Creator(assetID [32]byte) ([32]byte, uint64, error) {
+	creator, err := aew.ae.Creator(assetID)
+	if err != nil {
+		return [32]byte{}, 5, err
+	}
+
+	return creator, 5, nil
+}
+
+func (aew *AssetEngineWrapper) Manager(assetID [32]byte) ([32]byte, uint64, error) {
+	manager, err := aew.ae.Manager(assetID)
+	if err != nil {
+		return [32]byte{}, 5, err
+	}
+
+	return manager, 5, nil
+}
+
+func (aew *AssetEngineWrapper) Decimals(assetID [32]byte) (uint8, uint64, error) {
+	decimals, err := aew.ae.Decimals(assetID)
+	if err != nil {
+		return 0, 5, err
+	}
+
+	return decimals, 5, nil
+}
+
+func (aew *AssetEngineWrapper) MaxSupply(assetID [32]byte) (*big.Int, uint64, error) {
+	maxSupply, err := aew.ae.MaxSupply(assetID)
+	if err != nil {
+		return nil, 5, err
+	}
+
+	return maxSupply, 5, nil
+}
+
+func (aew *AssetEngineWrapper) CirculatingSupply(assetID [32]byte) (*big.Int, uint64, error) {
+	circSupply, err := aew.ae.CirculatingSupply(assetID)
+	if err != nil {
+		return nil, 5, err
+	}
+
+	return circSupply, 5, nil
+}
+
+func (aew *AssetEngineWrapper) LogicID(assetID [32]byte) ([32]byte, uint64, error) {
+	logicID, err := aew.ae.LogicID(assetID)
+	if err != nil {
+		return [32]byte{}, 5, err
+	}
+
+	return logicID, 5, nil
+}
+
+func (aew *AssetEngineWrapper) EnableEvents(assetID [32]byte) (bool, uint64, error) {
+	enableEvents, err := aew.ae.EnableEvents(assetID)
+	if err != nil {
+		return false, 5, err
+	}
+
+	return enableEvents, 10, nil
+}
+
+func (aew *AssetEngineWrapper) SetMetaData(assetID, participantID [32]byte, key string, val []byte) (uint64, error) {
+	err := aew.ae.SetMetaData(assetID, participantID, key, val)
+	if err != nil {
+		return 5, err
+	}
+
+	return 10, nil
+}
+
+func (aew *AssetEngineWrapper) GetMetaData(assetID [32]byte, key string) ([]byte, uint64, error) {
+	metadata, err := aew.ae.GetMetaData(assetID, key)
+	if err != nil {
+		return nil, 10, err
+	}
+
+	return metadata, 10, nil
+}
+
+func (aew *AssetEngineWrapper) SetTokenMetaData(
+	assetID [32]byte, participantID [32]byte,
+	tokenID uint64, key string, val []byte,
+) (uint64, error) {
+	err := aew.ae.SetTokenMetaData(
+		participantID,
+		assetID,
+		common.TokenID(tokenID),
+		key,
+		val,
+	)
+	if err != nil {
+		return 5, err
+	}
+
+	return 10, nil
+}
+
+func (aew *AssetEngineWrapper) GetTokenMetaData(
+	assetID [32]byte, participantID [32]byte,
+	tokenID uint64, key string,
+) ([]byte, uint64, error) {
+	metadata, err := aew.ae.GetTokenMetaData(
+		participantID,
+		assetID,
+		common.TokenID(tokenID),
+		key,
+	)
+	if err != nil {
+		return nil, 10, err
+	}
+
+	return metadata, 10, nil
 }

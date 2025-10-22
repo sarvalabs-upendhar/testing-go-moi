@@ -17,22 +17,25 @@ type TestLogicInstance struct {
 	x       engineio.Engine
 	Runtime engineio.Runtime
 
-	logic     map[identifiers.LogicID]*debugStateDriver
-	logicSnap map[identifiers.LogicID]*debugStateDriver
+	logic     map[identifiers.Identifier]*debugStateDriver
+	logicSnap map[identifiers.Identifier]*debugStateDriver
 
 	participants map[identifiers.Identifier]*debugStateDriver
 	snapshots    map[identifiers.Identifier]*debugStateDriver
 
 	defaultFuel    engineio.FuelGauge
-	defaultLogicID identifiers.LogicID
+	defaultLogicID identifiers.Identifier
 	defaultSender  identifiers.Identifier
 	defaultAccess  map[[32]byte]bool
+
+	transition *debugTransition
 
 	cleaners []testSuiteOptionCleaner
 }
 
 func (li *TestLogicInstance) initialise(
 	kind engineio.EngineKind,
+	as engineio.AssetEngine,
 	logics ...Logic,
 ) (*engineio.FuelGauge, error) {
 	// Set up the engine runtime
@@ -40,13 +43,15 @@ func (li *TestLogicInstance) initialise(
 	require.True(li.ti, ok, "unsupported engine kind")
 	li.x = engine
 	li.Runtime = engine.Runtime(uint64(defaultTimestamp))
+	li.Runtime.BindAssetEngine(as)
 	li.defaultAccess = make(map[[32]byte]bool)
 	li.defaultFuel = defaultLimit
+	li.transition = newDebugTransition()
 
-	li.logic = make(map[identifiers.LogicID]*debugStateDriver)
+	li.logic = make(map[identifiers.Identifier]*debugStateDriver)
 	li.participants = make(map[identifiers.Identifier]*debugStateDriver)
 	li.snapshots = make(map[identifiers.Identifier]*debugStateDriver)
-	li.logicSnap = make(map[identifiers.LogicID]*debugStateDriver)
+	li.logicSnap = make(map[identifiers.Identifier]*debugStateDriver)
 
 	consumption := new(engineio.FuelGauge)
 
@@ -56,7 +61,12 @@ func (li *TestLogicInstance) initialise(
 		}
 
 		// Compile a logic descriptor from the manifest
-		artifact, compileEffort, err := li.x.CompileManifest(logic.Manifest, defaultLimit)
+		artifact, compileEffort, err := li.x.CompileManifest(
+			engineio.ManifestKindFromIdentifier(logic.LogicID),
+			logic.LogicID,
+			logic.Manifest,
+			defaultLimit,
+		)
 		consumption.Add(compileEffort)
 
 		if err != nil {
@@ -70,6 +80,9 @@ func (li *TestLogicInstance) initialise(
 
 				s := newDebugStateDriver(li.ti, li.defaultSender)
 				li.participants[li.defaultSender] = s
+
+				// Add to transition
+				li.transition.Entry[li.defaultSender] = s
 				require.NoError(li.ti, li.Runtime.CreateActor(li.defaultSender, s, nil))
 			} else {
 				li.defaultSender = logic.Actors[0]
@@ -78,11 +91,11 @@ func (li *TestLogicInstance) initialise(
 			li.defaultLogicID = logic.LogicID
 		}
 
-		li.logic[logic.LogicID] = newDebugStateDriver(li.ti, logic.LogicID.AsIdentifier())
+		li.logic[logic.LogicID] = newDebugStateDriver(li.ti, logic.LogicID)
 
 		li.defaultAccess[logic.LogicID] = true
 
-		if err = li.Runtime.CreateLogic(
+		if err = li.Runtime.SpawnLogic(
 			logic.LogicID,
 			artifact,
 			li.logic[logic.LogicID],
@@ -95,6 +108,9 @@ func (li *TestLogicInstance) initialise(
 
 			s := newDebugStateDriver(li.ti, id)
 			li.participants[id] = s
+
+			// Add to transition
+			li.transition.Entry[id] = s
 			require.NoError(li.ti, li.Runtime.CreateActor(id, s, nil))
 		}
 	}
@@ -129,7 +145,7 @@ func (li *TestLogicInstance) tearDownTest() {
 }
 
 func (li *TestLogicInstance) call(
-	logicID identifiers.LogicID,
+	logicID identifiers.Identifier,
 	kind common.IxOpType,
 	site string,
 	input polo.Document,
@@ -148,7 +164,7 @@ func (li *TestLogicInstance) call(
 		access, // default fuel price
 	)
 
-	result := li.Runtime.Call(logicID, ixn, &li.defaultFuel)
+	result := li.Runtime.Call(logicID, ixn, li.transition, &li.defaultFuel)
 
 	return *result
 }
@@ -172,7 +188,7 @@ func (li *TestLogicInstance) cleanOpts() {
 }
 
 func (li *TestLogicInstance) callAndCheck(
-	logicID identifiers.LogicID,
+	logicID identifiers.Identifier,
 	kind common.IxOpType, site string, input polo.Document, access map[[32]byte]bool,
 	expectedOut polo.Document, expectedErr *engineio.ErrorResult,
 	opts ...TestSuiteOption,
@@ -195,12 +211,12 @@ func (li *TestLogicInstance) callAndCheck(
 
 func (li *TestLogicInstance) checkActorStorage(
 	actorID identifiers.Identifier,
-	logicID identifiers.LogicID,
+	logicID identifiers.Identifier,
 	key [32]byte, val any,
 ) {
 	party := li.participants[actorID]
 	if party == nil {
-		party = li.logic[identifiers.MustLogicID(actorID)]
+		party = li.logic[actorID]
 	}
 
 	require.NotNil(li.ti, party, "participant not found for address")

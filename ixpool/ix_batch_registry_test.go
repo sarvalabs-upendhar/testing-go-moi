@@ -58,15 +58,15 @@ func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
 		{
 			name:                            "add ixn to batch successfully",
 			batchID:                         0,
-			ix:                              ixns[0],
+			ix:                              ixns[1],
 			expectedAdd:                     true,
 			expectedIxCount:                 1,
-			expectedConsensusNodesHashCount: 2,
+			expectedConsensusNodesHashCount: 3,
 		},
 		{
 			name:    "failed to add ixn to batch",
 			batchID: 0,
-			ix:      ixns[0],
+			ix:      ixns[1],
 			preTestFn: func(batch *IxBatchRegistry) {
 				for i := 0; i < 101; i++ {
 					require.True(t, batch.addIxToBatch(0, ixns[0]))
@@ -74,7 +74,7 @@ func TestIxBatchRegistry_addIxToBatch(t *testing.T) {
 			},
 			expectedAdd:                     false,
 			expectedIxCount:                 101,
-			expectedConsensusNodesHashCount: 2,
+			expectedConsensusNodesHashCount: 1,
 		},
 		{
 			name:                            "add ixn where one of the participant is genesis account",
@@ -202,13 +202,16 @@ func TestIxBatchRegistry_addIx(t *testing.T) {
 			IxDataCallback: func(ix *common.IxData) {
 				ix.IxOps = []common.IxOpRaw{
 					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+						Type:    common.IxAssetAction,
+						Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 					},
 				}
 				ix.Participants = append(ix.Participants, []common.IxParticipant{
 					{
 						ID: ids[0],
+					},
+					{
+						ID: common.KMOITokenAccountID,
 					},
 				}...)
 			},

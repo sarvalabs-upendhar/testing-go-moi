@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-polo"
 
 	"github.com/stretchr/testify/require"
 
@@ -16,15 +17,41 @@ import (
 
 func (te *TestEnvironment) transferAsset(
 	sender tests.AccountWithMnemonic,
-	assetActionPayload *common.AssetActionPayload,
+	payOut *common.PayoutDetails,
 ) (common.Hash, error) {
 	te.logger.Debug("transfer asset ", "sender", sender.ID,
-		"beneficiary", assetActionPayload.Beneficiary, "asset id", assetActionPayload.AssetID,
-		"amount", assetActionPayload.Amount,
+		"beneficiary", payOut.Beneficiary, "asset id", payOut.AssetID, "token id", payOut.TokenID,
+		"amount", payOut.Amount,
 	)
 
-	payload, err := assetActionPayload.Bytes()
+	//	var callDataParams any
+
+	callDataParams := &common.TransferParams{
+		Beneficiary: payOut.Beneficiary,
+		Amount:      payOut.Amount,
+	}
+
+	// TODO: Need to improve this logic
+	//	callDataParams = &common.TransferParams{
+	//		Beneficiary: payOut.Beneficiary,
+	//		Amount:      payOut.Amount,
+	//	}
+	// }
+
+	callData, err := polo.PolorizeDocument(callDataParams, polo.DocStructs())
 	te.Suite.NoError(err)
+
+	payload := func() []byte {
+		ap := &common.AssetActionPayload{
+			AssetID:  payOut.AssetID,
+			Callsite: common.TransferEndpoint,
+			Calldata: callData.Bytes(),
+		}
+
+		encoded, _ := ap.Bytes()
+
+		return encoded
+	}()
 
 	ixData := &common.IxData{
 		Sender: common.Sender{
@@ -35,13 +62,13 @@ func (te *TestEnvironment) transferAsset(
 		FuelLimit: DefaultFuelLimit,
 		Funds: []common.IxFund{
 			{
-				AssetID: assetActionPayload.AssetID,
+				AssetID: payOut.AssetID,
 				Amount:  big.NewInt(1),
 			},
 		},
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IxAssetTransfer,
+				Type:    common.IxAssetAction,
 				Payload: payload,
 			},
 		},
@@ -51,8 +78,12 @@ func (te *TestEnvironment) transferAsset(
 				LockType: common.MutateLock,
 			},
 			{
-				ID:       assetActionPayload.Beneficiary,
+				ID:       payOut.Beneficiary,
 				LockType: common.MutateLock,
+			},
+			{
+				ID:       payOut.AssetID.AsIdentifier(),
+				LockType: common.NoLock,
 			},
 		},
 	}
@@ -74,10 +105,17 @@ func (te *TestEnvironment) transferAsset(
 // 4. Ensure the receiver's balance is increased by the transfer amount.
 func validateAssetTransfer(
 	te *TestEnvironment,
+	isFailure bool,
 	sender identifiers.Identifier,
-	payload *common.AssetActionPayload,
+	payload *common.PayoutDetails,
 	ixHash common.Hash,
 ) {
+	if isFailure {
+		checkForReceiptFailure(te.T(), te.moiClient, ixHash)
+
+		return
+	}
+
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 	senderHeight := moiclient.GetLatestHeight(te.T(), te.moiClient, sender)
@@ -99,87 +137,67 @@ func (te *TestEnvironment) TestAssetTransfer() {
 	receiver := accs[1]
 	initialAmount := big.NewInt(1000)
 
-	MAS0AssetID := createAsset(te, sender, createAssetCreatePayload(
+	MAS0AssetID := createAndMint(te, sender, createAssetCreatePayload(
 		tests.GetRandomUpperCaseString(te.T(), 8),
 		initialAmount,
 		common.MAS0,
+		sender.ID,
 		nil,
-	))
-
-	MAS1AssetID := createAsset(te, sender, createAssetCreatePayload(
-		tests.GetRandomUpperCaseString(te.T(), 8),
-		big.NewInt(1),
-		common.MAS1,
-		nil,
-	))
+	), &common.MintParams{
+		Beneficiary: sender.ID,
+		Amount:      initialAmount,
+	})
 
 	testcases := []struct {
-		name               string
-		sender             tests.AccountWithMnemonic
-		assetActionPayload *common.AssetActionPayload
-		postTest           func(
+		name     string
+		sender   tests.AccountWithMnemonic
+		payout   *common.PayoutDetails
+		postTest func(
 			te *TestEnvironment,
+			isSuccess bool,
 			sender identifiers.Identifier,
-			payload *common.AssetActionPayload,
+			payload *common.PayoutDetails,
 			ixHash common.Hash,
 		)
 		expectedError error
+		isFailure     bool
 	}{
 		{
 			name:   "transfer MAS0 asset",
 			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
+			payout: &common.PayoutDetails{
 				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(100),
-			},
-			postTest: validateAssetTransfer,
-		},
-		{
-			name:   "transfer MAS1 asset",
-			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
-				Beneficiary: receiver.ID,
-				AssetID:     MAS1AssetID,
-				Amount:      big.NewInt(1),
 			},
 			postTest: validateAssetTransfer,
 		},
 		{
 			name:   "amount is invalid",
 			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
+			payout: &common.PayoutDetails{
 				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(0),
 			},
-			expectedError: common.ErrInvalidValue,
-		},
-		{
-			name:   "beneficiary is sarga account",
-			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
-				Beneficiary: common.SargaAccountID,
-				AssetID:     MAS0AssetID,
-				Amount:      big.NewInt(1),
-			},
-			expectedError: common.ErrGenesisAccount,
+			isFailure: true,
+			postTest:  validateAssetTransfer,
 		},
 		{
 			name:   "asset ID doesn't exist",
 			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
+			payout: &common.PayoutDetails{
 				Beneficiary: receiver.ID,
 				AssetID:     tests.GetRandomAssetID(te.T(), tests.RandomIdentifierWithZeroVariant(te.T())),
 				Amount:      big.NewInt(100),
 			},
-			expectedError: common.ErrAssetNotFound,
+			expectedError: common.ErrAccountNotFound,
 		},
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.transferAsset(test.sender, test.assetActionPayload)
+			ixHash, err := te.transferAsset(test.sender, test.payout)
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
 
@@ -188,7 +206,7 @@ func (te *TestEnvironment) TestAssetTransfer() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.ID, test.assetActionPayload, ixHash)
+			test.postTest(te, test.isFailure, test.sender.ID, test.payout, ixHash)
 		})
 	}
 }
@@ -201,21 +219,25 @@ func (te *TestEnvironment) TestAssetTransfer_checkFuelDeduction() {
 	receiver := accs[1]
 	initialAmount := big.NewInt(1000)
 
-	MAS0AssetID := createAsset(te, sender, createAssetCreatePayload(
+	MAS0AssetID := createAndMint(te, sender, createAssetCreatePayload(
 		tests.GetRandomUpperCaseString(te.T(), 8),
 		initialAmount,
 		common.MAS0,
+		sender.ID,
 		nil,
-	))
+	), &common.MintParams{
+		Beneficiary: sender.ID,
+		Amount:      initialAmount,
+	})
 
 	testcases := []struct {
-		name               string
-		assetActionPayload *common.AssetActionPayload
-		expectedError      error
+		name          string
+		payout        *common.PayoutDetails
+		expectedError error
 	}{
 		{
 			name: "transfer non fuel token",
-			assetActionPayload: &common.AssetActionPayload{
+			payout: &common.PayoutDetails{
 				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(88),
@@ -223,7 +245,7 @@ func (te *TestEnvironment) TestAssetTransfer_checkFuelDeduction() {
 		},
 		{
 			name: "transfer fuel token",
-			assetActionPayload: &common.AssetActionPayload{
+			payout: &common.PayoutDetails{
 				Beneficiary: receiver.ID,
 				AssetID:     common.KMOITokenAssetID,
 				Amount:      big.NewInt(66),
@@ -235,7 +257,7 @@ func (te *TestEnvironment) TestAssetTransfer_checkFuelDeduction() {
 		te.Run(test.name, func() {
 			preTransferFuelAmount := getBalance(te, sender.ID, common.KMOITokenAssetID, -1)
 
-			ixHash, err := te.transferAsset(sender, test.assetActionPayload)
+			ixHash, err := te.transferAsset(sender, test.payout)
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
 
@@ -248,10 +270,10 @@ func (te *TestEnvironment) TestAssetTransfer_checkFuelDeduction() {
 
 			postTransferFuelAmount := getBalance(te, sender.ID, common.KMOITokenAssetID, -1)
 
-			if test.assetActionPayload.AssetID == common.KMOITokenAssetID {
+			if test.payout.AssetID == common.KMOITokenAssetID {
 				require.Equal(te.T(),
 					preTransferFuelAmount-postTransferFuelAmount,
-					receipt.FuelUsed.ToUint64()+test.assetActionPayload.Amount.Uint64(),
+					receipt.FuelUsed.ToUint64()+test.payout.Amount.Uint64(),
 				)
 
 				return

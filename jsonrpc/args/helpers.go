@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/sarvalabs/go-moi/common/hexutil"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/sarvalabs/go-moi/common/tests"
 
@@ -118,13 +119,32 @@ func CheckForRPCIxn(
 
 		switch op.Type {
 		case common.IxParticipantCreate:
-			participantCreatePayload := new(common.ParticipantCreatePayload)
-			err := participantCreatePayload.FromBytes(op.Payload)
+			pc := new(common.ParticipantCreatePayload)
+			err := pc.FromBytes(op.Payload)
 			require.NoError(t, err)
 
 			rpcAssetActionPayload := RPCParticipantCreate{
-				ID:     participantCreatePayload.ID,
-				Amount: (*hexutil.Big)(participantCreatePayload.Amount),
+				ID: pc.ID,
+				Value: func() *RPCAssetAction {
+					if pc.Value == nil {
+						return nil
+					}
+
+					var funds map[identifiers.AssetID]*hexutil.Big
+					if pc.Value.Funds != nil {
+						funds = make(map[identifiers.AssetID]*hexutil.Big)
+						for assetID, amount := range pc.Value.Funds {
+							funds[assetID] = (*hexutil.Big)(amount)
+						}
+					}
+
+					return &RPCAssetAction{
+						AssetID:  pc.Value.AssetID,
+						Callsite: pc.Value.Callsite,
+						Calldata: pc.Value.Calldata,
+						Funds:    funds,
+					}
+				}(),
 			}
 
 			expectedPayload, err := json.Marshal(rpcAssetActionPayload)
@@ -132,40 +152,56 @@ func CheckForRPCIxn(
 
 			require.Equal(t, expectedPayload, []byte(rpcIxn.IxOps[idx].Payload))
 
-		case common.IxAssetTransfer:
-			assetCreationPayload := new(common.AssetActionPayload)
-			err := assetCreationPayload.FromBytes(op.Payload)
+		case common.IxAssetAction:
+			ax := new(common.AssetActionPayload)
+			err := ax.FromBytes(op.Payload)
 			require.NoError(t, err)
 
-			rpcAssetActionPayload := RPCAssetAction{
-				Beneficiary: assetCreationPayload.Beneficiary,
-				AssetID:     assetCreationPayload.AssetID,
-				Amount:      (*hexutil.Big)(assetCreationPayload.Amount),
-				Timestamp:   (*hexutil.Uint64)(&assetCreationPayload.Timestamp),
+			var funds map[identifiers.AssetID]*hexutil.Big
+			if ax.Funds != nil {
+				funds = make(map[identifiers.AssetID]*hexutil.Big)
+				for assetID, amount := range ax.Funds {
+					funds[assetID] = (*hexutil.Big)(amount)
+				}
 			}
 
-			expectedPayload, err := json.Marshal(rpcAssetActionPayload)
+			res := &RPCAssetAction{
+				AssetID:  ax.AssetID,
+				Callsite: ax.Callsite,
+				Calldata: ax.Calldata,
+				Funds:    funds,
+			}
+
+			expectedPayload, err := json.Marshal(res)
 			require.NoError(t, err)
 
 			require.Equal(t, expectedPayload, []byte(rpcIxn.IxOps[idx].Payload))
 
 		case common.IxAssetCreate:
-			assetCreationPayload := new(common.AssetCreatePayload)
-			err := assetCreationPayload.FromBytes(op.Payload)
+			ac := new(common.AssetCreatePayload)
+			err := ac.FromBytes(op.Payload)
 			require.NoError(t, err)
 
-			rpcAssetCreationPayload := RPCAssetCreation{
-				Symbol:     assetCreationPayload.Symbol,
-				Supply:     (*hexutil.Big)(assetCreationPayload.Supply),
-				Dimension:  (*hexutil.Uint8)(&assetCreationPayload.Dimension),
-				Standard:   (*hexutil.Uint16)(&assetCreationPayload.Standard),
-				IsLogical:  assetCreationPayload.IsLogical,
-				IsStateful: assetCreationPayload.IsStateFul,
-
-				Logic: RPCLogicPayloadFromLogicPayload(assetCreationPayload.LogicPayload),
+			res := &RPCAssetCreation{
+				Symbol:       ac.Symbol,
+				Dimension:    hexutil.Uint8(ac.Dimension),
+				Decimals:     hexutil.Uint8(ac.Decimals),
+				Standard:     hexutil.Uint16(ac.Standard),
+				EnableEvents: ac.EnableEvents,
+				Manager:      ac.Manager,
+				MaxSupply:    (*hexutil.Big)(ac.MaxSupply),
+				Logic:        RPCLogicPayloadFromLogicPayload(ac.Logic),
 			}
 
-			expectedPayload, err := json.Marshal(rpcAssetCreationPayload)
+			if len(ac.MetaData) > 0 {
+				res.Metadata = make(map[string]hexutil.Bytes, len(ac.MetaData))
+			}
+
+			for k, v := range ac.MetaData {
+				res.Metadata[k] = v
+			}
+
+			expectedPayload, err := json.Marshal(res)
 			require.NoError(t, err)
 
 			require.Equal(t, expectedPayload, []byte(rpcIxn.IxOps[idx].Payload))
@@ -178,7 +214,7 @@ func CheckForRPCIxn(
 
 			rpcLogicPayload := &RPCLogicPayload{
 				Manifest: (hexutil.Bytes)(logicPayload.Manifest),
-				LogicID:  logicPayload.Logic.String(),
+				LogicID:  logicPayload.LogicID.String(),
 				Callsite: logicPayload.Callsite,
 				Calldata: (hexutil.Bytes)(logicPayload.Calldata),
 			}
@@ -284,7 +320,7 @@ func CheckForRPCReceipt(
 	}
 }
 
-func CreateInteractionWithTestData(t *testing.T, ixType common.IxOpType, payload []byte) *common.Interaction {
+func CreateInteractionWithTestData(t *testing.T, ixType common.IxOpType, payload any) *common.Interaction {
 	t.Helper()
 
 	ixData := common.IxData{
@@ -295,15 +331,12 @@ func CreateInteractionWithTestData(t *testing.T, ixType common.IxOpType, payload
 		Payer:     tests.RandomIdentifier(t),
 		FuelLimit: 1043,
 		FuelPrice: new(big.Int).SetUint64(1),
-		IxOps: []common.IxOpRaw{
-			{
-				Type:    ixType,
-				Payload: payload,
-			},
-		},
+		IxOps:     []common.IxOpRaw{},
 	}
 
-	tests.AppendParticipantsInIxData(t, &ixData)
+	tests.AddIxOp(t, &ixData, ixType, common.KMOITokenAssetID, payload)
+
+	tests.AppendDefaultParticipants(t, &ixData)
 
 	ix, err := common.NewInteraction(ixData, common.Signatures{
 		{

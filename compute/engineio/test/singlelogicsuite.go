@@ -15,7 +15,7 @@ import (
 )
 
 type Logic struct {
-	LogicID  identifiers.LogicID
+	LogicID  identifiers.Identifier
 	Manifest engineio.Manifest
 	Actors   []identifiers.Identifier
 }
@@ -42,13 +42,14 @@ type (
 
 func (suite *SingleLogicSuite) Initialise(
 	kind engineio.EngineKind,
+	as engineio.AssetEngine,
 	manifest engineio.Manifest,
 	actors ...identifiers.Identifier,
 ) (*engineio.FuelGauge, error) {
 	suite.ti = suite.T()
 
-	return suite.initialise(kind, Logic{
-		LogicID:  identifiers.RandomLogicIDv0(),
+	return suite.initialise(kind, as, Logic{
+		LogicID:  identifiers.RandomLogicIDv0().AsIdentifier(),
 		Manifest: manifest,
 		Actors:   actors,
 	})

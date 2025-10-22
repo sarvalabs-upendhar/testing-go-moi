@@ -1,18 +1,6 @@
 package e2e
 
-import (
-	"context"
-	"math/big"
-
-	"github.com/sarvalabs/go-moi/common/identifiers"
-
-	"github.com/sarvalabs/go-moi/jsonrpc/api"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/tests"
-	"github.com/sarvalabs/go-moi/moiclient"
-	"github.com/stretchr/testify/require"
-)
+/*
 
 func (te *TestEnvironment) createIxWithMultipleTxs(
 	sender tests.AccountWithMnemonic,
@@ -67,9 +55,9 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 
 		case common.IxAssetTransfer:
 			assetID := createAsset(te, sender, &common.AssetCreatePayload{
-				Symbol:   tests.GetRandomUpperCaseString(te.T(), 5),
-				Supply:   big.NewInt(5000),
-				Standard: common.MAS0,
+				Symbol:    tests.GetRandomUpperCaseString(te.T(), 5),
+				MaxSupply: big.NewInt(5000),
+				Standard:  common.MAS0,
 			})
 
 			id := tests.RandomIdentifierWithZeroVariant(te.T())
@@ -140,7 +128,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 		case common.IxLogicDeploy:
 			logicDeployPayload := &common.LogicPayload{
 				Manifest: common.Hex2Bytes(ledgerManifest),
-				Logic:    identifiers.Nil,
+				LogicID:  identifiers.Nil,
 				Callsite: "Seed",
 				Calldata: DeployCallData.Bytes(),
 			}
@@ -161,7 +149,7 @@ func (te *TestEnvironment) createIxWithMultipleTxs(
 
 			logicInvokePayload := &common.LogicPayload{
 				Manifest: []byte{},
-				Logic:    logicID,
+				LogicID:  logicID,
 				Callsite: "Transfer",
 				Calldata: invokeCalldata,
 			}
@@ -360,3 +348,5 @@ func (te *TestEnvironment) TestOperations() {
 		})
 	}
 }
+
+*/

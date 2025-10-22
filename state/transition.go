@@ -1,10 +1,12 @@
 package state
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 )
 
 type ObjectRef interface {
@@ -88,16 +90,48 @@ func (t *Transition) Receipts() common.Receipts {
 	return t.receipts
 }
 
-func (t *Transition) GetObject(id identifiers.Identifier) *Object {
+func (t *Transition) GetObject(id identifiers.Identifier) (*Object, error) {
+	obj, ok := t.objects[id]
+	if !ok {
+		return nil, fmt.Errorf("object not found for %s", id.String())
+	}
+
+	return obj, nil
+}
+
+func (t *Transition) MustGetObject(id identifiers.Identifier) *Object {
 	return t.objects[id]
+}
+
+func (t *Transition) GetLogicObject(logicID identifiers.Identifier) (*LogicObject, error) {
+	obj, err := t.GetObject(logicID)
+	if err != nil {
+		return nil, err
+	}
+
+	return obj.FetchLogicObject(logicID)
+}
+
+func (t *Transition) GetLogicStorageObject(logicID identifiers.Identifier) (engineio.Storage, error) {
+	obj, err := t.GetObject(logicID)
+	if err != nil {
+		return nil, err
+	}
+
+	return obj.FetchLogicStorageObject(), nil
 }
 
 func (t *Transition) GetSystemObject() *SystemObject {
 	return t.systemObject
 }
 
-func (t *Transition) GetAuxiliaryObject(id identifiers.Identifier) *Object {
-	return t.auxiliaryObjects[id]
+func (t *Transition) GetAuxiliaryObject(id identifiers.Identifier) (*Object, error) {
+	obj, ok := t.auxiliaryObjects[id]
+	if !ok {
+		return nil, fmt.Errorf("object not found for %s", id.String())
+	}
+
+	return obj, nil
 }
 
 func (t *Transition) IncrementSequenceID(id identifiers.Identifier, keyID uint64) {
@@ -115,7 +149,11 @@ func (t *Transition) Flush(id identifiers.Identifier) error {
 func (t *Transition) Commit() (common.AccountStateHashes, error) {
 	commitHashes := make(common.AccountStateHashes, len(t.objects))
 
-	for _, stateObject := range t.objects {
+	for addr, stateObject := range t.objects {
+		if addr == identifiers.Nil {
+			continue
+		}
+
 		stateHash, err := stateObject.Commit()
 		if err != nil {
 			return nil, err
@@ -187,7 +225,9 @@ func (t *Transition) GetConsensusNodes(id identifiers.Identifier) []identifiers.
 		return t.systemObject.ConsensusNodes()
 	}
 
-	return t.GetObject(id).ConsensusNodes()
+	obj, _ := t.GetObject(id)
+
+	return obj.ConsensusNodes()
 }
 
 func (t *Transition) ConsensusNodesHash(id identifiers.Identifier) common.Hash {

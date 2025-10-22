@@ -93,8 +93,8 @@ func TestPublicCoreAPI_SendInteraction(t *testing.T) {
 				FuelLimit: 1,
 				IxOps: []common.IxOpRaw{
 					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+						Type:    common.IxAssetCreate,
+						Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 					},
 				},
 			},
@@ -229,8 +229,8 @@ func TestPublicCoreAPI_ValidateArgumentsWithSign(t *testing.T) {
 		FuelLimit: 23,
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IxAssetTransfer,
-				Payload: tests.CreateRawAssetActionPayload(t, common.SargaAccountID),
+				Type:    common.IxAssetAction,
+				Payload: tests.CreateRawAssetTransferPayload(t, common.SargaAccountID),
 			},
 		},
 	}
@@ -310,8 +310,8 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 				FuelLimit: 23,
 				IxOps: []common.IxOpRaw{
 					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+						Type:    common.IxAssetAction,
+						Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 					},
 				},
 			},
@@ -328,8 +328,8 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 				FuelLimit: 23,
 				IxOps: []common.IxOpRaw{
 					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, common.SargaAccountID),
+						Type:    common.IxAssetAction,
+						Payload: tests.CreateRawAssetTransferPayload(t, common.SargaAccountID),
 					},
 				},
 			},
@@ -356,8 +356,8 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 				},
 				IxOps: []common.IxOpRaw{
 					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+						Type:    common.IxAssetAction,
+						Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 					},
 					{
 						Type:    common.IxAssetCreate,
@@ -376,8 +376,8 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 				},
 				IxOps: []common.IxOpRaw{
 					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+						Type:    common.IxAssetAction,
+						Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 					},
 					{
 						Type:    common.IxAssetCreate,
@@ -397,8 +397,8 @@ func TestPublicCoreAPI_ValidateIxData(t *testing.T) {
 				FuelLimit: 23,
 				IxOps: []common.IxOpRaw{
 					{
-						Type:    common.IxAssetTransfer,
-						Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+						Type:    common.IxAssetAction,
+						Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 					},
 					{
 						Type:    common.IxAssetCreate,
@@ -485,16 +485,16 @@ func TestPublicCoreAPI_ValidateIxOps(t *testing.T) {
 					Payload: tests.CreateRawAssetCreatePayload(t),
 				},
 				{
-					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+					Type:    common.IxAssetAction,
+					Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 				},
 				{
-					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+					Type:    common.IxAssetAction,
+					Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 				},
 				{
-					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+					Type:    common.IxAssetAction,
+					Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 				},
 			},
 			expectedErr: ErrTooManyIxOps,
@@ -531,8 +531,8 @@ func TestPublicCoreAPI_ValidateIxOps(t *testing.T) {
 			name: "valid ix operations",
 			txs: []common.IxOpRaw{
 				{
-					Type:    common.IxAssetTransfer,
-					Payload: tests.CreateRawAssetActionPayload(t, tests.RandomIdentifier(t)),
+					Type:    common.IxAssetAction,
+					Payload: tests.CreateRawAssetTransferPayload(t, tests.RandomIdentifier(t)),
 				},
 				{
 					Type:    common.IxAssetCreate,

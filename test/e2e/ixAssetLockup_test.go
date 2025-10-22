@@ -13,17 +13,25 @@ import (
 	"github.com/sarvalabs/go-moi/moiclient"
 )
 
-//nolint:dupl
+//nolint:dup
 func (te *TestEnvironment) lockupAsset(
 	sender tests.AccountWithMnemonic,
-	assetActionPayload *common.AssetActionPayload,
+	payOut *common.PayoutDetails,
 ) (common.Hash, error) {
 	te.logger.Debug("lockup asset ", "sender", sender.ID,
-		"beneficiary", assetActionPayload.Beneficiary, "asset id", assetActionPayload.AssetID,
-		"amount", assetActionPayload.Amount,
+		"beneficiary", payOut.Beneficiary, "asset id", payOut.AssetID,
+		"amount", payOut.Amount,
 	)
 
-	payload, err := assetActionPayload.Bytes()
+	params := &common.LockupParams{
+		Beneficiary: payOut.Beneficiary,
+		Amount:      payOut.Amount,
+	}
+
+	action, err := common.GetAssetActionPayload(payOut.AssetID, common.LockupEndpoint, params)
+	te.Suite.NoError(err)
+
+	payload, err := action.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
@@ -33,15 +41,9 @@ func (te *TestEnvironment) lockupAsset(
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Funds: []common.IxFund{
-			{
-				AssetID: assetActionPayload.AssetID,
-				Amount:  big.NewInt(1),
-			},
-		},
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IxAssetLockup,
+				Type:    common.IxAssetAction,
 				Payload: payload,
 			},
 		},
@@ -51,12 +53,16 @@ func (te *TestEnvironment) lockupAsset(
 				LockType: common.MutateLock,
 			},
 			{
-				ID:       assetActionPayload.Beneficiary,
+				ID:       payOut.AssetID.AsIdentifier(),
+				LockType: common.NoLock,
+			},
+			{
+				ID:       payOut.Beneficiary,
 				LockType: common.MutateLock,
 			},
 			{
 				ID:       common.SargaAccountID,
-				LockType: common.ReadLock,
+				LockType: common.NoLock,
 			},
 		},
 	}
@@ -79,17 +85,24 @@ func (te *TestEnvironment) lockupAsset(
 func validateAssetLockup(
 	te *TestEnvironment,
 	sender identifiers.Identifier,
-	payload *common.AssetActionPayload,
+	params *common.PayoutDetails,
 	ixHash common.Hash,
+	isSuccess bool,
 ) {
+	if !isSuccess {
+		checkForReceiptFailure(te.T(), te.moiClient, ixHash)
+
+		return
+	}
+
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 	lockups := moiclient.GetLockups(te.T(), te.moiClient, sender, -1)
 
 	for _, lockup := range lockups {
-		if lockup.AssetID == payload.AssetID.String() &&
-			lockup.ID == payload.Beneficiary &&
-			lockup.Amount.ToInt().Cmp(payload.Amount) == 0 {
+		if lockup.AssetID == params.AssetID &&
+			lockup.ID == params.Beneficiary &&
+			lockup.Amount.ToInt().Cmp(params.Amount) == 0 {
 			return
 		}
 	}
@@ -105,60 +118,59 @@ func (te *TestEnvironment) TestAssetLockup() {
 	receiver := accs[1]
 	initialAmount := big.NewInt(1000)
 
-	MAS0AssetID := createAsset(te, sender, createAssetCreatePayload(
+	MAS0AssetID := createAndMint(te, sender, createAssetCreatePayload(
 		tests.GetRandomUpperCaseString(te.T(), 8),
 		initialAmount,
 		common.MAS0,
+		sender.ID,
 		nil,
-	))
+	), &common.MintParams{
+		Beneficiary: sender.ID,
+		Amount:      initialAmount,
+	})
 
 	testcases := []struct {
-		name               string
-		sender             tests.AccountWithMnemonic
-		assetActionPayload *common.AssetActionPayload
-		postTest           func(
+		name     string
+		sender   tests.AccountWithMnemonic
+		payOut   *common.PayoutDetails
+		postTest func(
 			te *TestEnvironment,
 			sender identifiers.Identifier,
-			payload *common.AssetActionPayload,
+			params *common.PayoutDetails,
 			ixHash common.Hash,
+			isSuccess bool,
 		)
+		isSuccess     bool
 		expectedError error
 	}{
 		{
 			name:   "lockup MAS0 asset",
 			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
+			payOut: &common.PayoutDetails{
 				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
 				Amount:      big.NewInt(100),
 			},
-			postTest: validateAssetLockup,
+			isSuccess: true,
+			postTest:  validateAssetLockup,
 		},
 		{
 			name:   "amount is invalid",
 			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
+			payOut: &common.PayoutDetails{
 				Beneficiary: receiver.ID,
 				AssetID:     MAS0AssetID,
-				Amount:      big.NewInt(-50),
+				Amount:      big.NewInt(0),
 			},
-			expectedError: common.ErrInvalidValue,
+			isSuccess: false,
+			postTest:  validateAssetLockup,
 		},
-		{
-			name:   "beneficiary is sarga account",
-			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
-				Beneficiary: common.SargaAccountID,
-				AssetID:     MAS0AssetID,
-				Amount:      big.NewInt(1),
-			},
-			expectedError: common.ErrGenesisAccount,
-		},
+		// TODO: Add more tests here
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.lockupAsset(test.sender, test.assetActionPayload)
+			ixHash, err := te.lockupAsset(test.sender, test.payOut)
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
 
@@ -167,7 +179,7 @@ func (te *TestEnvironment) TestAssetLockup() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.ID, test.assetActionPayload, ixHash)
+			test.postTest(te, test.sender.ID, test.payOut, ixHash, test.isSuccess)
 		})
 	}
 }

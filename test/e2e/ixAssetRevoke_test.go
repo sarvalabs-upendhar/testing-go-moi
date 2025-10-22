@@ -16,13 +16,17 @@ import (
 
 func (te *TestEnvironment) revokeAsset(
 	sender tests.AccountWithMnemonic,
-	assetActionPayload *common.AssetActionPayload,
+	assetID identifiers.AssetID,
+	params *common.RevokeParams,
 ) (common.Hash, error) {
 	te.logger.Debug("revoke asset ", "sender", sender.ID,
-		"beneficiary", assetActionPayload.Beneficiary, "asset id", assetActionPayload.AssetID,
+		"beneficiary", params.Beneficiary, "asset id", assetID,
 	)
 
-	payload, err := assetActionPayload.Bytes()
+	action, err := common.GetAssetActionPayload(assetID, common.RevokeEndpoint, params)
+	te.Suite.Nil(err)
+
+	payload, err := action.Bytes()
 	te.Suite.NoError(err)
 
 	ixData := &common.IxData{
@@ -32,15 +36,9 @@ func (te *TestEnvironment) revokeAsset(
 		},
 		FuelPrice: DefaultFuelPrice,
 		FuelLimit: DefaultFuelLimit,
-		Funds: []common.IxFund{
-			{
-				AssetID: assetActionPayload.AssetID,
-				Amount:  big.NewInt(1),
-			},
-		},
 		IxOps: []common.IxOpRaw{
 			{
-				Type:    common.IxAssetRevoke,
+				Type:    common.IxAssetAction,
 				Payload: payload,
 			},
 		},
@@ -50,8 +48,12 @@ func (te *TestEnvironment) revokeAsset(
 				LockType: common.MutateLock,
 			},
 			{
-				ID:       assetActionPayload.Beneficiary,
+				ID:       params.Beneficiary,
 				LockType: common.MutateLock,
+			},
+			{
+				ID:       assetID.AsIdentifier(),
+				LockType: common.NoLock,
 			},
 		},
 	}
@@ -73,9 +75,16 @@ func (te *TestEnvironment) revokeAsset(
 func validateAssetRevoke(
 	te *TestEnvironment,
 	sender identifiers.Identifier,
-	payload *common.AssetActionPayload,
+	assetID identifiers.AssetID,
+	params *common.RevokeParams,
 	ixHash common.Hash,
+	isSuccess bool,
 ) {
+	if !isSuccess {
+		checkForReceiptFailure(te.T(), te.moiClient, ixHash)
+
+		return
+	}
 	// Verify the receipt was generated successfully for the interaction hash.
 	checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
@@ -84,8 +93,8 @@ func validateAssetRevoke(
 
 	// Verify that the revoked mandate does not exist in the mandates list.
 	for _, mandate := range mandates {
-		if mandate.AssetID == payload.AssetID.String() &&
-			mandate.ID == payload.Beneficiary {
+		if mandate.AssetID == assetID &&
+			mandate.ID == params.Beneficiary {
 			te.T().Fatalf("Expected mandate to be revoked, but it still exists")
 		}
 	}
@@ -99,64 +108,64 @@ func (te *TestEnvironment) TestAssetRevoke() {
 	receiver := accs[1]
 	initialAmount := big.NewInt(1000)
 
-	MAS0AssetID := createAsset(te, sender, createAssetCreatePayload(
+	MAS0AssetID := createAndMint(te, sender, createAssetCreatePayload(
 		tests.GetRandomUpperCaseString(te.T(), 8),
 		initialAmount,
 		common.MAS0,
+		sender.ID,
 		nil,
-	))
+	), &common.MintParams{
+		Beneficiary: sender.ID,
+		Amount:      initialAmount,
+	})
 
-	approveAsset(te, sender, &common.AssetActionPayload{
+	approveAsset(te, sender, MAS0AssetID, &common.ApproveParams{
 		Beneficiary: receiver.ID,
-		AssetID:     MAS0AssetID,
 		Amount:      big.NewInt(100),
-		Timestamp:   uint64(time.Now().Add(1 * time.Hour).Unix()),
+		ExpiresAt:   uint64(time.Now().Add(1 * time.Hour).Unix()),
 	})
 
 	testcases := []struct {
-		name               string
-		sender             tests.AccountWithMnemonic
-		assetActionPayload *common.AssetActionPayload
-		postTest           func(
+		name     string
+		sender   tests.AccountWithMnemonic
+		assetID  identifiers.AssetID
+		params   *common.RevokeParams
+		postTest func(
 			te *TestEnvironment,
 			sender identifiers.Identifier,
-			payload *common.AssetActionPayload,
+			assetID identifiers.AssetID,
+			params *common.RevokeParams,
 			ixHash common.Hash,
+			isSuccess bool,
 		)
 		expectedError error
+		isSuccess     bool
 	}{
 		{
-			name:   "revoke MAS0 asset",
-			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
+			name:    "revoke MAS0 asset",
+			sender:  sender,
+			assetID: MAS0AssetID,
+			params: &common.RevokeParams{
 				Beneficiary: receiver.ID,
-				AssetID:     MAS0AssetID,
 			},
-			postTest: validateAssetRevoke,
+			postTest:  validateAssetRevoke,
+			isSuccess: true,
 		},
 		{
-			name:   "invalid ix participants",
-			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
+			name:    "invalid ix participants",
+			sender:  sender,
+			assetID: MAS0AssetID,
+			params: &common.RevokeParams{
 				Beneficiary: sender.ID,
-				AssetID:     MAS0AssetID,
 			},
-			expectedError: common.ErrInvalidBeneficiary,
-		},
-		{
-			name:   "beneficiary is sarga account",
-			sender: sender,
-			assetActionPayload: &common.AssetActionPayload{
-				Beneficiary: common.SargaAccountID,
-				AssetID:     MAS0AssetID,
-			},
-			expectedError: common.ErrGenesisAccount,
+			postTest:  validateAssetRevoke,
+			isSuccess: false,
 		},
 	}
 
 	for _, test := range testcases {
 		te.Run(test.name, func() {
-			ixHash, err := te.revokeAsset(test.sender, test.assetActionPayload)
+			ixHash, err := te.revokeAsset(test.sender, test.assetID, test.params)
 			if test.expectedError != nil {
 				require.ErrorContains(te.T(), err, test.expectedError.Error())
 
@@ -165,7 +174,7 @@ func (te *TestEnvironment) TestAssetRevoke() {
 
 			require.NoError(te.T(), err)
 
-			test.postTest(te, test.sender.ID, test.assetActionPayload, ixHash)
+			test.postTest(te, test.sender.ID, test.assetID, test.params, ixHash, test.isSuccess)
 		})
 	}
 }

@@ -1,6 +1,7 @@
 package common
 
 import (
+	"math"
 	"math/big"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
@@ -9,39 +10,70 @@ import (
 	"github.com/sarvalabs/go-polo"
 )
 
-type AssetMap map[identifiers.AssetID]*big.Int
+const (
+	DefaultTokenID TokenID = 0
+)
+
+type TokenID uint64
+
+type AmountWithExpiry struct {
+	Amount    *big.Int
+	ExpiresAt uint64
+}
+type AssetMap map[identifiers.AssetID]map[TokenID]*big.Int
 
 func (assets AssetMap) Copy() AssetMap {
 	copied := make(AssetMap, len(assets))
-	for asset, amount := range assets {
-		copied[asset] = new(big.Int).SetBytes(amount.Bytes())
+	for asset, tokens := range assets {
+		copied[asset] = make(map[TokenID]*big.Int, len(tokens))
+
+		for tokenID, amount := range tokens {
+			copied[asset][tokenID] = new(big.Int).SetBytes(amount.Bytes())
+		}
 	}
 
 	return copied
 }
 
 type AssetDescriptor struct {
-	Symbol   string                 `json:"symbol"`
-	Operator identifiers.Identifier `json:"operator"`
-	Supply   *big.Int               `json:"supply"`
+	AssetID           identifiers.AssetID    `json:"asset_id"`
+	Symbol            string                 `json:"symbol"`
+	Decimals          uint8                  `json:"decimals"`
+	Dimension         uint8                  `json:"dimension"`
+	Creator           identifiers.Identifier `json:"creator"`
+	Manager           identifiers.Identifier `json:"manager"`
+	MaxSupply         *big.Int               `json:"max_supply"`
+	CirculatingSupply *big.Int               `json:"circulating_supply"`
+	EnableEvents      bool                   `json:"enable_events"`
+	Metadata          map[string][]byte      `json:"metadata"`
 
-	Dimension  uint8         `json:"dimension"`
-	Standard   AssetStandard `json:"standard"`
-	IsLogical  bool          `json:"is_logical"`
-	IsStateFul bool          `json:"is_stateful"`
-
-	LogicID identifiers.Identifier `json:"logic_id"`
+	LogicID identifiers.LogicID `json:"logic_id"`
 }
 
-func NewAssetDescriptor(operator identifiers.Identifier, asset AssetCreatePayload) *AssetDescriptor {
+func NewAssetDescriptor(
+	assetID identifiers.AssetID,
+	symbol string,
+	decimals uint8,
+	dimension uint8,
+	manager identifiers.Identifier,
+	creator identifiers.Identifier,
+	maxSupply *big.Int,
+	metadata map[string][]byte,
+	enableEvents bool,
+	logicID identifiers.LogicID,
+) *AssetDescriptor {
 	return &AssetDescriptor{
-		Operator:   operator,
-		Symbol:     asset.Symbol,
-		Supply:     asset.Supply,
-		Dimension:  asset.Dimension,
-		Standard:   asset.Standard,
-		IsStateFul: asset.IsStateFul,
-		IsLogical:  asset.IsLogical,
+		AssetID:           assetID,
+		Symbol:            symbol,
+		Decimals:          decimals,
+		Dimension:         dimension,
+		Creator:           creator,
+		Manager:           manager,
+		MaxSupply:         maxSupply,
+		CirculatingSupply: big.NewInt(0),
+		EnableEvents:      enableEvents,
+		Metadata:          metadata,
+		LogicID:           logicID,
 	}
 }
 
@@ -69,12 +101,8 @@ func (ad *AssetDescriptor) Flags() []identifiers.Flag {
 		flags = append(flags, identifiers.Systemic)
 	}
 
-	if ad.IsLogical {
+	if ad.LogicID != identifiers.Nil {
 		flags = append(flags, identifiers.AssetLogical)
-	}
-
-	if ad.IsStateFul {
-		flags = append(flags, identifiers.AssetStateful)
 	}
 
 	return flags
@@ -116,10 +144,18 @@ type AssetStandard uint16
 const (
 	MAS0 AssetStandard = iota
 	MAS1
+
+	MASX = math.MaxUint16
 )
+
+var ValidAssetStandards = map[AssetStandard]string{
+	MAS0: "MAS0",
+	MAS1: "MAS1",
+	MASX: "MASX",
+}
 
 type AssetMandateOrLockup struct {
 	AssetID identifiers.AssetID
 	ID      identifiers.Identifier
-	Amount  *big.Int
+	Amount  map[TokenID]*AmountWithExpiry
 }

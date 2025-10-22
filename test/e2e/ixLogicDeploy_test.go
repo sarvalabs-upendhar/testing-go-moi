@@ -119,8 +119,14 @@ func validateLogicDeploy(
 
 	logicID := moiclient.GetLogicID(te.T(), te.moiClient, txnID, sender, rpcargs.LatestTesseractHeight)
 
+	te.logger.Debug(
+		"Validating logic deploy",
+		"ixHash", ixHash,
+		"call site", payload.Callsite,
+		"logic ID", logicID)
+
 	actualManifest, err := te.moiClient.LogicManifest(context.Background(), &rpcargs.LogicManifestArgs{
-		LogicID:  logicID,
+		LogicID:  logicID.AsIdentifier(),
 		Encoding: "JSON",
 		Options: rpcargs.TesseractNumberOrHash{
 			TesseractNumber: &rpcargs.LatestTesseractHeight,

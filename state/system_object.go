@@ -231,12 +231,12 @@ func (so *SystemObject) Commit() (common.Hash, error) {
 	for field := range so.dirtyFields {
 		switch field {
 		case fieldTotalValidators:
-			err := so.SetStorageEntry(common.SystemLogicID, TotalValidatorsKey, Uint64ToBytes(so.totalValidators))
+			err := so.SetStorageEntry(common.SystemLogicID.AsIdentifier(), TotalValidatorsKey, Uint64ToBytes(so.totalValidators))
 			if err != nil {
 				return common.NilHash, err
 			}
 		case fieldGenesisTime:
-			err := so.SetStorageEntry(common.SystemLogicID, GenesisTimeKey, Int64ToBytes(so.genesisTime.Unix()))
+			err := so.SetStorageEntry(common.SystemLogicID.AsIdentifier(), GenesisTimeKey, Int64ToBytes(so.genesisTime.Unix()))
 			if err != nil {
 				return common.NilHash, err
 			}
@@ -251,7 +251,7 @@ func (so *SystemObject) Commit() (common.Hash, error) {
 					return common.NilHash, err
 				}
 
-				err = so.SetStorageEntry(common.SystemLogicID, ValidatorKey(index), data)
+				err = so.SetStorageEntry(common.SystemLogicID.AsIdentifier(), ValidatorKey(index), data)
 				if err != nil {
 					return common.NilHash, err
 				}
@@ -269,7 +269,7 @@ func (so *SystemObject) flush() error {
 }
 
 func (so *SystemObject) loadValidators() error {
-	rawBytes, err := so.GetStorageEntry(common.SystemLogicID, TotalValidatorsKey)
+	rawBytes, err := so.GetStorageEntry(common.SystemLogicID.AsIdentifier(), TotalValidatorsKey)
 	if err != nil {
 		return errors.Wrap(err, "failed to fetch total copyValidators key")
 	}
@@ -290,7 +290,7 @@ func (so *SystemObject) loadValidators() error {
 }
 
 func (so *SystemObject) loadGenesisTime() error {
-	rawBytes, err := so.GetStorageEntry(common.SystemLogicID, GenesisTimeKey)
+	rawBytes, err := so.GetStorageEntry(common.SystemLogicID.AsIdentifier(), GenesisTimeKey)
 	if err != nil {
 		return errors.Wrap(err, "failed to fetch genesis time key")
 	}
@@ -301,7 +301,7 @@ func (so *SystemObject) loadGenesisTime() error {
 }
 
 func (so *SystemObject) getValidatorByIndex(index uint64) (*common.Validator, error) {
-	rawVal, err := so.GetStorageEntry(common.SystemLogicID, ValidatorKey(index))
+	rawVal, err := so.GetStorageEntry(common.SystemLogicID.AsIdentifier(), ValidatorKey(index))
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to fetch validator %d", index)
 	}

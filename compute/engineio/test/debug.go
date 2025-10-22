@@ -8,6 +8,7 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common/identifiers"
+	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-polo"
 
 	"github.com/sarvalabs/go-moi/common"
@@ -169,6 +170,10 @@ func (txn debugTxnDriver) Parameters() map[string][]byte {
 	return nil
 }
 
+func (txn debugTxnDriver) Caller() [32]byte {
+	return txn.origin
+}
+
 func (txn debugTxnDriver) Type() common.IxOpType         { return txn.kind }
 func (txn debugTxnDriver) Hash() common.Hash             { return txn.hash }
 func (txn debugTxnDriver) FuelPrice() *big.Int           { return txn.price }
@@ -186,4 +191,23 @@ func (txn debugTxnDriver) Access(id [32]byte) (bool, error) {
 	}
 
 	return txn.access[id], nil
+}
+
+type debugTransition struct {
+	Entry map[identifiers.Identifier]*debugStateDriver
+}
+
+func newDebugTransition() *debugTransition {
+	return &debugTransition{
+		Entry: make(map[identifiers.Identifier]*debugStateDriver),
+	}
+}
+
+func (dt *debugTransition) GetLogicStorageObject(logicID identifiers.Identifier) (engineio.Storage, error) {
+	sd, ok := dt.Entry[logicID]
+	if !ok {
+		return nil, common.ErrObjectNotFound
+	}
+
+	return sd, nil
 }

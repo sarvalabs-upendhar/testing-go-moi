@@ -214,7 +214,7 @@ type MockStateManager struct {
 	logicManifests          map[string][]byte
 	logicStorage            map[string]map[string]string // first key denotes logic id, second key denotes storage key
 	accMetaInfo             map[identifiers.Identifier]*common.AccountMetaInfo
-	logicIDs                map[identifiers.Identifier][]identifiers.LogicID
+	logicIDs                map[identifiers.Identifier][]identifiers.Identifier
 	deeds                   map[identifiers.Identifier]map[identifiers.Identifier]*common.AssetDescriptor
 	mctxObject              map[common.Hash]*state.MetaContextObject
 	fetchIxStateObjectsHook func() error
@@ -255,7 +255,7 @@ func NewMockStateManager(t *testing.T) *MockStateManager {
 	mockState.logicManifests = make(map[string][]byte)
 	mockState.logicStorage = make(map[string]map[string]string)
 	mockState.accMetaInfo = make(map[identifiers.Identifier]*common.AccountMetaInfo)
-	mockState.logicIDs = make(map[identifiers.Identifier][]identifiers.LogicID)
+	mockState.logicIDs = make(map[identifiers.Identifier][]identifiers.Identifier)
 	mockState.deeds = make(map[identifiers.Identifier]map[identifiers.Identifier]*common.AssetDescriptor)
 	mockState.mctxObject = make(map[common.Hash]*state.MetaContextObject)
 
@@ -367,7 +367,7 @@ func (s *MockStateManager) addAsset(assetID identifiers.AssetID, descriptor *com
 	s.assetDeeds[assetID] = descriptor
 }
 
-func (s *MockStateManager) GetLogicManifest(logicID identifiers.LogicID, stateHash common.Hash) ([]byte, error) {
+func (s *MockStateManager) GetLogicManifest(logicID identifiers.Identifier, stateHash common.Hash) ([]byte, error) {
 	logicManifest, ok := s.logicManifests[hex.EncodeToString(logicID.Bytes())]
 	if !ok {
 		return logicManifest, errors.New("logic manifest not found")
@@ -379,7 +379,7 @@ func (s *MockStateManager) GetLogicManifest(logicID identifiers.LogicID, stateHa
 func (s *MockStateManager) setLogicIDs(
 	t *testing.T,
 	id identifiers.Identifier,
-	logicIDs []identifiers.LogicID,
+	logicIDs []identifiers.Identifier,
 ) {
 	t.Helper()
 
@@ -389,7 +389,7 @@ func (s *MockStateManager) setLogicIDs(
 func (s *MockStateManager) GetLogicIDs(
 	id identifiers.Identifier,
 	stateHash common.Hash,
-) ([]identifiers.LogicID, error) {
+) ([]identifiers.Identifier, error) {
 	logicIDs, ok := s.logicIDs[id]
 	if !ok {
 		return nil, errors.New("logic IDs not found")
@@ -417,18 +417,15 @@ func (s *MockStateManager) GetAccountMetaInfo(id identifiers.Identifier) (*commo
 	return accMetaInfo, nil
 }
 
-func (s *MockStateManager) setStorageEntry(t *testing.T, logicID identifiers.LogicID, storage map[string]string) {
+func (s *MockStateManager) setStorageEntry(t *testing.T, logicID identifiers.Identifier, storage map[string]string) {
 	t.Helper()
 
 	s.logicStorage[hex.EncodeToString(logicID.Bytes())] = storage
 }
 
 func (s *MockStateManager) GetPersistentStorageEntry(
-	logicID identifiers.LogicID,
-	key []byte, _ common.Hash,
-) (
-	[]byte, error,
-) {
+	logicID identifiers.Identifier, key []byte, _ common.Hash,
+) ([]byte, error) {
 	logicStorage, ok := s.logicStorage[hex.EncodeToString(logicID.Bytes())]
 	if !ok {
 		return nil, common.ErrLogicStorageTreeNotFound
@@ -444,7 +441,7 @@ func (s *MockStateManager) GetPersistentStorageEntry(
 
 func (s *MockStateManager) GetEphemeralStorageEntry(
 	id identifiers.Identifier,
-	logicID identifiers.LogicID,
+	logicID identifiers.Identifier,
 	key []byte, _ common.Hash,
 ) (
 	[]byte, error,
@@ -487,11 +484,17 @@ func (s *MockStateManager) GetBalances(id identifiers.Identifier, stateHash comm
 func (s *MockStateManager) GetBalance(
 	id identifiers.Identifier,
 	assetID identifiers.AssetID,
+	tokenID common.TokenID,
 	stateHash common.Hash,
 ) (*big.Int, error) {
 	if _, ok := s.balances[id]; ok {
 		if _, ok := s.balances[id][assetID]; ok {
-			return s.balances[id][assetID], nil
+			val, ok := s.balances[id][assetID][tokenID]
+			if !ok {
+				return nil, common.ErrTokenNotFound
+			}
+
+			return val, nil
 		}
 
 		return nil, common.ErrAssetNotFound
@@ -526,9 +529,14 @@ func (s *MockStateManager) GetValidatorByKramaID(kramaID identifiers.KramaID) (*
 	return nil, common.ErrKramaIDNotFound
 }
 
-func (s *MockStateManager) setBalance(id identifiers.Identifier, assetID identifiers.AssetID, balance *big.Int) {
+func (s *MockStateManager) setBalance(
+	id identifiers.Identifier,
+	assetID identifiers.AssetID, tokenID common.TokenID,
+	balance *big.Int,
+) {
 	s.balances[id] = make(common.AssetMap)
-	s.balances[id][assetID] = balance
+	s.balances[id][assetID] = make(map[common.TokenID]*big.Int)
+	s.balances[id][assetID][tokenID] = balance
 }
 
 func (s *MockStateManager) setAccount(id identifiers.Identifier, acc common.Account) {
@@ -1074,17 +1082,23 @@ func createMandatesOrLockups(t *testing.T) ([]common.AssetMandateOrLockup, []rpc
 	for _, assetID := range assetIDs {
 		id := tests.RandomIdentifier(t)
 		amount := new(big.Int).SetUint64(rand.Uint64())
+		tokenID := tests.GetRandomTokenID(t)
+		expiry := rand.Uint64()
 
 		list = append(list, common.AssetMandateOrLockup{
 			AssetID: assetID,
 			ID:      id,
-			Amount:  amount,
+			Amount: map[common.TokenID]*common.AmountWithExpiry{
+				tokenID: {Amount: amount, ExpiresAt: expiry},
+			},
 		})
 
 		rpcList = append(rpcList, rpcargs.RPCMandateOrLockup{
 			ID:      id,
-			AssetID: assetID.String(),
+			AssetID: assetID,
+			TokenID: hexutil.Uint64(tokenID),
 			Amount:  (*hexutil.Big)(amount),
+			Expiry:  hexutil.Uint64(expiry),
 		})
 	}
 

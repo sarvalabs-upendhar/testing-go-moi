@@ -108,8 +108,8 @@ func createAssetWithNonce(t *testing.T, client *Client, id identifiers.Identifie
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
 	assetCreationPayload := &common.AssetCreatePayload{
-		Symbol: "MOI",
-		Supply: supply,
+		Symbol:    "MOI",
+		MaxSupply: supply,
 	}
 
 	payload, err := polo.Polorize(assetCreationPayload)
@@ -156,8 +156,9 @@ func createAsset(t *testing.T, client *Client, id identifiers.Identifier, key te
 	supply, _ := new(big.Int).SetString("130D41", 16)
 
 	assetCreationPayload := &common.AssetCreatePayload{
-		Symbol: "MOI",
-		Supply: supply,
+		Symbol:    "MOI",
+		MaxSupply: supply,
+		Manager:   id,
 	}
 
 	payload, err := polo.Polorize(assetCreationPayload)
@@ -169,7 +170,7 @@ func createAsset(t *testing.T, client *Client, id identifiers.Identifier, key te
 			SequenceID: GetLatestSequenceID(t, client, id, 0),
 		},
 		FuelPrice: big.NewInt(1),
-		FuelLimit: 200,
+		FuelLimit: 20000,
 		IxOps: []common.IxOpRaw{
 			{
 				Type:    common.IxAssetCreate,
@@ -194,11 +195,13 @@ func createAsset(t *testing.T, client *Client, id identifiers.Identifier, key te
 	ixHash, err := client.SendInteractions(context.Background(), sendIX)
 	require.NoError(t, err)
 
+	t.Log("Fired Ixn", "hash", ixHash)
+
 	ctx, cancel := context.WithTimeout(context.Background(), IxnTimeout)
 	defer cancel()
 
 	receipt := RetryFetchReceipt(t, ctx, client, ixHash)
-	require.Equal(t, common.ReceiptOk, receipt.Status)
+	require.Equal(t, common.ReceiptOk, receipt.Status, string(receipt.IxOps[0].Data))
 
 	var assetReceipt common.AssetCreationResult
 	err = json.Unmarshal(receipt.IxOps[0].Data, &assetReceipt)

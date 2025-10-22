@@ -14,6 +14,8 @@ import (
 	"github.com/sarvalabs/go-moi/common/tests"
 )
 
+var MinimumStake = big.NewInt(10000)
+
 func GetGenesisCommand() *cobra.Command {
 	genesisTestCmd := &cobra.Command{
 		Use:   "genesis",
@@ -42,6 +44,12 @@ func parseGenesisTestFlags(genesisTestCmd *cobra.Command) {
 		"artifact-path",
 		"",
 		"Path to logic artifact file.",
+	)
+	genesisTestCmd.Flags().StringVar(
+		&assetArtifactFilePath,
+		"assetartifacts-path",
+		"",
+		"Path to standard asset artifacts file.",
 	)
 	genesisTestCmd.Flags().StringVar(
 		&readAccountsFilePath,
@@ -137,16 +145,27 @@ func createTestGenesisFile() {
 
 	g.AddSargaAccount(common.AccountSetupArgs{
 		ID:             common.SargaAccountID,
-		AccType:        common.SargaAccount,
 		MoiID:          common.BytesToHex(getRandomMOIID()),
 		ConsensusNodes: getKramaIDs(consensusNodesCount),
 	})
+
+	artifacts, err := cmdcommon.ReadAssetArtifactFile(assetArtifactFilePath)
+	if err != nil {
+		cmdcommon.Err(err)
+	}
+
+	for _, artifact := range artifacts {
+		g.AddAssetLogic(common.AssetLogicArgs{
+			Standard: artifact.Standard,
+			Manifest: artifact.Manifest,
+		})
+	}
 
 	validators := make([]*common.Validator, instancesCount)
 
 	for i := 0; i < instancesCount; i++ {
 		validators[i] = common.NewValidator(
-			common.ValidatorIndex(i), identifiers.KramaID(instances[i].KramaID), big.NewInt(0),
+			common.ValidatorIndex(i), identifiers.KramaID(instances[i].KramaID), big.NewInt(0), MinimumStake,
 			accounts[0].ID, common.Hex2Bytes(instances[i].ConsensusKey),
 			nil, common.KYCStatus(0),
 		)
@@ -154,7 +173,6 @@ func createTestGenesisFile() {
 
 	g.AddSystemAccount(common.SystemAccountSetupArgs{
 		ID:             common.SystemAccountID,
-		AccType:        common.SystemAccount,
 		ConsensusNodes: getKramaIDs(consensusNodesCount),
 		Validators:     validators,
 	})
@@ -163,14 +181,16 @@ func createTestGenesisFile() {
 		AssetInfo: &common.AssetCreationArgs{
 			Symbol:      common.KMOITokenSymbol,
 			Dimension:   0,
-			Standard:    0,
-			IsLogical:   false,
-			IsStateful:  false,
-			Operator:    identifiers.Nil,
+			Standard:    hexutil.Uint16(common.MAS0),
+			Decimals:    0,
+			Creator:     identifiers.Nil,
 			Allocations: make([]common.Allocation, 0, accCount),
+			MaxSupply:   hexutil.Big(*big.NewInt(0)),
 		},
 		ConsensusNodes: getKramaIDs(consensusNodesCount),
 	}
+
+	maxSupply := assetInfo.AssetInfo.MaxSupply.ToInt()
 
 	for i := 0; i < accCount; i++ {
 		participantID, err := identifiers.NewParticipantIDFromHex(accounts[i].ID.String())
@@ -188,7 +208,6 @@ func createTestGenesisFile() {
 						SignatureAlgorithm: 0,
 					},
 				},
-				AccType:        common.RegularAccount,
 				MoiID:          common.BytesToHex(getRandomMOIID()),
 				ConsensusNodes: getKramaIDs(consensusNodesCount),
 			},
@@ -199,6 +218,8 @@ func createTestGenesisFile() {
 				ID:     participantID.AsIdentifier(),
 				Amount: (*hexutil.Big)(new(big.Int).SetUint64(premineAmount)),
 			})
+
+			maxSupply.Add(maxSupply, new(big.Int).SetUint64(premineAmount))
 		}
 	}
 

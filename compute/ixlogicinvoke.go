@@ -15,7 +15,7 @@ func RunLogicInvoke(
 	op *common.IxOp,
 	ctx *engineio.RuntimeContext,
 	tank *FuelTank,
-	_ *state.Transition,
+	transition *state.Transition,
 ) *common.IxOpResult {
 	// Create a new op result
 	opResult := common.NewIxOpResult(op.Type())
@@ -25,7 +25,7 @@ func RunLogicInvoke(
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
-	result := ctx.Runtime.Call(op.Target(), op, &engineio.FuelGauge{
+	result := ctx.Runtime.Call(op.Target(), op, transition, &engineio.FuelGauge{
 		Compute: tank.ComputeCapacity,
 		Storage: tank.StorageCapacity, // TODO: Fix this
 	})
@@ -50,6 +50,15 @@ func RunLogicInvoke(
 func ValidateLogicInvoke(
 	op *common.IxOp,
 ) error {
+	if op.Type() == common.IxAssetAction {
+		_, err := op.GetAssetActionPayload()
+		if err != nil {
+			return err
+		}
+
+		return nil
+	}
+
 	_, err := op.GetLogicPayload()
 	if err != nil {
 		return err

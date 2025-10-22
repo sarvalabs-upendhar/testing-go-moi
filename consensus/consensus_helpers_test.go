@@ -147,6 +147,20 @@ type mockStateManager struct {
 	publicKeys map[identifiers.Identifier][]byte
 }
 
+func (m mockStateManager) CreateStateObject(identifier identifiers.Identifier, b bool) *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
+func (m mockStateManager) CreateStateObjectWithAccountType(
+	id identifiers.Identifier,
+	accType common.AccountType,
+	b bool,
+) *state.Object {
+	// TODO implement me
+	panic("implement me")
+}
+
 func newMockStateManager(db *mockDB) *mockStateManager {
 	return &mockStateManager{
 		db:         db,
@@ -183,12 +197,6 @@ func (m mockStateManager) CreateSystemObject(id identifiers.Identifier) *state.S
 }
 
 func (m mockStateManager) GetPublicKey(id identifiers.Identifier, keyID uint64, stateHash common.Hash) ([]byte, error) {
-	panic("implement me")
-}
-
-func (m mockStateManager) CreateStateObject(identifier identifiers.Identifier,
-	accountType common.AccountType, b bool,
-) *state.Object {
 	panic("implement me")
 }
 
@@ -1090,7 +1098,6 @@ func getParticipantsInfo(k *Engine, ids []identifiers.Identifier) (common.Partic
 		}
 
 		ps[id] = &common.Participant{
-			AccType:       info.Type,
 			ID:            id,
 			Height:        info.Height,
 			TesseractHash: info.TesseractHash,

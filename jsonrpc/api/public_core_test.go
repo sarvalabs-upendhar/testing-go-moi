@@ -482,7 +482,7 @@ func TestPublicCoreAPI_FuelEstimate(t *testing.T) {
 	require.NoError(t, err)
 
 	logicPayload := common.LogicPayload{
-		Logic:    identifiers.RandomLogicIDv0(),
+		LogicID:  identifiers.RandomLogicIDv0(),
 		Callsite: "hello",
 	}
 	rawLogicPayload, err := logicPayload.Bytes()
@@ -1165,7 +1165,7 @@ func TestPublicCoreAPI_GetBalance(t *testing.T) {
 	randomHash := tests.RandomHash(t)
 	assetID, _ := tests.CreateTestAsset(t, tests.RandomIdentifier(t))
 
-	stateManager.setBalance(id, assetID, big.NewInt(300))
+	stateManager.setBalance(id, assetID, common.DefaultTokenID, big.NewInt(300))
 
 	testcases := []struct {
 		name            string
@@ -1333,7 +1333,7 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 	tsHash := getTesseractsHashes(t, ts)
 	assetID, _ := tests.CreateTestAsset(t, tests.RandomIdentifier(t))
 
-	stateManager.setBalance(ts[0].AnyAccountID(), assetID, big.NewInt(300))
+	stateManager.setBalance(ts[0].AnyAccountID(), assetID, common.DefaultTokenID, big.NewInt(300))
 
 	testcases := []struct {
 		name          string
@@ -1389,9 +1389,14 @@ func TestPublicCoreAPI_GetTDU(t *testing.T) {
 
 			require.NoError(t, err)
 
-			for _, expectedAmount := range test.expectedTDU {
-				amount := tdu[0].Amount
-				require.Equal(t, expectedAmount, amount.ToInt())
+			for _, element := range tdu {
+				tokenMap, ok := test.expectedTDU[element.AssetID]
+				require.True(t, ok)
+
+				val, ok := tokenMap[common.TokenID(element.TokenID.ToUint64())]
+				require.True(t, ok)
+
+				require.Equal(t, element.Amount.ToInt(), val)
 			}
 		})
 	}
@@ -1746,6 +1751,7 @@ func TestPublicCoreAPI_Lockups(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+
 			require.ElementsMatch(t, test.expected, result)
 		})
 	}
@@ -1766,12 +1772,12 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	randomHash := tests.RandomHash(t)
 	tsHash := getTesseractsHashes(t, ts)
 
-	logicIDs := make([]identifiers.LogicID, 0, 3)
+	logicIDs := make([]identifiers.Identifier, 0, 3)
 
 	for i := 0; i < 3; i++ {
 		logicID := identifiers.RandomLogicIDv0()
 
-		logicIDs = append(logicIDs, logicID)
+		logicIDs = append(logicIDs, logicID.AsIdentifier())
 	}
 
 	stateManager.setLogicIDs(t, ts[0].AnyAccountID(), logicIDs)
@@ -1779,7 +1785,7 @@ func TestPublicCoreAPI_GetLogicIDs(t *testing.T) {
 	testcases := []struct {
 		name             string
 		args             rpcargs.GetAccountArgs
-		expectedLogicIDs []identifiers.LogicID
+		expectedLogicIDs []identifiers.Identifier
 		expectedError    error
 	}{
 		{
@@ -2130,7 +2136,7 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 	stateManager := NewMockStateManager(t)
 	coreAPI := NewPublicCoreAPI(nil, chainManager, stateManager, nil, nil, nil)
 
-	ixParams := tests.GetIxParamsWithID(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t))
+	ixParams := tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t))
 	ix := tests.CreateIX(t, ixParams)
 	tsHash := tests.RandomHash(t)
 	participants := tests.CreateParticipantWithTestData(t, 1)
@@ -2252,8 +2258,8 @@ func TestPublicCoreAPI_GetInteractionByTSHash(t *testing.T) {
 
 func TestPublicCoreAPI_GetInteractionByHash(t *testing.T) {
 	ixParams := map[int]*tests.CreateIxParams{
-		0: tests.GetIxParamsWithID(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t)),
-		1: tests.GetIxParamsWithID(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t)),
+		0: tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t)),
+		1: tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t)),
 	}
 	ixns := tests.CreateIxns(t, 2, ixParams)
 	participants := tests.CreateParticipantWithTestData(t, 1)
@@ -2364,7 +2370,7 @@ func TestPublicCoreAPI_GetInteractionReceipt(t *testing.T) {
 	chainManager := NewMockChainManager(t)
 
 	ixHashWithoutParticipants := tests.RandomHash(t)
-	ixParams := tests.GetIxParamsWithID(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t))
+	ixParams := tests.GetIxParamsForTransfer(t, tests.RandomIdentifier(t), tests.RandomIdentifier(t))
 	ix := tests.CreateIX(t, ixParams)
 	participants := tests.CreateParticipantWithTestData(t, 1)
 	ixIndex := 8
@@ -2490,14 +2496,20 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			require.Equal(t, test.expectedAssetDescriptor.AssetID.Standard(), fetchedAssetInfo.AssetID.Standard())
 			require.Equal(t, test.expectedAssetDescriptor.Symbol, fetchedAssetInfo.Symbol)
-			require.Equal(t, test.expectedAssetDescriptor.Operator, fetchedAssetInfo.Operator)
-			require.Equal(t, *(*hexutil.Big)(test.expectedAssetDescriptor.Supply), fetchedAssetInfo.Supply)
 			require.Equal(t, hexutil.Uint8(test.expectedAssetDescriptor.Dimension), fetchedAssetInfo.Dimension)
-			require.Equal(t, hexutil.Uint16(test.expectedAssetDescriptor.Standard), fetchedAssetInfo.Standard)
-			require.Equal(t, test.expectedAssetDescriptor.IsLogical, fetchedAssetInfo.IsLogical)
-			require.Equal(t, test.expectedAssetDescriptor.IsStateFul, fetchedAssetInfo.IsStateFul)
-			require.Equal(t, test.expectedAssetDescriptor.LogicID, fetchedAssetInfo.LogicID)
+			require.Equal(t, hexutil.Uint8(test.expectedAssetDescriptor.Decimals), fetchedAssetInfo.Decimals)
+			require.Equal(t, test.expectedAssetDescriptor.Creator, fetchedAssetInfo.Creator)
+			require.Equal(t, test.expectedAssetDescriptor.Manager, fetchedAssetInfo.Manager)
+			require.Equal(t, (*hexutil.Big)(test.expectedAssetDescriptor.MaxSupply), fetchedAssetInfo.MaxSupply)
+			require.Equal(t, (*hexutil.Big)(test.expectedAssetDescriptor.CirculatingSupply), fetchedAssetInfo.CirculatingSupply)
+			require.Equal(t, test.expectedAssetDescriptor.EnableEvents, fetchedAssetInfo.EnableEvents)
+			require.Equal(t, len(test.expectedAssetDescriptor.Metadata), len(fetchedAssetInfo.Metadata))
+
+			for k, v := range test.expectedAssetDescriptor.Metadata {
+				require.Equal(t, v, fetchedAssetInfo.Metadata[k].Bytes())
+			}
 		})
 	}
 }

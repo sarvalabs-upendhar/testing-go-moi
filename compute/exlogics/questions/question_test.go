@@ -6,14 +6,15 @@ import (
 	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/engineio/test"
+	"github.com/sarvalabs/go-moi/compute/exlogics/questions/answer"
 	"github.com/sarvalabs/go-moi/compute/pisa"
 	"github.com/sarvalabs/go-polo"
 	"github.com/stretchr/testify/suite"
 )
 
 var (
-	QuestionLogicID = identifiers.RandomLogicIDv0()
-	AnswerLogicID   = identifiers.RandomLogicIDv0()
+	QuestionLogicID = identifiers.RandomLogicIDv0().AsIdentifier()
+	AnswerLogicID   = identifiers.RandomLogicIDv0().AsIdentifier()
 )
 
 func TestLogicInterfaceTestSuite(t *testing.T) {
@@ -42,10 +43,10 @@ func (suite *LogicInterfaceTestSuite) SetupSuite() {
 	callerManifest, err := engineio.NewManifestFromFile("./question.yaml")
 	suite.Require().NoError(err, "could not read caller manifest file")
 
-	calleeManifest, err := engineio.NewManifestFromFile("./answer.yaml")
+	calleeManifest, err := engineio.NewManifestFromFile("./answer/answer.yaml")
 	suite.Require().NoError(err, "could not read callee manifest file")
 
-	_, err = suite.Initialise(engineio.PISA, []test.Logic{
+	_, err = suite.Initialise(engineio.PISA, nil, []test.Logic{
 		{
 			LogicID:  QuestionLogicID,
 			Manifest: callerManifest,
@@ -61,7 +62,7 @@ func (suite *LogicInterfaceTestSuite) SetupSuite() {
 	suite.Deploy(AnswerLogicID, "Init", polo.Document{}, nil, nil, nil)
 
 	// Read Answer value to check if the logic state is initialized
-	suite.CheckLogicStorage(AnswerLogicID, pisa.GenerateStorageKey(LogicAnswerSlot), 42)
+	suite.CheckLogicStorage(AnswerLogicID, pisa.GenerateStorageKey(answer.LogicAnswerSlot), 42)
 }
 
 func (suite *LogicInterfaceTestSuite) TestSetActorAnswer() {
@@ -70,11 +71,11 @@ func (suite *LogicInterfaceTestSuite) TestSetActorAnswer() {
 		QuestionLogicID,
 		"SetActorAnswer",
 		must(polo.PolorizeDocument(InputExternAnswer{
-			LogicID: AnswerLogicID.AsIdentifier(),
+			LogicID: AnswerLogicID,
 			Answer:  50,
 		})), nil, nil, nil,
 	)
-	suite.CheckActorStorage(AnswerLogicID, SeederID, pisa.GenerateStorageKey(ActorAnswerSlot), 50)
+	suite.CheckActorStorage(AnswerLogicID, SeederID, pisa.GenerateStorageKey(answer.ActorAnswerSlot), 50)
 }
 
 func (suite *LogicInterfaceTestSuite) TestSetLogicAnswer() {
@@ -83,12 +84,12 @@ func (suite *LogicInterfaceTestSuite) TestSetLogicAnswer() {
 		QuestionLogicID,
 		"SetMyAnswer",
 		must(polo.PolorizeDocument(InputExternAnswer{
-			LogicID: AnswerLogicID.AsIdentifier(),
+			LogicID: AnswerLogicID,
 			Answer:  30,
 		})), nil, nil, nil,
 	)
 
-	suite.CheckActorStorage(AnswerLogicID, QuestionLogicID.AsIdentifier(), pisa.GenerateStorageKey(ActorAnswerSlot), 30)
+	suite.CheckActorStorage(AnswerLogicID, QuestionLogicID, pisa.GenerateStorageKey(answer.ActorAnswerSlot), 30)
 }
 
 func (suite *LogicInterfaceTestSuite) TestAccessConstraints() {
@@ -122,7 +123,7 @@ func (suite *LogicInterfaceTestSuite) TestAccessConstraints() {
 				QuestionLogicID: false,
 			},
 			// Unfortunately, this is the error message we get from the PISA engine.
-			error: "cannot access actor dynamically",
+			error: "slot is read-only",
 		},
 	}
 	for _, tc := range testcases {
@@ -131,7 +132,7 @@ func (suite *LogicInterfaceTestSuite) TestAccessConstraints() {
 				QuestionLogicID,
 				"SetActorAnswer",
 				must(polo.PolorizeDocument(InputExternAnswer{
-					LogicID: AnswerLogicID.AsIdentifier(),
+					LogicID: AnswerLogicID,
 					Answer:  50,
 				})), nil, &engineio.ErrorResult{Error: tc.error}, tc.access,
 			)

@@ -12,33 +12,17 @@ import (
 func validateParticipantCreate(sender, target, sarga *state.Object, payload *common.ParticipantCreatePayload) error {
 	// Check if the account is already registered
 	// Fetch the account info from genesis state
-	_, err := sarga.GetStorageEntry(common.SargaLogicID, target.Identifier().Bytes())
+	_, err := sarga.GetStorageEntry(common.SargaLogicID.AsIdentifier(), target.Identifier().Bytes())
 	if !errors.Is(err, common.ErrKeyNotFound) {
 		return common.ErrAlreadyRegistered
 	}
 
-	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
+	_, err = sender.FetchAssetObject(common.KMOITokenAssetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
-		return common.ErrInsufficientFunds
-	}
-
 	return nil
-}
-
-// createParticipant registers a new participant by inserting a KMOI asset object into the target account's asset tree.
-func createParticipant(sender, target *state.Object, payload *common.ParticipantCreatePayload) error {
-	// Deduct the transfer amount from the sender's asset balance
-	if err := sender.SubBalance(common.KMOITokenAssetID, payload.Amount); err != nil {
-		return err
-	}
-
-	// Insert a new asset object with the specified amount into the target's asset tree.
-	return target.InsertNewAssetObject(common.KMOITokenAssetID, state.NewAssetObject(payload.Amount, nil))
 }
 
 func createAccountKeys(startID int, keysPayload []common.KeyAddPayload) common.AccountKeys {
@@ -68,20 +52,24 @@ func createAccountKeys(startID int, keysPayload []common.KeyAddPayload) common.A
 // or if the KMOI asset object already exists in the target account
 func RunParticipantCreate(
 	op *common.IxOp,
-	_ *engineio.RuntimeContext,
+	ctx *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
 	// Obtain the participant create Payload from the Interaction
 	payload, _ := op.GetParticipantCreatePayload()
 
-	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
-	target := transition.GetObject(op.Target())
-	sarga := transition.GetObject(common.SargaAccountID)
-
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
+
+	// Obtain the sender and target state objects
+	sender, _ := transition.GetObject(op.SenderID())
+	target, _ := transition.GetObject(op.Target())
+
+	sarga, err := transition.GetObject(common.SargaAccountID)
+	if err != nil {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
 
 	// Exhaust fuel from tank
 	if !tank.Exhaust(FuelSimpleParticipantCreate, 0) {
@@ -93,19 +81,36 @@ func RunParticipantCreate(
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
-	// Register the target account by creating and inserting a new KMOI asset object
-	// into the target account's asset tree.
-	if err := createParticipant(sender, target, payload); err != nil {
+	if err := addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
-	if err := addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
+	// Register the target account by transferring the KMOI asset from sender to target
+
+	result := ctx.Runtime.Call(common.KMOITokenAccountID, op, transition, &engineio.FuelGauge{
+		Compute: tank.ComputeCapacity,
+		Storage: tank.StorageCapacity, // TODO: Fix this
+	})
+
+	if !tank.Exhaust(result.ComputeEffort, result.StorageEffort) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	opResult.SetLogs(result.Logs)
+
+	if result.IsError() {
+		common.SetResultPayload(opResult, common.AccountCreationResult{Error: result.Err})
+
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
 	accountKeys := createAccountKeys(0, payload.KeysPayload)
 
 	target.UpdateKeys(accountKeys)
+
+	common.SetResultPayload(opResult, common.AccountCreationResult{
+		AccountID: target.Identifier(),
+	})
 
 	return opResult.WithStatus(common.ResultOk)
 }
@@ -130,7 +135,7 @@ func RunAccountConfigure(
 	payload, _ := op.GetAccountConfigurePayload()
 
 	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
+	sender, _ := transition.GetObject(op.SenderID())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -168,18 +173,13 @@ func validateAccountInherit(sender, sarga *state.Object, logicID identifiers.Ide
 ) error {
 	// Check if the account is already registered
 	// Fetch the account info from genesis state
-	if _, err := sarga.GetStorageEntry(common.SargaLogicID, logicID.Bytes()); err != nil {
+	if _, err := sarga.GetStorageEntry(common.SargaLogicID.AsIdentifier(), logicID.Bytes()); err != nil {
 		return common.ErrTargetAccountNotFound
 	}
 
-	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
+	_, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
-	}
-
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
-		return common.ErrInsufficientFunds
 	}
 
 	if int(payload.SubAccountIndex) != sender.SubAccountCount()+1 {
@@ -191,17 +191,17 @@ func validateAccountInherit(sender, sarga *state.Object, logicID identifiers.Ide
 
 func RunAccountInherit(
 	op *common.IxOp,
-	_ *engineio.RuntimeContext,
+	ctx *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
 	// Obtain the participant create Payload from the Interaction
 	payload, _ := op.GetAccountInheritPayload()
 
-	sender := transition.GetObject(op.SenderID())
-	sarga := transition.GetObject(common.SargaAccountID)
+	sender, _ := transition.GetObject(op.SenderID())
+	sarga, _ := transition.GetObject(common.SargaAccountID)
 	logicID := payload.TargetAccount
-	subAccount := transition.GetObject(op.Target())
+	subAccount, _ := transition.GetObject(op.Target())
 
 	// Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
@@ -218,12 +218,24 @@ func RunAccountInherit(
 
 	_ = sender.UpdateSubAccount(subAccount.Identifier(), logicID)
 
-	// Deduct the transfer amount from the sender's asset balance and add it to sub account
-	if err := sender.SubBalance(common.KMOITokenAssetID, payload.Amount); err != nil {
+	if err := addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
-	if err := addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), op.Target()); err != nil {
+	result := ctx.Runtime.Call(common.KMOITokenAccountID, op, transition, &engineio.FuelGauge{
+		Compute: tank.ComputeCapacity,
+		Storage: tank.StorageCapacity, // TODO: Fix this
+	})
+
+	if !tank.Exhaust(result.ComputeEffort, result.StorageEffort) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	opResult.SetLogs(result.Logs)
+
+	if result.IsError() {
+		common.SetResultPayload(opResult, common.AccountInheritResult{Error: result.Err})
+
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 

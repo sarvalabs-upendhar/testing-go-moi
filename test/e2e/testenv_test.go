@@ -361,6 +361,14 @@ func (te *TestEnvironment) SetupSuite() {
 	te.logger.Debug("kmoi id", KMOIAssetID.AsIdentifier())
 
 	for _, account := range te.accounts {
+		action, err := common.GetAssetActionPayload(
+			common.KMOITokenAssetID, common.TransferEndpoint, &common.TransferParams{
+				Beneficiary: account.ID,
+				Amount:      big.NewInt(InitialKMOITokens),
+			})
+
+		te.Suite.NoError(err)
+
 		te.logger.Debug("sending Fuel token ", "KMOI ", InitialKMOITokens)
 		createParticipant(te, registeredAcc[0], &common.ParticipantCreatePayload{
 			ID: account.ID,
@@ -371,7 +379,7 @@ func (te *TestEnvironment) SetupSuite() {
 					SignatureAlgorithm: 0,
 				},
 			},
-			Amount: big.NewInt(InitialKMOITokens),
+			Value: action,
 		})
 	}
 

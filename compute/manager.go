@@ -79,16 +79,21 @@ func AddActorsToRuntime(ix *common.Interaction, runtime engineio.Runtime, transi
 			continue
 		}
 
-		if id.IsLogic() { // TODO: || id.IsAsset() {
-			logicObject, err := transition.GetObject(id).FetchLogicObject(id)
+		if id.IsLogic() || id.IsAsset() {
+			logicObject, err := transition.GetLogicObject(id)
 			if err != nil {
 				return errors.Wrap(err, "failed to fetch logic object")
 			}
 
-			if err = runtime.CreateLogic(
+			lso, err := transition.GetLogicStorageObject(id)
+			if err != nil {
+				return errors.Wrap(err, "failed to fetch logic storage object")
+			}
+
+			if err = runtime.SpawnLogic(
 				id,
 				logicObject.Artifact,
-				transition.GetObject(id).GenerateLogicStorageObject(),
+				lso,
 				nil,
 			); err != nil {
 				return errors.Wrap(err, "failed to create logic actor")
@@ -97,9 +102,14 @@ func AddActorsToRuntime(ix *common.Interaction, runtime engineio.Runtime, transi
 			continue
 		}
 
-		if err := runtime.CreateActor(
+		lso, err := transition.GetLogicStorageObject(id)
+		if err != nil {
+			return errors.Wrap(err, "failed to fetch logic storage object")
+		}
+
+		if err = runtime.CreateActor(
 			id,
-			transition.GetObject(id).GenerateLogicStorageObject(),
+			lso,
 			nil,
 		); err != nil {
 			return errors.Wrap(err, "failed to create actor")
@@ -124,6 +134,8 @@ func (manager *Manager) InteractionCall(
 
 	runtime := engine.Runtime(ctx.Time)
 
+	runtime.BindAssetEngine(NewAssetEngine(executor.transition))
+
 	if err := AddActorsToRuntime(ix, runtime, transition); err != nil {
 		return nil, err
 	}
@@ -142,7 +154,7 @@ func addNewAccountsToSargaAccount(
 	ids ...identifiers.Identifier,
 ) error {
 	// get sarga object
-	sargaObject := transition.GetObject(common.SargaAccountID)
+	sargaObject, _ := transition.GetObject(common.SargaAccountID)
 
 	for _, id := range ids {
 		if !transition.IsGenesis(id) {

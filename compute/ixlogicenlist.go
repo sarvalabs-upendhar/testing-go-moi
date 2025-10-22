@@ -93,7 +93,7 @@ func EnlistLogic(
 	instance, err := engine.SpawnInstance(
 		logicObject,
 		fueltank.Level(),
-		logicState.GenerateLogicStorageObject(logicID),
+		logicState.FetchLogicStorageObject(logicID),
 		ctx,
 		eventstream,
 	)
@@ -106,7 +106,7 @@ func EnlistLogic(
 		return 0, nil, errors.Wrap(err, "unable to initialise ephemeral logic storage tree")
 	}
 
-	senderCtx := senderState.GenerateLogicStorageObject(logicID)
+	senderCtx := senderState.FetchLogicStorageObject(logicID)
 
 	// Perform execution call on the engine
 	result, err := instance.Call(context.Background(), op, senderCtx)

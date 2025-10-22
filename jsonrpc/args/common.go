@@ -52,15 +52,15 @@ func CreateRPCInteraction(
 			}
 
 			rpcPayload := RPCParticipantCreate{
-				ID:     payload.ID,
-				Amount: (*hexutil.Big)(payload.Amount),
+				ID:    payload.ID,
+				Value: RPCAssetActionFromAssetAction(payload.Value),
 			}
 
 			rawPayload, err = json.Marshal(rpcPayload)
 			if err != nil {
 				return nil, err
 			}
-		case common.IXAccountConfigure:
+		case common.IxAccountConfigure:
 			payload, err := op.GetAccountConfigurePayload()
 			if err != nil {
 				return nil, err
@@ -72,7 +72,7 @@ func CreateRPCInteraction(
 			if err != nil {
 				return nil, err
 			}
-		case common.IXAccountInherit:
+		case common.IxAccountInherit:
 			payload, err := op.GetAccountInheritPayload()
 			if err != nil {
 				return nil, err
@@ -80,8 +80,8 @@ func CreateRPCInteraction(
 
 			rpcPayload := RPCAccountInheritPayload{
 				TargetAccount:   payload.TargetAccount,
-				Amount:          (*hexutil.Big)(payload.Amount),
 				SubAccountIndex: hexutil.Uint64(payload.SubAccountIndex),
+				Value:           RPCAssetActionFromAssetAction(payload.Value),
 			}
 
 			rawPayload, err = json.Marshal(rpcPayload)
@@ -94,55 +94,25 @@ func CreateRPCInteraction(
 				return nil, err
 			}
 
-			rpcPayload := RPCAssetCreation{
-				Symbol:    payload.Symbol,
-				Supply:    (*hexutil.Big)(payload.Supply),
-				Dimension: (*hexutil.Uint8)(&payload.Dimension),
-				Standard:  (*hexutil.Uint16)(&payload.Standard),
-
-				IsLogical:  payload.IsLogical,
-				IsStateful: payload.IsStateFul,
-				Logic:      RPCLogicPayloadFromLogicPayload(payload.LogicPayload),
-			}
+			rpcPayload := RPCAssetCreationFromAssetCreation(payload)
 
 			rawPayload, err = json.Marshal(rpcPayload)
 			if err != nil {
 				return nil, err
 			}
-		case common.IxAssetTransfer, common.IxAssetApprove, common.IxAssetRevoke,
-			common.IxAssetLockup, common.IxAssetRelease:
+		case common.IxAssetAction:
 			payload, err := op.GetAssetActionPayload()
 			if err != nil {
 				return nil, err
 			}
 
-			rpcPayload := RPCAssetAction{
-				Benefactor:  payload.Benefactor,
-				Beneficiary: payload.Beneficiary,
-				AssetID:     payload.AssetID,
-				Amount:      (*hexutil.Big)(payload.Amount),
-				Timestamp:   (*hexutil.Uint64)(&payload.Timestamp),
-			}
+			rpcPayload := RPCAssetActionFromAssetAction(payload)
 
 			rawPayload, err = json.Marshal(rpcPayload)
 			if err != nil {
 				return nil, err
 			}
-		case common.IxAssetMint, common.IxAssetBurn:
-			payload, err := op.GetAssetSupplyPayload()
-			if err != nil {
-				return nil, err
-			}
 
-			rpcPayload := RPCAssetSupply{
-				AssetID: payload.AssetID,
-				Amount:  (*hexutil.Big)(payload.Amount),
-			}
-
-			rawPayload, err = json.Marshal(rpcPayload)
-			if err != nil {
-				return nil, err
-			}
 		case common.IxLogicDeploy, common.IxLogicEnlist, common.IxLogicInvoke:
 			payload, err := op.GetLogicPayload()
 			if err != nil {

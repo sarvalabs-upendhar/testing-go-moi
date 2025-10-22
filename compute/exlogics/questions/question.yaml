@@ -134,9 +134,11 @@ elements:
       - XBIND $0 $1 $0
       - XLLOAD $1 $0 &0
       - YIELD $1 &0
+      - DUMP $1
       - ORIGIN $1
       - XALOAD $1 $0 $1 &0
       - YIELD $1 &1
+      - DUMP $1
       - CARGS $2
       - CALLX $2 $0 &0 $2
       - GETFLD $2 $2 &0
@@ -150,4 +152,5 @@ elements:
       - LOGIC $2
       - XALOAD $1 $0 $2 &0
       - YIELD $1 &4
+      - DUMP $1
     catches: []

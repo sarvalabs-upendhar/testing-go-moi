@@ -4,71 +4,11 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-moi/compute/engineio"
-
-	"github.com/sarvalabs/go-moi/common"
-	"github.com/sarvalabs/go-moi/common/hexutil"
 	"github.com/sarvalabs/go-moi/state"
 )
-
-// RunAssetTransfer performs the given IxAssetTransfer operation.
-// The stateObjectRetriever must contain state objects for the sender and Target of the op.
-//
-// The IxOp must have an AssetActionPayload and the output receipt will have a AssetTransferResult.
-// The asset balance is debited from the sender/benefactor and credited to the Target state objects.
-// Returns an error if any of given amounts are invalid (negative)
-// or if the sender/benefactor does not have enough balance for that asset ID
-func RunAssetTransfer(
-	op *common.IxOp,
-	_ *engineio.RuntimeContext,
-	tank *FuelTank,
-	transition *state.Transition,
-) *common.IxOpResult {
-	// Obtain the Asset Transfer Payload from the Interaction
-	payload, _ := op.GetAssetActionPayload()
-
-	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
-	target := transition.GetObject(op.Target())
-	sarga := transition.GetAuxiliaryObject(common.SargaAccountID)
-
-	// Create a new result for the op
-	opResult := common.NewIxOpResult(op.Type())
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleParticipantCreate, 0) {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	if payload.Benefactor.IsNil() {
-		// Validate asset transfer payload
-		if err := validateAssetTransfer(sender, target, sarga, payload); err != nil {
-			return opResult.WithStatus(common.ResultExceptionRaised)
-		}
-
-		// Transfer the asset amount from the sender to target account
-		if err := transferAsset(sender, target, payload); err != nil {
-			return opResult.WithStatus(common.ResultExceptionRaised)
-		}
-	}
-
-	if !payload.Benefactor.IsNil() {
-		benefactor := transition.GetObject(payload.Benefactor)
-
-		// Validate asset consume payload
-		if err := validateAssetConsume(sender, target, sarga, benefactor, payload); err != nil {
-			return opResult.WithStatus(common.ResultExceptionRaised)
-		}
-
-		// Transfer the asset amount from the benefactor to target account
-		if err := consumeMandate(sender, target, benefactor, payload); err != nil {
-			return opResult.WithStatus(common.ResultExceptionRaised)
-		}
-	}
-
-	return opResult.WithStatus(common.ResultOk)
-}
 
 // RunAssetCreate performs the given IxAssetCreate operation.
 // The stateObjectRetriever must contain state objects for the sender and Target of the op.
@@ -78,7 +18,7 @@ func RunAssetTransfer(
 // The created supply of the asset is credited to the balances of the asset operator.
 func RunAssetCreate(
 	op *common.IxOp,
-	_ *engineio.RuntimeContext,
+	ctx *engineio.RuntimeContext,
 	tank *FuelTank,
 	transition *state.Transition,
 ) *common.IxOpResult {
@@ -88,35 +28,81 @@ func RunAssetCreate(
 	//  Create a new result for the op
 	opResult := common.NewIxOpResult(op.Type())
 
-	// Obtain the operator and asset account state objects
-	operator := transition.GetObject(op.SenderID())
-	assetacc := transition.GetObject(op.Target())
+	assetID, _ := op.Target().AsAssetID()
 
-	// todo: [asset logics] handle logic deployment for logical assets
-	// If logicCode is give, we need to compile it here and create the logic account.
-	// The given logic code must also compile to an asset logic.
-	// If the logicID is provided, we ignore any given code. We check if the logic id
-	// is for an asset logic and check if such a logic exists.
-
-	// todo: [asset logics] this is a simple value now, but will be include logic deployment cost
 	// Exhaust fuel from tank
 	if !tank.Exhaust(FuelAssetCreation, 0) {
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
-	// Validate asset create payload
-	if err := validateAssetCreate(operator, identifiers.MustAssetID(op.Target())); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Create a new asset on the operator state object and get the asset ID
-	assetID, err := createAsset(operator, assetacc, payload)
+	// Obtain the operator and asset account state objects
+	operator, err := transition.GetObject(op.SenderID())
 	if err != nil {
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
 
-	if err = addNewAccountsToSargaAccount(transition, op.Interaction.Hash(), assetacc.Identifier()); err != nil {
+	asset, err := transition.GetObject(op.Target())
+	if err != nil {
 		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	sargaObject, err := transition.GetObject(common.SargaAccountID)
+	if err != nil {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	// Validate asset create payload
+	if err = validateAssetCreate(operator, identifiers.MustAssetID(op.Target()), payload); err != nil {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	logicID := common.CreateLogicIDFromString(payload.Symbol, 0, identifiers.AssetLogical, identifiers.Systemic)
+
+	// Create a new asset using asset engine
+	_, err = ctx.Runtime.CreateAsset(
+		op.Hash(),
+		assetID,
+		payload.Symbol, payload.Decimals, payload.Dimension,
+		payload.Manager, op.SenderID(),
+		payload.MaxSupply, payload.MetaData, payload.EnableEvents, logicID)
+	if err != nil {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	var manifest []byte
+	if payload.Standard == common.MASX {
+		manifest = payload.Logic.Manifest
+	} else {
+		manifest, err = sargaObject.GetManifestForAsset(payload.Standard)
+		if err != nil {
+			return opResult.WithStatus(common.ResultExceptionRaised)
+		}
+	}
+
+	consumption, result, logs, err := DeployLogic(ctx, op, manifest, asset, operator, transition, tank)
+	// Exhaust fuel from tank
+	if !tank.Exhaust(consumption.Compute, consumption.Storage) {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	if err != nil {
+		return opResult.WithStatus(common.ResultExceptionRaised)
+	}
+
+	// Set the logs in the receipt
+	opResult.SetLogs(logs)
+
+	if result != nil {
+		common.SetResultPayload(
+			opResult,
+			common.AssetCreationResult{
+				AssetID: assetID,
+				Error:   result.Error,
+			})
+
+		if result.Error != nil {
+			return opResult.WithStatus(common.ResultExceptionRaised)
+		}
 	}
 
 	// Generate and set the result payload
@@ -127,354 +113,116 @@ func RunAssetCreate(
 	return opResult.WithStatus(common.ResultOk)
 }
 
-// RunAssetApprove performs the given IxAssetApprove operation.
-// The stateObjectRetriever must contain state objects for the sender, target, and Sarga accounts.
-//
-// The IxOp must have an AssetActionPayload and the output receipt will contain the result for asset approval.
-// The sender authorizes the target to access or use a specified amount of their asset by creating a mandate.
-// The mandate is recorded, allowing the target to access the asset in the future based on the sender's approval.
-func RunAssetApprove(
-	op *common.IxOp,
-	_ *engineio.RuntimeContext,
-	tank *FuelTank,
-	transition *state.Transition,
-) *common.IxOpResult {
-	// Obtain the Asset Transfer Payload from the Interaction
-	payload, _ := op.GetAssetActionPayload()
-
-	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
-
-	// Create a new result for the op
-	opResult := common.NewIxOpResult(op.Type())
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleAssetTransfer, 0) {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Validate asset approve payload
-	if err := validateAssetApprove(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Create an asset mandate for the target in the sender account
-	if err := approveAsset(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	return opResult.WithStatus(common.ResultOk)
-}
-
-// RunAssetRevoke performs the given IxAssetRevoke operation.
-// The stateObjectRetriever must contain state objects for the sender account.
-//
-// The IxOp must have an AssetActionPayload and the output receipt will contain a result for asset revocation.
-// The asset mandate is revoked for the specified beneficiary, and the asset is no longer accessible for them.
-// This operation ensures that the sender's mandates are appropriately updated in the state.
-func RunAssetRevoke(
-	op *common.IxOp,
-	_ *engineio.RuntimeContext,
-	tank *FuelTank,
-	transition *state.Transition,
-) *common.IxOpResult {
-	// Obtain the Asset Transfer Payload from the Interaction
-	payload, _ := op.GetAssetActionPayload()
-
-	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
-
-	// Create a new result for the op
-	opResult := common.NewIxOpResult(op.Type())
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleAssetTransfer, 0) {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Validate asset revoke payload
-	if err := validateAssetRevoke(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Delete the asset mandate from the sender account for the target
-	if err := revokeAsset(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	return opResult.WithStatus(common.ResultOk)
-}
-
-// RunAssetMint performs the given IxAssetMint operation.
-// The stateObjectRetriever must contain state objects for the operator and Target of the op.
-//
-// The IxOp must have an AssetSupplyPayload and the output receipt will have a AssetSupplyResult.
-// The asset supply is increased and the new tokens are credited to the balance of the asset operator.
-//
-//nolint:dupl
-func RunAssetMint(
-	op *common.IxOp,
-	_ *engineio.RuntimeContext,
-	tank *FuelTank,
-	objects *state.Transition,
-) *common.IxOpResult {
-	// Obtain the Asset mint or burn Payload from the Interaction
-	payload, _ := op.GetAssetSupplyPayload()
-
-	//  Create a new result for the op
-	opResult := common.NewIxOpResult(op.Type())
-
-	// Obtain the operator and asset account state objects
-	operator := objects.GetObject(op.SenderID())
-	assetacc := objects.GetObject(op.Target())
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelAssetSupplyModulate, 0) {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Validate asset mint payload
-	if err := validateAssetMint(operator, assetacc, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Obtain the registry entry for the asset from the asset account
-	supply, err := mintAsset(operator, assetacc, payload)
-	if err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Generate and set the result payload
-	common.SetResultPayload(opResult, common.AssetSupplyResult{
-		TotalSupply: (hexutil.Big)(supply),
-	})
-
-	return opResult.WithStatus(common.ResultOk)
-}
-
-// RunAssetBurn performs the given IxAssetBurn operation.
-// The stateObjectRetriever must contain state objects for the operator and Target of the op.
-//
-// The IxOp must have an AssetSupplyPayload and the output receipt will have a AssetSupplyResult.
-// The asset supply is decreased and the tokens are debited from the balances of the asset operator.
-//
-//nolint:dupl
-func RunAssetBurn(
-	op *common.IxOp,
-	_ *engineio.RuntimeContext,
-	tank *FuelTank,
-	objects *state.Transition,
-) *common.IxOpResult {
-	// Obtain the Asset Payload from the Interaction
-	payload, _ := op.GetAssetSupplyPayload()
-
-	//  Create a new result for the op
-	opResult := common.NewIxOpResult(op.Type())
-
-	// Obtain the operator and asset account state objects
-	operator := objects.GetObject(op.SenderID())
-	assetacc := objects.GetObject(op.Target())
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelAssetSupplyModulate, 0) {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Validate asset burn payload
-	if err := validateAssetBurn(operator, assetacc, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Burn the asset supply from asset account
-	supply, err := burnAsset(operator, assetacc, payload)
-	if err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Generate and set the result payload
-	common.SetResultPayload(opResult, common.AssetSupplyResult{
-		TotalSupply: (hexutil.Big)(supply),
-	})
-
-	return opResult.WithStatus(common.ResultOk)
-}
-
-// RunAssetLockup performs the given IxAssetLockup operation.
-// The stateObjectRetriever must contain the state object for the sender of the operation.
-//
-// The IxOp must have an AssetActionPayload, and the output receipt will reflect the lockup result.
-// The specified asset amount is locked up in the sender's account for the target beneficiary.
-func RunAssetLockup(
-	op *common.IxOp,
-	_ *engineio.RuntimeContext,
-	tank *FuelTank,
-	transition *state.Transition,
-) *common.IxOpResult {
-	// Obtain the Asset Transfer Payload from the Interaction
-	payload, _ := op.GetAssetActionPayload()
-
-	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
-
-	// Create a new result for the op
-	opResult := common.NewIxOpResult(op.Type())
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleAssetTransfer, 0) {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Validate asset lockup payload
-	if err := validateAssetLockup(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Create a lockup in the sender's account for the specified target
-	if err := lockupAsset(sender, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	return opResult.WithStatus(common.ResultOk)
-}
-
-// RunAssetRelease performs the given IxAssetRelease operation.
-// The stateObjectRetriever must contain state objects for the sender, target, sarga, and benefactor.
-//
-// The IxOp must have an AssetActionPayload, and the output receipt will reflect the release result.
-// The specified asset amount is released from the benefactor's lockup to the target account.
-func RunAssetRelease(
-	op *common.IxOp,
-	_ *engineio.RuntimeContext,
-	tank *FuelTank,
-	transition *state.Transition,
-) *common.IxOpResult {
-	// Obtain the Asset Transfer Payload from the Interaction
-	payload, _ := op.GetAssetActionPayload()
-
-	// Obtain the sender and target state objects
-	sender := transition.GetObject(op.SenderID())
-	target := transition.GetObject(op.Target())
-	benefactor := transition.GetObject(payload.Benefactor)
-	sarga := transition.GetAuxiliaryObject(common.SargaAccountID)
-
-	// Create a new result for the op
-	opResult := common.NewIxOpResult(op.Type())
-
-	// Exhaust fuel from tank
-	if !tank.Exhaust(FuelSimpleAssetTransfer, 0) {
-		opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Validate asset release payload
-	if err := validateAssetRelease(sender, target, sarga, benefactor, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	// Transfer the lockup amount from the benefactor to target account
-	if err := releaseAsset(sender, target, benefactor, payload); err != nil {
-		return opResult.WithStatus(common.ResultExceptionRaised)
-	}
-
-	return opResult.WithStatus(common.ResultOk)
-}
-
 // helper function
 
 // validateAssetCreate checks if the asset already exists and returns an error if it is already registered.
-func validateAssetCreate(operator *state.Object, assetID identifiers.AssetID) error {
+func validateAssetCreate(operator *state.Object,
+	assetID identifiers.AssetID, payload *common.AssetCreatePayload,
+) error {
 	// Check if the asset already exists
 	assetObject, _ := operator.FetchAssetObject(assetID, true)
 	if assetObject != nil {
 		return common.ErrAssetAlreadyRegistered
 	}
 
+	_, ok := common.ValidAssetStandards[payload.Standard]
+	if !ok {
+		return common.ErrInvalidAssetStandard
+	}
+
+	if payload.Standard == common.MASX {
+		lp := payload.Logic
+
+		if lp == nil || len(lp.Manifest) == 0 {
+			return common.ErrEmptyManifest
+		}
+	}
+
 	return nil
 }
 
-// createAsset creates a new asset and assigns it to the operator.
-func createAsset(operator, assetacc *state.Object, payload *common.AssetCreatePayload) (identifiers.AssetID, error) {
-	// Generate a new Asset Descriptor
-	descriptor := common.NewAssetDescriptor(operator.Identifier(), *payload)
-
+// createAsset creates a new asset and assigns it to the sender.
+func createAsset(sender, assetacc *state.Object, descriptor *common.AssetDescriptor) (identifiers.AssetID, error) {
 	// Create a new asset on the asset state object and get the asset ID
-	assetID, err := assetacc.CreateAsset(assetacc.Identifier(), descriptor)
+	err := assetacc.CreateAsset(assetacc.Identifier(), descriptor)
 	if err != nil {
 		return identifiers.Nil, err
 	}
 
-	assetObject := state.NewAssetObject(descriptor.Supply, nil)
-
-	// Create a new asset on the operator state object
-	if err = operator.InsertNewAssetObject(assetID, assetObject); err != nil {
+	// Registers a new asset in the sender's deed registry.
+	if err = sender.CreateDeedsEntry(descriptor.AssetID.AsIdentifier()); err != nil {
 		return identifiers.Nil, err
 	}
 
-	// Registers a new asset in the operator's deed registry.
-	if err = operator.CreateDeedsEntry(assetID.AsIdentifier()); err != nil {
-		return identifiers.Nil, err
-	}
-
-	return assetID, nil
+	return descriptor.AssetID, nil
 }
 
-// validateAssetTransfer ensures the target is registered, asset exists, and sender has sufficient balance.
-func validateAssetTransfer(sender, target, sarga *state.Object, payload *common.AssetActionPayload) error {
-	// Check if the target account is registered
+// validateAssetTransfer ensures the target is registered, asset exists, and the benefactor has sufficient balance.
+func validateAssetTransfer(benefactor, beneficiary, sarga *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	if amount.Cmp(big.NewInt(1)) == -1 {
+		return common.ErrInvalidAmount
+	}
+
+	// Check if the beneficiary account is registered
 	// Fetch the account info from genesis state
-	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Identifier().Bytes()); err != nil {
+	ok, err := sarga.IsAccountRegistered(beneficiary.Identifier())
+	if !ok || err != nil {
 		return common.ErrBeneficiaryNotRegistered
 	}
 
-	assetObject, err := sender.FetchAssetObject(payload.AssetID, true)
+	assetObject, err := benefactor.FetchAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
-		return common.ErrInsufficientFunds
+	if err = assetObject.HasBalance(tokenID, amount); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // transferAsset transfers the asset balance from sender to target account.
-func transferAsset(sender, target *state.Object, payload *common.AssetActionPayload,
+func transferAsset(sender, target *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
 ) error {
 	// Deduct the transfer amount from the sender's asset balance
-	if err := sender.SubBalance(payload.AssetID, payload.Amount); err != nil {
+	metadata, err := sender.SubBalance(assetID, tokenID, amount)
+	if err != nil {
 		return err
 	}
 
-	assetObject, _ := target.FetchAssetObject(payload.AssetID, true)
-	if assetObject == nil {
-		// Insert a new asset object if the asset doesn't exist
-		return target.InsertNewAssetObject(payload.AssetID, state.NewAssetObject(payload.Amount, nil))
-	}
-
 	// Increment the asset balance if the asset already exists
-	return target.AddBalance(payload.AssetID, payload.Amount)
+	return target.AddBalance(assetID, tokenID, amount, metadata)
 }
 
-// validateAssetConsume ensures the target is registered, mandate is valid, and benefactor has sufficient balance.
-func validateAssetConsume(sender, target, sarga, benefactor *state.Object, payload *common.AssetActionPayload) error {
-	// Check if the target account is registered
+// validateAssetConsume ensures the target is registered, mandate is valid, and the benefactor has sufficient balance.
+func validateAssetConsume(operatorID identifiers.Identifier, beneficiary, benefactor, sarga *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	// Check if the beneficiary account is registered
 	// Fetch the account info from genesis state
-	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Identifier().Bytes()); err != nil {
+	if _, err := sarga.GetStorageEntry(common.SargaLogicID.AsIdentifier(), beneficiary.Identifier().Bytes()); err != nil {
 		return common.ErrBeneficiaryNotRegistered
 	}
 
-	assetObject, err := benefactor.FetchAssetObject(payload.AssetID, true)
+	assetObject, err := benefactor.FetchAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
-		return common.ErrInsufficientFunds
+	if err = assetObject.HasBalance(tokenID, amount); err != nil {
+		return err
 	}
 
-	mandate, ok := assetObject.Mandate[sender.Identifier()]
+	mandates, ok := assetObject.Mandate[operatorID]
+	if !ok {
+		return common.ErrMandateNotFound
+	}
+
+	mandate, ok := mandates[tokenID]
 	if !ok {
 		return common.ErrMandateNotFound
 	}
@@ -483,7 +231,7 @@ func validateAssetConsume(sender, target, sarga, benefactor *state.Object, paylo
 		return common.ErrMandateExpired
 	}
 
-	if mandate.Amount.Cmp(payload.Amount) == -1 {
+	if mandate.Amount.Cmp(amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -491,40 +239,45 @@ func validateAssetConsume(sender, target, sarga, benefactor *state.Object, paylo
 }
 
 // consumeMandate transfers the asset balance from benefactor to target account.
-func consumeMandate(sender, target, benefactor *state.Object, payload *common.AssetActionPayload) error {
+func consumeMandate(operatorID identifiers.Identifier, benefactor, beneficiary *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
 	// Deduct the transfer amount from the benefactor's asset and mandate balance
-	if err := benefactor.ConsumeMandate(payload.AssetID, sender.Identifier(), payload.Amount); err != nil {
+	metadata, err := benefactor.ConsumeMandate(assetID, tokenID, operatorID, amount)
+	if err != nil {
 		return err
 	}
 
-	assetObject, _ := target.FetchAssetObject(payload.AssetID, true)
-	if assetObject == nil {
-		// Insert a new asset object if the asset doesn't exist
-		return target.InsertNewAssetObject(payload.AssetID, state.NewAssetObject(payload.Amount, nil))
-	}
-
 	// Increment the asset balance if the asset already exists
-	return target.AddBalance(payload.AssetID, payload.Amount)
+	return beneficiary.AddBalance(assetID, tokenID, amount, metadata)
 }
 
 // validateAssetApprove checks if the target is registered, asset exists, and sender has sufficient balance to approve.
-func validateAssetApprove(sender *state.Object, payload *common.AssetActionPayload) error {
-	assetObject, err := sender.FetchAssetObject(payload.AssetID, true)
+func validateAssetApprove(sender *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	if amount.Cmp(big.NewInt(1)) == -1 {
+		return common.ErrInvalidAmount
+	}
+
+	assetObject, err := sender.FetchAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
-		return common.ErrInsufficientFunds
+	if err = assetObject.HasBalance(tokenID, amount); err != nil {
+		return err
 	}
 
 	return nil
 }
 
 // approveAsset creates a mandate for the sender to approve a specified amount to the beneficiary.
-func approveAsset(sender *state.Object, payload *common.AssetActionPayload) error {
-	if err := sender.CreateMandate(payload.AssetID, payload.Beneficiary, payload.Amount, payload.Timestamp); err != nil {
+func approveAsset(benefactor *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID,
+	beneficiary identifiers.Identifier, amount *big.Int, expiresAt uint64,
+) error {
+	if err := benefactor.CreateMandate(assetID, tokenID, beneficiary, amount, expiresAt); err != nil {
 		return err
 	}
 
@@ -532,8 +285,10 @@ func approveAsset(sender *state.Object, payload *common.AssetActionPayload) erro
 }
 
 // validateAssetRevoke ensures the sender has a valid mandate for the beneficiary to revoke.
-func validateAssetRevoke(sender *state.Object, payload *common.AssetActionPayload) error {
-	_, err := sender.GetMandate(payload.AssetID, payload.Beneficiary)
+func validateAssetRevoke(benefactor *state.Object, beneficiary identifiers.Identifier,
+	assetID identifiers.AssetID, tokenID common.TokenID,
+) error {
+	_, err := benefactor.GetMandate(assetID, tokenID, beneficiary)
 	if err != nil {
 		return err
 	}
@@ -542,127 +297,144 @@ func validateAssetRevoke(sender *state.Object, payload *common.AssetActionPayloa
 }
 
 // revokeAsset deletes the mandate for the specified asset and beneficiary.
-func revokeAsset(sender *state.Object, payload *common.AssetActionPayload) error {
-	if err := sender.DeleteMandate(payload.AssetID, payload.Beneficiary); err != nil {
+func revokeAsset(benefactor *state.Object, beneficiary identifiers.Identifier,
+	assetID identifiers.AssetID, tokenID common.TokenID,
+) error {
+	if err := benefactor.DeleteMandate(assetID, tokenID, beneficiary); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// validateAssetMint ensures the asset exists and the operator matches the specified asset operator for minting.
-func validateAssetMint(operator, assetacc *state.Object, payload *common.AssetSupplyPayload) error {
-	assetInfo, err := assetacc.GetState(payload.AssetID)
+// validateAssetMint ensures the asset exists and the beneficiary matches the specified asset manager for minting.
+func validateAssetMint(senderID identifiers.Identifier, assetacc *state.Object,
+	assetID identifiers.AssetID, amount *big.Int,
+) error {
+	assetInfo, err := assetacc.GetProperties(assetID)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// only operator can mint asset
-	if assetInfo.Operator != operator.Identifier() {
-		return common.ErrOperatorMismatch
+	if amount.Cmp(big.NewInt(1)) == -1 {
+		return common.ErrInvalidAmount
+	}
+
+	if senderID != assetInfo.Manager {
+		return common.ErrManagerMismatch
+	}
+
+	if new(big.Int).Add(assetInfo.CirculatingSupply, amount).Cmp(assetInfo.MaxSupply) > 0 {
+		return common.ErrMaxSupplyReached
 	}
 
 	return nil
 }
 
-// mintAsset increases the asset supply and operator's balance.
-func mintAsset(operator, assetacc *state.Object, payload *common.AssetSupplyPayload) (big.Int, error) {
+// mintAsset increases the asset supply and beneficiary's balance.
+func mintAsset(beneficiary, assetacc *state.Object, assetID identifiers.AssetID,
+	tokenID common.TokenID, amount *big.Int,
+) error {
 	// Mint the asset supply in asset account
-	supply, err := assetacc.MintAsset(payload.AssetID, payload.Amount)
-	if err != nil {
-		return *big.NewInt(0), err
+	if _, err := assetacc.MintAsset(assetID, amount); err != nil {
+		return err
 	}
 
-	// Credit the minted tokens to operator account
-	if err = operator.AddBalance(payload.AssetID, payload.Amount); err != nil {
-		return *big.NewInt(0), err
-	}
-
-	return supply, nil
+	// Credit the minted tokens to beneficiary account
+	return beneficiary.AddBalance(assetID, tokenID, amount, nil)
 }
 
 // validateAssetBurn ensures the asset exists, the operator matches, and the burn amount does not exceed
 // the current balance.
-func validateAssetBurn(operator, assetacc *state.Object, payload *common.AssetSupplyPayload) error {
-	assetInfo, err := assetacc.GetState(payload.AssetID)
+func validateAssetBurn(benefactor, assetacc *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	assetInfo, err := assetacc.GetProperties(assetID)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// only operator can burn asset
-	if assetInfo.Operator != operator.Identifier() {
-		return common.ErrOperatorMismatch
+	// only manager can burn asset
+	if assetInfo.Manager != benefactor.Identifier() {
+		return common.ErrManagerMismatch
 	}
 
-	assetObject, err := operator.FetchAssetObject(payload.AssetID, true)
+	assetObject, err := benefactor.FetchAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
+	}
+
+	bal, ok := assetObject.Balance[tokenID]
+	if !ok {
+		return common.ErrTokenNotFound
+	}
+
+	if amount.Cmp(big.NewInt(1)) == -1 {
+		return common.ErrInvalidAmount
 	}
 
 	// cannot burn amount greater than current balance
-	if assetObject.Balance.Cmp(payload.Amount) < 0 {
+	if bal.Cmp(amount) < 0 {
 		return common.ErrInsufficientFunds
 	}
 
 	return nil
 }
 
-// burnAsset reduces the asset supply and operator's balance.
-func burnAsset(operator, assetacc *state.Object, payload *common.AssetSupplyPayload) (big.Int, error) {
-	// Debit the tokens from operator account
-	if err := operator.SubBalance(payload.AssetID, payload.Amount); err != nil {
-		return *big.NewInt(0), err
+// burnAsset reduces the asset supply and benefactor's balance.
+func burnAsset(
+	benefactor, assetacc *state.Object, assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	// Debit the tokens from benefactor account
+	if _, err := benefactor.SubBalance(assetID, tokenID, amount); err != nil {
+		return err
 	}
 
 	// Burn the supply in asset account
-	supply, err := assetacc.BurnAsset(payload.AssetID, payload.Amount)
-	if err != nil {
-		return *big.NewInt(0), err
-	}
+	_, err := assetacc.BurnAsset(assetID, amount)
 
-	return supply, nil
+	return err
 }
 
 // validateAssetLockup ensures the target account is registered, the asset exists, and the sender has
 // sufficient balance to lock up the specified amount.
-func validateAssetLockup(sender *state.Object, payload *common.AssetActionPayload) error {
-	assetObject, err := sender.FetchAssetObject(payload.AssetID, true)
+func validateAssetLockup(benefactor *state.Object, beneficiaryID identifiers.Identifier,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	if beneficiaryID.IsNil() {
+		return common.ErrInvalidBeneficiary
+	}
+
+	if amount.Cmp(big.NewInt(1)) == -1 {
+		return common.ErrInvalidAmount
+	}
+
+	assetObject, err := benefactor.FetchAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	// Check if sender has sufficient balance
-	if assetObject.Balance.Cmp(payload.Amount) == -1 {
-		return common.ErrInsufficientFunds
-	}
-
-	return nil
+	return assetObject.HasBalance(tokenID, amount)
 }
 
 // lockupAsset creates a lockup for the specified asset and amount.
-func lockupAsset(sender *state.Object, payload *common.AssetActionPayload) error {
-	if err := sender.CreateLockup(payload.AssetID, payload.Beneficiary, payload.Amount); err != nil {
-		return err
-	}
-
-	return nil
+func lockupAsset(benefactor *state.Object, beneficiary identifiers.Identifier,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	return benefactor.CreateLockup(assetID, tokenID, beneficiary, amount)
 }
 
 // validateAssetRelease verifies that the target account is registered and that the benefactor has enough funds
 // in the lockup to release the specified amount.
-func validateAssetRelease(sender, target, sarga, benefactor *state.Object, payload *common.AssetActionPayload) error {
-	// Check if the target account is registered
-	// Fetch the account info from genesis state
-	if _, err := sarga.GetStorageEntry(common.SargaLogicID, target.Identifier().Bytes()); err != nil {
-		return common.ErrBeneficiaryNotRegistered
-	}
-
-	lockupAmount, err := benefactor.GetLockup(payload.AssetID, sender.Identifier())
+func validateAssetRelease(operatorID identifiers.Identifier, benefactor *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	lockup, err := benefactor.GetLockup(assetID, tokenID, operatorID)
 	if err != nil {
 		return common.ErrLockupNotFound
 	}
 
-	if lockupAmount.Cmp(payload.Amount) == -1 {
+	if lockup.Amount.Cmp(amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -670,17 +442,14 @@ func validateAssetRelease(sender, target, sarga, benefactor *state.Object, paylo
 }
 
 // releaseAsset releases the specified amount from sender's lockup and updates the target's balance.
-func releaseAsset(sender, target, benefactor *state.Object, payload *common.AssetActionPayload) error {
-	if err := benefactor.ReleaseLockup(payload.AssetID, sender.Identifier(), payload.Amount); err != nil {
+func releaseAsset(operatorID identifiers.Identifier, benefactor, beneficiary *state.Object,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+) error {
+	metadata, err := benefactor.ReleaseLockup(assetID, tokenID, operatorID, amount)
+	if err != nil {
 		return err
 	}
 
-	assetObject, _ := target.FetchAssetObject(payload.AssetID, true)
-	if assetObject == nil {
-		// Insert a new asset object if the asset doesn't exist
-		return target.InsertNewAssetObject(payload.AssetID, state.NewAssetObject(payload.Amount, nil))
-	}
-
 	// Increment the asset balance if the asset already exists
-	return target.AddBalance(payload.AssetID, payload.Amount)
+	return beneficiary.AddBalance(assetID, tokenID, amount, metadata)
 }
