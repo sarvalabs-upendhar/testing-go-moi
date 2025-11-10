@@ -1,0 +1,98 @@
+name: Start/Stop Devnet Bootnode
+on:
+  workflow_dispatch: {}
+
+env:
+  BRANCH_NAME: ${{ github.ref_name }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.ACCESS_TOKEN }}
+          logout: true
+
+      - name: Build & Push moipod container image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          file: ./docker/moipod/internal.amd64
+          tags: ghcr.io/sarvalabs/moipod:latest
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
+
+  ansible-playbook:
+    runs-on: ubuntu-latest
+    needs: [publish]
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Install Teleport CLI
+      - name: Install Teleport CLI
+        uses: teleport-actions/setup@v1
+        with:
+          version: 16.2.1
+
+      # Authenticate with Teleport Machine ID (Bot)
+      - name: Authenticate via Teleport Bot
+        uses: teleport-actions/auth@v2
+        with:
+          proxy: dev.teleport.moi.technology:443
+          token: github-join-token
+          certificate-ttl: 2h
+          anonymous-telemetry: 1
+
+      # Run the Ansible playbook via Machine ID
+      - name: Run Ansible Playbook via Machine ID
+        run: |
+          echo "Starting bootnode playbook execution..."
+          
+          # Export AWS credentials
+          export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          export AWS_DEFAULT_REGION="${{ secrets.AWS_DEFAULT_REGION }}"
+          
+          # Decode inventory file from GitHub variable
+          echo "${{ vars.PUBLIC_DEVNET_BOOTNODE_INVENTORY_FILE }}" | base64 -d > /tmp/bootnode.yml
+          cat /tmp/bootnode.yml
+          
+          # Locate the Teleport Machine ID SSH config
+          MACHINE_ID_DIR=$(find /home/runner/work/_temp -name "ssh_config" -type f -exec dirname {} \; | head -1)
+          
+          # Create temporary Ansible config for Machine ID
+          cat > /tmp/ansible.cfg << 'EOF'
+          [defaults]
+          host_key_checking = False
+          inventory = /tmp/bootnode.yml
+          remote_tmp = /tmp/.ansible-${USER}/tmp
+          forks = 10
+          pipelining = True
+          
+          [ssh_connection]
+          ssh_args = -F ${MACHINE_ID_DIR}/ssh_config -o ControlMaster=auto -o ControlPersist=480s
+          EOF
+          
+          # Replace placeholder with actual MACHINE_ID_DIR
+          sed -i "s|\${MACHINE_ID_DIR}|$MACHINE_ID_DIR|g" /tmp/ansible.cfg
+          
+          # Run the Ansible playbook
+          ANSIBLE_CONFIG=/tmp/ansible.cfg ansible-playbook \
+            -i /tmp/bootnode.yml \
+            ansible-devnet/bootnode.yaml \
+            -f 10 \
+            --extra-vars "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}"
+            

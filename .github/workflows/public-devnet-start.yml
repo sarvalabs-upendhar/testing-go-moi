@@ -1,0 +1,52 @@
+name: Start Containers 
+
+on:  
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  BRANCH_NAME: ${{ github.ref_name }}
+
+jobs:
+  start-containers:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        host:
+          - dev-node-01
+          - dev-node-02
+          - dev-node-03
+          - dev-node-04
+          - dev-node-05
+          - dev-node-06
+          - dev-node-07
+          - dev-node-08
+          - dev-node-09
+          - dev-node-10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install Teleport CLI
+        uses: teleport-actions/setup@v1
+        with:
+          version: 16.2.1
+
+      - name: Authenticate via Teleport Bot
+        uses: teleport-actions/auth@v2
+        with:
+          proxy: dev.teleport.moi.technology:443
+          token: github-join-token
+          certificate-ttl: 2h
+          anonymous-telemetry: 1
+
+      - name: Start Devnet via tsh ssh
+        run: |
+          echo "Connecting to node: ${{ matrix.host }}"
+          tsh ssh moichain@${{ matrix.host }} "cd ~ && bash start.sh"
+          
