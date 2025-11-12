@@ -39,6 +39,7 @@ type ApproveParams struct {
 	Amount      *big.Int               `polo:"amount"`
 	ExpiresAt   uint64                 `polo:"expires_at"`
 }
+
 type LockupParams struct {
 	Beneficiary identifiers.Identifier `polo:"beneficiary"`
 	Amount      *big.Int               `polo:"amount"`

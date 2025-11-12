@@ -1,7 +1,6 @@
 package state
 
 import (
-	"fmt"
 	"math/big"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
@@ -381,10 +380,6 @@ func (object *Object) BalanceOf(id identifiers.AssetID, tokenID common.TokenID) 
 	assetObject, err := object.getAssetObject(id, false)
 	if err != nil {
 		return nil, common.ErrAssetNotFound
-	}
-
-	for k, v := range assetObject.Balance {
-		fmt.Println("Token ID", k, v)
 	}
 
 	amount, ok := assetObject.Balance[tokenID]

@@ -2188,7 +2188,7 @@ func TestIxPool_validateIx(t *testing.T) {
 		c.PriceLimit = defaultIxPriceLimit
 	}, true, sm, nil)
 
-	invalidAssetID := identifiers.AssetID(ids[0])
+	invalidAssetID := identifiers.AssetID(ids[1])
 	testcases := []struct {
 		name        string
 		ix          *common.Interaction

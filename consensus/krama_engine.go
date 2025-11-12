@@ -399,6 +399,8 @@ func (k *Engine) sendSyncRequests(
 	hasSentSyncRequest := false
 
 	sendSyncRequest := func(id identifiers.Identifier, height uint64) {
+		k.logger.Debug("sending sync request from consensus", "id", id, "height", height)
+
 		_ = k.mux.Post(utils.SyncRequestEvent{
 			ID:       id,
 			Height:   height,
@@ -611,7 +613,7 @@ func (k *Engine) loadClusterState(
 		return nil, err
 	}
 
-	viewInfos, err := k.loadViewInfo(participants.IDs())
+	viewInfos, err := k.loadViewInfo(participants.AccountsWithoutNoLocks())
 	if err != nil {
 		k.logger.Error("Failed to load view info", err)
 
@@ -710,12 +712,20 @@ func (k *Engine) fetchParticipantsAndCommittee(
 			participants[id].ConsensusNodesHash = consensusNodesHash
 			committee.IncrementPSCount(consensusNodesHash)
 
+			if committee.IsExcluded(existingPosition) && participants[id].LockType != common.NoLock {
+				committee.SetExcludeFromICS(existingPosition, false)
+			}
+
 			continue
 		}
 
 		committee.AppendNodeSet(consensusNodesHash,
 			ktypes.NewNodeSet(vals, uint32(len(vals))),
 		)
+
+		if participants[id].LockType == common.NoLock {
+			committee.SetExcludeFromICS(position, true)
+		}
 
 		participants[id].NodeSetPosition = position
 		participants[id].ConsensusQuorum = committee.ParticipantQuorum(position)
@@ -1236,6 +1246,11 @@ func (k *Engine) validateInteractions(ixs common.Interactions) error {
 			"sequence-id", ix.SequenceID(),
 			"from", ix.SenderID().Hex(),
 		)
+
+		for _, op := range ix.Ops() {
+			k.logger.Debug("printing ix op type", "ix-hash", ixHash, "op-type", op.OpType)
+		}
+
 		/*
 			Checks to perform
 			1) Verify sequenceID
@@ -1471,11 +1486,10 @@ func (k *Engine) ExecuteAndValidate(
 }
 
 func (k *Engine) AddActiveAccounts(
-	lockType common.LockType,
+	accountLocks map[identifiers.Identifier]common.LockType,
 	clusterID common.ClusterID,
-	ids ...identifiers.Identifier,
 ) bool {
-	return k.slots.AddActiveAccounts(lockType, clusterID, ids...)
+	return k.slots.AddActiveAccounts(accountLocks, clusterID)
 }
 
 func (k *Engine) ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier) {

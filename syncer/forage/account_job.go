@@ -121,7 +121,7 @@ func (jq *AccountJobQueue) RemoveJob(job *AccountSyncJob) error {
 	// If the account sync is triggered by tesseract worker, tesseract worker should clear active accounts
 	if job.tsWorkerSignal == nil {
 		// unlock the account as it is synced
-		jq.krama.ClearActiveAccounts(accountWorker, job.id)
+		jq.krama.ClearActiveAccounts(job.clusterID, job.id)
 	}
 
 	if err := jq.mux.Post(utils.PendingAccountEvent{ID: job.id, Count: -1}); err != nil {
@@ -176,6 +176,7 @@ type AccountSyncJob struct {
 	latticeSyncInProgress bool
 	selfAccLock           bool
 	tsWorkerSignal        chan struct{}
+	clusterID             common.ClusterID
 }
 
 func AccountSyncJobFromCanonicalInfo(

@@ -16,7 +16,6 @@ import (
 
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
 	"github.com/btcsuite/btcd/chaincfg"
-
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
 	"github.com/VictoriaMetrics/fastcache"

@@ -21,6 +21,14 @@ type State struct {
 	StateHash      Hash
 }
 
+func (s *State) IsSuccess() bool {
+	return !s.StateHash.IsNil()
+}
+
+func (s *State) IsFailure() bool {
+	return s.StateHash.IsNil()
+}
+
 func (s *State) Copy() State {
 	state := *s
 

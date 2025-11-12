@@ -39,7 +39,7 @@ func (k *Engine) GetICSCommittee(
 			return nil, err
 		}
 
-		ics.UpdateNodeset(consensusNodesHash, consensusNodes, ps[id])
+		ics.UpdateNodeset(consensusNodesHash, consensusNodes, ps[id], ts.ConsensusInfo().AccountLocks[id])
 	}
 
 	vals, err := systemObject.GetValidators(info.RandomSet...)
@@ -91,17 +91,7 @@ func (k *Engine) GetICSCommitteeFromRawContext(
 
 		contextHashes = append(contextHashes, ps[id].LockedContext)
 
-		ics.UpdateNodeset(metaObject.ConsensusNodesHash, nodeSet, ps[id])
-
-		if _, ok := ics.GetNodesetPosition(metaObject.ConsensusNodesHash); !ok {
-			ics.AppendNodeSet(metaObject.ConsensusNodesHash, nodeSet)
-		} else {
-			ics.IncrementPSCount(metaObject.ConsensusNodesHash)
-		}
-
-		if ps[id].StateHash == common.NilHash {
-			ics.IncrementExcludedPSCount(metaObject.ConsensusNodesHash)
-		}
+		ics.UpdateNodeset(metaObject.ConsensusNodesHash, nodeSet, ps[id], ts.ConsensusInfo().AccountLocks[id])
 	}
 
 	// delete the context hashes from delta separately instead of deleting in above for loop

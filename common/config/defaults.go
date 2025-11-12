@@ -101,7 +101,7 @@ func (n NetworkID) IsTestnet() bool {
 }
 
 var (
-	DevnetMaxConcurrentConns = 20
+	DevnetMaxConcurrentConns = 40
 
 	DevnetIPv4SubnetLimits = []rate.SubnetLimit{
 		{

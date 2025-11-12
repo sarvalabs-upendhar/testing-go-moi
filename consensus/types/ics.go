@@ -1,13 +1,11 @@
 package types
 
 import (
-	"crypto/rand"
 	"sync"
 	"time"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
-	"github.com/mr-tron/base58"
 	"github.com/sarvalabs/go-moi/common"
 	gtypes "github.com/sarvalabs/go-moi/state"
 	"github.com/sarvalabs/go-polo"
@@ -477,16 +475,6 @@ func (a AccountInfos) Identifiers() []identifiers.Identifier {
 	}
 
 	return ids
-}
-
-func GenerateClusterID() (common.ClusterID, error) {
-	randHash := make([]byte, 32)
-
-	if _, err := rand.Read(randHash); err != nil {
-		return "", err
-	}
-
-	return common.ClusterID(base58.Encode(randHash)), nil
 }
 
 type ICSOperatorInfo struct {

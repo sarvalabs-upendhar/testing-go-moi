@@ -846,6 +846,20 @@ func (ix *Interaction) IDs() []identifiers.Identifier {
 	return ids
 }
 
+func (ix *Interaction) AccountsWithoutNoLock() []identifiers.Identifier {
+	ids := make([]identifiers.Identifier, 0)
+
+	for id, info := range ix.ps {
+		if info.LockType == NoLock {
+			continue
+		}
+
+		ids = append(ids, id)
+	}
+
+	return ids
+}
+
 func (ix *Interaction) LeaderCandidateAcc() identifiers.Identifier {
 	return ix.leaderCandidateAcc.ID
 }
@@ -1109,7 +1123,7 @@ func (ix *Interaction) UpdateLeaderCandidateID() error {
 			continue
 		}
 
-		if info.AccountType() == RegularAccount {
+		if info.AccountType() == RegularAccount && info.LockType == MutateLock {
 			regularAccounts = append(regularAccounts, id)
 
 			continue
@@ -1225,12 +1239,16 @@ func (ixs Interactions) Hashes() Hashes {
 	return hashes
 }
 
-func (ixs Interactions) UniqueIds() []identifiers.Identifier {
+func (ixs Interactions) UniqueIdsWithoutNoLocks() []identifiers.Identifier {
 	ids := make(IdentifierList, 0)
 	hasID := make(map[identifiers.Identifier]struct{})
 
 	for _, ixn := range ixs.ixns {
-		for id := range ixn.ps {
+		for id, info := range ixn.ps {
+			if info.LockType == NoLock {
+				continue
+			}
+
 			if _, ok := hasID[id]; ok {
 				continue
 			}

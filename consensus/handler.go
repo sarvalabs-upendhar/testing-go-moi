@@ -65,7 +65,7 @@ func (k *Engine) processPrepareMsgs(participantToPrepareMsgs map[identifiers.Ide
 				continue
 			}
 
-			ps := prepare.ixns.UniqueIds()
+			ps := prepare.ixns.UniqueIdsWithoutNoLocks()
 
 			viewInfos, err := k.loadViewInfo(ps)
 			if err != nil {
@@ -229,7 +229,7 @@ func (k *Engine) handleNewView(ctx context.Context, view *types.View) {
 	}
 
 	for _, batch := range k.pool.ProcessableBatches() {
-		clusterID, err := types.GenerateClusterID()
+		clusterID, err := common.GenerateClusterID()
 		if err != nil {
 			k.logger.Error("failed to create clusterID")
 
@@ -266,7 +266,7 @@ func (k *Engine) handleNewView(ctx context.Context, view *types.View) {
 }
 
 func (k *Engine) handleFailedView(failedView uint64, ts *common.Tesseract, view *types.View) error {
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	if err != nil {
 		k.logger.Error("failed to create clusterID")
 
@@ -435,7 +435,7 @@ func (k *Engine) fetchParticipantsThisNodeIsContext(ixns *common.Interactions) [
 	ids := make([]identifiers.Identifier, 0)
 
 	for id, info := range ixns.Participants() {
-		if info.IsGenesis {
+		if info.IsGenesis || info.LockType == common.NoLock {
 			continue
 		}
 

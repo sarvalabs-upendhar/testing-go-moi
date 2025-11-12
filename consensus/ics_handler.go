@@ -3,6 +3,7 @@ package consensus
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -268,12 +269,10 @@ func (k *Engine) handleProposal(ctx context.Context, cs *ktypes.ClusterState, pr
 			continue
 		}
 
-		if err = k.updateHighestVI(cs, peerInfo, peerID, true); err != nil {
+		if err = k.validateAndUpdateHighestVI(cs, peerInfo, peerID, true); err != nil {
 			k.logger.Error("failed to validate highest QC", "error", err, "peer-id", peerID)
 
-			if errors.Is(err, common.ErrSyncRequestSent) {
-				shouldReturn = true
-			}
+			shouldReturn = true
 		}
 
 		cs.Committee().UpdateResponse(ktypes.MajorityCounter, peerID)
@@ -504,6 +503,38 @@ func (k *Engine) verifyPreparedMsg(
 	return nil
 }
 
+func (k *Engine) validateRemotePeerInfo(cs *ktypes.ClusterState, peerInfo common.Views,
+	sender identifiers.KramaID, isProposal bool,
+) error {
+	if len(peerInfo) != len(cs.HighestViewInfo()) {
+		return errors.New(fmt.Sprintf("view count doesn't match remote= %d , local= %d",
+			len(peerInfo), len(cs.HighestViewInfo())))
+	}
+
+	for i, viewInfo := range cs.LocalViewInfo() {
+		if peerInfo[i].ID != viewInfo.ID {
+			return errors.New("view order doesn't match")
+		}
+
+		// verify the bls signature of the QC
+		if err := k.validateQcAndUpdateSafety(cs, peerInfo[i], sender, isProposal); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (k *Engine) updateHighestViewInfo(cs *ktypes.ClusterState, peerInfo common.Views) {
+	for i := range cs.LocalViewInfo() {
+		if !k.shouldReplace(cs.HighestViewInfo()[i], peerInfo[i]) {
+			continue
+		}
+
+		cs.HighestViewInfo()[i] = peerInfo[i]
+	}
+}
+
 /*
 - Validate the viewID
 - Validate the BLS signature of the prepareQc
@@ -543,6 +574,10 @@ func (k *Engine) handlePrepared(
 		return nil
 	}
 
+	if err := k.validateRemotePeerInfo(cs, msg.Infos, sender, false); err != nil {
+		return err
+	}
+
 	// save the view info sent by the peer
 	cs.Committee().UpdateNodePreparedMsg(sender, msg)
 
@@ -555,6 +590,10 @@ func (k *Engine) handlePrepared(
 		return err
 	}
 
+	if swapped := slot.UpdateStage(ktypes.PrepareStage, ktypes.PreparedStage); !swapped {
+		return nil
+	}
+
 	for peerIndex, info := range viewInfos {
 		if info == nil { // ignore un-responded nodes
 			continue
@@ -562,19 +601,13 @@ func (k *Engine) handlePrepared(
 
 		slots, _, peerID, _ := cs.Committee().GetKramaID(int32(peerIndex))
 
+		// This ensures we don't collect more than quorum of prepared msgs for evaluating later
 		if cs.Committee().IsSlotsQuorum(slots) {
 			continue
 		}
 
-		if err := k.updateHighestVI(cs, info, peerID, true); err != nil {
-			k.logger.Error("failed to validate highest QC as operator", "error", err, "peer-id", peerID)
-		}
-
+		k.updateHighestViewInfo(cs, info)
 		cs.Committee().UpdateResponse(ktypes.MajorityCounter, peerID)
-	}
-
-	if swapped := slot.UpdateStage(ktypes.PrepareStage, ktypes.PreparedStage); !swapped {
-		return nil
 	}
 
 	lockedTS, status, err := k.getLockStatus(slot.ClusterState().HighestViewInfo(), slot.ClusterState().IxnsHash())
@@ -854,12 +887,13 @@ func (k *Engine) shouldReplace(highestViewInfo *common.ViewInfo, peerViewInfo *c
 //        - If the remote QC height is **equal to** the highest view info QC height **and**
 //          the remote peer view is lesser (i.e. its view number is smaller), do **not** update.
 
-// updateHighestVI updates the highest view info by validating the peer info view and qc.
-func (k *Engine) updateHighestVI(cs *ktypes.ClusterState, peerInfo common.Views,
+// validateAndUpdateHighestVI updates the highest view info by validating the peer info view and qc.
+func (k *Engine) validateAndUpdateHighestVI(cs *ktypes.ClusterState, peerInfo common.Views,
 	peerID identifiers.KramaID, isProposal bool,
 ) error {
 	if len(peerInfo) != len(cs.HighestViewInfo()) {
-		return errors.New("view count doesn't match")
+		return errors.New(fmt.Sprintf("view count doesn't match remote= %d , local= %d",
+			len(peerInfo), len(cs.HighestViewInfo())))
 	}
 
 	for i, viewInfo := range cs.LocalViewInfo() {
@@ -867,7 +901,7 @@ func (k *Engine) updateHighestVI(cs *ktypes.ClusterState, peerInfo common.Views,
 			return errors.New("view order doesn't match")
 		}
 
-		if shouldReplace := k.shouldReplace(cs.HighestViewInfo()[i], peerInfo[i]); !shouldReplace {
+		if !k.shouldReplace(cs.HighestViewInfo()[i], peerInfo[i]) {
 			continue
 		}
 

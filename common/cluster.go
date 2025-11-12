@@ -1,6 +1,7 @@
 package common
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"fmt"
 
@@ -21,6 +22,16 @@ func (c ClusterID) Hash() Hash {
 	}
 
 	return BytesToHash(rawHash)
+}
+
+func GenerateClusterID() (ClusterID, error) {
+	randHash := make([]byte, 32)
+
+	if _, err := rand.Read(randHash); err != nil {
+		return "", err
+	}
+
+	return ClusterID(base58.Encode(randHash)), nil
 }
 
 type ExecutionContext struct {

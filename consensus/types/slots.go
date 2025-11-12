@@ -168,6 +168,10 @@ func (s *Slots) areAccountsActive(ids map[identifiers.Identifier]common.LockType
 }
 
 func (s *Slots) addActiveAccount(id identifiers.Identifier, lockInfo *LockInfo) {
+	if lockInfo.lockType == common.NoLock {
+		return
+	}
+
 	_, ok := s.activeAccounts[id]
 	if !ok {
 		s.activeAccounts[id] = make([]*LockInfo, 0)
@@ -177,24 +181,18 @@ func (s *Slots) addActiveAccount(id identifiers.Identifier, lockInfo *LockInfo) 
 }
 
 func (s *Slots) AddActiveAccounts(
-	lockType common.LockType, clusterID common.ClusterID, ids ...identifiers.Identifier,
+	accountLocks map[identifiers.Identifier]common.LockType, clusterID common.ClusterID,
 ) bool {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	m := make(map[identifiers.Identifier]common.LockType)
-
-	for _, id := range ids {
-		m[id] = lockType
-	}
-
-	if s.areAccountsActive(m) {
+	if s.areAccountsActive(accountLocks) {
 		return false
 	}
 
-	for _, id := range ids {
-		s.logger.Debug("add account lock", "cid", clusterID, "id", id, "lock", lockType)
-		s.addActiveAccount(id, &LockInfo{lockType: lockType, clusterID: clusterID})
+	for id, lock := range accountLocks {
+		s.logger.Debug("add account lock", "cid", clusterID, "id", id, "lock", accountLocks[id])
+		s.addActiveAccount(id, &LockInfo{lockType: lock, clusterID: clusterID})
 	}
 
 	return true
@@ -206,6 +204,10 @@ func (s *Slots) removeAccount(clusterID common.ClusterID, id identifiers.Identif
 	}
 
 	if len(s.activeAccounts[id]) == 1 {
+		if s.activeAccounts[id][0].clusterID != clusterID {
+			return
+		}
+
 		s.logger.Debug("remove account lock", "cid", clusterID, "id", id)
 
 		delete(s.activeAccounts, id)

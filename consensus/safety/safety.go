@@ -126,7 +126,11 @@ func (s *ConsensusSafety) UpdateSafetyInfo(p *ktypes.Proposal, qc *common.Qc) er
 
 	tsHash := p.Tesseract.Hash()
 
-	for id := range p.Heights() {
+	for id, lock := range p.Tesseract.ConsensusInfo().AccountLocks {
+		if lock == common.NoLock {
+			continue
+		}
+
 		safetyInfo, err := s.getSafetyData(id)
 		if err != nil {
 			safetyInfo = &ktypes.SafetyData{

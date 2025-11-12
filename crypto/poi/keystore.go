@@ -112,7 +112,12 @@ func mParseInt(m interface{}) int {
 func getKDFKeyForKeystore(cryptoJSON cryptoParams, auth string) ([]byte, error) {
 	authArray := []byte(auth)
 
-	salt, err := hex.DecodeString(cryptoJSON.KDFParams["salt"].(string))
+	s, ok := cryptoJSON.KDFParams["salt"].(string)
+	if !ok {
+		return nil, fmt.Errorf("expected string for salt, got %T", cryptoJSON.KDFParams["salt"])
+	}
+
+	salt, err := hex.DecodeString(s)
 	if err != nil {
 		return nil, err
 	}

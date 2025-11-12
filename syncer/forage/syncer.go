@@ -212,10 +212,24 @@ type kramaEngine interface {
 		info *common.CommitInfo,
 		systemObject *state.SystemObject,
 	) (*ktypes.ICSCommittee, error)
-	AddActiveAccounts(lockType common.LockType, clusterID common.ClusterID, ids ...identifiers.Identifier) bool
+	AddActiveAccounts(accountLocks map[identifiers.Identifier]common.LockType, clusterID common.ClusterID) bool
 	ClearActiveAccounts(clusterID common.ClusterID, ids ...identifiers.Identifier)
 	GetLockedTSFromDB(tsHash common.Hash) (*common.Tesseract, error)
 	DeleteLockedTSInfo(ts *common.Tesseract, fromSyncer bool)
+}
+
+func createClusterID(prefix string, id common.ClusterID) common.ClusterID {
+	return common.ClusterID(fmt.Sprintf("%s%s", prefix, id))
+}
+
+type participantInfo struct {
+	lock           common.LockType
+	isSender       bool
+	newParticipant bool
+}
+
+func (pi *participantInfo) isReadOrNoLock() bool {
+	return pi.lock > common.MutateLock
 }
 
 type Syncer struct {
@@ -353,6 +367,11 @@ func (s *Syncer) NewSyncRequest(
 ) (err error) {
 	job, ok := s.accountJobQueue.getJob(id)
 	if job == nil {
+		clusterID, err := common.GenerateClusterID()
+		if err != nil {
+			return err
+		}
+
 		job = &AccountSyncJob{
 			db:              s.db,
 			logger:          s.logger,
@@ -365,6 +384,7 @@ func (s *Syncer) NewSyncRequest(
 			tesseractSignal: make(chan struct{}, 1),
 			bestPeers:       make(map[identifiers.KramaID]struct{}),
 			tsWorkerSignal:  tsWorkerSignal,
+			clusterID:       createClusterID(accountWorker, clusterID),
 		}
 
 		job.updateBestPeers(bestPeers)
@@ -461,28 +481,42 @@ func (s *Syncer) addTSThroughExecution(msg *TesseractInfo) error {
 	return nil
 }
 
-// SyncAccountState sync's the state of participants till previous tesseract or latest state based on flag
-func (s *Syncer) SyncAccountState(ts *common.Tesseract, syncUpToPrevTesseract bool) {
+// SyncAccountState synchronizes participant states up to either the previous or current tesseract.
+// - If a genesis account was created in a failed interaction, it cannot be synced to its latest or previous height.
+// - When syncUpToPrevTesseract is true:
+//   - NoLock accounts are synced up to the current tesseract.
+//   - MutateLock accounts are synced up to their previous height.
+//
+// - Otherwise, all accounts are synced up to the current tesseract.
+func (s *Syncer) SyncAccountState(ts *common.Tesseract, syncUpToPrevTesseract bool,
+	psInfo map[identifiers.Identifier]*participantInfo,
+) error {
+	ch := make(chan struct{})
+	defer close(ch)
+
 	var (
-		ch               = make(chan struct{})
-		accountSyncCount = 0
+		syncCount int
+		skip      bool
 	)
 
-	for id, ps := range ts.Participants() {
-		if syncUpToPrevTesseract && ps.Height == 0 {
+	for id, participant := range ts.Participants() {
+		info, ok := psInfo[id]
+		if !ok {
+			return errors.New("participant not found")
+		}
+
+		// Skip genesis accounts created in failed interactions.
+		if participant.IsFailure() && info.newParticipant {
 			continue
 		}
 
-		height := ps.Height
+		height := participant.Height
 
-		// If participant state hash is nil then sync till current height as it is excluded
-		if syncUpToPrevTesseract && !ps.StateHash.IsNil() {
-			height--
-		}
-
-		lockInfo, ok := ts.ConsensusInfo().AccountLocks[id]
-		if ok && lockInfo > common.MutateLock {
-			height--
+		if syncUpToPrevTesseract {
+			height, skip = findPreviousHeight(info, height, participant.IsSuccess())
+			if skip {
+				continue
+			}
 		}
 
 		if s.db.HasAccMetaInfoAt(id, height) {
@@ -497,6 +531,10 @@ func (s *Syncer) SyncAccountState(ts *common.Tesseract, syncUpToPrevTesseract bo
 			continue
 		}
 
+		s.logger.Debug("creating account sync request", "height", height, "id", id,
+			"before-height", participant.Height, "info", info, "statehash", participant.StateHash,
+		)
+
 		err = s.NewSyncRequest(id, height, common.LatestSync, peers, false, ch)
 		if err != nil {
 			s.logger.Error("failed to create account sync request",
@@ -505,81 +543,195 @@ func (s *Syncer) SyncAccountState(ts *common.Tesseract, syncUpToPrevTesseract bo
 			continue
 		}
 
-		accountSyncCount++
+		syncCount++
 	}
 
-	if accountSyncCount == 0 {
-		return
+	if syncCount == 0 {
+		return nil
 	}
 
 	s.logger.Debug("trying to sync the accounts for", ts.Hash())
 
-	defer close(ch)
-
 	for range ch {
-		accountSyncCount--
+		syncCount--
 
-		if accountSyncCount == 0 {
+		if syncCount == 0 {
 			s.logger.Debug("synced the accounts successfully for", ts.Hash())
 
-			return
+			return nil
 		}
+	}
+
+	return nil
+}
+
+// fetchParticipantsInfo collects participant metadata (lock type, newParticipant, isSender)
+// across all interactions in the provided set.
+//
+// Notes:
+//   - MutateLock takes precedence over ReadLock/NoLock (i.e., higher mutability wins).
+//   - If a participant appears multiple times, fields are merged intelligently:
+//   - lock: most restrictive (mutate > read > noLock)
+//   - newParticipant: true if true in any interaction
+//   - isSender: true if participant is sender in any interaction
+func fetchParticipantsInfo(ixns []*common.Interaction) map[identifiers.Identifier]*participantInfo {
+	info := make(map[identifiers.Identifier]*participantInfo)
+
+	for _, ixn := range ixns {
+		for id, psInfo := range ixn.Participants() {
+			oldInfo, exists := info[id]
+			if !exists {
+				info[id] = &participantInfo{
+					lock:           psInfo.LockType,
+					newParticipant: psInfo.IsGenesis,
+					isSender:       id == ixn.SenderID(),
+				}
+
+				continue
+			}
+
+			if psInfo.LockType < oldInfo.lock {
+				oldInfo.lock = psInfo.LockType
+			}
+
+			// If participant was ever new or sender, retain true
+			oldInfo.newParticipant = oldInfo.newParticipant || psInfo.IsGenesis
+			oldInfo.isSender = oldInfo.isSender || (id == ixn.SenderID())
+		}
+	}
+
+	return info
+}
+
+// findPreviousHeight returns the previous height of a participant if the state changed.
+// It returns (height, skip):
+//   - If the lock is readLock or noLock then return same height
+//   - If the previous height doesn't exist, skip is true.
+//   - When a interaction fails, only the sender's height changes (decremented); others retain the same height.
+func findPreviousHeight(info *participantInfo, height uint64, isSuccess bool) (newHeight uint64, skip bool) {
+	switch {
+	case info.isReadOrNoLock():
+		return height, false
+
+	case isSuccess && height == 0:
+		return 0, true
+
+	case isSuccess:
+		return height - 1, false
+
+	case info.isSender:
+		return height - 1, false
+
+	default:
+		return height, false
 	}
 }
 
-// getStorageStatus checks the storage status of participants in the Tesseract.
-func (s *Syncer) getParticipantStorageStatus(ts *common.Tesseract) StorageStatus {
-	hasStored, hasNotStored := false, false
+// getParticipantStorageStatus determines how fully the Tesseract state
+// has been stored across participants.
+//
+// StorageStatus can be:
+//   - NotStored: no participant achieved the target state.
+//   - PartiallyStored: some (≥1) participants achieved it.
+//   - FullyStored: all participants achieved it.
+//
+// Notes:
+//   - No new state is created for noLock/readLock accounts or non-sender participants in failed interactions.
+//     Therefore, storage decisions for those cases are not fully informed.
+func (s *Syncer) getParticipantStorageStatus(ts *common.Tesseract, psInfo map[identifiers.Identifier]*participantInfo,
+) (StorageStatus, error) {
+	var hasStored, hasNotStored bool
 
 	for id, participant := range ts.Participants() {
-		if participant.StateHash == common.NilHash {
-			continue
+		height := participant.Height
+
+		info, ok := psInfo[id]
+		if !ok {
+			return 0, fmt.Errorf("participant %v not found", id)
 		}
 
-		if lockInfo, exists := ts.ConsensusInfo().AccountLocks[id]; exists && lockInfo > common.MutateLock {
-			continue
-		}
+		switch {
+		case info.isReadOrNoLock():
+			if !s.db.HasAccMetaInfoAt(id, height) {
+				hasNotStored = true
+			}
 
-		if s.db.HasAccMetaInfoAt(id, participant.Height) {
-			hasStored = true
-		} else {
-			hasNotStored = true
+		case participant.IsFailure():
+			if info.newParticipant {
+				continue
+			}
+
+			if !s.db.HasAccMetaInfoAt(id, height) {
+				hasNotStored = true
+			}
+
+		default:
+			if s.db.HasAccMetaInfoAt(id, height) {
+				hasStored = true
+			} else {
+				hasNotStored = true
+			}
 		}
 
 		// Short-circuit if we find both cases
 		if hasStored && hasNotStored {
-			return PartiallyStored
+			return PartiallyStored, nil
 		}
 	}
 
-	if hasStored {
-		return FullyStored
+	switch {
+	case hasStored:
+		return FullyStored, nil
+	default:
+		return NotStored, nil
 	}
-
-	return NotStored
 }
 
-func (s *Syncer) processTesseract(tsInfo *TesseractInfo) {
-	defer s.consensus.ClearActiveAccounts(tsWorker, tsInfo.tesseract.AccountIDs()...)
+func (s *Syncer) processTesseract(tsInfo *TesseractInfo, cid common.ClusterID) {
+	defer s.consensus.ClearActiveAccounts(cid, tsInfo.tesseract.AccountIDs()...)
 
-	switch s.getParticipantStorageStatus(tsInfo.tesseract) {
+	ixns, err := s.lattice.GetInteractionsByTSHash(tsInfo.tesseract.Hash())
+	if err != nil {
+		if err := s.fillTSWithIxnsAndReceipts(tsInfo); err != nil {
+			s.logger.Trace("failed to fetch ixns and receipts ", "err", err)
+
+			return
+		}
+	} else {
+		tsInfo.tesseract.SetIxns(common.NewInteractionsWithLeaderCheck(true, ixns...))
+	}
+
+	psInfo := fetchParticipantsInfo(tsInfo.tesseract.Interactions().IxList())
+
+	status, err := s.getParticipantStorageStatus(tsInfo.tesseract, psInfo)
+	if err != nil {
+		s.tsJobQueue.delete(tsInfo.tesseract)
+		s.logger.Error("failed to get participants storage status", "err", err)
+
+		return
+	}
+
+	switch status {
 	case FullyStored:
 		s.tsJobQueue.delete(tsInfo.tesseract)
 
 		return
 	case PartiallyStored:
-		s.SyncAccountState(tsInfo.tesseract, false)
+		if err := s.SyncAccountState(tsInfo.tesseract, false, psInfo); err != nil {
+			s.logger.Error("failed to sync partial account state", "err", err)
+		}
+
 		s.tsJobQueue.delete(tsInfo.tesseract)
 
 		return
 	case NotStored:
-		s.SyncAccountState(tsInfo.tesseract, true)
-	}
+		if err := s.SyncAccountState(tsInfo.tesseract, true, psInfo); err != nil {
+			s.logger.Error("failed to sync account state", "err", err)
 
-	if err := s.fillTSWithIxnsAndReceipts(tsInfo); err != nil {
-		s.logger.Trace("failed to fetch ixns and receipts ", "err", err)
+			s.tsJobQueue.delete(tsInfo.tesseract)
 
-		return
+			return
+		}
 	}
 
 	if tsInfo.committee == nil && !tsInfo.extractICSNodeset(s) {
@@ -609,8 +761,17 @@ func (s *Syncer) tesseractWorker() {
 			return
 		}
 
+		clusterID, err := common.GenerateClusterID()
+		if err != nil {
+			s.logger.Error("failed to generate cluster id", "err", err)
+
+			continue
+		}
+
+		clusterID = createClusterID(tsWorker, clusterID)
+
 		lockAccounts := func(ts *common.Tesseract) bool {
-			if !s.consensus.AddActiveAccounts(common.MutateLock, tsWorker, ts.AccountIDs()...) {
+			if !s.consensus.AddActiveAccounts(ts.ConsensusInfo().AccountLocks, clusterID) {
 				s.logger.Debug("accounts are active, tesseract is ignored", "ts-hash", ts.Hash())
 
 				return false
@@ -624,7 +785,7 @@ func (s *Syncer) tesseractWorker() {
 			continue
 		}
 
-		s.processTesseract(tsInfo)
+		s.processTesseract(tsInfo, clusterID)
 	}
 }
 
@@ -847,7 +1008,8 @@ func (s *Syncer) jobProcessor(job *AccountSyncJob) error {
 
 	if job.tsWorkerSignal == nil {
 		// Attempt to lock the account for synchronization also make sure that account is not locked by this job.
-		if !s.consensus.AddActiveAccounts(common.MutateLock, accountWorker, job.id) && !job.selfAccLock {
+		if !s.consensus.AddActiveAccounts(
+			map[identifiers.Identifier]common.LockType{job.id: common.MutateLock}, job.clusterID) && !job.selfAccLock {
 			s.logger.Debug("Account is active, job state set to sleep", "addr", job.id)
 			job.updateJobState(Sleep)
 

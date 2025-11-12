@@ -149,6 +149,14 @@ func (i *ICSCommittee) IncrementExcludedPSCount(consensusNodesHash common.Hash) 
 	}
 }
 
+func (i *ICSCommittee) SetExcludeFromICS(pos int, val bool) {
+	i.Sets[pos].ExcludedFromICS = val
+}
+
+func (i *ICSCommittee) IsExcluded(pos int) bool {
+	return i.Sets[pos].ExcludedFromICS
+}
+
 // AppendNodeSet appends a node set and tracks its position using the consensus nodes hash.
 // When appending a random set, provide nilHash as the consensus nodes hash,
 // since the random nodes hash differs from the consensus nodes hash, it doesn't need to be stored.
@@ -169,10 +177,26 @@ func (i *ICSCommittee) AppendNodeSet(consensusNodesHash common.Hash, data *NodeS
 	}
 }
 
-func (i *ICSCommittee) UpdateNodeset(consensusNodesHash common.Hash, consensusSet *NodeSet, ps common.State) {
+func (i *ICSCommittee) UpdateNodeset(consensusNodesHash common.Hash, consensusSet *NodeSet,
+	ps common.State, lockType common.LockType,
+) {
 	if _, ok := i.GetNodesetPosition(consensusNodesHash); !ok {
+		// If consensus nodes fetched for the first time, we can exclude it from ics if account has NoLock.
+		if lockType == common.NoLock {
+			consensusSet.ExcludedFromICS = true
+		}
+
 		i.AppendNodeSet(consensusNodesHash, consensusSet)
 	} else {
+		nodeset := i.Sets[i.ConsensusNodesHash[consensusNodesHash].Position]
+
+		// If the nodeset already exists but is excluded from ICS,
+		// update its inclusion status only for a successful ixn with mutate lock.
+
+		if nodeset.ExcludedFromICS && lockType == common.MutateLock && ps.StateHash != common.NilHash {
+			nodeset.ExcludedFromICS = false
+		}
+
 		i.IncrementPSCount(consensusNodesHash)
 	}
 
@@ -560,6 +584,10 @@ func (i *ICSCommittee) IsSlotsQuorum(slots []int32) bool {
 			continue
 		}
 
+		if i.Sets[j].ExcludedFromICS {
+			continue
+		}
+
 		responses += i.Sets[j].GetRespCount(MajorityCounter)
 		setSize += int(i.Sets[j].SetSizeWithOutDelta)
 
@@ -578,6 +606,10 @@ func (i *ICSCommittee) IsContextQuorum(ct CounterType) bool {
 		setSize := 0
 
 		if i.Sets[j] == nil {
+			continue
+		}
+
+		if i.Sets[j].ExcludedFromICS {
 			continue
 		}
 

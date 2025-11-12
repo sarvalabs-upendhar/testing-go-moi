@@ -223,18 +223,18 @@ func (m *MockKramaEngine) GetICSCommitteeFromRawContext(
 }
 
 func (m *MockKramaEngine) AddActiveAccounts(
-	lockType common.LockType, clusterID common.ClusterID, ids ...identifiers.Identifier,
+	accountLocks map[identifiers.Identifier]common.LockType, clusterID common.ClusterID,
 ) bool {
 	m.mtx.Lock()
 	defer m.mtx.Unlock()
 
-	for _, id := range ids {
+	for id := range accountLocks {
 		if _, ok := m.activeAccounts[id]; ok {
 			return false
 		}
 	}
 
-	for _, id := range ids {
+	for id := range accountLocks {
 		m.activeAccounts[id] = struct{}{}
 	}
 
@@ -304,7 +304,7 @@ type MockLattice struct {
 }
 
 func (m *MockLattice) GetInteractionsByTSHash(tsHash common.Hash) ([]*common.Interaction, error) {
-	panic("implement me")
+	return nil, errors.New("ixns not found in db")
 }
 
 func newMockLattice(db store, logger hclog.Logger) *MockLattice {

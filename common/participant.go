@@ -154,3 +154,19 @@ func (ps Participants) IDs() IdentifierList {
 
 	return ids
 }
+
+func (ps Participants) AccountsWithoutNoLocks() IdentifierList {
+	ids := make(IdentifierList, 0)
+
+	for id, state := range ps {
+		if state.LockType == NoLock {
+			continue
+		}
+
+		ids = append(ids, id)
+	}
+
+	sort.Sort(ids)
+
+	return ids
+}

@@ -51,6 +51,10 @@ func (k *Engine) sendPrepareMsg(
 			continue
 		}
 
+		if ns.ExcludedFromICS {
+			continue
+		}
+
 		for index, info := range ns.Infos {
 			if k.selfID == info.KramaID {
 				ns.UpdateViewInfo(index, preparedMsg)

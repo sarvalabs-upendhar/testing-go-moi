@@ -147,11 +147,6 @@ type mockStateManager struct {
 	publicKeys map[identifiers.Identifier][]byte
 }
 
-func (m mockStateManager) CreateStateObject(identifier identifiers.Identifier, b bool) *state.Object {
-	// TODO implement me
-	panic("implement me")
-}
-
 func (m mockStateManager) CreateStateObjectWithAccountType(
 	id identifiers.Identifier,
 	accType common.AccountType,
@@ -197,6 +192,11 @@ func (m mockStateManager) CreateSystemObject(id identifiers.Identifier) *state.S
 }
 
 func (m mockStateManager) GetPublicKey(id identifiers.Identifier, keyID uint64, stateHash common.Hash) ([]byte, error) {
+	panic("implement me")
+}
+
+func (m mockStateManager) CreateStateObject(identifier identifiers.Identifier, b bool,
+) *state.Object {
 	panic("implement me")
 }
 
@@ -818,7 +818,7 @@ func (k *Engine) handlePrepForTest(msg *types.ICSMSG, prepare *types.Prepare) er
 	k.logger.Debug("Handling prep message", "ixns-count", len(prepare.Ixns), len(ixs))
 	ixns := common.NewInteractionsWithLeaderCheck(true, ixs...)
 
-	id := ixns.UniqueIds()[0]
+	id := ixns.UniqueIdsWithoutNoLocks()[0]
 
 	k.participantToPrepareMsg[id] = []*metaPrepareMsg{
 		{
@@ -1591,7 +1591,8 @@ func insertPrepareMsg(k *Engine, nodeContextParticipants []identifiers.Identifie
 	msg *metaPrepareMsg, ps map[identifiers.Identifier]*common.ParticipantInfo,
 ) {
 	for _, id := range nodeContextParticipants {
-		if _, ok := ps[id]; !ok {
+		info, ok := ps[id]
+		if !ok || info.LockType == common.NoLock {
 			continue
 		}
 
@@ -1644,7 +1645,7 @@ func ensureResponseMatches(t *testing.T, k *Engine,
 		err := prepared.FromBytes(icsMsg.Payload)
 		require.NoError(t, err)
 
-		ensureIDsMatch(t, ixns[idx].IDs(), getIDs(prepared))
+		ensureIDsMatch(t, ixns[idx].AccountsWithoutNoLock(), getIDs(prepared))
 	}
 }
 

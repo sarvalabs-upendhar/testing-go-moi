@@ -94,7 +94,7 @@ func TestFullRound_WithMultipleNodes(t *testing.T) {
 	err := storeGenesisData(ts, k)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	viewInfos, err := k.loadViewInfo(ids)
@@ -199,7 +199,7 @@ func TestFullRound_WithLessThanContextQuorumPrepared(t *testing.T) {
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -278,7 +278,7 @@ func TestFullRound_WithLessThanQuorumContextPrevotes(t *testing.T) { //nolint:du
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -369,7 +369,7 @@ func TestFullRound_WithLessThanQuorumRandomPrevotes(t *testing.T) { //nolint:dup
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -460,7 +460,7 @@ func TestFullRound_WithLessThanContextQuorumPrecommits(t *testing.T) { //nolint:
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -562,7 +562,7 @@ func TestFullRound_WithLessThanRandomQuorumPrecommits(t *testing.T) { //nolint:d
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -664,7 +664,7 @@ func TestFullRound_WithInvalidPrepared(t *testing.T) {
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -743,7 +743,7 @@ func TestFullRound_WithInvalidPrevote(t *testing.T) {
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -837,7 +837,7 @@ func TestFullRound_WithInvalidPrecommit(t *testing.T) {
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -938,7 +938,7 @@ func TestFullRound_WithDuplicatePrepared(t *testing.T) {
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -1017,7 +1017,7 @@ func TestFullRound_WithDuplicatePrevote(t *testing.T) {
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -1109,7 +1109,7 @@ func TestFullRound_WithDuplicatePrecommit(t *testing.T) {
 	viewInfos, err := k.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k, ids)
@@ -1220,7 +1220,7 @@ func TestFullRound_WithMultipleNodes_Validator(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -1352,7 +1352,7 @@ func TestValidator_MissingProposal(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -1471,7 +1471,7 @@ func TestValidator_MissingPrevoteQC(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -1598,7 +1598,7 @@ func TestFullRound_LockSeen_ByOperator(t *testing.T) {
 	viewInfos1, err := k1.loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID1, err := types.GenerateClusterID()
+	clusterID1, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k1, ids)
@@ -1665,7 +1665,7 @@ func TestFullRound_LockSeen_ByOperator(t *testing.T) {
 	view2 := uint64(2)
 	k1.currentView.SetID(view2)
 
-	clusterID2, err := types.GenerateClusterID()
+	clusterID2, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	viewInfos2, err := k1.loadViewInfo(ids)
@@ -1780,7 +1780,7 @@ func TestFullRound_LockSeen_ByValidator_Syncing(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -1872,7 +1872,7 @@ func TestFullRound_LockSeen_ByValidator_Syncing(t *testing.T) {
 	// useful in creating cluster state for validator or validating locks received
 	k[0].storeICSCommitteeForTest(ixnsHash, ics0)
 
-	clusterID1, err := types.GenerateClusterID()
+	clusterID1, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps1, err := getParticipantsInfo(k[0], ids)
@@ -2000,7 +2000,7 @@ func TestFullRound_LockNotSeen_OutdatedLock(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -2086,7 +2086,7 @@ func TestFullRound_LockNotSeen_OutdatedLock(t *testing.T) {
 	// useful in creating cluster state for validator or validating locks received
 	k[0].storeICSCommitteeForTest(ixnsHash, ics0)
 
-	clusterID1, err := types.GenerateClusterID()
+	clusterID1, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps1, err := getParticipantsInfo(k[0], ids)
@@ -2191,7 +2191,7 @@ func TestFullRound_LockNotSeen_OutdatedLock(t *testing.T) {
 	k[0].storeICSCommitteeForTest(ixnsHash2, ics3)
 	storeIxns(k[0].pool, &ixns2)
 
-	clusterID3, err := types.GenerateClusterID()
+	clusterID3, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps3, err := getParticipantsInfo(k[1], ids)
@@ -2300,7 +2300,7 @@ func TestMultipleLocks_ViewPriority(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -2383,7 +2383,7 @@ func TestMultipleLocks_ViewPriority(t *testing.T) {
 	// useful in creating cluster state for validator or validating locks received
 	k[0].storeICSCommitteeForTest(ixnsHash, createICSCommitteeFromVaults(vaults, []int{0, 1, 2}))
 
-	clusterID1, err := types.GenerateClusterID()
+	clusterID1, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps1, err := getParticipantsInfo(k[0], ids)
@@ -2481,7 +2481,7 @@ func TestMultipleLocks_ViewPriority(t *testing.T) {
 	k[0].storeICSCommitteeForTest(ixnsHash, createICSCommitteeFromVaults(vaults, []int{0, 1, 2}))
 	k[1].storeICSCommitteeForTest(ixnsHash, createICSCommitteeFromVaults(vaults, []int{0, 1, 2}))
 
-	clusterID3, err := types.GenerateClusterID()
+	clusterID3, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps3, err := getParticipantsInfo(k[2], ids)
@@ -2631,7 +2631,7 @@ func TestRelock_HiddenLock(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -2716,7 +2716,7 @@ func TestRelock_HiddenLock(t *testing.T) {
 	// useful in creating cluster state for validator or validating locks received
 	k[0].storeICSCommitteeForTest(ixnsHash, ics0)
 
-	clusterID1, err := types.GenerateClusterID()
+	clusterID1, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps1, err := getParticipantsInfo(k[0], ids)
@@ -2818,7 +2818,7 @@ func TestRelock_HiddenLock(t *testing.T) {
 	k[0].storeICSCommitteeForTest(ixnsHash, ics0)
 	k[1].storeICSCommitteeForTest(ixnsHash, ics1)
 
-	clusterID3, err := types.GenerateClusterID()
+	clusterID3, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps3, err := getParticipantsInfo(k[2], ids)
@@ -2963,7 +2963,7 @@ func TestViewChangeInSyncLag(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -3048,17 +3048,22 @@ func TestViewChangeInSyncLag(t *testing.T) {
 
 	ics1 := createICSCommitteeFromVaults(vaults, []int{0, 1, 2})
 
-	ix2 := tests.CreateIXWithParticipants(t, ids, 0, nil)
+	ix2 := tests.CreateIXWithParticipants(t, ids, 1, nil)
 	ixns2 := common.NewInteractionsWithLeaderCheck(false, ix2)
 
 	ixnsHash2, err := ixns2.Hash()
 	require.NoError(t, err)
 
-	// useful in creating cluster state for validator or validating locks received
-	k[1].storeICSCommitteeForTest(ixnsHash2, ics1)
-	storeIxns(k[1].pool, &ixns)
+	ixnsHash, err := ixns.Hash()
+	require.NoError(t, err)
 
-	clusterID1, err := types.GenerateClusterID()
+	// useful in creating cluster state for validator or validating locks received
+	k[0].storeICSCommitteeForTest(ixnsHash, ics1)
+	k[1].storeICSCommitteeForTest(ixnsHash2, ics1)
+
+	storeIxns(k[1].pool, &ixns2)
+
+	clusterID1, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps1, err := getParticipantsInfo(k[0], ids)
@@ -3176,7 +3181,7 @@ func TestLock_PartialLocks_AbortOnly(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(participants)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], participants)
@@ -3258,7 +3263,7 @@ func TestLock_PartialLocks_AbortOnly(t *testing.T) {
 	ixns = common.NewInteractionsWithLeaderCheck(false, ix)
 	participants = ids[2:4]
 
-	clusterID1, err := types.GenerateClusterID()
+	clusterID1, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps1, err := getParticipantsInfo(k[1], participants)
@@ -3370,7 +3375,7 @@ func TestLock_PartialLocks_AbortOnly(t *testing.T) {
 		k[i].storeICSCommitteeForTest(clusterState1.IxnsHash(), createICSCommitteeFromVaults(vaults, []int{2, 3, 5}))
 	}
 
-	clusterID3, err := types.GenerateClusterID()
+	clusterID3, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps3, err := getParticipantsInfo(k[2], participants)
@@ -3494,7 +3499,7 @@ func TestFullRound_CommittedTS_VoteOnLock(t *testing.T) {
 	viewInfos, err := k[0].loadViewInfo(ids)
 	require.NoError(t, err)
 
-	clusterID, err := types.GenerateClusterID()
+	clusterID, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps, err := getParticipantsInfo(k[0], ids)
@@ -3605,7 +3610,7 @@ func TestFullRound_CommittedTS_VoteOnLock(t *testing.T) {
 	// useful in creating cluster state for validator or validating locks received
 	k[0].storeICSCommitteeForTest(ixnsHash, ics0)
 
-	clusterID1, err := types.GenerateClusterID()
+	clusterID1, err := common.GenerateClusterID()
 	require.NoError(t, err)
 
 	ps1, err := getParticipantsInfo(k[1], ids)

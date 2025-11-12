@@ -1454,6 +1454,14 @@ func TestIsAnyOtherParticipantStored(t *testing.T) {
 		},
 	})
 
+	psInfo := make(map[identifiers.Identifier]*participantInfo)
+
+	for _, id := range ids {
+		psInfo[id] = &participantInfo{
+			lock: common.MutateLock,
+		}
+	}
+
 	testcases := []struct {
 		name          string
 		psToBeStored  int
@@ -1489,7 +1497,8 @@ func TestIsAnyOtherParticipantStored(t *testing.T) {
 				mockDB.setAccMetaInfoAt(ids[i], heights[i])
 			}
 
-			storageStatus := s.getParticipantStorageStatus(ts)
+			storageStatus, err := s.getParticipantStorageStatus(ts, psInfo)
+			require.NoError(t, err)
 			require.Equal(t, test.storageStatus, storageStatus)
 		})
 	}
@@ -1792,6 +1801,429 @@ func TestFetchContextForAgora(t *testing.T) {
 
 			nodes := fetchContextFromLattice(t, ts[test.tsCount-1].AnyAccountID(), *ts[test.tsCount-1], s)
 			require.Equal(t, nodes, peers) // check if context nodes matches
+		})
+	}
+}
+
+func TestFetchParticipantsInfo(t *testing.T) {
+	ids := tests.GetIdentifiers(t, 3)
+
+	testcases := []struct {
+		name       string
+		ixns       []*common.Interaction
+		expectedPS map[identifiers.Identifier]*participantInfo
+	}{
+		{
+			name: "single ixn with 3 participants",
+			ixns: tests.CreateIxns(t, 1, map[int]*tests.CreateIxParams{
+				0: {
+					IxDataCallback: func(ix *common.IxData) {
+						ix.Sender.ID = ids[0]
+						tests.AddParticipants(t, ix, []common.IxParticipant{
+							{
+								ID:       ids[1],
+								LockType: common.ReadLock,
+							},
+							{
+								ID:       ids[2],
+								LockType: common.NoLock,
+							},
+						}...)
+					},
+				},
+			}),
+
+			expectedPS: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock:     common.MutateLock,
+					isSender: true,
+				},
+				ids[1]: {
+					lock: common.ReadLock,
+				},
+				ids[2]: {
+					lock: common.NoLock,
+				},
+			},
+		},
+		{
+			name: "two ixns with common participant having different locks",
+			ixns: tests.CreateIxns(t, 2, map[int]*tests.CreateIxParams{
+				0: {
+					IxDataCallback: func(ix *common.IxData) {
+						ix.Sender.ID = ids[0]
+						tests.AddParticipants(t, ix, []common.IxParticipant{
+							{
+								ID:       ids[1],
+								LockType: common.MutateLock,
+							},
+						}...)
+					},
+				},
+				1: {
+					IxDataCallback: func(ix *common.IxData) {
+						ix.Sender.ID = ids[2]
+						tests.AddParticipants(t, ix, []common.IxParticipant{
+							{
+								ID:       ids[1],
+								LockType: common.NoLock,
+							},
+						}...)
+					},
+				},
+			}),
+
+			expectedPS: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock:     common.MutateLock,
+					isSender: true,
+				},
+				ids[1]: {
+					lock: common.MutateLock,
+				},
+				ids[2]: {
+					lock:     common.MutateLock,
+					isSender: true,
+				},
+			},
+		},
+		{
+			name: "two ixns where common participant is a sender in one ixn and non-sender in other ixn",
+			ixns: tests.CreateIxns(t, 2, map[int]*tests.CreateIxParams{
+				0: {
+					IxDataCallback: func(ix *common.IxData) {
+						ix.Sender.ID = ids[0]
+					},
+				},
+				1: {
+					IxDataCallback: func(ix *common.IxData) {
+						ix.Sender.ID = ids[1]
+						tests.AddParticipants(t, ix, []common.IxParticipant{
+							{
+								ID:       ids[0],
+								LockType: common.NoLock,
+							},
+						}...)
+					},
+				},
+			}),
+
+			expectedPS: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock:     common.MutateLock,
+					isSender: true,
+				},
+				ids[1]: {
+					lock:     common.MutateLock,
+					isSender: true,
+				},
+			},
+		},
+		{
+			name: "single ixn with genesis participant",
+			ixns: tests.CreateIxns(t, 1, map[int]*tests.CreateIxParams{
+				0: {
+					IxDataCallback: func(ix *common.IxData) {
+						ix.Sender.ID = ids[0]
+						tests.AddIxOp(t, ix, common.IxParticipantCreate, common.KMOITokenAssetID,
+							tests.CreateParticipantCreatePayload(t, ids[1]))
+					},
+				},
+			}),
+
+			expectedPS: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock:     common.MutateLock,
+					isSender: true,
+				},
+				common.KMOITokenAssetID.AsIdentifier(): {
+					lock: common.MutateLock,
+				},
+				ids[1]: {
+					lock:           common.MutateLock,
+					newParticipant: true,
+				},
+				common.SargaAccountID: {
+					lock: common.MutateLock,
+				},
+			},
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			psInfo := fetchParticipantsInfo(test.ixns)
+			require.Equal(t, len(test.expectedPS), len(psInfo))
+
+			for id, expectedPS := range test.expectedPS {
+				actualPS, ok := test.expectedPS[id]
+				require.True(t, ok)
+
+				require.Equal(t, expectedPS, actualPS)
+			}
+		})
+	}
+}
+
+func TestGetParticipantStorageStatus(t *testing.T) {
+	ids := tests.GetIdentifiers(t, 3)
+	mockDB := NewMockDB()
+
+	for _, id := range ids {
+		mockDB.setAccMetaInfoAt(id, 3)
+	}
+
+	s := Syncer{
+		db: mockDB,
+	}
+
+	testcases := []struct {
+		name           string
+		ts             *common.Tesseract
+		psInfo         map[identifiers.Identifier]*participantInfo
+		expectedStatus StorageStatus
+	}{
+		{
+			name: "all participants have latest state",
+			ts: tests.CreateTesseract(t, &tests.CreateTesseractParams{
+				Participants: common.ParticipantsState{
+					ids[0]: {
+						Height:    3,
+						StateHash: tests.RandomHash(t),
+					},
+					ids[1]: {
+						Height: 3,
+					},
+					ids[2]: {
+						Height: 3,
+					},
+				},
+			}),
+			psInfo: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock: common.MutateLock,
+				},
+				ids[1]: {
+					lock: common.ReadLock,
+				},
+				ids[2]: {
+					lock: common.NoLock,
+				},
+			},
+			expectedStatus: FullyStored,
+		},
+		{
+			name: "only noLock and read accounts have latest state",
+			ts: tests.CreateTesseract(t, &tests.CreateTesseractParams{
+				Participants: common.ParticipantsState{
+					ids[0]: {
+						Height:    4,
+						StateHash: tests.RandomHash(t),
+					},
+					ids[1]: {
+						Height: 3,
+					},
+					ids[2]: {
+						Height: 3,
+					},
+				},
+			}),
+			psInfo: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock: common.MutateLock,
+				},
+				ids[1]: {
+					lock: common.ReadLock,
+				},
+				ids[2]: {
+					lock: common.NoLock,
+				},
+			},
+			expectedStatus: NotStored,
+		},
+		{
+			name: "only mutate accounts have latest state",
+			ts: tests.CreateTesseract(t, &tests.CreateTesseractParams{
+				Participants: common.ParticipantsState{
+					ids[0]: {
+						Height:    3,
+						StateHash: tests.RandomHash(t),
+					},
+					ids[1]: {
+						Height: 4,
+					},
+					ids[2]: {
+						Height: 4,
+					},
+				},
+			}),
+			psInfo: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock: common.MutateLock,
+				},
+				ids[1]: {
+					lock: common.ReadLock,
+				},
+				ids[2]: {
+					lock: common.NoLock,
+				},
+			},
+			expectedStatus: PartiallyStored,
+		},
+		{
+			name: "participants of failed ixn is genesis",
+			ts: tests.CreateTesseract(t, &tests.CreateTesseractParams{
+				Participants: common.ParticipantsState{
+					ids[0]: {
+						Height: 0,
+					},
+					ids[1]: {
+						Height:    3,
+						StateHash: tests.RandomHash(t),
+					},
+				},
+			}),
+			psInfo: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock:           common.MutateLock,
+					newParticipant: true,
+				},
+				ids[1]: {
+					lock: common.MutateLock,
+				},
+			},
+			expectedStatus: FullyStored,
+		},
+		{
+			name: "few mutate accounts are stored and few are not stored",
+			ts: tests.CreateTesseract(t, &tests.CreateTesseractParams{
+				Participants: common.ParticipantsState{
+					ids[0]: {
+						Height:    3,
+						StateHash: tests.RandomHash(t),
+					},
+					ids[1]: {
+						Height:    4,
+						StateHash: tests.RandomHash(t),
+					},
+				},
+			}),
+			psInfo: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock: common.MutateLock,
+				},
+				ids[1]: {
+					lock: common.MutateLock,
+				},
+			},
+			expectedStatus: PartiallyStored,
+		},
+		{
+			name: "participant of failed ixn doesn't have latest state",
+			ts: tests.CreateTesseract(t, &tests.CreateTesseractParams{
+				Participants: common.ParticipantsState{
+					ids[0]: {
+						Height: 4,
+					},
+					ids[1]: {
+						Height:    3,
+						StateHash: tests.RandomHash(t),
+					},
+				},
+			}),
+			psInfo: map[identifiers.Identifier]*participantInfo{
+				ids[0]: {
+					lock: common.MutateLock,
+				},
+				ids[1]: {
+					lock: common.MutateLock,
+				},
+			},
+			expectedStatus: PartiallyStored,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			status, err := s.getParticipantStorageStatus(test.ts, test.psInfo)
+			require.NoError(t, err)
+
+			require.Equal(t, test.expectedStatus, status)
+		})
+	}
+}
+
+func TestFindPreviousHeight(t *testing.T) {
+	testcases := []struct {
+		name           string
+		info           *participantInfo
+		height         uint64
+		isSuccess      bool
+		expectedHeight uint64
+		expectedSkip   bool
+	}{
+		{
+			name: "ixn with read Lock",
+			info: &participantInfo{
+				lock: common.ReadLock,
+			},
+			isSuccess:      true,
+			height:         32,
+			expectedHeight: 32,
+			expectedSkip:   false,
+		},
+		{
+			name: "ixn with read Lock",
+			info: &participantInfo{
+				lock: common.NoLock,
+			},
+			height:         52,
+			expectedHeight: 52,
+			expectedSkip:   false,
+		},
+		{
+			name: "successful ixn with participant height zero",
+			info: &participantInfo{
+				lock: common.MutateLock,
+			},
+			isSuccess:      true,
+			height:         0,
+			expectedHeight: 0,
+			expectedSkip:   true,
+		},
+		{
+			name: "successful ixn with participant height non-zero",
+			info: &participantInfo{
+				lock: common.MutateLock,
+			},
+			isSuccess:      true,
+			height:         8,
+			expectedHeight: 7,
+		},
+		{
+			name: "failure ixn where participant is sender",
+			info: &participantInfo{
+				lock:     common.MutateLock,
+				isSender: true,
+			},
+			height:         5,
+			expectedHeight: 4,
+		},
+		{
+			name: "failure ixn where participant is not sender",
+			info: &participantInfo{
+				lock: common.MutateLock,
+			},
+			height:         9,
+			expectedHeight: 9,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			height, skip := findPreviousHeight(test.info, test.height, test.isSuccess)
+			require.Equal(t, test.expectedHeight, height)
+			require.Equal(t, test.expectedSkip, skip)
 		})
 	}
 }
