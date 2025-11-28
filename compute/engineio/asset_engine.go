@@ -20,24 +20,31 @@ type AssetEngine interface {
 	EnableEvents(assetID identifiers.AssetID) (bool, error)
 
 	// Asset metadata operations
-	SetMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier, key string, val []byte) error
-	GetMetaData(assetID identifiers.AssetID, key string) ([]byte, error)
-	SetTokenMetaData(participantID identifiers.Identifier,
-		assetID identifiers.AssetID, tokenID common.TokenID,
+	SetStaticMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier, key string, val []byte) error
+	SetDynamicMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier, key string, val []byte) error
+
+	GetStaticMetaData(assetID identifiers.AssetID, key string) ([]byte, error)
+	GetDynamicMetaData(assetID identifiers.AssetID, key string) ([]byte, error)
+
+	SetStaticTokenMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier, tokenID common.TokenID,
 		key string, val []byte) error
-	GetTokenMetaData(participantID identifiers.Identifier,
-		assetID identifiers.AssetID, tokenID common.TokenID,
-		key string) ([]byte, error)
+	SetDynamicTokenMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier, tokenID common.TokenID,
+		key string, val []byte) error
+
+	GetStaticTokenMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
+		tokenID common.TokenID, key string) ([]byte, error)
+	GetDynamicTokenMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
+		tokenID common.TokenID, key string) ([]byte, error)
 
 	// Asset lifecycle operations
 	CreateAsset(ixHash common.Hash,
 		assetID identifiers.AssetID, symbol string, decimals uint8, dimension uint8,
 		manager identifiers.Identifier, creator identifiers.Identifier, maxSupply *big.Int,
-		metadata map[string][]byte, enableEvents bool, logicID identifiers.LogicID) (uint64, error)
+		staticMetadata, dynamicMetadata map[string][]byte, enableEvents bool, logicID identifiers.LogicID) (uint64, error)
 	Transfer(assetID identifiers.AssetID, tokenID common.TokenID,
 		operatorID, benefactorID, beneficiaryID identifiers.Identifier, amount *big.Int) (uint64, error)
-	Mint(assetID identifiers.AssetID, tokenID common.TokenID,
-		senderID, beneficiaryID identifiers.Identifier, amount *big.Int) (uint64, error)
+	Mint(assetID identifiers.AssetID, tokenID common.TokenID, senderID, beneficiaryID identifiers.Identifier,
+		amount *big.Int, staticMetadata map[string][]byte) (uint64, error)
 	Burn(assetID identifiers.AssetID, tokenID common.TokenID,
 		benefactorID identifiers.Identifier, amount *big.Int) (uint64, error)
 

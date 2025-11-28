@@ -92,8 +92,12 @@ func validateAssetCreation(
 	require.Equal(te.T(), assetCreatePayload.Decimals, assetDescriptor.Decimals.ToInt())
 	require.Equal(te.T(), assetCreatePayload.Manager, assetDescriptor.Manager)
 
-	for k, v := range assetCreatePayload.MetaData {
-		require.Equal(te.T(), v, assetDescriptor.Metadata[k].Bytes())
+	for k, v := range assetCreatePayload.StaticMetadata {
+		require.Equal(te.T(), v, assetDescriptor.StaticMetadata[k].Bytes())
+	}
+
+	for k, v := range assetCreatePayload.DynamicMetaData {
+		require.Equal(te.T(), v, assetDescriptor.DynamicMetadata[k].Bytes())
 	}
 
 	manifestBytes, err := te.moiClient.LogicManifest(context.Background(), &args.LogicManifestArgs{
@@ -146,7 +150,7 @@ func (te *TestEnvironment) TestAssetCreate() {
 				acc.ID,
 				func(payload *common.AssetCreatePayload) {
 					payload.Dimension = 0
-					payload.MetaData = map[string][]byte{
+					payload.StaticMetadata = map[string][]byte{
 						"key1": []byte("value1"),
 					}
 				},

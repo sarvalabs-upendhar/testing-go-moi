@@ -2209,13 +2209,16 @@ func checkForMetaContextObject(
 
 */
 
+// WithAssetBalance is a helper function to set asset balance in state object
+// please note that it overwrites any existing asset object
 func WithAssetBalance(
 	t *testing.T,
 	so *Object,
 	assetID identifiers.AssetID,
 	tokenID common.TokenID,
 	amount *big.Int,
-	metadata *MetaData,
+	assetMetaData *MetaData,
+	tokenMetadata *MetaData,
 ) {
 	t.Helper()
 
@@ -2223,6 +2226,32 @@ func WithAssetBalance(
 		Balance: map[common.TokenID]*big.Int{
 			tokenID: amount,
 		},
-		TokenMetaData: map[common.TokenID]*MetaData{tokenID: metadata},
+		Properties: &common.AssetDescriptor{
+			AssetID: assetID,
+			StaticMetaData: func() map[string][]byte {
+				if assetMetaData != nil {
+					return assetMetaData.static
+				}
+
+				return make(map[string][]byte)
+			}(),
+			DynamicMetaData: func() map[string][]byte {
+				if assetMetaData != nil {
+					return assetMetaData.dynamic
+				}
+
+				return make(map[string][]byte)
+			}(),
+		},
+		TokenMetaData: map[common.TokenID]*MetaData{tokenID: func() *MetaData {
+			if tokenMetadata != nil {
+				return tokenMetadata
+			}
+			// we se the empty metadata if none is provided
+			return &MetaData{
+				static:  make(map[string][]byte),
+				dynamic: make(map[string][]byte),
+			}
+		}()},
 	})
 }

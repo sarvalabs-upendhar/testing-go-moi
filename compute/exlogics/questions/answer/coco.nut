@@ -17,8 +17,8 @@ format = "YAML"
 output = "answer"
 
 [target.pisa]
-format = "BIN"
-version = "0.5.0"
+format = "ASM"
+version = "0.5.1"
 
 [lab.render]
 big_int_as_hex = true

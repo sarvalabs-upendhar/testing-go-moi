@@ -25,7 +25,7 @@ func TestBalanceOf(t *testing.T) {
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	balance := big.NewInt(123)
 
-	WithAssetBalance(t, sObj, assetID, common.DefaultTokenID, balance, nil)
+	WithAssetBalance(t, sObj, assetID, common.DefaultTokenID, balance, nil, nil)
 
 	testcases := []struct {
 		name          string
@@ -68,10 +68,11 @@ func TestAddBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetID := tests.GetRandomAssetID(t, tests.RandomIdentifier(t))
 	tokenID := tests.GetRandomTokenID(t)
-	tokenMetaData := &MetaData{data: map[string][]byte{"URL": []byte("https://moi.technology")}}
+	tokenMetaData := &MetaData{static: map[string][]byte{"URL": []byte("https://moi.technology")}}
 	WithAssetBalance(
 		t, sObj,
 		assetID, tokenID, big.NewInt(123),
+		nil,
 		tokenMetaData,
 	)
 
@@ -97,7 +98,7 @@ func TestAddBalance(t *testing.T) {
 			tokenID:         1,
 			amount:          big.NewInt(123),
 			expectedBalance: big.NewInt(123),
-			metaData:        &MetaData{map[string][]byte{"URL": []byte("https://sarva.ai")}},
+			metaData:        &MetaData{static: map[string][]byte{"URL": []byte("https://sarva.ai")}},
 		},
 	}
 
@@ -125,9 +126,9 @@ func TestSubBalance(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	assetIDs, _ := tests.CreateTestAssets(t, 2)
 	tokenID := tests.GetRandomTokenID(t)
-	tokenMetaData := &MetaData{data: map[string][]byte{"URL": []byte("https://moi.technology")}}
-	WithAssetBalance(t, sObj, assetIDs[0], tokenID, big.NewInt(124), tokenMetaData)
-	WithAssetBalance(t, sObj, assetIDs[1], tokenID, big.NewInt(124), tokenMetaData)
+	tokenMetaData := &MetaData{static: map[string][]byte{"URL": []byte("https://moi.technology")}}
+	WithAssetBalance(t, sObj, assetIDs[0], tokenID, big.NewInt(124), nil, tokenMetaData)
+	WithAssetBalance(t, sObj, assetIDs[1], tokenID, big.NewInt(124), nil, tokenMetaData)
 
 	testcases := []struct {
 		name            string
@@ -1964,6 +1965,421 @@ func TestBurnAsset(t *testing.T) {
 	}
 }
 
+func TestSetMetadata(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	assetIDs, _ := tests.CreateTestAssets(t, 2)
+
+	// Set up assets with initial balances
+	WithAssetBalance(t, sObj, assetIDs[0], common.DefaultTokenID, big.NewInt(1000), &MetaData{static: map[string][]byte{
+		"symbol": []byte("BTC"),
+	}, dynamic: nil}, nil)
+	WithAssetBalance(t, sObj, assetIDs[1], common.DefaultTokenID, big.NewInt(2000), nil, nil)
+
+	testcases := []struct {
+		name          string
+		assetID       identifiers.AssetID
+		isStatic      bool
+		key           string
+		value         []byte
+		expectedError error
+	}{
+		{
+			name:     "successfully set static metadata",
+			assetID:  assetIDs[0],
+			isStatic: true,
+			key:      "name",
+			value:    []byte("Bitcoin"),
+		},
+		{
+			name:     "successfully set dynamic metadata",
+			assetID:  assetIDs[0],
+			isStatic: false,
+			key:      "price",
+			value:    []byte("50000"),
+		},
+		{
+			name:          "should return error for updating static metadata",
+			assetID:       assetIDs[0],
+			isStatic:      true,
+			key:           "symbol",
+			value:         []byte("ETH"),
+			expectedError: common.ErrKeyExists,
+		},
+		{
+			name:     "successfully update existing dynamic metadata",
+			assetID:  assetIDs[1],
+			isStatic: false,
+			key:      "volume",
+			value:    []byte("1000000"),
+		},
+		{
+			name:          "should return error if asset not found",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			isStatic:      true,
+			key:           "name",
+			value:         []byte("Unknown"),
+			expectedError: common.ErrAssetNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sObj.SetAssetMetadata(test.assetID, test.isStatic, test.key, test.value)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Verify metadata was set correctly
+			assetObject, err := sObj.getAssetObject(test.assetID, true)
+			require.NoError(t, err)
+
+			if test.isStatic {
+				require.NotNil(t, assetObject.Properties.StaticMetaData)
+				val, ok := assetObject.Properties.StaticMetaData[test.key]
+				require.True(t, ok)
+				require.Equal(t, test.value, val)
+			} else {
+				require.NotNil(t, assetObject.Properties.DynamicMetaData)
+				val, ok := assetObject.Properties.DynamicMetaData[test.key]
+				require.True(t, ok)
+				require.Equal(t, test.value, val)
+			}
+		})
+	}
+}
+
+func TestGetAssetMetadata(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	assetIDs, _ := tests.CreateTestAssets(t, 2)
+
+	// Set up assets with metadata
+	WithAssetBalance(t, sObj, assetIDs[0], common.DefaultTokenID, big.NewInt(1000), &MetaData{
+		static: map[string][]byte{
+			"symbol": []byte("BTC"),
+			"name":   []byte("Bitcoin"),
+		},
+		dynamic: map[string][]byte{
+			"price":  []byte("50000"),
+			"volume": []byte("1000000"),
+		},
+	}, nil)
+	WithAssetBalance(t, sObj, assetIDs[1], common.DefaultTokenID, big.NewInt(2000), nil, nil)
+
+	testcases := []struct {
+		name          string
+		assetID       identifiers.AssetID
+		isStatic      bool
+		key           string
+		expectedValue []byte
+		expectedError error
+	}{
+		{
+			name:          "successfully get static metadata",
+			assetID:       assetIDs[0],
+			isStatic:      true,
+			key:           "symbol",
+			expectedValue: []byte("BTC"),
+		},
+		{
+			name:          "successfully get dynamic metadata",
+			assetID:       assetIDs[0],
+			isStatic:      false,
+			key:           "price",
+			expectedValue: []byte("50000"),
+		},
+		{
+			name:          "should return error if static key not found",
+			assetID:       assetIDs[0],
+			isStatic:      true,
+			key:           "nonexistent",
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name:          "should return error if dynamic key not found",
+			assetID:       assetIDs[0],
+			isStatic:      false,
+			key:           "nonexistent",
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name:          "should return error if asset not found",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			isStatic:      true,
+			key:           "symbol",
+			expectedError: common.ErrAssetNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			value, err := sObj.GetAssetMetadata(test.assetID, test.isStatic, test.key)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, test.expectedValue, value)
+		})
+	}
+}
+
+func TestSetTokenMetadata(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	assetIDs, _ := tests.CreateTestAssets(t, 4)
+
+	// Set up assets with initial balances and tokens
+	WithAssetBalance(t, sObj, assetIDs[0], common.DefaultTokenID, big.NewInt(1000), nil, nil)
+	WithAssetBalance(t, sObj, assetIDs[1], common.TokenID(1), big.NewInt(500), nil, nil)
+	WithAssetBalance(t, sObj, assetIDs[2], common.DefaultTokenID, big.NewInt(2000), nil, &MetaData{
+		static: map[string][]byte{
+			"symbol": []byte("ETH"),
+		},
+	})
+	WithAssetBalance(t, sObj, assetIDs[3], common.DefaultTokenID, big.NewInt(3000), nil, nil)
+
+	testcases := []struct {
+		name          string
+		assetID       identifiers.AssetID
+		tokenID       common.TokenID
+		isStatic      bool
+		key           string
+		value         []byte
+		expectedError error
+	}{
+		{
+			name:     "successfully set static token metadata",
+			assetID:  assetIDs[0],
+			tokenID:  common.DefaultTokenID,
+			isStatic: true,
+			key:      "name",
+			value:    []byte("Bitcoin Token"),
+		},
+		{
+			name:     "successfully set dynamic token metadata",
+			assetID:  assetIDs[0],
+			tokenID:  common.DefaultTokenID,
+			isStatic: false,
+			key:      "price",
+			value:    []byte("60000"),
+		},
+		{
+			name:     "successfully set metadata for non-default token",
+			assetID:  assetIDs[1],
+			tokenID:  common.TokenID(1),
+			isStatic: true,
+			key:      "rarity",
+			value:    []byte("rare"),
+		},
+		{
+			name:          "successfully update existing static token metadata",
+			assetID:       assetIDs[2],
+			tokenID:       common.DefaultTokenID,
+			isStatic:      true,
+			key:           "symbol",
+			value:         []byte("ETH"),
+			expectedError: common.ErrKeyExists,
+		},
+		{
+			name:     "successfully update existing dynamic token metadata",
+			assetID:  assetIDs[3],
+			tokenID:  common.DefaultTokenID,
+			isStatic: false,
+			key:      "volume",
+			value:    []byte("2000000"),
+		},
+		{
+			name:          "should return error if asset not found",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			tokenID:       common.DefaultTokenID,
+			isStatic:      true,
+			key:           "name",
+			value:         []byte("Unknown"),
+			expectedError: common.ErrAssetNotFound,
+		},
+		{
+			name:          "should return error if token not found",
+			assetID:       assetIDs[0],
+			tokenID:       tests.GetRandomTokenID(t),
+			isStatic:      true,
+			key:           "name",
+			value:         []byte("Unknown Token"),
+			expectedError: common.ErrTokenNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := sObj.SetTokenMetadata(test.assetID, test.tokenID, test.isStatic, test.key, test.value)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorContains(t, err, test.expectedError.Error())
+
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Verify token metadata was set correctly
+			assetObject, err := sObj.getAssetObject(test.assetID, true)
+			require.NoError(t, err)
+
+			tokenMetadata, ok := assetObject.TokenMetaData[test.tokenID]
+			require.True(t, ok, "token metadata should exist for token ID %d", test.tokenID)
+			require.NotNil(t, tokenMetadata)
+
+			if test.isStatic {
+				val, ok := tokenMetadata.static[test.key]
+				require.True(t, ok, "static metadata key '%s' should exist", test.key)
+				require.Equal(t, test.value, val)
+			} else {
+				val, ok := tokenMetadata.dynamic[test.key]
+				require.True(t, ok, "dynamic metadata key '%s' should exist", test.key)
+				require.Equal(t, test.value, val)
+			}
+		})
+	}
+}
+
+func TestGetTokenMetadata(t *testing.T) {
+	sObj := createTestStateObject(t, nil)
+	assetIDs, _ := tests.CreateTestAssets(t, 3)
+
+	// Set up test assets with various metadata configurations
+	// Asset 0: Has both static and dynamic metadata
+	dynamicMetadata := &MetaData{
+		static: map[string][]byte{
+			"name":   []byte("Bitcoin Token"),
+			"symbol": []byte("BTC"),
+		},
+		dynamic: map[string][]byte{
+			"price":  []byte("60000"),
+			"volume": []byte("2000000"),
+		},
+	}
+	WithAssetBalance(t, sObj, assetIDs[0], common.DefaultTokenID, big.NewInt(1000), nil, dynamicMetadata)
+
+	// Asset 1: Has only static metadata
+	staticOnlyMetadata := &MetaData{
+		static: map[string][]byte{
+			"rarity": []byte("legendary"),
+			"tier":   []byte("gold"),
+		},
+		dynamic: map[string][]byte{},
+	}
+	WithAssetBalance(t, sObj, assetIDs[1], common.TokenID(1), big.NewInt(500), nil, staticOnlyMetadata)
+
+	// Asset 2: Has balance but no metadata keys
+	emptyMetadata := &MetaData{
+		static:  map[string][]byte{},
+		dynamic: map[string][]byte{},
+	}
+	WithAssetBalance(t, sObj, assetIDs[2], common.DefaultTokenID, big.NewInt(2000), nil, emptyMetadata)
+
+	testcases := []struct {
+		name          string
+		assetID       identifiers.AssetID
+		tokenID       common.TokenID
+		isStatic      bool
+		key           string
+		expectedValue []byte
+		expectedError error
+	}{
+		{
+			name:          "should return error if asset not found",
+			assetID:       tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
+			tokenID:       common.DefaultTokenID,
+			isStatic:      true,
+			key:           "name",
+			expectedError: common.ErrAssetNotFound,
+		},
+		{
+			name:          "should return error if token not found",
+			assetID:       assetIDs[0],
+			tokenID:       tests.GetRandomTokenID(t),
+			isStatic:      true,
+			key:           "name",
+			expectedError: common.ErrTokenNotFound,
+		},
+		{
+			name:          "successfully retrieve static metadata",
+			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
+			isStatic:      true,
+			key:           "name",
+			expectedValue: []byte("Bitcoin Token"),
+		},
+		{
+			name:          "successfully retrieve another static metadata key",
+			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
+			isStatic:      true,
+			key:           "symbol",
+			expectedValue: []byte("BTC"),
+		},
+		{
+			name:          "successfully retrieve dynamic metadata",
+			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
+			isStatic:      false,
+			key:           "price",
+			expectedValue: []byte("60000"),
+		},
+		{
+			name:          "successfully retrieve static metadata from non-default token",
+			assetID:       assetIDs[1],
+			tokenID:       common.TokenID(1),
+			isStatic:      true,
+			key:           "rarity",
+			expectedValue: []byte("legendary"),
+		},
+		{
+			name:          "should return error if static metadata key not found",
+			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
+			isStatic:      true,
+			key:           "nonexistent",
+			expectedError: common.ErrKeyNotFound,
+		},
+		{
+			name:          "should return error if dynamic metadata key not found",
+			assetID:       assetIDs[0],
+			tokenID:       common.DefaultTokenID,
+			isStatic:      false,
+			key:           "nonexistent",
+			expectedError: common.ErrKeyNotFound,
+		},
+	}
+
+	for _, test := range testcases {
+		t.Run(test.name, func(t *testing.T) {
+			value, err := sObj.GetTokenMetadata(test.assetID, test.tokenID, test.isStatic, test.key)
+
+			if test.expectedError != nil {
+				require.Error(t, err)
+				require.ErrorIs(t, err, test.expectedError)
+				require.Nil(t, value)
+
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, value)
+			require.Equal(t, test.expectedValue, value)
+		})
+	}
+}
+
 func TestGetMetaContextObjectCopy(t *testing.T) {
 	mObj, mHash := getMetaContextObjects(t, 2)
 
@@ -2286,7 +2702,8 @@ func TestHasFuel(t *testing.T) {
 			amount: big.NewInt(200),
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
-					WithAssetBalance(t, so, common.KMOITokenAssetID, common.DefaultTokenID, big.NewInt(1000), nil)
+					WithAssetBalance(t,
+						so, common.KMOITokenAssetID, common.DefaultTokenID, big.NewInt(1000), nil, nil)
 				},
 			},
 			hasFuel: true,
@@ -2296,7 +2713,7 @@ func TestHasFuel(t *testing.T) {
 			amount: big.NewInt(200),
 			soParams: &createStateObjectParams{
 				soCallback: func(so *Object) {
-					WithAssetBalance(t, so, common.KMOITokenAssetID, common.DefaultTokenID, big.NewInt(100), nil)
+					WithAssetBalance(t, so, common.KMOITokenAssetID, common.DefaultTokenID, big.NewInt(100), nil, nil)
 				},
 			},
 			hasFuel: false,

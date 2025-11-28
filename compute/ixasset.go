@@ -64,7 +64,7 @@ func RunAssetCreate(
 		assetID,
 		payload.Symbol, payload.Decimals, payload.Dimension,
 		payload.Manager, op.SenderID(),
-		payload.MaxSupply, payload.MetaData, payload.EnableEvents, logicID)
+		payload.MaxSupply, payload.StaticMetadata, payload.DynamicMetaData, payload.EnableEvents, logicID)
 	if err != nil {
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}

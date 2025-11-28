@@ -92,14 +92,21 @@ type RPCAssetDescriptor struct {
 	MaxSupply         *hexutil.Big             `json:"max_supply"`
 	CirculatingSupply *hexutil.Big             `json:"circulating_supply"`
 	EnableEvents      bool                     `json:"enable_events"`
-	Metadata          map[string]hexutil.Bytes `json:"metadata,omitempty"`
+	StaticMetadata    map[string]hexutil.Bytes `json:"static_metadata,omitempty"`
+	DynamicMetadata   map[string]hexutil.Bytes `json:"dynamic_metadata,omitempty"`
 	LogicID           string                   `json:"logic_id,omitempty"`
 }
 
 func GetRPCAssetDescriptor(ad *common.AssetDescriptor) *RPCAssetDescriptor {
-	metadata := make(map[string]hexutil.Bytes)
-	for k, v := range ad.Metadata {
-		metadata[k] = v
+	staticMetadata := make(map[string]hexutil.Bytes)
+	dynamicMetadata := make(map[string]hexutil.Bytes)
+
+	for k, v := range ad.StaticMetaData {
+		staticMetadata[k] = v
+	}
+
+	for k, v := range ad.DynamicMetaData {
+		dynamicMetadata[k] = v
 	}
 
 	var logicID string
@@ -116,7 +123,8 @@ func GetRPCAssetDescriptor(ad *common.AssetDescriptor) *RPCAssetDescriptor {
 		MaxSupply:         (*hexutil.Big)(ad.MaxSupply),
 		CirculatingSupply: (*hexutil.Big)(ad.CirculatingSupply),
 		EnableEvents:      ad.EnableEvents,
-		Metadata:          metadata,
+		StaticMetadata:    staticMetadata,
+		DynamicMetadata:   dynamicMetadata,
 		LogicID:           logicID,
 	}
 }

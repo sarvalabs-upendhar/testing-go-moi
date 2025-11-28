@@ -2,7 +2,7 @@ syntax: 1
 engine:
   kind: PISA
   flags: []
-  version: 0.5.0
+  version: 0.5.1
 kind: logic
 elements:
 - ptr: 0
@@ -66,8 +66,9 @@ elements:
     executes:
       asm:
       - OBTAIN $0 &0
-      - LDPTR1 $1 0x0
-      - XBIND $0 $1 $0
+      - ORIGIN $1
+      - LDPTR1 $2 0x0
+      - XBIND $0 $2 $0 $1
       - CARGS $1
       - ORIGIN $2
       - SETFLD $1 &0 $2
@@ -92,8 +93,9 @@ elements:
     executes:
       asm:
       - OBTAIN $0 &0
-      - LDPTR1 $1 0x0
-      - XBIND $0 $1 $0
+      - ORIGIN $1
+      - LDPTR1 $2 0x0
+      - XBIND $0 $2 $0 $1
       - CARGS $1
       - LOGIC $2
       - SETFLD $1 &0 $2
@@ -130,8 +132,9 @@ elements:
     executes:
       asm:
       - OBTAIN $0 &0
-      - LDPTR1 $1 0x0
-      - XBIND $0 $1 $0
+      - ORIGIN $1
+      - LDPTR1 $2 0x0
+      - XBIND $0 $2 $0 $1
       - XLLOAD $1 $0 &0
       - YIELD $1 &0
       - DUMP $1

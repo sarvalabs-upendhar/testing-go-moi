@@ -3,7 +3,7 @@
   "engine": {
     "kind": "PISA",
     "flags": [],
-    "version": "0.5.0"
+    "version": "0.5.1"
   },
   "kind": "logic",
   "elements": [
@@ -57,21 +57,12 @@
         "accepts": [],
         "returns": [],
         "executes": {
-          "bin": [
-            144,
-            0,
-            0,
-            17,
-            1,
-            0,
-            43,
-            1,
-            1,
-            155,
-            0,
-            1,
-            159,
-            0
+          "asm": [
+            "LLOAD $0 &0",
+            "LDPTR1 $1 0x0",
+            "LMAKE $1 $1",
+            "DISPER $0 $1",
+            "STORE $0"
           ]
         },
         "catches": []
@@ -96,15 +87,10 @@
           }
         ],
         "executes": {
-          "bin": [
-            144,
-            0,
-            0,
-            5,
-            0,
-            0,
-            158,
-            0
+          "asm": [
+            "LLOAD $0 &0",
+            "YIELD $0 &0",
+            "DUMP $0"
           ]
         },
         "catches": []
@@ -135,19 +121,11 @@
           }
         ],
         "executes": {
-          "bin": [
-            4,
-            0,
-            0,
-            145,
-            1,
-            0,
-            0,
-            5,
-            1,
-            0,
-            158,
-            1
+          "asm": [
+            "OBTAIN $0 &0",
+            "ALOAD $1 $0 &0",
+            "YIELD $1 &0",
+            "DUMP $1"
           ]
         },
         "catches": []
@@ -177,22 +155,12 @@
         ],
         "returns": [],
         "executes": {
-          "bin": [
-            4,
-            0,
-            0,
-            145,
-            1,
-            0,
-            0,
-            4,
-            2,
-            1,
-            155,
-            1,
-            2,
-            159,
-            1
+          "asm": [
+            "OBTAIN $0 &0",
+            "ALOAD $1 $0 &0",
+            "OBTAIN $2 &1",
+            "DISPER $1 $2",
+            "STORE $1"
           ]
         },
         "catches": []

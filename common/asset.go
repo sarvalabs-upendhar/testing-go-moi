@@ -45,7 +45,8 @@ type AssetDescriptor struct {
 	MaxSupply         *big.Int               `json:"max_supply"`
 	CirculatingSupply *big.Int               `json:"circulating_supply"`
 	EnableEvents      bool                   `json:"enable_events"`
-	Metadata          map[string][]byte      `json:"metadata"`
+	StaticMetaData    map[string][]byte      `json:"static_metadata"`
+	DynamicMetaData   map[string][]byte      `json:"dynamic_metadata"`
 
 	LogicID identifiers.LogicID `json:"logic_id"`
 }
@@ -58,7 +59,7 @@ func NewAssetDescriptor(
 	manager identifiers.Identifier,
 	creator identifiers.Identifier,
 	maxSupply *big.Int,
-	metadata map[string][]byte,
+	staticMetadata, dynamicMetadata map[string][]byte,
 	enableEvents bool,
 	logicID identifiers.LogicID,
 ) *AssetDescriptor {
@@ -72,7 +73,8 @@ func NewAssetDescriptor(
 		MaxSupply:         maxSupply,
 		CirculatingSupply: big.NewInt(0),
 		EnableEvents:      enableEvents,
-		Metadata:          metadata,
+		StaticMetaData:    staticMetadata,
+		DynamicMetaData:   dynamicMetadata,
 		LogicID:           logicID,
 	}
 }

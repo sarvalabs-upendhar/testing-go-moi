@@ -766,22 +766,52 @@ func (object *Object) GetMandate(assetID identifiers.AssetID,
 	return nil, common.ErrMandateNotFound
 }
 
-func (object *Object) SetMetadata(assetID identifiers.AssetID, key string, val []byte) error {
+func (object *Object) SetAssetMetadata(assetID identifiers.AssetID, isStatic bool, key string, val []byte) error {
 	assetObject, err := object.getAssetObject(assetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
-	assetObject.Properties.Metadata[key] = val
+	defer func() {
+		object.updateAssetTree(assetID, assetObject)
+	}()
 
-	object.updateAssetTree(assetID, assetObject)
+	if isStatic {
+		return assetObject.updateStaticMetadata(key, val)
+	}
+
+	assetObject.updateDynamicMetadata(key, val)
 
 	return nil
+}
+
+func (object *Object) GetAssetMetadata(assetID identifiers.AssetID, isStatic bool, key string) ([]byte, error) {
+	properties, err := object.GetProperties(assetID)
+	if err != nil {
+		return nil, err
+	}
+
+	if isStatic {
+		val, ok := properties.StaticMetaData[key]
+		if !ok {
+			return nil, common.ErrKeyNotFound
+		}
+
+		return val, nil
+	}
+
+	val, ok := properties.DynamicMetaData[key]
+	if !ok {
+		return nil, common.ErrKeyNotFound
+	}
+
+	return val, nil
 }
 
 func (object *Object) SetTokenMetadata(
 	assetID identifiers.AssetID,
 	tokenID common.TokenID,
+	isStatic bool,
 	key string, val []byte,
 ) error {
 	assetObject, err := object.getAssetObject(assetID, true)
@@ -789,20 +819,27 @@ func (object *Object) SetTokenMetadata(
 		return common.ErrAssetNotFound
 	}
 
-	metadata, ok := assetObject.TokenMetaData[tokenID]
-	if !ok {
+	if !assetObject.hasTokenID(tokenID) {
 		return common.ErrTokenNotFound
 	}
 
-	if len(metadata.data) == 0 {
+	defer func() {
+		object.updateAssetTree(assetID, assetObject)
+	}()
+
+	_, ok := assetObject.TokenMetaData[tokenID]
+	if !ok {
 		assetObject.TokenMetaData[tokenID] = &MetaData{
-			data: make(map[string][]byte),
+			static:  make(map[string][]byte),
+			dynamic: make(map[string][]byte),
 		}
 	}
 
-	assetObject.TokenMetaData[tokenID].data[key] = val
+	if isStatic {
+		return assetObject.updateStaticTokenMetaData(tokenID, key, val)
+	}
 
-	object.updateAssetTree(assetID, assetObject)
+	assetObject.updateDynamicTokenMetaData(tokenID, key, val)
 
 	return nil
 }
@@ -810,6 +847,7 @@ func (object *Object) SetTokenMetadata(
 func (object *Object) GetTokenMetadata(
 	assetID identifiers.AssetID,
 	tokenID common.TokenID,
+	isStatic bool,
 	key string,
 ) ([]byte, error) {
 	assetObject, err := object.getAssetObject(assetID, true)
@@ -822,7 +860,16 @@ func (object *Object) GetTokenMetadata(
 		return nil, common.ErrTokenNotFound
 	}
 
-	val, ok := metadata.data[key]
+	if isStatic {
+		val, ok := metadata.static[key]
+		if !ok {
+			return nil, common.ErrKeyNotFound
+		}
+
+		return val, nil
+	}
+
+	val, ok := metadata.dynamic[key]
 	if !ok {
 		return nil, common.ErrKeyNotFound
 	}

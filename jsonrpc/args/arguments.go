@@ -216,16 +216,16 @@ type GetLogicIDArgs struct {
 }
 
 type RPCAssetCreation struct {
-	Symbol       string                   `json:"symbol"`
-	Dimension    hexutil.Uint8            `json:"dimension"`
-	Decimals     hexutil.Uint8            `json:"decimals"`
-	Standard     hexutil.Uint16           `json:"standard"`
-	EnableEvents bool                     `json:"enable_events"`
-	Manager      identifiers.Identifier   `json:"manager"`
-	MaxSupply    *hexutil.Big             `json:"max_supply"`
-	Metadata     map[string]hexutil.Bytes `json:"metadata"`
-
-	Logic *RPCLogicPayload `json:"logic_code,omitempty"`
+	Symbol          string                   `json:"symbol"`
+	Dimension       hexutil.Uint8            `json:"dimension"`
+	Decimals        hexutil.Uint8            `json:"decimals"`
+	Standard        hexutil.Uint16           `json:"standard"`
+	EnableEvents    bool                     `json:"enable_events"`
+	Manager         identifiers.Identifier   `json:"manager"`
+	MaxSupply       *hexutil.Big             `json:"max_supply"`
+	StaticMetadata  map[string]hexutil.Bytes `json:"static_metadata"`
+	DynamicMetadata map[string]hexutil.Bytes `json:"dynamic_metadata"`
+	Logic           *RPCLogicPayload         `json:"logic_code,omitempty"`
 }
 
 type RPCParticipantCreate struct {
@@ -352,12 +352,20 @@ func RPCAssetCreationFromAssetCreation(ac *common.AssetCreatePayload) *RPCAssetC
 		Logic:        RPCLogicPayloadFromLogicPayload(ac.Logic),
 	}
 
-	if len(ac.MetaData) > 0 {
-		res.Metadata = make(map[string]hexutil.Bytes, len(ac.MetaData))
+	if len(ac.StaticMetadata) > 0 {
+		res.StaticMetadata = make(map[string]hexutil.Bytes, len(ac.StaticMetadata))
 	}
 
-	for k, v := range ac.MetaData {
-		res.Metadata[k] = v
+	if len(ac.DynamicMetaData) > 0 {
+		res.DynamicMetadata = make(map[string]hexutil.Bytes, len(ac.DynamicMetaData))
+	}
+
+	for k, v := range ac.StaticMetadata {
+		res.StaticMetadata[k] = v
+	}
+
+	for k, v := range ac.DynamicMetaData {
+		res.DynamicMetadata[k] = v
 	}
 
 	return res

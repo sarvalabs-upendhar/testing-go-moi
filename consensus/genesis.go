@@ -597,7 +597,7 @@ func (k *Engine) setupAssetAccounts(
 			ai.AssetID, ai.Symbol,
 			ai.Decimals, ai.Dimension,
 			ai.Manager, ai.Creator,
-			ai.MaxSupply, ai.Metadata,
+			ai.MaxSupply, ai.StaticMetaData, ai.DynamicMetaData,
 			ai.EnableEvents, ai.LogicID); err != nil {
 			return err
 		}

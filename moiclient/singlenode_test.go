@@ -318,7 +318,8 @@ func (tn *TestSingleNode) TestGetAssetInfoByAssetID() {
 			require.Equal(tn.T(), assetDescriptor.Manager, a.Manager)
 			require.Equal(tn.T(), assetDescriptor.MaxSupply.ToInt().Uint64(),
 				uint64(tn.bgConfig.GenesisAccountCount*tn.bgConfig.PremineAmount))
-			require.Equal(tn.T(), assetDescriptor.Metadata, a.Metadata)
+			require.Equal(tn.T(), assetDescriptor.DynamicMetadata, a.DynamicMetadata)
+			require.Equal(tn.T(), assetDescriptor.StaticMetadata, a.StaticMetadata)
 		})
 	}
 }

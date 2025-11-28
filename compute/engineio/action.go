@@ -43,7 +43,7 @@ type Action interface {
 	Identifier() [32]byte
 	Origin() [32]byte
 	Caller() [32]byte
-	Access(id [32]byte) (bool, error)
-	AccessList() map[[32]byte]bool
+	Access(id [32]byte) (int, error)
+	AccessList() map[[32]byte]int
 	Parameters() map[string][]byte
 }

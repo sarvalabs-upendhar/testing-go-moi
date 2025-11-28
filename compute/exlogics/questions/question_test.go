@@ -3,6 +3,7 @@ package questions
 import (
 	"testing"
 
+	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-moi/compute/engineio"
 	"github.com/sarvalabs/go-moi/compute/engineio/test"
@@ -95,32 +96,32 @@ func (suite *LogicInterfaceTestSuite) TestSetLogicAnswer() {
 func (suite *LogicInterfaceTestSuite) TestAccessConstraints() {
 	testcases := []struct {
 		name   string
-		access map[[32]byte]bool
+		access map[[32]byte]int
 		error  string
 	}{
 		{
 			name: "Access not granted for caller logic",
-			access: map[[32]byte]bool{
-				SeederID:        true,
-				QuestionLogicID: false, // Answer logic is not accessible
+			access: map[[32]byte]int{
+				SeederID:        int(common.MutateLock),
+				QuestionLogicID: int(common.NoLock), // Answer logic is not accessible
 			},
 			error: "actor not accessible",
 		},
 		{
 			name: "Access not granted for callee logic",
-			access: map[[32]byte]bool{
-				SeederID:      true,
-				AnswerLogicID: false, // Question logic is not accessible
+			access: map[[32]byte]int{
+				SeederID:      int(common.MutateLock),
+				AnswerLogicID: int(common.NoLock), // Question logic is not accessible
 			},
 			// Unfortunately, this is the error message we get from the PISA engine.
 			error: "actor not accessible",
 		},
 		{
 			name: "Dynamic access not granted for actor",
-			access: map[[32]byte]bool{
-				SeederID:        false, // false here means the actor is not mutable (Static Access)
-				AnswerLogicID:   false,
-				QuestionLogicID: false,
+			access: map[[32]byte]int{
+				SeederID:        int(common.ReadLock), // false here means the actor is not mutable (Static Access)
+				AnswerLogicID:   int(common.ReadLock),
+				QuestionLogicID: int(common.ReadLock),
 			},
 			// Unfortunately, this is the error message we get from the PISA engine.
 			error: "slot is read-only",

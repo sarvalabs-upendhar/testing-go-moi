@@ -54,14 +54,15 @@ func (asset *AssetPayload) FromBytes(data []byte) error {
 
 // AssetCreatePayload holds data for creating an asset.
 type AssetCreatePayload struct {
-	Symbol       string
-	Dimension    uint8
-	Decimals     uint8
-	Standard     AssetStandard
-	EnableEvents bool
-	Manager      identifiers.Identifier
-	MaxSupply    *big.Int
-	MetaData     map[string][]byte
+	Symbol          string
+	Dimension       uint8
+	Decimals        uint8
+	Standard        AssetStandard
+	EnableEvents    bool
+	Manager         identifiers.Identifier
+	MaxSupply       *big.Int
+	StaticMetadata  map[string][]byte
+	DynamicMetaData map[string][]byte
 
 	Logic *LogicPayload
 }

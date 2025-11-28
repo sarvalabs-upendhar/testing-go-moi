@@ -287,7 +287,7 @@ func setupAssetAccount(t *testing.T, operator, assetAcc *state.Object, assetID i
 			0,
 			0,
 			operator.Identifier(), operator.Identifier(),
-			big.NewInt(5000), nil, false, identifiers.Nil)))
+			big.NewInt(5000), nil, nil, false, identifiers.Nil)))
 }
 
 func checkGuardianRegister(t *testing.T, system *state.SystemObject, payload *common.GuardianRegisterPayload) { //nolint

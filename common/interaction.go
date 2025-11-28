@@ -455,20 +455,20 @@ func (op *IxOp) Caller() [32]byte {
 	return op.Sender().ID
 }
 
-func (op *IxOp) Access(id [32]byte) (bool, error) {
+func (op *IxOp) Access(id [32]byte) (int, error) {
 	info, ok := op.Participants()[id]
 	if !ok {
-		return false, errors.New("actor not found")
+		return 0, errors.New("actor not found")
 	}
 
-	return info.LockType == MutateLock, nil
+	return int(info.LockType), nil
 }
 
-func (op *IxOp) AccessList() map[[32]byte]bool {
-	accessList := make(map[[32]byte]bool, len(op.Participants()))
+func (op *IxOp) AccessList() map[[32]byte]int {
+	accessList := make(map[[32]byte]int, len(op.Participants()))
 
 	for id, info := range op.Participants() {
-		accessList[id] = info.LockType == MutateLock
+		accessList[id] = int(info.LockType)
 	}
 
 	return accessList

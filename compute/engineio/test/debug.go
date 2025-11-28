@@ -118,7 +118,7 @@ type debugTxnDriver struct {
 	callsite string
 	calldata []byte
 	origin   [32]byte
-	access   map[[32]byte]bool
+	access   map[[32]byte]int
 }
 
 func newDebugTxnDriver(
@@ -127,7 +127,7 @@ func newDebugTxnDriver(
 	hash common.Hash,
 	callsite string, calldata []byte,
 	limit uint64, price *big.Int,
-	access map[[32]byte]bool,
+	access map[[32]byte]int,
 ) debugTxnDriver {
 	t.Helper()
 
@@ -174,20 +174,20 @@ func (txn debugTxnDriver) Caller() [32]byte {
 	return txn.origin
 }
 
-func (txn debugTxnDriver) Type() common.IxOpType         { return txn.kind }
-func (txn debugTxnDriver) Hash() common.Hash             { return txn.hash }
-func (txn debugTxnDriver) FuelPrice() *big.Int           { return txn.price }
-func (txn debugTxnDriver) FuelLimit() uint64             { return txn.limit }
-func (txn debugTxnDriver) Callsite() string              { return txn.callsite }
-func (txn debugTxnDriver) Identifier() [32]byte          { return txn.hash }
-func (txn debugTxnDriver) AccessList() map[[32]byte]bool { return txn.access }
-func (txn debugTxnDriver) Access(id [32]byte) (bool, error) {
+func (txn debugTxnDriver) Type() common.IxOpType        { return txn.kind }
+func (txn debugTxnDriver) Hash() common.Hash            { return txn.hash }
+func (txn debugTxnDriver) FuelPrice() *big.Int          { return txn.price }
+func (txn debugTxnDriver) FuelLimit() uint64            { return txn.limit }
+func (txn debugTxnDriver) Callsite() string             { return txn.callsite }
+func (txn debugTxnDriver) Identifier() [32]byte         { return txn.hash }
+func (txn debugTxnDriver) AccessList() map[[32]byte]int { return txn.access }
+func (txn debugTxnDriver) Access(id [32]byte) (int, error) {
 	if txn.access == nil {
-		return true, nil
+		return 0, nil
 	}
 
 	if _, ok := txn.access[id]; !ok {
-		return false, errors.New("actor not found")
+		return 0, errors.New("actor not found")
 	}
 
 	return txn.access[id], nil

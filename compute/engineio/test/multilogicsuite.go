@@ -27,7 +27,7 @@ func (suite *MultiLogicSuite) Deploy(
 	logicID identifiers.Identifier,
 	callsite string, input polo.Document,
 	output polo.Document, failure *engineio.ErrorResult,
-	access map[[32]byte]bool,
+	access map[[32]byte]int,
 	opts ...TestSuiteOption,
 ) {
 	suite.callAndCheck(logicID, common.IxLogicDeploy, callsite, input, access, output, failure, opts...)
@@ -37,7 +37,7 @@ func (suite *MultiLogicSuite) Enlist(
 	logicID identifiers.Identifier,
 	callsite string, input polo.Document,
 	output polo.Document, failure *engineio.ErrorResult,
-	access map[[32]byte]bool,
+	access map[[32]byte]int,
 	opts ...TestSuiteOption,
 ) {
 	suite.callAndCheck(logicID, common.IxLogicEnlist, callsite, input, access, output, failure, opts...)
@@ -47,7 +47,7 @@ func (suite *MultiLogicSuite) Invoke(
 	logicID identifiers.Identifier,
 	callsite string, input polo.Document,
 	output polo.Document, failure *engineio.ErrorResult,
-	access map[[32]byte]bool,
+	access map[[32]byte]int,
 	opts ...TestSuiteOption,
 ) {
 	suite.callAndCheck(logicID, common.IxLogicInvoke, callsite, input, access, output, failure, opts...)

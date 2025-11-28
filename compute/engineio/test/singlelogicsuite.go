@@ -66,7 +66,7 @@ func (suite *SingleLogicSuite) TearDownTest() {
 func (suite *SingleLogicSuite) Deploy(
 	callsite string, input polo.Document,
 	output polo.Document, failure *engineio.ErrorResult,
-	access map[[32]byte]bool,
+	access map[[32]byte]int,
 	opts ...TestSuiteOption,
 ) {
 	suite.callAndCheck(suite.defaultLogicID, common.IxLogicDeploy, callsite, input, access, output, failure, opts...)
@@ -75,7 +75,7 @@ func (suite *SingleLogicSuite) Deploy(
 func (suite *SingleLogicSuite) Enlist(
 	callsite string, input polo.Document,
 	output polo.Document, failure *engineio.ErrorResult,
-	access map[[32]byte]bool,
+	access map[[32]byte]int,
 	opts ...TestSuiteOption,
 ) {
 	suite.callAndCheck(suite.defaultLogicID, common.IxLogicEnlist, callsite, input, access, output, failure, opts...)
@@ -84,7 +84,7 @@ func (suite *SingleLogicSuite) Enlist(
 func (suite *SingleLogicSuite) Invoke(
 	callsite string, input polo.Document,
 	output polo.Document, failure *engineio.ErrorResult,
-	access map[[32]byte]bool,
+	access map[[32]byte]int,
 	opts ...TestSuiteOption,
 ) {
 	suite.callAndCheck(suite.defaultLogicID, common.IxLogicInvoke, callsite, input, access, output, failure, opts...)

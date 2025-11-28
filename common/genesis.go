@@ -35,7 +35,8 @@ type AssetCreationArgs struct {
 	Manager           identifiers.Identifier   `json:"manager"`
 	MaxSupply         hexutil.Big              `json:"max_supply"`
 	CirculatingSupply hexutil.Big              `json:"circulating_supply"`
-	Metadata          map[string]hexutil.Bytes `json:"metadata"`
+	StaticMetadata    map[string]hexutil.Bytes `json:"static_metadata"`
+	DynamicMetadata   map[string]hexutil.Bytes `json:"dynamic_metadata"`
 	LogicPayload      LogicSetupArgs           `json:"logic_payload"`
 	Allocations       []Allocation             `json:"allocations"`
 	descriptor        *AssetDescriptor
@@ -59,12 +60,17 @@ func (ac *AssetCreationArgs) AssetDescriptor() *AssetDescriptor {
 		Manager:           ac.Manager,
 		MaxSupply:         ac.MaxSupply.ToInt(),
 		CirculatingSupply: big.NewInt(0),
-		Metadata:          make(map[string][]byte),
+		StaticMetaData:    make(map[string][]byte),
+		DynamicMetaData:   make(map[string][]byte),
 		LogicID:           logicID,
 	}
 
-	for k, v := range ac.Metadata {
-		ad.Metadata[k] = v.Bytes()
+	for k, v := range ac.StaticMetadata {
+		ad.StaticMetaData[k] = v.Bytes()
+	}
+
+	for k, v := range ac.DynamicMetadata {
+		ad.DynamicMetaData[k] = v.Bytes()
 	}
 
 	assetID := CreateAssetIDFromString(ac.Symbol, 0, uint16(ac.Standard), ad.Flags()...)

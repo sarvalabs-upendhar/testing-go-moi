@@ -108,12 +108,13 @@ func (rw *RuntimeWrapper) CreateAsset(
 	symbol string, decimals uint8, dimension uint8,
 	manager, creator identifiers.Identifier,
 	maxSupply *big.Int,
-	metadata map[string][]byte,
+	staticMetadata, dynamicMetadata map[string][]byte,
 	enableEvents bool,
 	logicID identifiers.LogicID,
 ) (uint64, error) {
 	return rw.as.CreateAsset(
-		ixHash, assetID, symbol, decimals, dimension, manager, creator, maxSupply, metadata, enableEvents, logicID)
+		ixHash, assetID, symbol,
+		decimals, dimension, manager, creator, maxSupply, staticMetadata, dynamicMetadata, enableEvents, logicID)
 }
 
 func (rw *RuntimeWrapper) ActorExists(logicID [32]byte) bool {
@@ -231,14 +232,9 @@ func (aew *AssetEngineWrapper) Transfer(
 
 func (aew *AssetEngineWrapper) Mint(
 	assetID [32]byte, tokenID uint64, senderID, beneficiaryID [32]byte, amount *big.Int,
+	staticMetadata map[string][]byte,
 ) (uint64, error) {
-	return aew.ae.Mint(
-		assetID,
-		common.TokenID(tokenID),
-		senderID,
-		beneficiaryID,
-		amount,
-	)
+	return aew.ae.Mint(assetID, common.TokenID(tokenID), senderID, beneficiaryID, amount, staticMetadata)
 }
 
 func (aew *AssetEngineWrapper) Burn(
@@ -392,8 +388,10 @@ func (aew *AssetEngineWrapper) EnableEvents(assetID [32]byte) (bool, uint64, err
 	return enableEvents, 10, nil
 }
 
-func (aew *AssetEngineWrapper) SetMetaData(assetID, participantID [32]byte, key string, val []byte) (uint64, error) {
-	err := aew.ae.SetMetaData(assetID, participantID, key, val)
+func (aew *AssetEngineWrapper) SetStaticMetaData(assetID, participantID [32]byte,
+	key string, val []byte,
+) (uint64, error) {
+	err := aew.ae.SetStaticMetaData(assetID, participantID, key, val)
 	if err != nil {
 		return 5, err
 	}
@@ -401,8 +399,19 @@ func (aew *AssetEngineWrapper) SetMetaData(assetID, participantID [32]byte, key 
 	return 10, nil
 }
 
-func (aew *AssetEngineWrapper) GetMetaData(assetID [32]byte, key string) ([]byte, uint64, error) {
-	metadata, err := aew.ae.GetMetaData(assetID, key)
+func (aew *AssetEngineWrapper) SetDynamicMetaData(assetID, participantID [32]byte,
+	key string, val []byte,
+) (uint64, error) {
+	err := aew.ae.SetDynamicMetaData(assetID, participantID, key, val)
+	if err != nil {
+		return 5, err
+	}
+
+	return 10, nil
+}
+
+func (aew *AssetEngineWrapper) GetStaticMetaData(assetID [32]byte, key string) ([]byte, uint64, error) {
+	metadata, err := aew.ae.GetStaticMetaData(assetID, key)
 	if err != nil {
 		return nil, 10, err
 	}
@@ -410,17 +419,20 @@ func (aew *AssetEngineWrapper) GetMetaData(assetID [32]byte, key string) ([]byte
 	return metadata, 10, nil
 }
 
-func (aew *AssetEngineWrapper) SetTokenMetaData(
+func (aew *AssetEngineWrapper) GetDynamicMetaData(assetID [32]byte, key string) ([]byte, uint64, error) {
+	metadata, err := aew.ae.GetDynamicMetaData(assetID, key)
+	if err != nil {
+		return nil, 10, err
+	}
+
+	return metadata, 10, nil
+}
+
+func (aew *AssetEngineWrapper) SetStaticTokenMetaData(
 	assetID [32]byte, participantID [32]byte,
 	tokenID uint64, key string, val []byte,
 ) (uint64, error) {
-	err := aew.ae.SetTokenMetaData(
-		participantID,
-		assetID,
-		common.TokenID(tokenID),
-		key,
-		val,
-	)
+	err := aew.ae.SetStaticTokenMetaData(assetID, participantID, common.TokenID(tokenID), key, val)
 	if err != nil {
 		return 5, err
 	}
@@ -428,16 +440,35 @@ func (aew *AssetEngineWrapper) SetTokenMetaData(
 	return 10, nil
 }
 
-func (aew *AssetEngineWrapper) GetTokenMetaData(
+func (aew *AssetEngineWrapper) SetDynamicTokenMetaData(
+	assetID [32]byte, participantID [32]byte,
+	tokenID uint64, key string, val []byte,
+) (uint64, error) {
+	err := aew.ae.SetDynamicTokenMetaData(assetID, participantID, common.TokenID(tokenID), key, val)
+	if err != nil {
+		return 5, err
+	}
+
+	return 10, nil
+}
+
+func (aew *AssetEngineWrapper) GetStaticTokenMetaData(
 	assetID [32]byte, participantID [32]byte,
 	tokenID uint64, key string,
 ) ([]byte, uint64, error) {
-	metadata, err := aew.ae.GetTokenMetaData(
-		participantID,
-		assetID,
-		common.TokenID(tokenID),
-		key,
-	)
+	metadata, err := aew.ae.GetStaticTokenMetaData(assetID, participantID, common.TokenID(tokenID), key)
+	if err != nil {
+		return nil, 10, err
+	}
+
+	return metadata, 10, nil
+}
+
+func (aew *AssetEngineWrapper) GetDynamicTokenMetaData(
+	assetID [32]byte, participantID [32]byte,
+	tokenID uint64, key string,
+) ([]byte, uint64, error) {
+	metadata, err := aew.ae.GetDynamicTokenMetaData(assetID, participantID, common.TokenID(tokenID), key)
 	if err != nil {
 		return nil, 10, err
 	}

@@ -140,7 +140,7 @@ func (e *AssetEngineImpl) EnableEvents(assetID identifiers.AssetID) (bool, error
 	return properties.EnableEvents, nil
 }
 
-func (e *AssetEngineImpl) SetMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
+func (e *AssetEngineImpl) SetStaticMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
 	key string, val []byte,
 ) error {
 	object, err := e.transition.GetObject(assetID.AsIdentifier())
@@ -157,48 +157,89 @@ func (e *AssetEngineImpl) SetMetaData(assetID identifiers.AssetID, participantID
 		return common.ErrManagerMismatch
 	}
 
-	return object.SetMetadata(assetID, key, val)
+	return object.SetAssetMetadata(assetID, true, key, val)
 }
 
-func (e *AssetEngineImpl) GetMetaData(assetID identifiers.AssetID, key string) ([]byte, error) {
+func (e *AssetEngineImpl) SetDynamicMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
+	key string, val []byte,
+) error {
+	object, err := e.transition.GetObject(assetID.AsIdentifier())
+	if err != nil {
+		return err
+	}
+
+	properties, err := object.GetProperties(assetID)
+	if err != nil {
+		return err
+	}
+
+	if properties.Manager != participantID {
+		return common.ErrManagerMismatch
+	}
+
+	return object.SetAssetMetadata(assetID, false, key, val)
+}
+
+func (e *AssetEngineImpl) GetStaticMetaData(assetID identifiers.AssetID, key string) ([]byte, error) {
 	object, err := e.transition.GetObject(assetID.AsIdentifier())
 	if err != nil {
 		return nil, err
 	}
 
-	properties, err := object.GetProperties(assetID)
+	return object.GetAssetMetadata(assetID, true, key)
+}
+
+func (e *AssetEngineImpl) GetDynamicMetaData(assetID identifiers.AssetID, key string) ([]byte, error) {
+	object, err := e.transition.GetObject(assetID.AsIdentifier())
 	if err != nil {
 		return nil, err
 	}
 
-	val, ok := properties.Metadata[key]
-	if !ok {
-		return nil, common.ErrKeyNotFound
-	}
-
-	return val, nil
+	return object.GetAssetMetadata(assetID, false, key)
 }
 
-func (e *AssetEngineImpl) SetTokenMetaData(participantID identifiers.Identifier,
-	assetID identifiers.AssetID, tokenID common.TokenID, key string, val []byte,
+func (e *AssetEngineImpl) SetStaticTokenMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
+	tokenID common.TokenID, key string, val []byte,
 ) error {
 	participant, err := e.transition.GetObject(participantID)
 	if err != nil {
 		return err
 	}
 
-	return participant.SetTokenMetadata(assetID, tokenID, key, val)
+	return participant.SetTokenMetadata(assetID, tokenID, true, key, val)
 }
 
-func (e *AssetEngineImpl) GetTokenMetaData(participantID identifiers.Identifier,
-	assetID identifiers.AssetID, tokenID common.TokenID, key string,
+func (e *AssetEngineImpl) SetDynamicTokenMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
+	tokenID common.TokenID, key string, val []byte,
+) error {
+	participant, err := e.transition.GetObject(participantID)
+	if err != nil {
+		return err
+	}
+
+	return participant.SetTokenMetadata(assetID, tokenID, false, key, val)
+}
+
+func (e *AssetEngineImpl) GetStaticTokenMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
+	tokenID common.TokenID, key string,
 ) ([]byte, error) {
 	participant, err := e.transition.GetObject(participantID)
 	if err != nil {
 		return nil, err
 	}
 
-	return participant.GetTokenMetadata(assetID, tokenID, key)
+	return participant.GetTokenMetadata(assetID, tokenID, true, key)
+}
+
+func (e *AssetEngineImpl) GetDynamicTokenMetaData(assetID identifiers.AssetID, participantID identifiers.Identifier,
+	tokenID common.TokenID, key string,
+) ([]byte, error) {
+	participant, err := e.transition.GetObject(participantID)
+	if err != nil {
+		return nil, err
+	}
+
+	return participant.GetTokenMetadata(assetID, tokenID, false, key)
 }
 
 func (e *AssetEngineImpl) CreateAsset(
@@ -210,7 +251,7 @@ func (e *AssetEngineImpl) CreateAsset(
 	manager identifiers.Identifier,
 	creator identifiers.Identifier,
 	maxSupply *big.Int,
-	metadata map[string][]byte,
+	staticMetadata, dynamicMetadata map[string][]byte,
 	enableEvents bool,
 	logicID identifiers.LogicID,
 ) (uint64, error) {
@@ -234,7 +275,7 @@ func (e *AssetEngineImpl) CreateAsset(
 		manager,
 		creator,
 		maxSupply,
-		metadata,
+		staticMetadata, dynamicMetadata,
 		enableEvents,
 		logicID,
 	)
@@ -312,9 +353,11 @@ func (e *AssetEngineImpl) Transfer(
 }
 
 func (e *AssetEngineImpl) Mint(
-	assetID identifiers.AssetID, tokenID common.TokenID,
+	assetID identifiers.AssetID,
+	tokenID common.TokenID,
 	senderID, beneficiaryID identifiers.Identifier,
 	amount *big.Int,
+	staticMetadata map[string][]byte,
 ) (uint64, error) {
 	fuel := FuelAssetMint
 
@@ -332,7 +375,15 @@ func (e *AssetEngineImpl) Mint(
 		return fuel, err
 	}
 
-	err = mintAsset(beneficiary, assetacc, assetID, tokenID, amount)
+	if err = mintAsset(beneficiary, assetacc, assetID, tokenID, amount); err != nil {
+		return fuel, err
+	}
+
+	for k, v := range staticMetadata {
+		if err = e.SetStaticTokenMetaData(assetID, senderID, tokenID, k, v); err != nil {
+			return fuel, err
+		}
+	}
 
 	return fuel, err
 }

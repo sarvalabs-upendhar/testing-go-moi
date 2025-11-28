@@ -26,7 +26,7 @@ type TestLogicInstance struct {
 	defaultFuel    engineio.FuelGauge
 	defaultLogicID identifiers.Identifier
 	defaultSender  identifiers.Identifier
-	defaultAccess  map[[32]byte]bool
+	defaultAccess  map[[32]byte]int
 
 	transition *debugTransition
 
@@ -44,7 +44,7 @@ func (li *TestLogicInstance) initialise(
 	li.x = engine
 	li.Runtime = engine.Runtime(uint64(defaultTimestamp))
 	li.Runtime.BindAssetEngine(as)
-	li.defaultAccess = make(map[[32]byte]bool)
+	li.defaultAccess = make(map[[32]byte]int)
 	li.defaultFuel = defaultLimit
 	li.transition = newDebugTransition()
 
@@ -76,7 +76,7 @@ func (li *TestLogicInstance) initialise(
 		if li.defaultSender.IsNil() {
 			if len(logic.Actors) == 0 {
 				li.defaultSender = identifiers.RandomParticipantIDv0().AsIdentifier()
-				li.defaultAccess[li.defaultSender] = true
+				li.defaultAccess[li.defaultSender] = int(common.MutateLock)
 
 				s := newDebugStateDriver(li.ti, li.defaultSender)
 				li.participants[li.defaultSender] = s
@@ -93,7 +93,7 @@ func (li *TestLogicInstance) initialise(
 
 		li.logic[logic.LogicID] = newDebugStateDriver(li.ti, logic.LogicID)
 
-		li.defaultAccess[logic.LogicID] = true
+		li.defaultAccess[logic.LogicID] = int(common.MutateLock)
 
 		if err = li.Runtime.SpawnLogic(
 			logic.LogicID,
@@ -104,7 +104,7 @@ func (li *TestLogicInstance) initialise(
 		}
 
 		for _, id := range logic.Actors {
-			li.defaultAccess[id] = true
+			li.defaultAccess[id] = int(common.MutateLock)
 
 			s := newDebugStateDriver(li.ti, id)
 			li.participants[id] = s
@@ -149,7 +149,7 @@ func (li *TestLogicInstance) call(
 	kind common.IxOpType,
 	site string,
 	input polo.Document,
-	access map[[32]byte]bool,
+	access map[[32]byte]int,
 ) engineio.CallResult {
 	if len(access) == 0 {
 		access = li.defaultAccess
@@ -189,7 +189,7 @@ func (li *TestLogicInstance) cleanOpts() {
 
 func (li *TestLogicInstance) callAndCheck(
 	logicID identifiers.Identifier,
-	kind common.IxOpType, site string, input polo.Document, access map[[32]byte]bool,
+	kind common.IxOpType, site string, input polo.Document, access map[[32]byte]int,
 	expectedOut polo.Document, expectedErr *engineio.ErrorResult,
 	opts ...TestSuiteOption,
 ) {
@@ -197,7 +197,7 @@ func (li *TestLogicInstance) callAndCheck(
 	li.applyOpts(opts...)
 
 	if len(access) == 0 {
-		access = make(map[[32]byte]bool)
+		access = make(map[[32]byte]int)
 	}
 
 	// Perform an IxLogicEnlist call

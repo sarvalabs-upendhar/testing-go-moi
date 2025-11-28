@@ -636,15 +636,21 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 	switch schema.Mode {
 	case "dynamic":
 		routine.Access = pisa.DynamicAccess{
-			Logic:  true,
-			Origin: true,
-			Actors: true,
+			Logic:  datatypes.AccessWrite,
+			Origin: datatypes.AccessWrite,
+			Actors: datatypes.AccessWrite,
 		}
 	case "static":
 		routine.Access = pisa.DynamicAccess{
-			Logic:  false,
-			Origin: false,
-			Actors: false,
+			Logic:  datatypes.AccessRead,
+			Origin: datatypes.AccessRead,
+			Actors: datatypes.AccessRead,
+		}
+	case "pure":
+		routine.Access = pisa.DynamicAccess{
+			Logic:  datatypes.AccessNone,
+			Origin: datatypes.AccessNone,
+			Actors: datatypes.AccessNone,
 		}
 	default:
 		return errors.Errorf("invalid mode for routine element")

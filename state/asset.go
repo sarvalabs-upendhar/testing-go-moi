@@ -15,7 +15,8 @@ import (
 const AssetLogicPrefix = "Asset_Logic_"
 
 type MetaData struct {
-	data map[string][]byte
+	static  map[string][]byte
+	dynamic map[string][]byte
 }
 
 // AssetObject represents an asset's state, including balance, lockups, mandates, and properties.
@@ -58,7 +59,7 @@ func (ao *AssetObject) FromBytes(bytes []byte) error {
 }
 
 func (ao *AssetObject) hasTokenID(tokenID common.TokenID) bool {
-	if _, ok := ao.Balance[tokenID]; !ok {
+	if _, ok := ao.Balance[tokenID]; ok {
 		return true
 	}
 
@@ -98,6 +99,42 @@ func (ao *AssetObject) HasBalance(tokenID common.TokenID, amount *big.Int) error
 	}
 
 	return nil
+}
+
+func (ao *AssetObject) updateStaticMetadata(key string, value []byte) error {
+	if ao.Properties.StaticMetaData == nil {
+		ao.Properties.StaticMetaData = make(map[string][]byte)
+	}
+
+	if _, exists := ao.Properties.StaticMetaData[key]; exists {
+		return common.ErrKeyExists
+	}
+
+	ao.Properties.StaticMetaData[key] = value
+
+	return nil
+}
+
+func (ao *AssetObject) updateDynamicMetadata(key string, value []byte) {
+	if ao.Properties.DynamicMetaData == nil {
+		ao.Properties.DynamicMetaData = make(map[string][]byte)
+	}
+
+	ao.Properties.DynamicMetaData[key] = value
+}
+
+func (ao *AssetObject) updateStaticTokenMetaData(tokenID common.TokenID, key string, value []byte) error {
+	if _, ok := ao.TokenMetaData[tokenID].static[key]; ok {
+		return common.ErrKeyExists
+	}
+
+	ao.TokenMetaData[tokenID].static[key] = value
+
+	return nil
+}
+
+func (ao *AssetObject) updateDynamicTokenMetaData(tokenID common.TokenID, key string, value []byte) {
+	ao.TokenMetaData[tokenID].dynamic[key] = value
 }
 
 func AssetLogicKey(standard common.AssetStandard) []byte {

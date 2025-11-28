@@ -193,12 +193,20 @@ func CheckForRPCIxn(
 				Logic:        RPCLogicPayloadFromLogicPayload(ac.Logic),
 			}
 
-			if len(ac.MetaData) > 0 {
-				res.Metadata = make(map[string]hexutil.Bytes, len(ac.MetaData))
+			if len(ac.StaticMetadata) > 0 {
+				res.StaticMetadata = make(map[string]hexutil.Bytes, len(ac.StaticMetadata))
 			}
 
-			for k, v := range ac.MetaData {
-				res.Metadata[k] = v
+			if len(ac.DynamicMetaData) > 0 {
+				res.DynamicMetadata = make(map[string]hexutil.Bytes, len(ac.DynamicMetaData))
+			}
+
+			for k, v := range ac.StaticMetadata {
+				res.StaticMetadata[k] = v
+			}
+
+			for k, v := range ac.DynamicMetaData {
+				res.DynamicMetadata[k] = v
 			}
 
 			expectedPayload, err := json.Marshal(res)

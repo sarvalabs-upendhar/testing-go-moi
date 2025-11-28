@@ -84,7 +84,7 @@ type Runtime interface {
 		assetID identifiers.AssetID,
 		symbol string, decimals uint8, dimension uint8,
 		manager, creator identifiers.Identifier,
-		maxSupply *big.Int, metadata map[string][]byte,
+		maxSupply *big.Int, staticMetadata, dynamicMetadata map[string][]byte,
 		enableEvents bool, logicID identifiers.LogicID,
 	) (uint64, error)
 	ActorExists(logicID [32]byte) bool

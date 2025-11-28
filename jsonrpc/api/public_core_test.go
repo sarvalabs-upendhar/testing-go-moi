@@ -2505,10 +2505,15 @@ func TestPublicCoreAPI_GetAssetInfoByAssetID(t *testing.T) {
 			require.Equal(t, (*hexutil.Big)(test.expectedAssetDescriptor.MaxSupply), fetchedAssetInfo.MaxSupply)
 			require.Equal(t, (*hexutil.Big)(test.expectedAssetDescriptor.CirculatingSupply), fetchedAssetInfo.CirculatingSupply)
 			require.Equal(t, test.expectedAssetDescriptor.EnableEvents, fetchedAssetInfo.EnableEvents)
-			require.Equal(t, len(test.expectedAssetDescriptor.Metadata), len(fetchedAssetInfo.Metadata))
+			require.Equal(t, len(test.expectedAssetDescriptor.StaticMetaData), len(fetchedAssetInfo.StaticMetadata))
+			require.Equal(t, len(test.expectedAssetDescriptor.DynamicMetaData), len(fetchedAssetInfo.DynamicMetadata))
 
-			for k, v := range test.expectedAssetDescriptor.Metadata {
-				require.Equal(t, v, fetchedAssetInfo.Metadata[k].Bytes())
+			for k, v := range test.expectedAssetDescriptor.StaticMetaData {
+				require.Equal(t, v, fetchedAssetInfo.StaticMetadata[k].Bytes())
+			}
+
+			for k, v := range test.expectedAssetDescriptor.DynamicMetaData {
+				require.Equal(t, v, fetchedAssetInfo.DynamicMetadata[k].Bytes())
 			}
 		})
 	}
