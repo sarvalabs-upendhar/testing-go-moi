@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/sarvalabs/go-moi/common"
 	"github.com/sarvalabs/go-moi/crypto/poi/moinode"
@@ -49,7 +48,7 @@ var (
 	NetworkRPCUrl       string
 	LocalRPCUrl         string
 	WatchdogURL         string
-	DiscoveryInterval   time.Duration
+	DiscoveryInterval   uint64
 	enableDebugMode     bool
 	DisableRegistration bool
 )
@@ -136,7 +135,7 @@ func parseFlags(cmd *cobra.Command) {
 		"",
 		"WatchDog service url",
 	)
-	cmd.PersistentFlags().DurationVar(
+	cmd.PersistentFlags().Uint64Var(
 		&DiscoveryInterval,
 		discoveryIntervalFlag,
 		config.DefaultDiscoveryInterval,

@@ -424,7 +424,7 @@ func (c *Cluster) initTestServer(i int) {
 		LogLevel:          c.Config.LogLevel,
 		DataDir:           "./" + c.Config.TempDir + "/test_" + strconv.Itoa(i),
 		CleanDB:           "false",
-		DiscoveryInterval: "1s",
+		DiscoveryInterval: "1000",
 		ConfigPath:        "./" + c.Config.TempDir + fmt.Sprintf("/test_%d/config.json", i),
 		GenesisPath:       c.Config.Dir(genesisFile),
 		OperatorSlots:     1,

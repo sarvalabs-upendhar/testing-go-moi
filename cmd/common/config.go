@@ -2,7 +2,6 @@ package common
 
 import (
 	"strconv"
-	"time"
 
 	"github.com/sarvalabs/go-moi/common/config"
 	"github.com/sarvalabs/go-moi/common/hexutil"
@@ -397,27 +396,27 @@ func DefaultDevnetConfig(path string) *Config {
 }
 
 type NetworkConfig struct {
-	BootStrapPeers     []string      `json:"bootnodes"`
-	TrustedPeers       []PeerInfo    `json:"trusted_peers"`
-	StaticPeers        []PeerInfo    `json:"static_peers"`
-	MaxPeers           uint          `json:"max_peers"`
-	RelayNodeAddr      string        `json:"relay_node_addr"`
-	Libp2pAddr         []string      `json:"libp2p_addr"`
-	PublicP2PAddresses []string      `json:"public_p2p_addresses"`
-	JSONRPCAddr        string        `json:"jsonrpc_addr"`
-	MTQ                float64       `json:"mtq"`
-	CorsAllowedOrigins []string      `json:"cors_allowed_origins"`
-	NetworkSize        uint64        `json:"network_size"`
-	NoDiscovery        bool          `json:"no_discovery"`
-	RefreshSenatus     bool          `json:"refresh_senatus"`
-	InboundConnLimit   int64         `json:"inbound_conn_limit"`
-	OutboundConnLimit  int64         `json:"outbound_conn_limit"`
-	MinimumConnections int           `json:"minimum_connections"`
-	MaximumConnections int           `json:"maximum_connections"`
-	AllowIPv6Addresses bool          `json:"allow_ipv6_addresses"`
-	DisablePrivateIP   bool          `json:"disable_private_ip"`
-	DiscoveryInterval  time.Duration `json:"discovery_interval"`
-	EnableIPColocation bool          `json:"enable_ip_colocation"`
+	BootStrapPeers     []string   `json:"bootnodes"`
+	TrustedPeers       []PeerInfo `json:"trusted_peers"`
+	StaticPeers        []PeerInfo `json:"static_peers"`
+	MaxPeers           uint       `json:"max_peers"`
+	RelayNodeAddr      string     `json:"relay_node_addr"`
+	Libp2pAddr         []string   `json:"libp2p_addr"`
+	PublicP2PAddresses []string   `json:"public_p2p_addresses"`
+	JSONRPCAddr        string     `json:"jsonrpc_addr"`
+	MTQ                float64    `json:"mtq"`
+	CorsAllowedOrigins []string   `json:"cors_allowed_origins"`
+	NetworkSize        uint64     `json:"network_size"`
+	NoDiscovery        bool       `json:"no_discovery"`
+	RefreshSenatus     bool       `json:"refresh_senatus"`
+	InboundConnLimit   int64      `json:"inbound_conn_limit"`
+	OutboundConnLimit  int64      `json:"outbound_conn_limit"`
+	MinimumConnections int        `json:"minimum_connections"`
+	MaximumConnections int        `json:"maximum_connections"`
+	AllowIPv6Addresses bool       `json:"allow_ipv6_addresses"`
+	DisablePrivateIP   bool       `json:"disable_private_ip"`
+	DiscoveryInterval  uint64     `json:"discovery_interval"`
+	EnableIPColocation bool       `json:"enable_ip_colocation"`
 }
 
 type SyncerConfig struct {

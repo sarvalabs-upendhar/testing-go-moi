@@ -989,6 +989,7 @@ func createServer(
 		MaxPeers:          0, // current we don't limit the no.of peers
 		InboundConnLimit:  50,
 		OutboundConnLimit: 15,
+		DiscoveryInterval: time.Second,
 	}
 
 	cfg.ListenAddresses = tests.GetListenAddresses(t, 1)

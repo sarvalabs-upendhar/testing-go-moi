@@ -36,7 +36,7 @@ const (
 	DefaultMaximumConnections = 200
 	DefaultWatchDogURL        = "https://babylon-watchdog.moi.techbology/add"
 	DefaultICSRequestTimeout  = 800 * time.Millisecond
-	DefaultDiscoveryInterval  = 60 * time.Second
+	DefaultDiscoveryInterval  = 60 * 1000 // 60 seconds
 )
 
 // Chain defaults

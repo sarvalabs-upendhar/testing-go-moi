@@ -325,7 +325,7 @@ func (p *Params) getNetworkConfig() *config.NetworkConfig {
 		MaximumConnections: p.rawCfg.Network.MaximumConnections,
 		AllowIPv6Addresses: p.rawCfg.Network.AllowIPv6Addresses,
 		DisablePrivateIP:   p.rawCfg.Network.DisablePrivateIP,
-		DiscoveryInterval:  p.rawCfg.Network.DiscoveryInterval,
+		DiscoveryInterval:  time.Duration(p.rawCfg.Network.DiscoveryInterval) * time.Millisecond,
 		EnableIPColocation: p.rawCfg.Network.EnableIPColocation,
 	}
 

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/sarvalabs/go-moi/common/identifiers"
 
@@ -147,7 +148,19 @@ func (s *Server) GetAddrsFromPeerStore(peerID peer.ID) []maddr.Multiaddr {
 	return s.host.Peerstore().Addrs(peerID)
 }
 
+func (s *Server) validateNetworkConfig() error {
+	if s.cfg.DiscoveryInterval < time.Second {
+		return errors.New("discovery interval cannot be less than 1 second")
+	}
+
+	return nil
+}
+
 func (s *Server) SetupServer() error {
+	if err := s.validateNetworkConfig(); err != nil {
+		return err
+	}
+
 	if err := s.setupHost(); err != nil {
 		return fmt.Errorf("setup host: %w", err)
 	}
