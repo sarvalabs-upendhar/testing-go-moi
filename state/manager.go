@@ -131,10 +131,10 @@ func (sm *StateManager) CreateSystemObject(id identifiers.Identifier) *SystemObj
 	return systemObject
 }
 
-func (sm *StateManager) initSystemStateObject(id identifiers.Identifier) (*SystemObject, error) {
+func (sm *StateManager) initSystemStateObject(id identifiers.Identifier, isGenesis bool) (*SystemObject, error) {
 	stateObject, err := sm.GetLatestStateObject(id)
 	if err != nil {
-		stateObject = sm.CreateStateObject(id, true)
+		stateObject = sm.CreateStateObject(id, isGenesis)
 	}
 
 	systemObject := NewSystemObject(stateObject)
@@ -154,7 +154,7 @@ func (sm *StateManager) GetSystemObject() *SystemObject {
 		return systemObject
 	}
 
-	systemObject, err := sm.initSystemStateObject(common.SystemAccountID)
+	systemObject, err := sm.initSystemStateObject(common.SystemAccountID, false)
 	if err != nil {
 		panic(err)
 	}
@@ -170,7 +170,7 @@ func (sm *StateManager) GetConsensusNodes(
 		return nil, common.NilHash, err
 	}
 
-	validators, err := sm.systemRegistry.GetSystemObject().GetValidatorsByKramaID(consensusNodes)
+	validators, err := sm.GetSystemObject().GetValidatorsByKramaID(consensusNodes)
 	if err != nil {
 		return nil, common.NilHash, err
 	}
@@ -205,7 +205,8 @@ func (sm *StateManager) RefreshCachedObject(id identifiers.Identifier, sysObj *S
 
 	sm.objectCache.Remove(id)
 
-	if sysObj != nil && sysObj.id == id {
+	// Note: sysObj can be nil
+	if common.SystemAccountID == id {
 		sm.systemRegistry.SetSystemObject(sysObj)
 	}
 }

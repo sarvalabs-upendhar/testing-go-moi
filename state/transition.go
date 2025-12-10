@@ -100,6 +100,10 @@ func (t *Transition) GetObject(id identifiers.Identifier) (*Object, error) {
 }
 
 func (t *Transition) MustGetObject(id identifiers.Identifier) *Object {
+	if id == common.SystemAccountID {
+		return t.systemObject.Object
+	}
+
 	return t.objects[id]
 }
 

@@ -738,7 +738,7 @@ func (s *Syncer) processTesseract(tsInfo *TesseractInfo, cid common.ClusterID) {
 		return
 	}
 
-	if err := s.addTSThroughExecution(tsInfo); err != nil {
+	if err = s.addTSThroughExecution(tsInfo); err != nil {
 		s.logger.Error("failed to add tesseract ", "ts-hash", tsInfo.tesseract.Hash(), "error", err)
 	}
 
@@ -2051,6 +2051,7 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 			IsGenesis: msg.tesseract.TransitiveLink(msg.id()).IsNil(),
 		}
 
+		// TODO: Should we load state for a given height rather than latest height?
 		transition, err := s.state.LoadTransitionObjects(ps, nil)
 		if err != nil {
 			return false, err
@@ -2088,56 +2089,10 @@ func (s *Syncer) syncTesseract(msg *TesseractInfo) (bool, error) {
 		}
 
 		// Clear the cache because the account state has changed
+		// For system object we pass nil here as we need to reload it from DB
 		s.state.RefreshCachedObject(msg.id(), nil)
 
 		return true, nil
-	}
-
-	syncTSThroughExecution := func() (bool, error) {
-		err := s.consensus.ValidateTesseract(
-			identifiers.Nil,
-			msg.tesseract,
-			msg.committee,
-			true,
-		)
-		if err != nil {
-			return false, errors.Wrap(err, "failed to validate tesseract")
-		}
-
-		transition, err := s.state.LoadTransitionObjects(
-			msg.tesseract.Interactions().Participants(),
-			msg.tesseract.Participants(),
-		)
-		if err != nil {
-			return false, errors.Wrap(err, "failed to load transition objects")
-		}
-
-		if err = s.consensus.ExecuteAndValidate(msg.tesseract, transition); err != nil {
-			return false, err
-		}
-
-		if err = s.lattice.AddTesseractWithState(
-			msg.id(),
-			extractDirtyEntries(msg.delta),
-			msg.tesseract,
-			transition,
-			false,
-		); err != nil {
-			return false, err
-		}
-
-		if err = s.publishEventTesseractSync(msg.id(), msg.height()); err != nil {
-			s.logger.Error("Failed to publish event lattice sync", "err", err)
-		}
-
-		// Update the cache because the account state has changed
-		s.state.RefreshCachedObject(msg.id(), transition.GetSystemObject())
-
-		return true, nil
-	}
-
-	if msg.id() == common.SystemAccountID {
-		return syncTSThroughExecution()
 	}
 
 	return syncTSThroughAgora()

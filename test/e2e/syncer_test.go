@@ -250,3 +250,110 @@ func (te *TestEnvironment) TestZFullSyncForOneNode() {
 		})
 	}
 }
+
+func (te *TestEnvironment) chooseContextNodeURL(ids []identifiers.Identifier) string {
+	contextNodes := moiclient.GetContextNodes(te.T(), te.moiClient, ids)
+
+	hasNode := func(node string) bool {
+		for _, n := range contextNodes {
+			if n == node {
+				return true
+			}
+		}
+
+		return false
+	}
+
+	operatorPort := strconv.Itoa(DefaultJSONRPCPort)
+
+	// choosing operator and context nodes as node will be stopped
+	for _, instance := range te.instances {
+		if hasNode(instance.KramaID) && !strings.HasSuffix(instance.RPCUrl, operatorPort) {
+			parts := strings.Split(instance.RPCUrl, ":")
+
+			return "http://0.0.0.0:" + parts[1]
+		}
+	}
+
+	return ""
+}
+
+func (te *TestEnvironment) TestZIxnExecutionAfterRestart() {
+	accs, err := te.chooseRandomUniqueAccounts(2)
+	require.NoError(te.T(), err)
+
+	var (
+		sender     = accs[0]
+		chosenNode *moiclient.Client
+	)
+
+	// choose node that need to be stopped, it should be context node of ixn participants
+	chosenNode, err = getMoiClient(
+		te.T(),
+		te.chooseContextNodeURL([]identifiers.Identifier{sender.ID, common.SargaAccountID}),
+	)
+	require.NoError(te.T(), err)
+
+	createAsset(te, sender, createAssetCreatePayload(
+		tests.GetRandomUpperCaseString(te.T(), 8),
+		big.NewInt(1),
+		common.MAS0,
+		sender.ID,
+		nil,
+	))
+
+	testcases := []struct {
+		name        string
+		withCleanDB bool
+	}{
+		{
+			name: "start the node without clean db",
+		},
+	}
+
+	for _, test := range testcases {
+		te.Run(test.name, func() {
+			ctx, cancel := context.WithTimeout(context.Background(), DefaultNodeStopTime)
+
+			te.logger.Debug("Stop node", chosenNode.URL(), time.Now())
+
+			err := te.bgClient.StopNode(ctx, chosenNode.URL())
+			require.NoError(te.T(), err)
+
+			cancel()
+
+			ctx, cancel = context.WithTimeout(context.Background(), DefaultNodeStartTime)
+
+			te.logger.Debug("Start node", chosenNode.URL(), time.Now())
+
+			err = te.bgClient.StartNode(ctx, chosenNode.URL(), test.withCleanDB)
+			require.NoError(te.T(), err)
+
+			cancel()
+
+			// TODO Replace with wait for initial sync time code
+			time.Sleep(10 * time.Second)
+
+			checkIfNodeSynced(te.T(), chosenNode)
+			checkIfNodesSynced(te.T(), te.moiClients)
+
+			createAsset(te, sender, createAssetCreatePayload(
+				tests.GetRandomUpperCaseString(te.T(), 8),
+				big.NewInt(1),
+				common.MAS0,
+				sender.ID,
+				nil,
+			))
+
+			ctx, cancel = context.WithTimeout(context.Background(), DefaultQueryTime)
+			defer cancel()
+
+			ids, err := te.moiClient.Accounts(ctx)
+			require.NoError(te.T(), err)
+
+			checkIfAccountsSyncedOnAllNodes(te.T(), te.moiClient, te.moiClients, ids...)
+
+			time.Sleep(2 * time.Second)
+		})
+	}
+}

@@ -6,8 +6,10 @@ import (
 	"sync"
 	"time"
 
+	iradix "github.com/hashicorp/go-immutable-radix"
 	"github.com/pkg/errors"
 	"github.com/sarvalabs/go-moi/common"
+	"github.com/sarvalabs/go-moi/common/identifiers"
 	"github.com/sarvalabs/go-polo"
 )
 
@@ -222,7 +224,7 @@ func (so *SystemObject) Copy() *SystemObject {
 		}
 	})
 
-	so.Object = so.Object.Copy()
+	newObj.Object = so.Object.Copy()
 
 	return newObj
 }
@@ -265,7 +267,17 @@ func (so *SystemObject) Commit() (common.Hash, error) {
 }
 
 func (so *SystemObject) flush() error {
-	return so.Object.flush()
+	if err := so.Object.flush(); err != nil {
+		return err
+	}
+
+	// Clear merkle tree txns and dirty entries
+	so.Object.assetTreeTxn = nil
+	so.Object.logicTreeTxn = nil
+	so.Object.storageTreeTxns = make(map[identifiers.Identifier]*iradix.Txn)
+	so.Object.dirtyEntries = make(Storage)
+
+	return nil
 }
 
 func (so *SystemObject) loadValidators() error {
