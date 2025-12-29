@@ -9,43 +9,63 @@ elements:
   kind: literal
   data:
     type: string
-    value: '0x065472616e73666572'
+    value: '0x065f5f746f6b656e5f636f756e745f5f'
 - ptr: 1
   kind: literal
   data:
     type: string
-    value: '0x065472616e7366657246726f6d'
+    value: '0x065472616e73666572'
 - ptr: 2
   kind: literal
   data:
     type: string
-    value: '0x064d696e74'
+    value: '0x065472616e7366657246726f6d'
 - ptr: 3
   kind: literal
   data:
     type: string
-    value: '0x064275726e'
+    value: '0x064d696e74'
 - ptr: 4
   kind: literal
   data:
     type: string
-    value: '0x064c6f636b7570'
+    value: 0x064d696e74576974684d65746164617461
 - ptr: 5
   kind: literal
   data:
     type: string
-    value: '0x0652656c65617365'
+    value: '0x064275726e'
 - ptr: 6
   kind: literal
   data:
     type: string
-    value: '0x06417070726f7665'
+    value: '0x064c6f636b7570'
 - ptr: 7
   kind: literal
   data:
     type: string
-    value: '0x065265766f6b65'
+    value: '0x0652656c65617365'
 - ptr: 8
+  kind: literal
+  data:
+    type: string
+    value: '0x06417070726f7665'
+- ptr: 9
+  kind: literal
+  data:
+    type: string
+    value: '0x065265766f6b65'
+- ptr: 10
+  kind: literal
+  data:
+    type: string
+    value: 0x062069732061207265736572766564206b6579
+- ptr: 11
+  kind: literal
+  data:
+    type: string
+    value: 0x066f6e6c7920746f6b656e206f776e65722063616e2073657420746f6b656e206d65746164617461
+- ptr: 12
   kind: event
   data:
     name: AssetEvent
@@ -55,24 +75,88 @@ elements:
       label: operation
       type: string
     - slot: 1
+      label: token_id
+      type: u64
+    - slot: 2
       label: operator
       type: identifier
-    - slot: 2
+    - slot: 3
       label: benefactor
       type: identifier
-    - slot: 3
+    - slot: 4
       label: beneficiary
       type: identifier
-    - slot: 4
-      label: amount
-      type: u256
     - slot: 5
       label: expires_at
       type: u64
-- ptr: 9
+- ptr: 13
+  kind: callable
+  data:
+    name: get_token_count
+    mode: static
+    kind: internal
+    accepts: []
+    returns:
+    - slot: 0
+      label: token_count
+      type: u64
+    executes:
+      asm:
+      - CARGS $0
+      - LDPTR1 $1 0x0
+      - LMAKE $1 $1
+      - SETFLD $0 &0 $1
+      - ASSET $1
+      - CALLM $0 $1 &1b $0
+      - GETFLD $0 $0 &0
+      - PFORM $0 &5 $0
+      - YIELD $0 &0
+    catches: []
+- ptr: 14
+  kind: callable
+  data:
+    name: set_token_count
+    mode: dynamic
+    kind: internal
+    accepts:
+    - slot: 0
+      label: token_count
+      type: u64
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - LDPTR1 $1 0x0
+      - LMAKE $1 $1
+      - OBTAIN $2 &0
+      - ENCODE $2 $2
+      - SETFLD $0 &0 $1
+      - SETFLD $0 &1 $2
+      - ASSET $1
+      - CALLM $0 $1 &19 $0
+    catches: []
+- ptr: 15
   deps:
-  - 0
-  - 8
+  - 14
+  kind: callable
+  data:
+    name: Init
+    mode: dynamic
+    kind: deploy
+    accepts: []
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - PMAKE $1 &5
+      - SETFLD $0 &0 $1
+      - LDPTR1 $1 0xe
+      - CALLC $0 $1 $0
+    catches: []
+- ptr: 16
+  deps:
+  - 1
+  - 12
   kind: callable
   data:
     name: Transfer
@@ -80,61 +164,8 @@ elements:
     kind: invoke
     accepts:
     - slot: 0
-      label: beneficiary
-      type: identifier
-    - slot: 1
-      label: amount
-      type: u256
-    returns: []
-    executes:
-      asm:
-      - CARGS $0
-      - ASSET $1
-      - CALLM $0 $1 &17 $0
-      - GETFLD $0 $0 &0
-      - NOT $0 $0
-      - LDPTR1 $2 0x18
-      - JUMPI $2 $0
-      - CARGS $0
-      - LDPTR1 $2 0x0
-      - LMAKE $2 $2
-      - SETFLD $0 &0 $2
-      - ORIGIN $2
-      - SETFLD $0 &1 $2
-      - ORIGIN $2
-      - SETFLD $0 &2 $2
-      - OBTAIN $2 &0
-      - SETFLD $0 &3 $2
-      - OBTAIN $2 &1
-      - SETFLD $0 &4 $2
-      - LDPTR1 $2 0x8
-      - EVMAKE $0 $2 $0
-      - LOGIC $2
-      - ID $2 $2
-      - EMIT $2 $0
-      - DEST
-      - CARGS $0
-      - PMAKE $2 &5
-      - OBTAIN $3 &0
-      - OBTAIN $4 &1
-      - SETFLD $0 &0 $2
-      - SETFLD $0 &2 $3
-      - SETFLD $0 &3 $4
-      - CALLM $0 $1 &1 $0
-    catches: []
-- ptr: 10
-  deps:
-  - 1
-  - 8
-  kind: callable
-  data:
-    name: TransferFrom
-    mode: static
-    kind: invoke
-    accepts:
-    - slot: 0
-      label: benefactor
-      type: identifier
+      label: token_id
+      type: u64
     - slot: 1
       label: beneficiary
       type: identifier
@@ -155,35 +186,96 @@ elements:
       - LDPTR1 $2 0x1
       - LMAKE $2 $2
       - SETFLD $0 &0 $2
-      - ORIGIN $2
-      - SETFLD $0 &1 $2
       - OBTAIN $2 &0
+      - SETFLD $0 &1 $2
+      - ORIGIN $2
       - SETFLD $0 &2 $2
-      - OBTAIN $2 &1
+      - ORIGIN $2
       - SETFLD $0 &3 $2
-      - OBTAIN $2 &2
+      - OBTAIN $2 &1
       - SETFLD $0 &4 $2
-      - LDPTR1 $2 0x8
+      - LDPTR1 $2 0xc
       - EVMAKE $0 $2 $0
       - LOGIC $2
       - ID $2 $2
       - EMIT $2 $0
       - DEST
       - CARGS $0
-      - PMAKE $2 &5
-      - OBTAIN $3 &0
-      - OBTAIN $4 &1
-      - OBTAIN $5 &2
+      - OBTAIN $2 &0
+      - OBTAIN $3 &1
+      - OBTAIN $4 &2
+      - SETFLD $0 &0 $2
+      - SETFLD $0 &2 $3
+      - SETFLD $0 &3 $4
+      - CALLM $0 $1 &1 $0
+    catches: []
+- ptr: 17
+  deps:
+  - 2
+  - 12
+  kind: callable
+  data:
+    name: TransferFrom
+    mode: static
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
+      label: benefactor
+      type: identifier
+    - slot: 2
+      label: beneficiary
+      type: identifier
+    - slot: 3
+      label: amount
+      type: u256
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - ASSET $1
+      - CALLM $0 $1 &17 $0
+      - GETFLD $0 $0 &0
+      - NOT $0 $0
+      - LDPTR1 $2 0x18
+      - JUMPI $2 $0
+      - CARGS $0
+      - LDPTR1 $2 0x2
+      - LMAKE $2 $2
+      - SETFLD $0 &0 $2
+      - OBTAIN $2 &0
+      - SETFLD $0 &1 $2
+      - ORIGIN $2
+      - SETFLD $0 &2 $2
+      - OBTAIN $2 &1
+      - SETFLD $0 &3 $2
+      - OBTAIN $2 &2
+      - SETFLD $0 &4 $2
+      - LDPTR1 $2 0xc
+      - EVMAKE $0 $2 $0
+      - LOGIC $2
+      - ID $2 $2
+      - EMIT $2 $0
+      - DEST
+      - CARGS $0
+      - OBTAIN $2 &0
+      - OBTAIN $3 &1
+      - OBTAIN $4 &2
+      - OBTAIN $5 &3
       - SETFLD $0 &0 $2
       - SETFLD $0 &1 $3
       - SETFLD $0 &2 $4
       - SETFLD $0 &3 $5
       - CALLM $0 $1 &1 $0
     catches: []
-- ptr: 11
+- ptr: 18
   deps:
-  - 2
-  - 8
+  - 3
+  - 12
+  - 13
+  - 14
   kind: callable
   data:
     name: Mint
@@ -196,45 +288,60 @@ elements:
     - slot: 1
       label: amount
       type: u256
-    returns: []
+    returns:
+    - slot: 0
+      label: token_id
+      type: u64
     executes:
       asm:
       - CARGS $0
-      - ASSET $1
-      - CALLM $0 $1 &17 $0
+      - LDPTR1 $1 0xd
+      - CALLC $0 $1 $0
       - GETFLD $0 $0 &0
-      - NOT $0 $0
-      - LDPTR1 $2 0x16
-      - JUMPI $2 $0
-      - CARGS $0
-      - LDPTR1 $2 0x2
-      - LMAKE $2 $2
-      - SETFLD $0 &0 $2
-      - ORIGIN $2
-      - SETFLD $0 &1 $2
-      - OBTAIN $2 &0
-      - SETFLD $0 &3 $2
-      - OBTAIN $2 &1
-      - SETFLD $0 &4 $2
-      - LDPTR1 $2 0x8
-      - EVMAKE $0 $2 $0
-      - LOGIC $2
-      - ID $2 $2
-      - EMIT $2 $0
+      - CARGS $1
+      - ASSET $2
+      - CALLM $1 $2 &17 $1
+      - GETFLD $1 $1 &0
+      - NOT $1 $1
+      - LDPTR1 $3 0x19
+      - JUMPI $3 $1
+      - CARGS $1
+      - LDPTR1 $3 0x3
+      - LMAKE $3 $3
+      - SETFLD $1 &0 $3
+      - SETFLD $1 &1 $0
+      - ORIGIN $3
+      - SETFLD $1 &2 $3
+      - OBTAIN $3 &0
+      - SETFLD $1 &4 $3
+      - LDPTR1 $3 0xc
+      - EVMAKE $1 $3 $1
+      - LOGIC $3
+      - ID $3 $3
+      - EMIT $3 $1
       - DEST
-      - CARGS $0
-      - PMAKE $2 &5
+      - CARGS $1
       - OBTAIN $3 &0
       - OBTAIN $4 &1
-      - SETFLD $0 &0 $2
-      - SETFLD $0 &1 $3
-      - SETFLD $0 &2 $4
-      - CALLM $0 $1 &2 $0
+      - SETFLD $1 &0 $0
+      - SETFLD $1 &1 $3
+      - SETFLD $1 &2 $4
+      - CALLM $1 $2 &2 $1
+      - CARGS $1
+      - PMAKE $2 &5
+      - INCR $2
+      - ADD $2 $0 $2
+      - SETFLD $1 &0 $2
+      - LDPTR1 $2 0xe
+      - CALLC $1 $2 $1
+      - YIELD $0 &0
     catches: []
-- ptr: 12
+- ptr: 19
   deps:
-  - 2
-  - 8
+  - 4
+  - 12
+  - 13
+  - 14
   kind: callable
   data:
     name: MintWithMetadata
@@ -250,47 +357,60 @@ elements:
     - slot: 2
       label: static_metadata
       type: map[string]bytes
-    returns: []
+    returns:
+    - slot: 0
+      label: token_id
+      type: u64
     executes:
       asm:
       - CARGS $0
-      - ASSET $1
-      - CALLM $0 $1 &17 $0
+      - LDPTR1 $1 0xd
+      - CALLC $0 $1 $0
       - GETFLD $0 $0 &0
-      - NOT $0 $0
-      - LDPTR1 $2 0x16
-      - JUMPI $2 $0
-      - CARGS $0
-      - LDPTR1 $2 0x2
-      - LMAKE $2 $2
-      - SETFLD $0 &0 $2
-      - ORIGIN $2
-      - SETFLD $0 &1 $2
-      - OBTAIN $2 &0
-      - SETFLD $0 &3 $2
-      - OBTAIN $2 &1
-      - SETFLD $0 &4 $2
-      - LDPTR1 $2 0x8
-      - EVMAKE $0 $2 $0
-      - LOGIC $2
-      - ID $2 $2
-      - EMIT $2 $0
+      - CARGS $1
+      - ASSET $2
+      - CALLM $1 $2 &17 $1
+      - GETFLD $1 $1 &0
+      - NOT $1 $1
+      - LDPTR1 $3 0x19
+      - JUMPI $3 $1
+      - CARGS $1
+      - LDPTR1 $3 0x4
+      - LMAKE $3 $3
+      - SETFLD $1 &0 $3
+      - SETFLD $1 &1 $0
+      - ORIGIN $3
+      - SETFLD $1 &2 $3
+      - OBTAIN $3 &0
+      - SETFLD $1 &4 $3
+      - LDPTR1 $3 0xc
+      - EVMAKE $1 $3 $1
+      - LOGIC $3
+      - ID $3 $3
+      - EMIT $3 $1
       - DEST
-      - CARGS $0
-      - PMAKE $2 &5
+      - CARGS $1
       - OBTAIN $3 &0
       - OBTAIN $4 &1
       - OBTAIN $5 &2
-      - SETFLD $0 &0 $2
-      - SETFLD $0 &1 $3
-      - SETFLD $0 &2 $4
-      - SETFLD $0 &3 $5
-      - CALLM $0 $1 &2 $0
+      - SETFLD $1 &0 $0
+      - SETFLD $1 &1 $3
+      - SETFLD $1 &2 $4
+      - SETFLD $1 &3 $5
+      - CALLM $1 $2 &2 $1
+      - CARGS $1
+      - PMAKE $2 &5
+      - INCR $2
+      - ADD $2 $0 $2
+      - SETFLD $1 &0 $2
+      - LDPTR1 $2 0xe
+      - CALLC $1 $2 $1
+      - YIELD $0 &0
     catches: []
-- ptr: 13
+- ptr: 20
   deps:
-  - 3
-  - 8
+  - 5
+  - 12
   kind: callable
   data:
     name: Burn
@@ -298,6 +418,9 @@ elements:
     kind: invoke
     accepts:
     - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
       label: amount
       type: u256
     returns: []
@@ -311,32 +434,32 @@ elements:
       - LDPTR1 $2 0x16
       - JUMPI $2 $0
       - CARGS $0
-      - LDPTR1 $2 0x3
+      - LDPTR1 $2 0x5
       - LMAKE $2 $2
       - SETFLD $0 &0 $2
-      - ORIGIN $2
+      - OBTAIN $2 &0
       - SETFLD $0 &1 $2
       - ORIGIN $2
       - SETFLD $0 &2 $2
-      - OBTAIN $2 &0
-      - SETFLD $0 &4 $2
-      - LDPTR1 $2 0x8
+      - ORIGIN $2
+      - SETFLD $0 &3 $2
+      - LDPTR1 $2 0xc
       - EVMAKE $0 $2 $0
       - LOGIC $2
       - ID $2 $2
       - EMIT $2 $0
       - DEST
       - CARGS $0
-      - PMAKE $2 &5
-      - OBTAIN $3 &0
+      - OBTAIN $2 &0
+      - OBTAIN $3 &1
       - SETFLD $0 &0 $2
       - SETFLD $0 &1 $3
       - CALLM $0 $1 &3 $0
     catches: []
-- ptr: 14
+- ptr: 21
   deps:
-  - 4
-  - 8
+  - 6
+  - 12
   kind: callable
   data:
     name: Lockup
@@ -344,9 +467,12 @@ elements:
     kind: invoke
     accepts:
     - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
       label: beneficiary
       type: identifier
-    - slot: 1
+    - slot: 2
       label: amount
       type: u256
     returns: []
@@ -360,36 +486,36 @@ elements:
       - LDPTR1 $2 0x18
       - JUMPI $2 $0
       - CARGS $0
-      - LDPTR1 $2 0x4
+      - LDPTR1 $2 0x6
       - LMAKE $2 $2
       - SETFLD $0 &0 $2
-      - ORIGIN $2
+      - OBTAIN $2 &0
       - SETFLD $0 &1 $2
       - ORIGIN $2
       - SETFLD $0 &2 $2
-      - OBTAIN $2 &0
+      - ORIGIN $2
       - SETFLD $0 &3 $2
       - OBTAIN $2 &1
       - SETFLD $0 &4 $2
-      - LDPTR1 $2 0x8
+      - LDPTR1 $2 0xc
       - EVMAKE $0 $2 $0
       - LOGIC $2
       - ID $2 $2
       - EMIT $2 $0
       - DEST
       - CARGS $0
-      - PMAKE $2 &5
-      - OBTAIN $3 &0
-      - OBTAIN $4 &1
+      - OBTAIN $2 &0
+      - OBTAIN $3 &1
+      - OBTAIN $4 &2
       - SETFLD $0 &0 $2
       - SETFLD $0 &1 $3
       - SETFLD $0 &2 $4
       - CALLM $0 $1 &6 $0
     catches: []
-- ptr: 15
+- ptr: 22
   deps:
-  - 5
-  - 8
+  - 7
+  - 12
   kind: callable
   data:
     name: Release
@@ -397,12 +523,15 @@ elements:
     kind: invoke
     accepts:
     - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
       label: benefactor
       type: identifier
-    - slot: 1
+    - slot: 2
       label: beneficiary
       type: identifier
-    - slot: 2
+    - slot: 3
       label: amount
       type: u256
     returns: []
@@ -416,38 +545,38 @@ elements:
       - LDPTR1 $2 0x18
       - JUMPI $2 $0
       - CARGS $0
-      - LDPTR1 $2 0x5
+      - LDPTR1 $2 0x7
       - LMAKE $2 $2
       - SETFLD $0 &0 $2
-      - ORIGIN $2
-      - SETFLD $0 &1 $2
       - OBTAIN $2 &0
+      - SETFLD $0 &1 $2
+      - ORIGIN $2
       - SETFLD $0 &2 $2
       - OBTAIN $2 &1
       - SETFLD $0 &3 $2
       - OBTAIN $2 &2
       - SETFLD $0 &4 $2
-      - LDPTR1 $2 0x8
+      - LDPTR1 $2 0xc
       - EVMAKE $0 $2 $0
       - LOGIC $2
       - ID $2 $2
       - EMIT $2 $0
       - DEST
       - CARGS $0
-      - PMAKE $2 &5
-      - OBTAIN $3 &0
-      - OBTAIN $4 &1
-      - OBTAIN $5 &2
+      - OBTAIN $2 &0
+      - OBTAIN $3 &1
+      - OBTAIN $4 &2
+      - OBTAIN $5 &3
       - SETFLD $0 &0 $2
       - SETFLD $0 &1 $3
       - SETFLD $0 &2 $4
       - SETFLD $0 &3 $5
       - CALLM $0 $1 &7 $0
     catches: []
-- ptr: 16
+- ptr: 23
   deps:
-  - 6
   - 8
+  - 12
   kind: callable
   data:
     name: Approve
@@ -455,12 +584,15 @@ elements:
     kind: invoke
     accepts:
     - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
       label: beneficiary
       type: identifier
-    - slot: 1
+    - slot: 2
       label: amount
       type: u256
-    - slot: 2
+    - slot: 3
       label: expires_at
       type: u64
     returns: []
@@ -474,40 +606,40 @@ elements:
       - LDPTR1 $2 0x1a
       - JUMPI $2 $0
       - CARGS $0
-      - LDPTR1 $2 0x6
+      - LDPTR1 $2 0x8
       - LMAKE $2 $2
       - SETFLD $0 &0 $2
-      - ORIGIN $2
+      - OBTAIN $2 &0
       - SETFLD $0 &1 $2
       - ORIGIN $2
       - SETFLD $0 &2 $2
-      - OBTAIN $2 &0
+      - ORIGIN $2
       - SETFLD $0 &3 $2
       - OBTAIN $2 &1
       - SETFLD $0 &4 $2
-      - OBTAIN $2 &2
+      - OBTAIN $2 &3
       - SETFLD $0 &5 $2
-      - LDPTR1 $2 0x8
+      - LDPTR1 $2 0xc
       - EVMAKE $0 $2 $0
       - LOGIC $2
       - ID $2 $2
       - EMIT $2 $0
       - DEST
       - CARGS $0
-      - PMAKE $2 &5
-      - OBTAIN $3 &0
-      - OBTAIN $4 &1
-      - OBTAIN $5 &2
+      - OBTAIN $2 &0
+      - OBTAIN $3 &1
+      - OBTAIN $4 &2
+      - OBTAIN $5 &3
       - SETFLD $0 &0 $2
       - SETFLD $0 &1 $3
       - SETFLD $0 &2 $4
       - SETFLD $0 &3 $5
       - CALLM $0 $1 &4 $0
     catches: []
-- ptr: 17
+- ptr: 24
   deps:
-  - 7
-  - 8
+  - 9
+  - 12
   kind: callable
   data:
     name: Revoke
@@ -515,6 +647,9 @@ elements:
     kind: invoke
     accepts:
     - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
       label: beneficiary
       type: identifier
     returns: []
@@ -525,32 +660,63 @@ elements:
       - CALLM $0 $1 &17 $0
       - GETFLD $0 $0 &0
       - NOT $0 $0
-      - LDPTR1 $2 0x16
+      - LDPTR1 $2 0x18
       - JUMPI $2 $0
       - CARGS $0
-      - LDPTR1 $2 0x7
+      - LDPTR1 $2 0x9
       - LMAKE $2 $2
       - SETFLD $0 &0 $2
-      - ORIGIN $2
+      - OBTAIN $2 &0
       - SETFLD $0 &1 $2
       - ORIGIN $2
       - SETFLD $0 &2 $2
-      - OBTAIN $2 &0
+      - ORIGIN $2
       - SETFLD $0 &3 $2
-      - LDPTR1 $2 0x8
+      - OBTAIN $2 &1
+      - SETFLD $0 &4 $2
+      - LDPTR1 $2 0xc
       - EVMAKE $0 $2 $0
       - LOGIC $2
       - ID $2 $2
       - EMIT $2 $0
       - DEST
       - CARGS $0
-      - PMAKE $2 &5
-      - OBTAIN $3 &0
+      - OBTAIN $2 &0
+      - OBTAIN $3 &1
       - SETFLD $0 &0 $2
       - SETFLD $0 &1 $3
       - CALLM $0 $1 &5 $0
     catches: []
-- ptr: 18
+- ptr: 25
+  kind: callable
+  data:
+    name: BalanceOf
+    mode: static
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
+      label: address
+      type: identifier
+    returns:
+    - slot: 0
+      label: balance
+      type: u256
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - OBTAIN $2 &1
+      - SETFLD $0 &0 $1
+      - SETFLD $0 &1 $2
+      - ASSET $1
+      - CALLM $0 $1 &11 $0
+      - GETFLD $0 $0 &0
+      - YIELD $0 &0
+    catches: []
+- ptr: 26
   kind: callable
   data:
     name: Symbol
@@ -569,33 +735,7 @@ elements:
       - GETFLD $0 $0 &0
       - YIELD $0 &0
     catches: []
-- ptr: 19
-  kind: callable
-  data:
-    name: BalanceOf
-    mode: static
-    kind: invoke
-    accepts:
-    - slot: 0
-      label: address
-      type: identifier
-    returns:
-    - slot: 0
-      label: balance
-      type: u256
-    executes:
-      asm:
-      - CARGS $0
-      - PMAKE $1 &5
-      - OBTAIN $2 &0
-      - SETFLD $0 &0 $1
-      - SETFLD $0 &1 $2
-      - ASSET $1
-      - CALLM $0 $1 &11 $0
-      - GETFLD $0 $0 &0
-      - YIELD $0 &0
-    catches: []
-- ptr: 20
+- ptr: 27
   kind: callable
   data:
     name: Creator
@@ -614,7 +754,7 @@ elements:
       - GETFLD $0 $0 &0
       - YIELD $0 &0
     catches: []
-- ptr: 21
+- ptr: 28
   kind: callable
   data:
     name: Manager
@@ -633,64 +773,7 @@ elements:
       - GETFLD $0 $0 &0
       - YIELD $0 &0
     catches: []
-- ptr: 22
-  kind: callable
-  data:
-    name: Decimals
-    mode: static
-    kind: invoke
-    accepts: []
-    returns:
-    - slot: 0
-      label: decimals
-      type: u64
-    executes:
-      asm:
-      - CARGS $0
-      - ASSET $1
-      - CALLM $0 $1 &14 $0
-      - GETFLD $0 $0 &0
-      - YIELD $0 &0
-    catches: []
-- ptr: 23
-  kind: callable
-  data:
-    name: MaxSupply
-    mode: static
-    kind: invoke
-    accepts: []
-    returns:
-    - slot: 0
-      label: max_supply
-      type: u256
-    executes:
-      asm:
-      - CARGS $0
-      - ASSET $1
-      - CALLM $0 $1 &15 $0
-      - GETFLD $0 $0 &0
-      - YIELD $0 &0
-    catches: []
-- ptr: 24
-  kind: callable
-  data:
-    name: CirculatingSupply
-    mode: static
-    kind: invoke
-    accepts: []
-    returns:
-    - slot: 0
-      label: circulating_supply
-      type: u256
-    executes:
-      asm:
-      - CARGS $0
-      - ASSET $1
-      - CALLM $0 $1 &16 $0
-      - GETFLD $0 $0 &0
-      - YIELD $0 &0
-    catches: []
-- ptr: 25
+- ptr: 29
   kind: callable
   data:
     name: SetStaticMetadata
@@ -714,7 +797,9 @@ elements:
       - ASSET $1
       - CALLM $0 $1 &18 $0
     catches: []
-- ptr: 26
+- ptr: 30
+  deps:
+  - 10
   kind: callable
   data:
     name: SetDynamicMetadata
@@ -730,15 +815,28 @@ elements:
     returns: []
     executes:
       asm:
-      - CARGS $0
-      - OBTAIN $1 &0
+      - OBTAIN $0 &0
+      - LDPTR1 $1 0x0
+      - LMAKE $1 $1
+      - EQ $1 $0 $1
+      - NOT $1 $1
+      - LDPTR1 $2 0xd
+      - JUMPI $2 $1
+      - LDPTR1 $1 0x0
+      - LMAKE $1 $1
+      - LDPTR1 $2 0xa
+      - LMAKE $2 $2
+      - JOIN $1 $1 $2
+      - THROW $1
+      - DEST
+      - CARGS $1
       - OBTAIN $2 &1
-      - SETFLD $0 &0 $1
-      - SETFLD $0 &1 $2
-      - ASSET $1
-      - CALLM $0 $1 &19 $0
+      - SETFLD $1 &0 $0
+      - SETFLD $1 &1 $2
+      - ASSET $0
+      - CALLM $0 $0 &19 $1
     catches: []
-- ptr: 27
+- ptr: 31
   kind: callable
   data:
     name: GetStaticMetadata
@@ -762,7 +860,7 @@ elements:
       - GETFLD $0 $0 &0
       - YIELD $0 &0
     catches: []
-- ptr: 28
+- ptr: 32
   kind: callable
   data:
     name: GetDynamicMetadata
@@ -786,7 +884,157 @@ elements:
       - GETFLD $0 $0 &0
       - YIELD $0 &0
     catches: []
-- ptr: 29
+- ptr: 33
+  deps:
+  - 11
+  kind: callable
+  data:
+    name: SetStaticTokenMetadata
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
+      label: key
+      type: string
+    - slot: 2
+      label: value
+      type: bytes
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - ORIGIN $2
+      - SETFLD $0 &0 $1
+      - SETFLD $0 &1 $2
+      - ASSET $2
+      - CALLM $0 $2 &11 $0
+      - GETFLD $0 $0 &0
+      - PMAKE $3 &7
+      - EQ $0 $0 $3
+      - NOT $0 $0
+      - LDPTR1 $3 0x10
+      - JUMPI $3 $0
+      - LDPTR1 $0 0xb
+      - LMAKE $0 $0
+      - THROW $0
+      - DEST
+      - CARGS $0
+      - OBTAIN $3 &1
+      - OBTAIN $4 &2
+      - SETFLD $0 &0 $1
+      - SETFLD $0 &1 $3
+      - SETFLD $0 &2 $4
+      - CALLM $0 $2 &1c $0
+    catches: []
+- ptr: 34
+  deps:
+  - 11
+  kind: callable
+  data:
+    name: SetDynamicTokenMetadata
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
+      label: key
+      type: string
+    - slot: 2
+      label: value
+      type: bytes
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - ORIGIN $2
+      - SETFLD $0 &0 $1
+      - SETFLD $0 &1 $2
+      - ASSET $2
+      - CALLM $0 $2 &11 $0
+      - GETFLD $0 $0 &0
+      - PMAKE $3 &7
+      - EQ $0 $0 $3
+      - NOT $0 $0
+      - LDPTR1 $3 0x10
+      - JUMPI $3 $0
+      - LDPTR1 $0 0xb
+      - LMAKE $0 $0
+      - THROW $0
+      - DEST
+      - CARGS $0
+      - OBTAIN $3 &1
+      - OBTAIN $4 &2
+      - SETFLD $0 &0 $1
+      - SETFLD $0 &1 $3
+      - SETFLD $0 &2 $4
+      - CALLM $0 $2 &1d $0
+    catches: []
+- ptr: 35
+  kind: callable
+  data:
+    name: GetStaticTokenMetadata
+    mode: static
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
+      label: key
+      type: string
+    returns:
+    - slot: 0
+      label: value
+      type: bytes
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - OBTAIN $2 &1
+      - SETFLD $0 &0 $1
+      - SETFLD $0 &1 $2
+      - ASSET $1
+      - CALLM $0 $1 &1e $0
+      - GETFLD $0 $0 &0
+      - YIELD $0 &0
+    catches: []
+- ptr: 36
+  kind: callable
+  data:
+    name: GetDynamicTokenMetadata
+    mode: static
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: token_id
+      type: u64
+    - slot: 1
+      label: key
+      type: string
+    returns:
+    - slot: 0
+      label: value
+      type: bytes
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - OBTAIN $2 &1
+      - SETFLD $0 &0 $1
+      - SETFLD $0 &1 $2
+      - ASSET $1
+      - CALLM $0 $1 &1f $0
+      - GETFLD $0 $0 &0
+      - YIELD $0 &0
+    catches: []
+- ptr: 37
   kind: asset
   data:
     engine: 1.0.0

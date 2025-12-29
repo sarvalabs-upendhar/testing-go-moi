@@ -98,10 +98,14 @@ func DeployLogic(
 	}
 
 	// If no callsite is provided -> return the logic ID and fuel consumption
-	if op.Callsite() == "" {
+	if len(descriptor.DeployerCallsite) == 0 && op.Callsite() == "" {
 		return engineio.NewFuelGauge(deployer.fuel.Consumed()),
 			&common.LogicDeployResult{LogicID: logicObject.ID},
 			nil, nil
+	}
+
+	if _, ok := descriptor.DeployerCallsite[op.Callsite()]; !ok {
+		return engineio.NewFuelGauge(deployer.fuel.Consumed()), nil, nil, common.ErrInvalidCallSite
 	}
 
 	if err = ctx.Runtime.SpawnLogic(
@@ -161,7 +165,7 @@ func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, erro
 		return nil, errors.New("invalid manifest: manifest engine is not PISA")
 	}
 
-	rawArtifact, consumed, err := engine.CompileManifest(
+	rawArtifact, consumed, deployCallsites, err := engine.CompileManifest(
 		engineio.ManifestKindFromIdentifier(deployer.logicState.Identifier()),
 		deployer.logicState.Identifier(),
 		manifest,
@@ -177,10 +181,11 @@ func (deployer logicDeployer) compileManifest() (*engineio.LogicDescriptor, erro
 
 	// Create a new manifest compiler
 	return &engineio.LogicDescriptor{
-		Engine:       manifest.Engine().Kind,
-		Artifact:     rawArtifact,
-		ManifestHash: manifest.Hash(), // TODO: This is expensive, optimize this.
-		ManifestData: deployer.manifest,
+		Engine:           manifest.Engine().Kind,
+		Artifact:         rawArtifact,
+		ManifestHash:     manifest.Hash(), // TODO: This is expensive, optimize this.
+		ManifestData:     deployer.manifest,
+		DeployerCallsite: deployCallsites,
 	}, nil
 }
 
@@ -189,7 +194,7 @@ func (deployer logicDeployer) deployLogicObject(
 	descriptor *engineio.LogicDescriptor,
 ) (*state.LogicObject, error) {
 	// Create a logic object and attach it to the state object
-	err := deployer.logicState.CreateLogic(logicID, *descriptor)
+	err := deployer.logicState.CreateLogic(logicID, descriptor)
 	if err != nil {
 		return nil, err
 	}

@@ -20,13 +20,19 @@ endpoint TransferFrom(benefactor, beneficiary Identifier, amount U256):
             beneficiary: beneficiary, amount: amount}
     asset.TransferFrom(token_id: 0, benefactor, beneficiary, amount)
 
-endpoint Mint(beneficiary Identifier, amount U256):
+endpoint dynamic Mint(beneficiary Identifier, amount U256):
     if asset.EnableEvents():
         emit AssetEvent{operation: "Mint", operator: Sender, beneficiary: beneficiary,
             amount: amount}
     asset.Mint(token_id: 0, beneficiary, amount)
 
-endpoint Burn(amount U256):
+endpoint dynamic MintWithMetadata(beneficiary Identifier, amount U256, static_metadata Map[String]Bytes):
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "Mint", operator: Sender, beneficiary: beneficiary,
+            amount: amount}
+    asset.MintWithMetadata(token_id: 0, beneficiary, amount, static_metadata)
+
+endpoint dynamic Burn(amount U256):
     if asset.EnableEvents():
         emit AssetEvent{operation: "Burn", operator: Sender, benefactor: Sender,
             amount: amount}
@@ -63,3 +69,30 @@ endpoint Symbol() -> (symbol String):
 
 endpoint BalanceOf(address Identifier) -> (balance U256):
     balance = asset.BalanceOf(token_id: 0, address)
+
+endpoint Creator() -> (creator Identifier):
+    creator = asset.Creator()
+
+endpoint Manager() -> (manager Identifier):
+    manager = asset.Manager()
+
+endpoint Decimals() -> (decimals U64):
+    decimals = asset.Decimals()
+
+endpoint MaxSupply() -> (max_supply U256):
+    max_supply = asset.MaxSupply()
+
+endpoint CirculatingSupply() -> (circulating_supply U256):
+    circulating_supply = asset.CirculatingSupply()
+
+endpoint dynamic SetStaticMetadata(key String, value Bytes):
+    asset.SetStaticMetadata(key, value)
+
+endpoint dynamic SetDynamicMetadata(key String, value Bytes):
+    asset.SetDynamicMetadata(key, value)
+
+endpoint GetStaticMetadata(key String) -> (value Bytes):
+    value = asset.GetStaticMetadata(key)
+
+endpoint GetDynamicMetadata(key String) -> (value Bytes):
+    value = asset.GetDynamicMetadata(key)

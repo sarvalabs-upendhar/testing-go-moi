@@ -50,7 +50,7 @@ type Cryptography interface {
 }
 
 // Engine is the base definition for execution engine runtime. It is
-// used for runtime level behavioural capabilities rather for logic execution.
+// used for runtime level behavioral capabilities rather for logic execution.
 //
 // This can include:
 //   - Compiling Manifest objects for the runtime
@@ -71,6 +71,7 @@ type Engine interface {
 	) (
 		[]byte,
 		*FuelGauge,
+		map[string]struct{},
 		error,
 	)
 

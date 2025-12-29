@@ -47,7 +47,7 @@ func ReadAssetArtifactFile(path string) (AssetArtifacts, error) {
 	}
 
 	if err = json.Unmarshal(file, &assetArtifacts); err != nil {
-		return nil, errors.New("error unmarshalling into asset artifact")
+		return nil, errors.Wrap(err, "error unmarshalling into asset artifact")
 	}
 
 	return assetArtifacts, nil

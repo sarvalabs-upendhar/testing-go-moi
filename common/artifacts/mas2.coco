@@ -1,0 +1,122 @@
+coco asset MAS2
+
+const TOKEN_COUNT String = "__token_count__"
+
+event AssetEvent:
+    topic operation String
+    field token_id U64
+    field operator Identifier
+    field benefactor Identifier
+    field beneficiary Identifier
+    field expires_at U64
+
+function get_token_count() -> (token_count U64):
+    memory value = asset.GetDynamicMetadata(key: TOKEN_COUNT)
+    token_count = depolorize(U64, value)
+
+function dynamic set_token_count(token_count U64):
+    asset.SetDynamicMetadata(key: TOKEN_COUNT, polorize(token_count))
+
+endpoint deploy Init():
+    set_token_count(token_count: 0)
+
+endpoint Transfer(token_id U64, beneficiary Identifier, amount U256):
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "Transfer", token_id: token_id, operator: Sender, benefactor: Sender,
+            beneficiary: beneficiary}
+    asset.Transfer(token_id, beneficiary, amount)
+
+endpoint TransferFrom(token_id U64, benefactor, beneficiary Identifier, amount U256):
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "TransferFrom", token_id: token_id, operator: Sender, benefactor: benefactor,
+            beneficiary: beneficiary}
+    asset.TransferFrom(token_id, benefactor, beneficiary, amount)
+
+endpoint dynamic Mint(beneficiary Identifier, amount U256) -> (token_id U64):
+    memory new_token_id = (token_count) <- get_token_count()
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "Mint", token_id: new_token_id, operator: Sender, beneficiary: beneficiary}
+    asset.Mint(token_id: new_token_id, beneficiary, amount)
+    set_token_count(token_count: new_token_id+1)
+    token_id = new_token_id
+
+endpoint dynamic MintWithMetadata(beneficiary Identifier, amount U256, static_metadata Map[String]Bytes) -> (token_id U64):
+    memory new_token_id = (token_count) <- get_token_count()
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "MintWithMetadata", token_id: new_token_id, operator: Sender, beneficiary: beneficiary}
+    asset.MintWithMetadata(token_id: new_token_id, beneficiary, amount, static_metadata)
+    set_token_count(token_count: new_token_id+1)
+    token_id = new_token_id
+
+endpoint dynamic Burn(token_id U64, amount U256):
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "Burn", token_id: token_id, operator: Sender, benefactor: Sender}
+    asset.Burn(token_id, amount)
+
+endpoint Lockup(token_id U64, beneficiary Identifier, amount U256):
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "Lockup", token_id: token_id, operator: Sender, benefactor: Sender,
+            beneficiary: beneficiary}
+    asset.Lockup(token_id, beneficiary, amount)
+
+endpoint Release(token_id U64, benefactor, beneficiary Identifier, amount U256):
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "Release", token_id: token_id, operator: Sender, benefactor: benefactor,
+            beneficiary: beneficiary}
+    asset.Release(token_id, benefactor, beneficiary, amount)
+
+endpoint Approve(token_id U64, beneficiary Identifier, amount U256, expires_at U64):
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "Approve", token_id: token_id, operator: Sender, benefactor: Sender,
+            beneficiary: beneficiary, expires_at: expires_at}
+    asset.Approve(token_id,  beneficiary, amount, expires_at)
+
+endpoint Revoke(token_id U64, beneficiary Identifier):
+    if asset.EnableEvents():
+        emit AssetEvent{operation: "Revoke", token_id: token_id, operator: Sender, benefactor: Sender,
+            beneficiary: beneficiary}
+    asset.Revoke(token_id, beneficiary)
+
+// Getters
+
+endpoint BalanceOf(token_id U64, address Identifier) -> (balance U256):
+    balance = asset.BalanceOf(token_id, address)
+
+endpoint Symbol() -> (symbol String):
+    symbol = asset.Symbol()
+
+endpoint Creator() -> (creator Identifier):
+    creator = asset.Creator()
+
+endpoint Manager() -> (manager Identifier):
+    manager = asset.Manager()
+
+endpoint dynamic SetStaticMetadata(key String, value Bytes):
+    asset.SetStaticMetadata(key, value)
+
+endpoint dynamic SetDynamicMetadata(key String, value Bytes):
+    if key == TOKEN_COUNT:
+        throw f"{TOKEN_COUNT} is a reserved key"
+    asset.SetDynamicMetadata(key, value)
+
+endpoint GetStaticMetadata(key String) -> (value Bytes):
+    value = asset.GetStaticMetadata(key)
+
+endpoint GetDynamicMetadata(key String) -> (value Bytes):
+    value = asset.GetDynamicMetadata(key)
+
+endpoint dynamic SetStaticTokenMetadata(token_id U64, key String, value Bytes):
+    if asset.BalanceOf(token_id, Sender) == 0:
+        throw "only token owner can set token metadata"
+    asset.SetStaticTokenMetadata(token_id, key, value)
+
+endpoint dynamic SetDynamicTokenMetadata(token_id U64, key String, value Bytes):
+    if asset.BalanceOf(token_id, Sender) == 0:
+        throw "only token owner can set token metadata"
+    asset.SetDynamicTokenMetadata(token_id, key, value)
+
+endpoint GetStaticTokenMetadata(token_id U64, key String) -> (value Bytes):
+    value = asset.GetStaticTokenMetadata(token_id, key)
+
+endpoint GetDynamicTokenMetadata(token_id U64, key String) -> (value Bytes):
+    value = asset.GetDynamicTokenMetadata(token_id, key)

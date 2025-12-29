@@ -1343,7 +1343,7 @@ func (tn *TestSingleNode) TestFuelEstimate() {
 					},
 				},
 			},
-			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(2265)),
+			expectedFuelConsumed: (*hexutil.Big)(big.NewInt(3005)),
 		},
 		{
 			name: "retrieved fuel used in asset create ixn when fuel limit and price are not given",
@@ -1524,7 +1524,7 @@ func (tn *TestSingleNode) TestCall() {
 				},
 			},
 			expectedReceipt: &rpcargs.RPCReceipt{
-				FuelUsed: hexutil.Uint64(2265),
+				FuelUsed: hexutil.Uint64(3005),
 				From:     id,
 				IxOps: []*rpcargs.RPCIxOpResult{
 					{

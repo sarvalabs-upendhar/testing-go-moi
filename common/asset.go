@@ -146,6 +146,7 @@ type AssetStandard uint16
 const (
 	MAS0 AssetStandard = iota
 	MAS1
+	MAS2
 
 	MASX = math.MaxUint16
 )
@@ -153,6 +154,7 @@ const (
 var ValidAssetStandards = map[AssetStandard]string{
 	MAS0: "MAS0",
 	MAS1: "MAS1",
+	MAS2: "MAS2",
 	MASX: "MASX",
 }
 

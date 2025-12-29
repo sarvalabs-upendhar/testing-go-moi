@@ -26,7 +26,7 @@ type LogicObject struct {
 }
 
 // NewLogicObject generates a new LogicObject for a given LogicID, LogicDescriptor and Storage Namespace key
-func NewLogicObject(id identifiers.Identifier, descriptor engineio.LogicDescriptor) *LogicObject {
+func NewLogicObject(id identifiers.Identifier, descriptor *engineio.LogicDescriptor) *LogicObject {
 	return &LogicObject{
 		ID:         id,
 		EngineKind: descriptor.Engine,

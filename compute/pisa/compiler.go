@@ -74,12 +74,13 @@ var ErrInsufficientCompileFuel = errors.New("insufficient fuel for manifest comp
 //
 // manifestCompiler internally uses the tools and validation rules provided by pisa.ArtifactBuilder
 type ManifestCompiler struct {
-	manifest     engineio.Manifest
-	manifestKind engineio.ManifestKind
-	fuel         engineio.FuelGauge
-	dependency   *depgraph.DependencyGraph
-	logicID      identifiers.Identifier
-	builder      *pisa.ArtifactBuilder
+	manifest         engineio.Manifest
+	manifestKind     engineio.ManifestKind
+	fuel             engineio.FuelGauge
+	dependency       *depgraph.DependencyGraph
+	logicID          identifiers.Identifier
+	builder          *pisa.ArtifactBuilder
+	deployerCallsite map[string]struct{}
 }
 
 func NewManifestCompiler(
@@ -89,12 +90,13 @@ func NewManifestCompiler(
 	manifest engineio.Manifest,
 ) *ManifestCompiler {
 	mc := &ManifestCompiler{
-		fuel:         fuel,
-		manifest:     manifest,
-		manifestKind: manifestKind,
-		dependency:   depgraph.NewDependencyGraph(),
-		builder:      pisa.NewArtifactBuilder(common.Hash(manifest.Hash()).String()),
-		logicID:      logicID,
+		fuel:             fuel,
+		manifest:         manifest,
+		manifestKind:     manifestKind,
+		dependency:       depgraph.NewDependencyGraph(),
+		builder:          pisa.NewArtifactBuilder(common.Hash(manifest.Hash()).String()),
+		logicID:          logicID,
+		deployerCallsite: make(map[string]struct{}),
 	}
 
 	if manifestKind == engineio.AssetKind {
@@ -557,20 +559,26 @@ func (compiler *ManifestCompiler) compileRoutineElement(element engineio.Manifes
 			return ErrInsufficientCompileFuel
 		}
 
+		if _, ok := compiler.deployerCallsite[schema.Name]; !ok {
+			compiler.deployerCallsite[schema.Name] = struct{}{}
+		}
+
 		// Check that deployer has the persistent mode
 		if schema.Mode != DynamicState {
 			return errors.New("invalid routine element: invalid state mode for deployer routine")
 		}
 
-		// Check if the persistent state has been compiled
-		pstate, ok := compiler.builder.GetLogicStatePtr()
-		if !ok {
-			return errors.New("invalid routine element: deployer routine for non-existent persistent storage")
-		}
+		if compiler.manifest.Header().Kind != "asset" {
+			// Check if the persistent state has been compiled
+			pstate, ok := compiler.builder.GetLogicStatePtr()
+			if !ok {
+				return errors.New("invalid routine element: deployer routine for non-existent persistent storage")
+			}
 
-		// Check if the routine has the necessary dependency for the persistent state
-		if !contains(element.Deps, pstate) {
-			return errors.New("invalid routine element: missing dependency on persistent state for deployer")
+			// Check if the routine has the necessary dependency for the persistent state
+			if !contains(element.Deps, pstate) {
+				return errors.New("invalid routine element: missing dependency on persistent state for deployer")
+			}
 		}
 
 	case engineio.CallsiteInteract:

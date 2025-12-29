@@ -56,11 +56,12 @@ func (p *Pisa) CompileManifest(
 ) (
 	[]byte,
 	*engineio.FuelGauge,
+	map[string]struct{},
 	error,
 ) {
 	// Check that the Manifest Instance is PISA
 	if manifest.Engine().Kind != engineio.PISA {
-		return nil, fuel.Consumed(fuel), errors.New("invalid manifest: manifest engine is not PISA")
+		return nil, fuel.Consumed(fuel), nil, errors.New("invalid manifest: manifest engine is not PISA")
 	}
 
 	// Create a new manifest compiler
@@ -68,10 +69,10 @@ func (p *Pisa) CompileManifest(
 	// Compile the manifest
 	descriptor, err := compiler.CompileArtifact()
 	if err != nil {
-		return nil, fuel.Consumed(compiler.fuel), errors.Wrap(err, "compile error")
+		return nil, fuel.Consumed(compiler.fuel), nil, errors.Wrap(err, "compile error")
 	}
 
-	return descriptor, fuel.Consumed(compiler.fuel), nil
+	return descriptor, fuel.Consumed(compiler.fuel), compiler.deployerCallsite, nil
 }
 
 func NewRuntimeWrapper(rn *pisa.Runtime) *RuntimeWrapper {

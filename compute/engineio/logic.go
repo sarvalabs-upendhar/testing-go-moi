@@ -20,6 +20,8 @@ type LogicDescriptor struct {
 	ManifestHash [32]byte
 
 	Artifact []byte
+
+	DeployerCallsite map[string]struct{}
 }
 
 // LogicElement represents a generic container for a logic Element.

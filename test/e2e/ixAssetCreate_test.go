@@ -67,8 +67,15 @@ func validateAssetCreation(
 	sender identifiers.Identifier,
 	ixHash common.Hash,
 	txnID int,
+	isFailure bool,
 	assetCreatePayload *common.AssetCreatePayload,
 ) {
+	if isFailure {
+		checkForReceiptFailure(te.T(), te.moiClient, ixHash)
+
+		return
+	}
+
 	receipt := checkForReceiptSuccess(te.T(), te.moiClient, ixHash)
 
 	var assetReceipt common.AssetCreationResult
@@ -131,11 +138,13 @@ func (te *TestEnvironment) TestAssetCreate() {
 	testcases := []struct {
 		name               string
 		assetCreatePayload *common.AssetCreatePayload
+		isFailure          bool
 		postTest           func(
 			te *TestEnvironment,
 			acc identifiers.Identifier,
 			ixHash common.Hash,
 			txnID int,
+			isFailure bool,
 			assetCreatePayload *common.AssetCreatePayload,
 		)
 		expectedError error
@@ -158,11 +167,28 @@ func (te *TestEnvironment) TestAssetCreate() {
 			postTest: validateAssetCreation,
 		},
 		{
+			name: "MAS1 asset creation should fail without logic payload",
+			assetCreatePayload: createAssetCreatePayload(
+				tests.GetRandomUpperCaseString(te.T(), 8),
+				big.NewInt(1000),
+				common.MAS1,
+				acc.ID,
+				func(payload *common.AssetCreatePayload) {
+					payload.Dimension = 0
+					payload.StaticMetadata = map[string][]byte{
+						"key1": []byte("value1"),
+					}
+				},
+			),
+			isFailure: true,
+			postTest:  validateAssetCreation,
+		},
+		{
 			name: "invalid asset details",
 			assetCreatePayload: createAssetCreatePayload(
 				tests.GetRandomUpperCaseString(te.T(), 8),
 				big.NewInt(1000),
-				2,
+				3, // invalid standard
 				acc.ID,
 				nil,
 			),
@@ -180,7 +206,7 @@ func (te *TestEnvironment) TestAssetCreate() {
 			}
 
 			require.NoError(te.T(), err)
-			test.postTest(te, acc.ID, ixHash, 0, test.assetCreatePayload)
+			test.postTest(te, acc.ID, ixHash, 0, test.isFailure, test.assetCreatePayload)
 		})
 	}
 }

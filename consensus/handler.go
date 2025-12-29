@@ -33,7 +33,7 @@ func viewTime(genesisTime uint64, viewNumber uint64, viewDuration time.Duration)
 	return genesis.Add(offset)
 }
 
-func (k *Engine) startPrepareTimeoutTimer(prepareTimeoutDeadline time.Time) {
+func (k *Engine) schedulePrepareTimeout(prepareTimeoutDeadline time.Time) {
 	select {
 	case <-k.ctx.Done():
 		return
@@ -141,7 +141,7 @@ func (k *Engine) handler() {
 			k.participantToPrepareMsg = make(map[identifiers.Identifier][]*metaPrepareMsg)
 			k.stopPrepareMsgs = false
 
-			go k.startPrepareTimeoutTimer(prepareTimeOutDeadline)
+			go k.schedulePrepareTimeout(prepareTimeOutDeadline)
 
 			for _, msg := range k.futureMsg {
 				k.handleConsensusMessage(msg)

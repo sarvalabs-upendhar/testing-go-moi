@@ -61,7 +61,7 @@ func (li *TestLogicInstance) initialise(
 		}
 
 		// Compile a logic descriptor from the manifest
-		artifact, compileEffort, err := li.x.CompileManifest(
+		artifact, compileEffort, _, err := li.x.CompileManifest(
 			engineio.ManifestKindFromIdentifier(logic.LogicID),
 			logic.LogicID,
 			logic.Manifest,

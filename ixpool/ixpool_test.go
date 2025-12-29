@@ -2502,7 +2502,7 @@ func TestIxPool_ValidateOperations(t *testing.T) {
 
 	invalidAssetPayload := &common.AssetCreatePayload{
 		Symbol:   "&&&&",
-		Standard: 2,
+		Standard: 5, // invalid standard
 	}
 
 	testcases := []struct {
@@ -2563,7 +2563,7 @@ func TestIxPool_ValidateAssetCreate(t *testing.T) {
 
 	invalidAssetStandardPayload := &common.AssetCreatePayload{
 		Symbol:   "@123",
-		Standard: 2,
+		Standard: 3,
 	}
 
 	missingLogicPayload := &common.AssetCreatePayload{

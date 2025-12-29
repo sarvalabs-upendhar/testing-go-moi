@@ -1730,7 +1730,7 @@ func TestUpdateAssetTree(t *testing.T) {
 func TestUpdateLogicTree(t *testing.T) {
 	sObj := createTestStateObject(t, nil)
 	logicID := tests.GetLogicID(t, tests.RandomIdentifier(t))
-	logicObject := NewLogicObject(logicID, engineio.LogicDescriptor{Engine: engineio.PISA})
+	logicObject := NewLogicObject(logicID, &engineio.LogicDescriptor{Engine: engineio.PISA})
 
 	setLogicObject(t, sObj, logicID, logicObject)
 

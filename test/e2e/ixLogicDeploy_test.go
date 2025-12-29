@@ -192,7 +192,7 @@ func (te *TestEnvironment) TestLogicDeploy() {
 				Calldata: DeployCallData.Bytes(),
 				Manifest: common.Hex2Bytes(ledgerManifest),
 			},
-			checkReceipt: checkForReceiptSuccess, // TODO check if this can be structured in better way
+			checkReceipt: checkForReceiptFailure,
 		},
 		{
 			name:   "empty call data",

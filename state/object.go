@@ -1339,7 +1339,7 @@ func (object *Object) BurnAsset(assetID identifiers.AssetID, amount *big.Int) (*
 }
 
 // CreateLogic creates a new logic object and returns its logic ID.
-func (object *Object) CreateLogic(logicID identifiers.Identifier, descriptor engineio.LogicDescriptor) error {
+func (object *Object) CreateLogic(logicID identifiers.Identifier, descriptor *engineio.LogicDescriptor) error {
 	// Generate the key for the LogicManifest from its hash
 	key := common.BytesToHex(storage.LogicManifestKey(object.Identifier(), descriptor.ManifestHash))
 	// Write the manifest into the dirty entries

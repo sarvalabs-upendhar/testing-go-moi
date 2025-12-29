@@ -481,12 +481,8 @@ github.com/russross/blackfriday/v2 v2.0.1/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQD
 github.com/russross/blackfriday/v2 v2.1.0/go.mod h1:+Rmxgy9KzJVeS9/2gXHxylqXiyQDYRxCVz55jmeOWTM=
 github.com/sarvalabs/battleground v0.3.1 h1:UUd759i9U6AbqQjjntnlVtromLoiqrplPNKG44M7xXo=
 github.com/sarvalabs/battleground v0.3.1/go.mod h1:q3OnSk0d5kY997EbGxtp3koohB1JEf76IpTfhGmSNno=
-github.com/sarvalabs/go-pisa v0.5.0-rc.5.0.20251112102635-941b41f1bd9f h1:x8BK3KIeMYIZBSoII4asVqo5l35sPv24M8IauhBORuE=
-github.com/sarvalabs/go-pisa v0.5.0-rc.5.0.20251112102635-941b41f1bd9f/go.mod h1:CYFlUl2YAkoBN1SZ9Fz646xsAJ7vNTd+YNFoHLrHP9Q=
-github.com/sarvalabs/go-pisa v0.5.0 h1:ZLUoF5sezZlrZY/RE7h4Z+JL8O3sFDH+NYxPC4p/tG4=
-github.com/sarvalabs/go-pisa v0.5.0/go.mod h1:kxL8CAU3xw52i6rpeN5Pr/JTgzkLgFVSDYF7Nwzg2jg=
-github.com/sarvalabs/go-pisa v0.5.1-rc.1 h1:OQKYpsdKSOhXBiSy8CxusyGlD2Hwsm8cRYbJXiAsvlU=
-github.com/sarvalabs/go-pisa v0.5.1-rc.1/go.mod h1:CYFlUl2YAkoBN1SZ9Fz646xsAJ7vNTd+YNFoHLrHP9Q=
+github.com/sarvalabs/go-pisa v0.6.0 h1:5B8Jz+TRiclWLTqlwnG9iocJYWTXpxKFlttS7nR9nRQ=
+github.com/sarvalabs/go-pisa v0.6.0/go.mod h1:CYFlUl2YAkoBN1SZ9Fz646xsAJ7vNTd+YNFoHLrHP9Q=
 github.com/sarvalabs/go-polo v0.4.9 h1:/ZuiQaAIw8N8GbAViC8WlvmlWWOszohRm+rlt/A1H1o=
 github.com/sarvalabs/go-polo v0.4.9/go.mod h1:LwrHUAuRpoTJcTCUXsHZIlGrlI03gvmShAUJBRAxGh0=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=
