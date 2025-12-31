@@ -5,11 +5,16 @@
   gather_facts: false
   vars:
     deployment_option: "{{ lookup('env', 'deployment_option') | default('Full_Deployment') }}"  # Default to 'Full_Deployment' if not set
+    clean_db: "{{ lookup('env', 'clean_db') | default('true') }}"  # Default to 'true' if not set
 
   tasks:
     - name: Print deployment option
       debug:
         msg: "Deployment Option: {{ deployment_option }}"
+
+    - name: Print clean db option
+      debug:
+        msg: "Clean DB Option: {{ clean_db }}"
 
 - name: Set timestamp
   hosts: all

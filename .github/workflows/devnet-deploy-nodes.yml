@@ -3,7 +3,7 @@ on:
 
   workflow_dispatch:
     inputs:
-      environment:
+      deployment_option:
           default: 'Quick_Deployment'
           description: 'Choose deployment option'
           required: true
@@ -13,6 +13,14 @@ on:
             - Full_Deployment
             - Genesis_Update_Only
             - Config_Update_Only   
+      clean_db:
+          default: 'true'
+          description: 'Clean database before deployment'
+          required: true
+          type: choice
+          options:
+            - 'true'
+            - 'false' 
 
 env: 
   BRANCH_NAME: ${{ github.ref_name }}
@@ -57,7 +65,8 @@ jobs:
       - name: Set Deployment Option
         id: set_option
         run: |
-          echo "DEPLOYMENT_OPTION=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+          echo "DEPLOYMENT_OPTION=${{ github.event.inputs.deployment_option }}" >> $GITHUB_ENV
+          echo "CLEAN_DB=${{ github.event.inputs.clean_db }}" >> $GITHUB_ENV
 
 
       # Step 3: Connect to the jump server and execute the playbook
@@ -87,4 +96,4 @@ jobs:
             # Run the Ansible playbook with extra vars based on deployment option
             ansible-playbook -i /tmp/node.yml ansible-devnet/network-upgrade.yaml -f 10 \
             --extra-vars "ansible_ssh_private_key_file=/home/github/.ssh/id_rsa" \
-            -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} deployment_option=${{ env.DEPLOYMENT_OPTION }} SUDO_PASSWORD=${{ secrets.SUDO_PASSWORD }}"
+            -e "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} deployment_option=${{ env.DEPLOYMENT_OPTION }} clean_db=${{ env.CLEAN_DB }} SUDO_PASSWORD=${{ secrets.SUDO_PASSWORD }}"
