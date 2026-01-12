@@ -93,7 +93,7 @@ func (t *Transition) Receipts() common.Receipts {
 func (t *Transition) GetObject(id identifiers.Identifier) (*Object, error) {
 	obj, ok := t.objects[id]
 	if !ok {
-		return nil, fmt.Errorf("object not found for %s", id.String())
+		return nil, common.ErrObjectNotFound
 	}
 
 	return obj, nil

@@ -598,7 +598,9 @@ func (k *Engine) setupAssetAccounts(
 			ai.Decimals, ai.Dimension,
 			ai.Manager, ai.Creator,
 			ai.MaxSupply, ai.StaticMetaData, ai.DynamicMetaData,
-			ai.EnableEvents, ai.LogicID); err != nil {
+			ai.EnableEvents, ai.LogicID, map[[32]byte]int{
+				ai.Manager: int(common.MutateLock),
+			}); err != nil {
 			return err
 		}
 
@@ -616,7 +618,10 @@ func (k *Engine) setupAssetAccounts(
 			return errors.Wrap(err, "failed to create logic in runtime")
 		}
 
-		ix, err := common.NewIxForMint(ai.Manager, common.PayoutsFromAllocations(assetAccount.AssetInfo.Allocations)...)
+		ix, err := common.NewIxForMint(
+			ai.Manager,
+			common.PayoutsFromAllocations(ai.AssetID, assetAccount.AssetInfo.Allocations)...,
+		)
 		if err != nil {
 			return err
 		}

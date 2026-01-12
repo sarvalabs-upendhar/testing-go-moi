@@ -63,7 +63,7 @@ func Test_ValidateParticipantCreate(t *testing.T) {
 		//			t,
 		//			tests.GetRandomAssetID(t, tests.RandomIdentifier(t)),
 		// common.TransferEndpoint,
-		// &common.TransferParams{Beneficiary: tests.RandomIdentifier(t), Amount: big.NewInt(5000000)}),
+		// &common.TransferParams{beneficiary: tests.RandomIdentifier(t), amount: big.NewInt(5000000)}),
 		//	},
 		//	expectedError: common.ErrInsufficientFunds,
 		// },

@@ -112,10 +112,11 @@ func (rw *RuntimeWrapper) CreateAsset(
 	staticMetadata, dynamicMetadata map[string][]byte,
 	enableEvents bool,
 	logicID identifiers.LogicID,
+	access map[[32]byte]int,
 ) (uint64, error) {
 	return rw.as.CreateAsset(
 		ixHash, assetID, symbol,
-		decimals, dimension, manager, creator, maxSupply, staticMetadata, dynamicMetadata, enableEvents, logicID)
+		decimals, dimension, manager, creator, maxSupply, staticMetadata, dynamicMetadata, enableEvents, logicID, access)
 }
 
 func (rw *RuntimeWrapper) ActorExists(logicID [32]byte) bool {
@@ -206,20 +207,9 @@ type AssetEngineWrapper struct {
 	ae engineio.AssetEngine
 }
 
-func (aew *AssetEngineWrapper) DefineAsset(
-	assetID [32]byte,
-	senderID [32]byte,
-	symbol string, decimals uint8,
-	manager [32]byte,
-	maxSupply *big.Int,
-	enableEvents bool,
-) (uint64, error) {
-	return 0, errors.New("DefineAsset not implemented in PISA AssetEngineWrapper")
-}
-
 func (aew *AssetEngineWrapper) Transfer(
 	assetID [32]byte, tokenID uint64, operatorID [32]byte, benefactorID [32]byte,
-	beneficiaryID [32]byte, amount *big.Int,
+	beneficiaryID [32]byte, amount *big.Int, access map[[32]byte]int,
 ) (uint64, error) {
 	return aew.ae.Transfer(
 		assetID,
@@ -228,30 +218,33 @@ func (aew *AssetEngineWrapper) Transfer(
 		benefactorID,
 		beneficiaryID,
 		amount,
+		access,
 	)
 }
 
 func (aew *AssetEngineWrapper) Mint(
 	assetID [32]byte, tokenID uint64, senderID, beneficiaryID [32]byte, amount *big.Int,
-	staticMetadata map[string][]byte,
+	staticMetadata map[string][]byte, access map[[32]byte]int,
 ) (uint64, error) {
-	return aew.ae.Mint(assetID, common.TokenID(tokenID), senderID, beneficiaryID, amount, staticMetadata)
+	return aew.ae.Mint(assetID, common.TokenID(tokenID), senderID, beneficiaryID, amount, staticMetadata, access)
 }
 
 func (aew *AssetEngineWrapper) Burn(
-	assetID [32]byte, tokenID uint64, benefactorID [32]byte, amount *big.Int,
+	assetID [32]byte, tokenID uint64, benefactorID [32]byte, amount *big.Int, access map[[32]byte]int,
 ) (uint64, error) {
 	return aew.ae.Burn(
 		assetID,
 		common.TokenID(tokenID),
 		benefactorID,
 		amount,
+		access,
 	)
 }
 
 func (aew *AssetEngineWrapper) Approve(
 	assetID [32]byte, tokenID uint64,
 	benefactorID, beneficiaryID [32]byte, amount *big.Int, expiresAt uint64,
+	access map[[32]byte]int,
 ) (uint64, error) {
 	return aew.ae.Approve(
 		assetID,
@@ -260,24 +253,27 @@ func (aew *AssetEngineWrapper) Approve(
 		beneficiaryID,
 		amount,
 		expiresAt,
+		access,
 	)
 }
 
 func (aew *AssetEngineWrapper) Revoke(
 	assetID [32]byte, tokenID uint64,
 	benefactorID, beneficiaryID [32]byte,
+	access map[[32]byte]int,
 ) (uint64, error) {
 	return aew.ae.Revoke(
 		assetID,
 		common.TokenID(tokenID),
 		benefactorID,
 		beneficiaryID,
+		access,
 	)
 }
 
 func (aew *AssetEngineWrapper) Lockup(
 	assetID [32]byte, tokenID uint64,
-	benefactorID, beneficiaryID [32]byte, amount *big.Int,
+	benefactorID, beneficiaryID [32]byte, amount *big.Int, access map[[32]byte]int,
 ) (uint64, error) {
 	return aew.ae.Lockup(
 		assetID,
@@ -285,12 +281,13 @@ func (aew *AssetEngineWrapper) Lockup(
 		benefactorID,
 		beneficiaryID,
 		amount,
+		access,
 	)
 }
 
 func (aew *AssetEngineWrapper) Release(
 	assetID [32]byte, tokenID uint64,
-	operatorID, benefactorID, beneficiaryID [32]byte, amount *big.Int,
+	operatorID, benefactorID, beneficiaryID [32]byte, amount *big.Int, access map[[32]byte]int,
 ) (uint64, error) {
 	return aew.ae.Release(
 		assetID,
@@ -299,11 +296,12 @@ func (aew *AssetEngineWrapper) Release(
 		benefactorID,
 		beneficiaryID,
 		amount,
+		access,
 	)
 }
 
-func (aew *AssetEngineWrapper) Symbol(assetID [32]byte) (string, uint64, error) {
-	symbol, err := aew.ae.Symbol(assetID)
+func (aew *AssetEngineWrapper) Symbol(assetID [32]byte, access map[[32]byte]int) (string, uint64, error) {
+	symbol, err := aew.ae.Symbol(assetID, access)
 	if err != nil {
 		return "", 5, err
 	}
@@ -312,12 +310,13 @@ func (aew *AssetEngineWrapper) Symbol(assetID [32]byte) (string, uint64, error) 
 }
 
 func (aew *AssetEngineWrapper) BalanceOf(
-	assetID [32]byte, tokenID uint64, address [32]byte,
+	assetID [32]byte, tokenID uint64, address [32]byte, access map[[32]byte]int,
 ) (*big.Int, uint64, error) {
 	balance, err := aew.ae.BalanceOf(
 		address,
 		assetID,
 		common.TokenID(tokenID),
+		access,
 	)
 	if err != nil {
 		return nil, 5, err
@@ -326,8 +325,8 @@ func (aew *AssetEngineWrapper) BalanceOf(
 	return balance, 5, nil
 }
 
-func (aew *AssetEngineWrapper) Creator(assetID [32]byte) ([32]byte, uint64, error) {
-	creator, err := aew.ae.Creator(assetID)
+func (aew *AssetEngineWrapper) Creator(assetID [32]byte, access map[[32]byte]int) ([32]byte, uint64, error) {
+	creator, err := aew.ae.Creator(assetID, access)
 	if err != nil {
 		return [32]byte{}, 5, err
 	}
@@ -335,8 +334,8 @@ func (aew *AssetEngineWrapper) Creator(assetID [32]byte) ([32]byte, uint64, erro
 	return creator, 5, nil
 }
 
-func (aew *AssetEngineWrapper) Manager(assetID [32]byte) ([32]byte, uint64, error) {
-	manager, err := aew.ae.Manager(assetID)
+func (aew *AssetEngineWrapper) Manager(assetID [32]byte, access map[[32]byte]int) ([32]byte, uint64, error) {
+	manager, err := aew.ae.Manager(assetID, access)
 	if err != nil {
 		return [32]byte{}, 5, err
 	}
@@ -344,8 +343,8 @@ func (aew *AssetEngineWrapper) Manager(assetID [32]byte) ([32]byte, uint64, erro
 	return manager, 5, nil
 }
 
-func (aew *AssetEngineWrapper) Decimals(assetID [32]byte) (uint8, uint64, error) {
-	decimals, err := aew.ae.Decimals(assetID)
+func (aew *AssetEngineWrapper) Decimals(assetID [32]byte, access map[[32]byte]int) (uint8, uint64, error) {
+	decimals, err := aew.ae.Decimals(assetID, access)
 	if err != nil {
 		return 0, 5, err
 	}
@@ -353,8 +352,8 @@ func (aew *AssetEngineWrapper) Decimals(assetID [32]byte) (uint8, uint64, error)
 	return decimals, 5, nil
 }
 
-func (aew *AssetEngineWrapper) MaxSupply(assetID [32]byte) (*big.Int, uint64, error) {
-	maxSupply, err := aew.ae.MaxSupply(assetID)
+func (aew *AssetEngineWrapper) MaxSupply(assetID [32]byte, access map[[32]byte]int) (*big.Int, uint64, error) {
+	maxSupply, err := aew.ae.MaxSupply(assetID, access)
 	if err != nil {
 		return nil, 5, err
 	}
@@ -362,8 +361,8 @@ func (aew *AssetEngineWrapper) MaxSupply(assetID [32]byte) (*big.Int, uint64, er
 	return maxSupply, 5, nil
 }
 
-func (aew *AssetEngineWrapper) CirculatingSupply(assetID [32]byte) (*big.Int, uint64, error) {
-	circSupply, err := aew.ae.CirculatingSupply(assetID)
+func (aew *AssetEngineWrapper) CirculatingSupply(assetID [32]byte, access map[[32]byte]int) (*big.Int, uint64, error) {
+	circSupply, err := aew.ae.CirculatingSupply(assetID, access)
 	if err != nil {
 		return nil, 5, err
 	}
@@ -371,8 +370,8 @@ func (aew *AssetEngineWrapper) CirculatingSupply(assetID [32]byte) (*big.Int, ui
 	return circSupply, 5, nil
 }
 
-func (aew *AssetEngineWrapper) LogicID(assetID [32]byte) ([32]byte, uint64, error) {
-	logicID, err := aew.ae.LogicID(assetID)
+func (aew *AssetEngineWrapper) LogicID(assetID [32]byte, access map[[32]byte]int) ([32]byte, uint64, error) {
+	logicID, err := aew.ae.LogicID(assetID, access)
 	if err != nil {
 		return [32]byte{}, 5, err
 	}
@@ -380,8 +379,8 @@ func (aew *AssetEngineWrapper) LogicID(assetID [32]byte) ([32]byte, uint64, erro
 	return logicID, 5, nil
 }
 
-func (aew *AssetEngineWrapper) EnableEvents(assetID [32]byte) (bool, uint64, error) {
-	enableEvents, err := aew.ae.EnableEvents(assetID)
+func (aew *AssetEngineWrapper) EnableEvents(assetID [32]byte, access map[[32]byte]int) (bool, uint64, error) {
+	enableEvents, err := aew.ae.EnableEvents(assetID, access)
 	if err != nil {
 		return false, 5, err
 	}
@@ -390,9 +389,9 @@ func (aew *AssetEngineWrapper) EnableEvents(assetID [32]byte) (bool, uint64, err
 }
 
 func (aew *AssetEngineWrapper) SetStaticMetaData(assetID, participantID [32]byte,
-	key string, val []byte,
+	key string, val []byte, access map[[32]byte]int,
 ) (uint64, error) {
-	err := aew.ae.SetStaticMetaData(assetID, participantID, key, val)
+	err := aew.ae.SetStaticMetaData(assetID, participantID, key, val, access)
 	if err != nil {
 		return 5, err
 	}
@@ -401,9 +400,9 @@ func (aew *AssetEngineWrapper) SetStaticMetaData(assetID, participantID [32]byte
 }
 
 func (aew *AssetEngineWrapper) SetDynamicMetaData(assetID, participantID [32]byte,
-	key string, val []byte,
+	key string, val []byte, access map[[32]byte]int,
 ) (uint64, error) {
-	err := aew.ae.SetDynamicMetaData(assetID, participantID, key, val)
+	err := aew.ae.SetDynamicMetaData(assetID, participantID, key, val, access)
 	if err != nil {
 		return 5, err
 	}
@@ -411,8 +410,10 @@ func (aew *AssetEngineWrapper) SetDynamicMetaData(assetID, participantID [32]byt
 	return 10, nil
 }
 
-func (aew *AssetEngineWrapper) GetStaticMetaData(assetID [32]byte, key string) ([]byte, uint64, error) {
-	metadata, err := aew.ae.GetStaticMetaData(assetID, key)
+func (aew *AssetEngineWrapper) GetStaticMetaData(assetID [32]byte, key string,
+	access map[[32]byte]int,
+) ([]byte, uint64, error) {
+	metadata, err := aew.ae.GetStaticMetaData(assetID, key, access)
 	if err != nil {
 		return nil, 10, err
 	}
@@ -420,8 +421,11 @@ func (aew *AssetEngineWrapper) GetStaticMetaData(assetID [32]byte, key string) (
 	return metadata, 10, nil
 }
 
-func (aew *AssetEngineWrapper) GetDynamicMetaData(assetID [32]byte, key string) ([]byte, uint64, error) {
-	metadata, err := aew.ae.GetDynamicMetaData(assetID, key)
+func (aew *AssetEngineWrapper) GetDynamicMetaData(
+	assetID [32]byte, key string,
+	access map[[32]byte]int,
+) ([]byte, uint64, error) {
+	metadata, err := aew.ae.GetDynamicMetaData(assetID, key, access)
 	if err != nil {
 		return nil, 10, err
 	}
@@ -431,9 +435,9 @@ func (aew *AssetEngineWrapper) GetDynamicMetaData(assetID [32]byte, key string) 
 
 func (aew *AssetEngineWrapper) SetStaticTokenMetaData(
 	assetID [32]byte, participantID [32]byte,
-	tokenID uint64, key string, val []byte,
+	tokenID uint64, key string, val []byte, access map[[32]byte]int,
 ) (uint64, error) {
-	err := aew.ae.SetStaticTokenMetaData(assetID, participantID, common.TokenID(tokenID), key, val)
+	err := aew.ae.SetStaticTokenMetaData(assetID, participantID, common.TokenID(tokenID), key, val, access)
 	if err != nil {
 		return 5, err
 	}
@@ -443,9 +447,9 @@ func (aew *AssetEngineWrapper) SetStaticTokenMetaData(
 
 func (aew *AssetEngineWrapper) SetDynamicTokenMetaData(
 	assetID [32]byte, participantID [32]byte,
-	tokenID uint64, key string, val []byte,
+	tokenID uint64, key string, val []byte, access map[[32]byte]int,
 ) (uint64, error) {
-	err := aew.ae.SetDynamicTokenMetaData(assetID, participantID, common.TokenID(tokenID), key, val)
+	err := aew.ae.SetDynamicTokenMetaData(assetID, participantID, common.TokenID(tokenID), key, val, access)
 	if err != nil {
 		return 5, err
 	}
@@ -455,9 +459,9 @@ func (aew *AssetEngineWrapper) SetDynamicTokenMetaData(
 
 func (aew *AssetEngineWrapper) GetStaticTokenMetaData(
 	assetID [32]byte, participantID [32]byte,
-	tokenID uint64, key string,
+	tokenID uint64, key string, access map[[32]byte]int,
 ) ([]byte, uint64, error) {
-	metadata, err := aew.ae.GetStaticTokenMetaData(assetID, participantID, common.TokenID(tokenID), key)
+	metadata, err := aew.ae.GetStaticTokenMetaData(assetID, participantID, common.TokenID(tokenID), key, access)
 	if err != nil {
 		return nil, 10, err
 	}
@@ -467,9 +471,9 @@ func (aew *AssetEngineWrapper) GetStaticTokenMetaData(
 
 func (aew *AssetEngineWrapper) GetDynamicTokenMetaData(
 	assetID [32]byte, participantID [32]byte,
-	tokenID uint64, key string,
+	tokenID uint64, key string, access map[[32]byte]int,
 ) ([]byte, uint64, error) {
-	metadata, err := aew.ae.GetDynamicTokenMetaData(assetID, participantID, common.TokenID(tokenID), key)
+	metadata, err := aew.ae.GetDynamicTokenMetaData(assetID, participantID, common.TokenID(tokenID), key, access)
 	if err != nil {
 		return nil, 10, err
 	}

@@ -74,7 +74,7 @@ var (
 	ErrKeyDoNotExist                = errors.New("key do not exist")
 	ErrOutboundConnLimit            = errors.New("maximum outbound connection limit exceeded")
 	ErrInvalidAccountType           = errors.New("invalid account type")
-	ErrFetchingAccMetaInfo          = errors.New("account meta info fetch failed")
+	ErrInvalidAccess                = errors.New("invalid access to actor")
 	ErrFetchingBalance              = errors.New("failed to fetch balance object")
 	ErrInvalidCalldata              = errors.New("invalid calldata")
 	ErrEmptyManifest                = errors.New("empty manifest")

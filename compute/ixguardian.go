@@ -20,13 +20,13 @@ func validateGuardianRegister(
 		return common.ErrGuardianExists
 	}
 
-	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
+	assetStateObj, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
 	// Check if the sender has enough balance to cover the required amount
-	if assetObject.Balance.Cmp(payload.amount) == -1 {
+	if assetStateObj.Balance.Cmp(payload.amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -70,13 +70,13 @@ func validateGuardianStake(
 	}
 
 	// Fetch the sender's KMOI asset object
-	assetObject, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
+	assetStateObj, err := sender.FetchAssetObject(common.KMOITokenAssetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
 	// Check if the sender has enough balance to stake the requested amount
-	if assetObject.Balance.Cmp(payload.amount) == -1 {
+	if assetStateObj.Balance.Cmp(payload.amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 
@@ -246,13 +246,13 @@ func validateGuardianClaim(
 	}
 
 	// Fetch the system's KMOI token asset object to verify available balance
-	assetObject, err := system.FetchAssetObject(common.KMOITokenAssetID, true)
+	assetStateObj, err := system.FetchAssetObject(common.KMOITokenAssetID, true)
 	if err != nil {
 		return common.ErrAssetNotFound
 	}
 
 	// Check if the system has sufficient KMOI tokens to cover the claim
-	if assetObject.Balance.Cmp(payload.amount) == -1 {
+	if assetStateObj.Balance.Cmp(payload.amount) == -1 {
 		return common.ErrInsufficientFunds
 	}
 

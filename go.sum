@@ -483,6 +483,8 @@ github.com/sarvalabs/battleground v0.3.1 h1:UUd759i9U6AbqQjjntnlVtromLoiqrplPNKG
 github.com/sarvalabs/battleground v0.3.1/go.mod h1:q3OnSk0d5kY997EbGxtp3koohB1JEf76IpTfhGmSNno=
 github.com/sarvalabs/go-pisa v0.6.0 h1:5B8Jz+TRiclWLTqlwnG9iocJYWTXpxKFlttS7nR9nRQ=
 github.com/sarvalabs/go-pisa v0.6.0/go.mod h1:CYFlUl2YAkoBN1SZ9Fz646xsAJ7vNTd+YNFoHLrHP9Q=
+github.com/sarvalabs/go-pisa v0.6.1 h1:pJa9T5OBqUKx76FSgCtAd2MvOU5qz/wSU6lXjmszDi0=
+github.com/sarvalabs/go-pisa v0.6.1/go.mod h1:CYFlUl2YAkoBN1SZ9Fz646xsAJ7vNTd+YNFoHLrHP9Q=
 github.com/sarvalabs/go-polo v0.4.9 h1:/ZuiQaAIw8N8GbAViC8WlvmlWWOszohRm+rlt/A1H1o=
 github.com/sarvalabs/go-polo v0.4.9/go.mod h1:LwrHUAuRpoTJcTCUXsHZIlGrlI03gvmShAUJBRAxGh0=
 github.com/sergi/go-diff v1.0.0/go.mod h1:0CfEIISq7TuYL3j771MWULgwwjU+GofnZX9QAmXWZgo=

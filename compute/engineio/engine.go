@@ -86,7 +86,7 @@ type Runtime interface {
 		symbol string, decimals uint8, dimension uint8,
 		manager, creator identifiers.Identifier,
 		maxSupply *big.Int, staticMetadata, dynamicMetadata map[string][]byte,
-		enableEvents bool, logicID identifiers.LogicID,
+		enableEvents bool, logicID identifiers.LogicID, access map[[32]byte]int,
 	) (uint64, error)
 	ActorExists(logicID [32]byte) bool
 	CreateActor(id [32]byte, storage Storage, params map[string][]byte) error

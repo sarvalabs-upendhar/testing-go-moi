@@ -25,7 +25,7 @@ type AssetObject struct {
 	TokenMetaData map[common.TokenID]*MetaData
 	Lockup        map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry
 	Mandate       map[identifiers.Identifier]map[common.TokenID]*common.AmountWithExpiry
-	Properties    *common.AssetDescriptor
+	Properties    *common.AssetDescriptor // this field is available only in the asset account
 }
 
 // NewAssetObject initializes a new AssetObject with the given balance and properties.

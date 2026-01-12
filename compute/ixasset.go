@@ -64,7 +64,7 @@ func RunAssetCreate(
 		assetID,
 		payload.Symbol, payload.Decimals, payload.Dimension,
 		payload.Manager, op.SenderID(),
-		payload.MaxSupply, payload.StaticMetadata, payload.DynamicMetaData, payload.EnableEvents, logicID)
+		payload.MaxSupply, payload.StaticMetadata, payload.DynamicMetaData, payload.EnableEvents, logicID, op.AccessList())
 	if err != nil {
 		return opResult.WithStatus(common.ResultExceptionRaised)
 	}
@@ -159,10 +159,14 @@ func createAsset(sender, assetacc *state.Object, descriptor *common.AssetDescrip
 
 // validateAssetTransfer ensures the target is registered, asset exists, and the benefactor has sufficient balance.
 func validateAssetTransfer(benefactor, beneficiary, sarga *state.Object,
-	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int, access map[[32]byte]int,
 ) error {
 	if amount.Cmp(big.NewInt(1)) == -1 {
 		return common.ErrInvalidAmount
+	}
+
+	if !hasMutateAccess(access, benefactor.Identifier(), beneficiary.Identifier()) {
+		return common.ErrInvalidAccess
 	}
 
 	// Check if the beneficiary account is registered
@@ -200,12 +204,16 @@ func transferAsset(sender, target *state.Object,
 
 // validateAssetConsume ensures the target is registered, mandate is valid, and the benefactor has sufficient balance.
 func validateAssetConsume(operatorID identifiers.Identifier, beneficiary, benefactor, sarga *state.Object,
-	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int, access map[[32]byte]int,
 ) error {
 	// Check if the beneficiary account is registered
 	// Fetch the account info from genesis state
 	if _, err := sarga.GetStorageEntry(common.SargaLogicID.AsIdentifier(), beneficiary.Identifier().Bytes()); err != nil {
 		return common.ErrBeneficiaryNotRegistered
+	}
+
+	if !hasMutateAccess(access, beneficiary.Identifier(), benefactor.Identifier()) {
+		return common.ErrInvalidAccess
 	}
 
 	assetObject, err := benefactor.FetchAssetObject(assetID, true)
@@ -254,8 +262,12 @@ func consumeMandate(operatorID identifiers.Identifier, benefactor, beneficiary *
 
 // validateAssetApprove checks if the target is registered, asset exists, and sender has sufficient balance to approve.
 func validateAssetApprove(sender *state.Object,
-	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int, access map[[32]byte]int,
 ) error {
+	if !hasMutateAccess(access, sender.Identifier()) {
+		return common.ErrInvalidAccess
+	}
+
 	if amount.Cmp(big.NewInt(1)) == -1 {
 		return common.ErrInvalidAmount
 	}
@@ -286,8 +298,13 @@ func approveAsset(benefactor *state.Object,
 
 // validateAssetRevoke ensures the sender has a valid mandate for the beneficiary to revoke.
 func validateAssetRevoke(benefactor *state.Object, beneficiary identifiers.Identifier,
-	assetID identifiers.AssetID, tokenID common.TokenID,
+	assetID identifiers.AssetID, tokenID common.TokenID, access map[[32]byte]int,
 ) error {
+	// check if the benefactor has mutate access
+	if !hasMutateAccess(access, benefactor.Identifier()) {
+		return common.ErrInvalidAccess
+	}
+
 	_, err := benefactor.GetMandate(assetID, tokenID, beneficiary)
 	if err != nil {
 		return err
@@ -308,9 +325,14 @@ func revokeAsset(benefactor *state.Object, beneficiary identifiers.Identifier,
 }
 
 // validateAssetMint ensures the asset exists and the beneficiary matches the specified asset manager for minting.
-func validateAssetMint(senderID identifiers.Identifier, assetacc *state.Object,
-	assetID identifiers.AssetID, amount *big.Int,
+func validateAssetMint(senderID, beneficiaryID identifiers.Identifier, assetacc *state.Object,
+	assetID identifiers.AssetID, amount *big.Int, access map[[32]byte]int,
 ) error {
+	// Check if asset account and beneficiary have mutate access
+	if !hasMutateAccess(access, assetID.AsIdentifier(), beneficiaryID) {
+		return common.ErrInvalidAccess
+	}
+
 	assetInfo, err := assetacc.GetProperties(assetID)
 	if err != nil {
 		return common.ErrAssetNotFound
@@ -347,8 +369,13 @@ func mintAsset(beneficiary, assetacc *state.Object, assetID identifiers.AssetID,
 // validateAssetBurn ensures the asset exists, the operator matches, and the burn amount does not exceed
 // the current balance.
 func validateAssetBurn(benefactor, assetacc *state.Object,
-	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int, access map[[32]byte]int,
 ) error {
+	// Check if asset account and benefactor have mutate access
+	if !hasMutateAccess(access, assetID.AsIdentifier(), benefactor.Identifier()) {
+		return common.ErrInvalidAccess
+	}
+
 	assetInfo, err := assetacc.GetProperties(assetID)
 	if err != nil {
 		return common.ErrAssetNotFound
@@ -399,8 +426,12 @@ func burnAsset(
 // validateAssetLockup ensures the target account is registered, the asset exists, and the sender has
 // sufficient balance to lock up the specified amount.
 func validateAssetLockup(benefactor *state.Object, beneficiaryID identifiers.Identifier,
-	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int, access map[[32]byte]int,
 ) error {
+	if !hasMutateAccess(access, benefactor.Identifier()) {
+		return common.ErrInvalidAccess
+	}
+
 	if beneficiaryID.IsNil() {
 		return common.ErrInvalidBeneficiary
 	}
@@ -426,9 +457,14 @@ func lockupAsset(benefactor *state.Object, beneficiary identifiers.Identifier,
 
 // validateAssetRelease verifies that the target account is registered and that the benefactor has enough funds
 // in the lockup to release the specified amount.
-func validateAssetRelease(operatorID identifiers.Identifier, benefactor *state.Object,
-	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int,
+func validateAssetRelease(
+	operatorID identifiers.Identifier, benefactor *state.Object, beneficiaryID identifiers.Identifier,
+	assetID identifiers.AssetID, tokenID common.TokenID, amount *big.Int, access map[[32]byte]int,
 ) error {
+	if !hasMutateAccess(access, benefactor.Identifier(), beneficiaryID) {
+		return common.ErrInvalidAccess
+	}
+
 	lockup, err := benefactor.GetLockup(assetID, tokenID, operatorID)
 	if err != nil {
 		return common.ErrLockupNotFound
@@ -452,4 +488,66 @@ func releaseAsset(operatorID identifiers.Identifier, benefactor, beneficiary *st
 
 	// Increment the asset balance if the asset already exists
 	return beneficiary.AddBalance(assetID, tokenID, amount, metadata)
+}
+
+// validateSetStaticMetaData validates if the participant has permission to set static metadata.
+func validateSetStaticMetaData(assetObject *state.Object, assetID identifiers.AssetID,
+	participantID identifiers.Identifier, access map[[32]byte]int,
+) error {
+	// check if asset account has mutate access
+	if !hasMutateAccess(access, assetID.AsIdentifier()) {
+		return common.ErrInvalidAccess
+	}
+
+	properties, err := assetObject.GetProperties(assetID)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	if properties.Manager != participantID {
+		return common.ErrManagerMismatch
+	}
+
+	return nil
+}
+
+// validateSetDynamicMetaData validates if the participant has permission to set dynamic metadata.
+func validateSetDynamicMetaData(assetObject *state.Object, assetID identifiers.AssetID,
+	participantID identifiers.Identifier, access map[[32]byte]int,
+) error {
+	// check if asset account has mutate access
+	if !hasMutateAccess(access, assetID.AsIdentifier()) {
+		return common.ErrInvalidAccess
+	}
+
+	properties, err := assetObject.GetProperties(assetID)
+	if err != nil {
+		return common.ErrAssetNotFound
+	}
+
+	if properties.Manager != participantID {
+		return common.ErrManagerMismatch
+	}
+
+	return nil
+}
+
+// validateSetStaticTokenMetaData validates if the participant has permission to set static token metadata.
+func validateSetStaticTokenMetaData(participantID identifiers.Identifier, access map[[32]byte]int) error {
+	// check if participant account has mutate access
+	if !hasMutateAccess(access, participantID) {
+		return common.ErrInvalidAccess
+	}
+
+	return nil
+}
+
+// validateSetDynamicTokenMetaData validates if the participant has permission to set dynamic token metadata.
+func validateSetDynamicTokenMetaData(participantID identifiers.Identifier, access map[[32]byte]int) error {
+	// check if participant has mutate access
+	if !hasMutateAccess(access, participantID) {
+		return common.ErrInvalidAccess
+	}
+
+	return nil
 }

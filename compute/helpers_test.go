@@ -32,6 +32,18 @@ func assetObjectWithToken(t *testing.T, tokenID common.TokenID, balance *big.Int
 	return ao
 }
 
+func assetObjectWithManager(
+	t *testing.T,
+	assetID identifiers.AssetID, manager identifiers.Identifier,
+) *state.AssetObject {
+	t.Helper()
+
+	return state.NewAssetObject(&common.AssetDescriptor{
+		AssetID: assetID,
+		Manager: manager,
+	})
+}
+
 func createTestStateObject(t *testing.T) *state.Object {
 	t.Helper()
 

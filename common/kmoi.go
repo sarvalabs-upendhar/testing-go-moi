@@ -159,7 +159,7 @@ func NewIxForMint(
 		}
 
 		if _, exists := addedPs[payout.AssetID.AsIdentifier()]; !exists {
-			ps = append(ps, IxParticipant{ID: payout.AssetID.AsIdentifier(), LockType: NoLock})
+			ps = append(ps, IxParticipant{ID: payout.AssetID.AsIdentifier(), LockType: MutateLock})
 		}
 	}
 

@@ -92,13 +92,13 @@ type PayoutDetails struct {
 	Amount      *big.Int
 }
 
-func PayoutsFromAllocations(allocs []Allocation) []PayoutDetails {
+func PayoutsFromAllocations(assetID identifiers.AssetID, allocs []Allocation) []PayoutDetails {
 	allocations := make([]PayoutDetails, len(allocs))
 	for i, alloc := range allocs {
 		allocations[i] = PayoutDetails{
 			Beneficiary: alloc.ID,
 			Amount:      alloc.Amount.ToInt(),
-			AssetID:     KMOITokenAssetID,
+			AssetID:     assetID,
 			TokenID:     DefaultTokenID,
 		}
 	}
