@@ -35,7 +35,6 @@ jobs:
       IP12: ${{ secrets.IP12 }}
       IP13: ${{ secrets.IP13 }}
       IP14: ${{ secrets.IP14 }}
-      IP15: ${{ secrets.IP15 }}
       NODE_USER: ${{ secrets.NODE_USER }}
       TELEPORT_HOST: ${{ secrets.TELEPORT_HOST }}
       TELEPORT_USER: ${{ secrets.TELEPORT_USER }}
@@ -70,7 +69,6 @@ jobs:
       IP12: ${{ secrets.IP12 }}
       IP13: ${{ secrets.IP13 }}
       IP14: ${{ secrets.IP14 }}
-      IP15: ${{ secrets.IP15 }}
       NODE_USER: ${{ secrets.NODE_USER }}
       TELEPORT_HOST: ${{ secrets.TELEPORT_HOST }}
       TELEPORT_USER: ${{ secrets.TELEPORT_USER }}

@@ -32,8 +32,6 @@ on:
         required: true
       IP14:
         required: true
-      IP15:
-        required: true
       NODE_USER:
         required: true
       TELEPORT_HOST:
@@ -66,7 +64,6 @@ jobs:
           - IP12
           - IP13
           - IP14
-          - IP15
     steps:
       - name: Stop Devnet
         uses: appleboy/ssh-action@334f9259f2f8eb3376d33fa4c684fff373f2c2a6
