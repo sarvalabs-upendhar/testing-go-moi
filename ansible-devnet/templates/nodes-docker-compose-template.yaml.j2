@@ -20,6 +20,6 @@ services:
     <<: *default-params
     volumes:
       - "/home/{{ app_user }}/shared/moipod:/data:rw"
-    command: server --data-dir test_{{ i }} --operator-slots {{ operator_slot }} --validator-slots {{ validator_slot }} --clean-db="{{ clean_db }}" --allow-origins "{{ allow_origin }}" --bootnodes {{ bootnode_endpoint }} --node-password {{ node_password }} --config-path ./test_{{ i }}/config.json --genesis-path ./genesis.json --log-dir ./logs/ --log-level={{ log_level }} --discovery-interval {{ discovery_interval }} --enable-tracing {% if disable_registration %} --disable-registration {% endif %}
+    command: server --data-dir test_{{ i }} --operator-slots {{ operator_slot }} --validator-slots {{ validator_slot }} --clean-db="{{ clean_db }}" --allow-origins "{{ allow_origin }}" --bootnodes {{ bootnode_endpoint }} --node-password {{ node_password }} --config-path ./test_{{ i }}/config.json --genesis-path ./genesis.json --log-dir ./logs/ --log-level={{ log_level }} --discovery-interval {{ discovery_interval }} {% if enable_tracing %} --enable-tracing {% if disable_registration %} --disable-registration {% endif %}{% endif %}
 
 {% endfor %}

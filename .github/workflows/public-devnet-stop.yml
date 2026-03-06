@@ -1,3 +1,4 @@
+
 name: Stop Containers 
 
 on:  
@@ -48,5 +49,5 @@ jobs:
       - name: Stop Devnet via tsh ssh
         run: |
           echo "Connecting to node: ${{ matrix.host }}"
-          tsh ssh moichain@${{ matrix.host }} "cd ~ && bash stop.sh"
+          tsh ssh moichain@${{ matrix.host }} "cd /home/moichain && bash moipod_stop.sh"
           

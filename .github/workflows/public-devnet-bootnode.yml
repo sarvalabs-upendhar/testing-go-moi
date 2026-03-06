@@ -74,16 +74,17 @@ jobs:
           MACHINE_ID_DIR=$(find /home/runner/work/_temp -name "ssh_config" -type f -exec dirname {} \; | head -1)
           
           # Create temporary Ansible config for Machine ID
-          cat > /tmp/ansible.cfg << 'EOF'
+          cat > /tmp/ansible.cfg <<EOF
           [defaults]
           host_key_checking = False
-          inventory = /tmp/bootnode.yml
-          remote_tmp = /tmp/.ansible-${USER}/tmp
+          inventory = /tmp/node.yml
+          remote_tmp = /tmp/.ansible-\${USER}/tmp
           forks = 10
           pipelining = True
-          
+
           [ssh_connection]
-          ssh_args = -F ${MACHINE_ID_DIR}/ssh_config -o ControlMaster=auto -o ControlPersist=480s
+          scp_if_ssh = True
+          ssh_args = -o ProxyCommand="tsh proxy ssh %h" -o IdentityFile="$MACHINE_ID_DIR/key" -o CertificateFile="$MACHINE_ID_DIR/key-cert.pub" -o ControlMaster=auto -o ControlPersist=600
           EOF
           
           # Replace placeholder with actual MACHINE_ID_DIR
@@ -94,5 +95,5 @@ jobs:
             -i /tmp/bootnode.yml \
             ansible-devnet/bootnode.yaml \
             -f 10 \
-            --extra-vars "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }}"
+            --extra-vars "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} ghcr_pat=${{ secrets.ACCESS_TOKEN }} ghcr_user=${{ secrets.GH_USER }}"
             

@@ -48,5 +48,5 @@ jobs:
       - name: Start Devnet via tsh ssh
         run: |
           echo "Connecting to node: ${{ matrix.host }}"
-          tsh ssh moichain@${{ matrix.host }} "cd ~ && bash start.sh"
+          tsh ssh moichain@${{ matrix.host }} "cd /home/moichain && bash moipod_start.sh"
           

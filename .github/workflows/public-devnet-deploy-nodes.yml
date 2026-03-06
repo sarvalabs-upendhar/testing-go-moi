@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [publish]
     permissions:
-      id-token: write  
+      id-token: write
       contents: read
 
     steps:
@@ -74,40 +74,41 @@ jobs:
       # Run Ansible Playbook using Teleport-issued identity
       - name: Run Ansible Playbook via Machine ID
         run: |
-          # Export AWS credentials
+          # Export AWS credentials 
           export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
           export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
           export AWS_DEFAULT_REGION="${{ secrets.AWS_DEFAULT_REGION }}"
-          
+
           # Download config template from S3
           aws s3 cp s3://pub-devnet-config-template/config_template.json.j2 /tmp/config_template.json.j2
           
           # Decode inventory file from GitHub variable
           echo "${{ vars.PUBLIC_DEVNET_NODE_INVENTORY_FILE }}" | base64 -d > /tmp/node.yml
           
+          mkdir -p /tmp/ssh-control
+          
           # Locate the Machine ID SSH config
           MACHINE_ID_DIR=$(find /home/runner/work/_temp -name "ssh_config" -type f -exec dirname {} \; | head -1)
           
           # Create temporary Ansible configuration file
-          cat > /tmp/ansible.cfg << 'EOF'
+          cat > /tmp/ansible.cfg << EOF
           [defaults]
-          host_key_checking = False
-          inventory = /tmp/node.yml
-          remote_tmp = /tmp/.ansible-${USER}/tmp
-          forks = 10
-          pipelining = True
+          inventory=/tmp/node.yml
+          host_key_checking=False
+          remote_tmp=/tmp/.ansible-${USER}/tmp
+          forks=10
+          pipelining=True
+          timeout=30
           
           [ssh_connection]
-          ssh_args = -F ${MACHINE_ID_DIR}/ssh_config -o ControlMaster=auto -o ControlPersist=480s
+          scp_if_ssh = True
+          ssh_args = -o ProxyCommand="tsh proxy ssh %h" -o IdentityFile="$MACHINE_ID_DIR/key" -o CertificateFile="$MACHINE_ID_DIR/key-cert.pub" -o ControlMaster=auto -o ControlPath=/tmp/ssh-control/ssh-%h-%p-%r -o ControlPersist=600
+          pipelining=True
           EOF
-          
-          # Replace placeholder in ansible.cfg
-          sed -i "s|\${MACHINE_ID_DIR}|$MACHINE_ID_DIR|g" /tmp/ansible.cfg
           
           # Run the Ansible playbook
           ANSIBLE_CONFIG=/tmp/ansible.cfg ansible-playbook \
             -i /tmp/node.yml \
             ansible-devnet/network-upgrade.yaml \
             -f 10 \
-            --extra-vars "AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} deployment_option=${{ env.DEPLOYMENT_OPTION }}"
-            
+            --extra-vars "deployment_option=${{ env.DEPLOYMENT_OPTION }} AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} ghcr_pat=${{ secrets.ACCESS_TOKEN }} ghcr_user=${{ secrets.GH_USER }}"

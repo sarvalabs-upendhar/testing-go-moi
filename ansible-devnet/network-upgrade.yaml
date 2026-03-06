@@ -261,6 +261,30 @@
       state: absent
     when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
 
+#################################
+# Docker login on moi servers #
+#################################
+
+- name: Login to GHCR on moi servers
+  hosts: moi-servers
+  become: yes
+  become_user: "{{ become_user }}"
+  tasks:
+
+    - name: Logout from GHCR
+      shell: docker --config /home/{{ app_user }}/.docker logout ghcr.io
+      ignore_errors: yes
+      environment:
+        HOME: "/home/{{ app_user }}"
+      when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
+
+    - name: Login to GHCR using Docker
+      shell: |
+        echo "{{ ghcr_pat }}" | docker --config /home/{{ app_user }}/.docker login ghcr.io -u {{ ghcr_user }} --password-stdin
+      no_log: true
+      environment:
+        HOME: "/home/{{ app_user }}"
+      when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
 
 ##################################
 # Docker start on moi servers #
