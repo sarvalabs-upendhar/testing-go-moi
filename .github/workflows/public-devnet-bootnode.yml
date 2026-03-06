@@ -33,6 +33,7 @@ jobs:
 
   ansible-playbook:
     runs-on: ubuntu-latest
+    environment: public-devnet
     needs: [publish]
     permissions:
       id-token: write
@@ -41,7 +42,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Install Teleport CLI
+      ## Install Teleport CLI
       - name: Install Teleport CLI
         uses: teleport-actions/setup@v1
         with:
@@ -51,7 +52,7 @@ jobs:
       - name: Authenticate via Teleport Bot
         uses: teleport-actions/auth@v2
         with:
-          proxy: dev.teleport.moi.technology:443
+          proxy: ${{ vars.TP_PROXY }}
           token: github-join-token
           certificate-ttl: 2h
           anonymous-telemetry: 1
@@ -77,8 +78,8 @@ jobs:
           cat > /tmp/ansible.cfg <<EOF
           [defaults]
           host_key_checking = False
-          inventory = /tmp/node.yml
-          remote_tmp = /tmp/.ansible-\${USER}/tmp
+          inventory = /tmp/bootnode.yml
+          remote_tmp = /tmp/.ansible-${USER}/tmp
           forks = 10
           pipelining = True
 

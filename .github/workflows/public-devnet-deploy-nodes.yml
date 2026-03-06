@@ -44,6 +44,7 @@ jobs:
 
   ansible-playbook:
     runs-on: ubuntu-latest
+    environment: public-devnet
     needs: [publish]
     permissions:
       id-token: write
@@ -66,7 +67,7 @@ jobs:
       - name: Authenticate via Teleport Bot
         uses: teleport-actions/auth@v2
         with:
-          proxy: dev.teleport.moi.technology:443
+          proxy: ${{ vars.TP_PROXY }}
           token: github-join-token
           certificate-ttl: 2h
           anonymous-telemetry: 1

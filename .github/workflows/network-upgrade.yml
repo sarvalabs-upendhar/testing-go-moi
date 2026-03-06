@@ -88,6 +88,8 @@ jobs:
     name: Ansible Deploy
     needs: publish_image
     runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target || 'devnet' }}
+
     permissions:
       id-token: write
       contents: read
@@ -105,13 +107,11 @@ jobs:
       - name: Set environment-specific variables
         run: |
           if [[ "$TARGET" == "public-devnet" ]]; then
-            echo "TP_PROXY=dev.teleport.moi.technology:443" >> $GITHUB_ENV
             echo "TP_TOKEN=github-join-token" >> $GITHUB_ENV
             echo "TP_VERSION=16.2.1" >> $GITHUB_ENV
             echo "S3_BUCKET=pub-devnet-config-template" >> $GITHUB_ENV
             echo "INVENTORY=${{ vars.PUBLIC_DEVNET_NODE_INVENTORY_FILE }}" >> $GITHUB_ENV
           else
-            echo "TP_PROXY=teleport.moinet.io:443" >> $GITHUB_ENV
             echo "TP_TOKEN=github-ci-token" >> $GITHUB_ENV
             echo "TP_VERSION=16.5.15" >> $GITHUB_ENV
             echo "S3_BUCKET=devnet-config-template" >> $GITHUB_ENV
@@ -126,7 +126,7 @@ jobs:
       - name: Authenticate via Teleport Machine ID
         uses: teleport-actions/auth@v2
         with:
-          proxy: ${{ env.TP_PROXY }}
+          proxy: ${{ vars.TP_PROXY }}
           token: ${{ env.TP_TOKEN }}
           certificate-ttl: 2h
           anonymous-telemetry: 1
@@ -150,7 +150,7 @@ jobs:
           [defaults]
           host_key_checking = False
           inventory = /tmp/node.yml
-          remote_tmp = /tmp/.ansible-\${USER}/tmp
+          remote_tmp = /tmp/.ansible-${USER}/tmp
           pipelining = True
           EOF
 
