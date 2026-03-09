@@ -32,7 +32,7 @@ jobs:
           logout: true
 
       - name: Build & Push moipod container image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
