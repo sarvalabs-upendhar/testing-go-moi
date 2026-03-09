@@ -24,7 +24,7 @@ jobs:
       - 
         name: Login to Registry
         # https://github.com/docker/login-action/releases/tag/v3.0.0
-        uses: docker/login-action@e92390c5fb421da1463c202d546fed0ec5c39f20 # v3.1.0
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
           username: ${{ secrets.DUSER }}
           password: ${{ secrets.DPASS }}
