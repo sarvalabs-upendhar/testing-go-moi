@@ -8,7 +8,7 @@ on:
         required: true
         type: choice
         options:
-          - devnet
+          - private-devnet
           - public-devnet
 
 env:
@@ -68,7 +68,7 @@ jobs:
             echo "TP_VERSION=16.5.15" >> $GITHUB_ENV
             echo "TP_TOKEN=github-ci-token" >> $GITHUB_ENV
             echo "INVENTORY=${{ vars.DEVNET_BOOTNODE_INVENTORY_FILE_UPDATED }}" >> $GITHUB_ENV
-            echo "TARGET=devnet" >> $GITHUB_ENV
+            echo "TARGET=private-devnet" >> $GITHUB_ENV
           fi
 
       - name: Install Teleport CLI

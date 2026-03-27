@@ -8,7 +8,7 @@ on:
         required: true
         type: choice
         options:
-          - devnet
+          - private-devnet
           - public-devnet
       action:
         description: "Select Action"

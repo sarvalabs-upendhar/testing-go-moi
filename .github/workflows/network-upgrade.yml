@@ -1,12 +1,12 @@
 # ---------------------------------
-# Workflow for devnet & public-devnet
+# Workflow for private-devnet & public-devnet
 # ---------------------------------
 name: Network Upgrade
 
 on:
   push:
     branches:
-      - develop
+      - fix/remove-ci-section
 
   workflow_dispatch:
     inputs:
@@ -14,10 +14,11 @@ on:
         description: "Select target environment"
         required: false
         type: choice
-        default: devnet
+        default: private-devnet
         options:
           - public-devnet
-          - devnet
+          - private-devnet
+
       deployment_option:
         description: "Choose deployment type"
         required: false
@@ -28,6 +29,7 @@ on:
           - Full_Deployment
           - Genesis_Update_Only
           - Config_Update_Only
+
       clean_db:
         description: 'Clean database before deployment'
         required: false
@@ -41,23 +43,13 @@ env:
   BRANCH_NAME: ${{ github.ref_name }}
 
 # ---------------------------------
-# Continuous Integration (CI)
+# Build & Push Docker Image
 # ---------------------------------
 jobs:
 
-  ci:
-    name: Continuous Integration
-    uses: ./.github/workflows/ci.yml
-    secrets:
-      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-# ---------------------------------
-# Build & Push Docker Image
-# ---------------------------------
   publish_image:
-    needs: ci
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -88,7 +80,7 @@ jobs:
     name: Ansible Deploy
     needs: publish_image
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.target || 'devnet' }}
+    environment: ${{ github.event.inputs.target || 'private-devnet' }}
 
     permissions:
       id-token: write
@@ -100,7 +92,7 @@ jobs:
 
       - name: Set Deployment Variables
         run: |
-          echo "TARGET=${{ github.event.inputs.target || 'devnet' }}" >> $GITHUB_ENV
+          echo "TARGET=${{ github.event.inputs.target || 'private-devnet' }}" >> $GITHUB_ENV
           echo "DEPLOYMENT_OPTION=${{ github.event.inputs.deployment_option || 'Full_Deployment' }}" >> $GITHUB_ENV
           echo "CLEAN_DB=${{ github.event.inputs.clean_db || 'true' }}" >> $GITHUB_ENV
 
@@ -112,6 +104,7 @@ jobs:
             echo "S3_BUCKET=pub-devnet-config-template" >> $GITHUB_ENV
             echo "INVENTORY=${{ vars.PUBLIC_DEVNET_NODE_INVENTORY_FILE }}" >> $GITHUB_ENV
           else
+            # private-devnet block
             echo "TP_TOKEN=github-ci-token" >> $GITHUB_ENV
             echo "TP_VERSION=16.5.15" >> $GITHUB_ENV
             echo "S3_BUCKET=devnet-config-template" >> $GITHUB_ENV
