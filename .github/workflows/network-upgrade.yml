@@ -6,7 +6,7 @@ name: Network Upgrade
 on:
   push:
     branches:
-      - fix/remove-ci-section
+      - develop
 
   workflow_dispatch:
     inputs:
