@@ -1,0 +1,39 @@
+name: Continuous Integration
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+    types:
+      - opened
+      - synchronize
+      - ready_for_review
+    paths:
+      - "**.go"
+      - "**.mod"
+      - "**.sum"
+      - "**.coco"
+
+  workflow_call:
+    secrets:
+      ACCESS_TOKEN:
+        required: true
+      CODECOV_TOKEN:
+        required: true
+
+  workflow_dispatch: {}
+
+jobs:
+  lint:
+    name: Lint
+    uses: ./.github/workflows/lint.yml
+    secrets:
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+  test:
+    name: Test
+    needs: lint
+    uses: ./.github/workflows/test.yml
+    secrets:
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

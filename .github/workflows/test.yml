@@ -1,0 +1,51 @@
+name: Go Test
+on:
+  workflow_call:
+    secrets:
+      ACCESS_TOKEN:
+        required: true
+      CODECOV_TOKEN:
+        required: true
+
+  workflow_dispatch: {}
+
+jobs:
+  tests:
+    name: go test
+    runs-on: ubuntu-latest
+    env:
+      GOPRIVATE: github.com/sarvalabs/*
+      ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+      CGO_ENABLED: 1
+      GO111MODULE: auto
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@44c2b7a8a4ea60a981eaca3cf939b5f4305c123b
+
+      - name: Install and setup go
+        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6.0.0
+        with:
+          go-version: 1.24.x
+
+      - name: Configure git
+        run: git config --global url.https://$ACCESS_TOKEN@github.com/.insteadOf https://github.com/
+
+      - run: echo $PATH && go env
+
+      - name: build bin
+        run: GO111MODULE=auto CGO_ENABLED=1 CGO_CFLAGS=-"O -D__BLST_PORTABLE__" make build
+        
+      - run: export PATH=./build:$PATH && echo $PATH
+
+      - run: make moipod && make mcutils
+        
+      - name: Run tests
+        run: CGO_ENABLED=1 go test -v --shuffle=on -race -short -coverprofile coverage.out -timeout 10m ./...
+
+      - name: Upload coverage file to codecov
+        uses: codecov/codecov-action@eaaf4bedf32dbdc6b720b63067d99c4d77d6047d
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.out
+          flags: unittests
