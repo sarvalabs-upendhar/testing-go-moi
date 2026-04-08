@@ -4,8 +4,8 @@
   hosts: all
   gather_facts: false
   vars:
-    deployment_option: "{{ lookup('env', 'deployment_option') | default('Full_Deployment') }}"  # Default to 'Full_Deployment' if not set
-    clean_db: "{{ lookup('env', 'clean_db') | default('true') }}"  # Default to 'true' if not set
+    deployment_option: "{{ lookup('env', 'deployment_option') | default('Full_Deployment') }}"
+    clean_db: "{{ lookup('env', 'clean_db') | default('true') }}"
 
   tasks:
     - name: Print deployment option
@@ -32,16 +32,15 @@
 ###########################################################
 
 - name: Ensure AWS CLI is installed on all hosts
-  hosts: moi-servers
+  hosts: all
   gather_facts: true
   tasks:
     - name: Include AWS CLI installation tasks
       import_tasks: common/install_aws_cli.yaml
       become: yes
       become_user: root
-      become_method: sudo   
-      vars:
-        ansible_become_pass: "{{ SUDO_PASSWORD }}"     
+      become_method: sudo
+      # ✅ REMOVED: ansible_become_pass (SUDO_PASSWORD) - not needed with .pem key auth
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
 
 #################################
@@ -49,38 +48,42 @@
 #################################
 
 - name: Run stop.sh on the moi server
-  hosts: moi-servers
+  hosts: all
   tasks:
     - name: Run stop.sh on moi servers
       import_tasks: common/stop.yaml
       vars:
         file_name: moipod_stop.sh
-        owner: "{{ become_user }}"
-        group: "{{ become_user }}"
+        owner: root
+        group: root
         mode: '0755'
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
+      # ✅ REMOVED: become_user variable - hardcoded root for testing
       when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
 
 ###########################################################
-# Backup folder on moi backup servers and upload to S3 #
+# Backup folder and upload to S3
 ###########################################################
 
 - name: Backup and upload to S3
-  hosts: moi-backup-servers
+  hosts: all
   gather_facts: true
-  tasks:    
+  tasks:
     - name: Ensure backup directory exists
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       file:
         path: "{{ backup_dir }}"
         state: directory
-        owner: "{{ become_user }}"
-        group: "{{ become_user }}"
+        owner: root
+        group: root
         mode: '0755'
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Backup directories
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       loop: "{{ directories_to_backup }}"
       loop_control:
         label: "{{ item.name }}"
@@ -92,11 +95,12 @@
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Upload backups to S3 with timestamp
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       shell: |
             set -euo pipefail
             aws s3 cp {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
-            s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
+            s3://{{ aws_bucket }}/backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
       args:
         executable: /bin/bash
       with_items: "{{ directories_to_backup }}"
@@ -109,39 +113,43 @@
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
 ###########################################################
-# Backup logs on moi backup servers and upload to S3 #
+# Backup logs and upload to S3
 ###########################################################
 
 - name: Backup logs
-  hosts: moi-backup-servers
+  hosts: all
   gather_facts: true
-  tasks:    
+  tasks:
     - name: Ensure backup directory exists
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       file:
         path: "{{ backup_dir }}"
         state: directory
-        owner: "{{ become_user }}"
-        group: "{{ become_user }}"
+        owner: root
+        group: root
         mode: '0755'
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Create temporary directory for backup
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       file:
         path: "/tmp/log_backup_{{ inventory_hostname }}"
         state: directory
         mode: '0755'
 
     - name: Sync logs to temporary directory using rsync
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       command: rsync -av --ignore-errors --delete {{ item.path }}/ /tmp/log_backup_{{ inventory_hostname }}/{{ item.name }}/
       loop: "{{ log_directory_to_backup }}"
       loop_control:
         label: "{{ item.name }}"
 
     - name: Archive the copied logs
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       command: >
         tar czf {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz -C /tmp/log_backup_{{ inventory_hostname }} {{ item.name }}
       loop: "{{ log_directory_to_backup }}"
@@ -149,11 +157,12 @@
         label: "{{ item.name }}"
 
     - name: Upload backups to S3 with timestamp
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       shell: |
             set -euo pipefail
             aws s3 cp {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
-            s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
+            s3://{{ aws_bucket }}/log-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
       args:
         executable: /bin/bash
       with_items: "{{ log_directory_to_backup }}"
@@ -166,7 +175,8 @@
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Clean up temporary directory
-      become_user: "{{ become_user }}"
+      become: yes
+      become_user: root
       file:
         path: "/tmp/log_backup_{{ inventory_hostname }}"
         state: absent
@@ -176,9 +186,9 @@
 #################################################
 
 - name: Generate docker-compose.yaml file for moi servers
-  hosts: moi-servers
+  hosts: all
   become: true
-  become_user: "{{ become_user }}"
+  become_user: root
   tasks:
     - name: Create docker-compose.yaml from template
       template:
@@ -191,9 +201,9 @@
 #########################################
 
 - name: Update config.json file on moi servers
-  hosts: moi-servers
+  hosts: all
   become: true
-  become_user: "{{ become_user }}"
+  become_user: root
   vars:
     local_template_path: "/tmp/config_template.json.j2"
 
@@ -220,22 +230,24 @@
     when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
 ##########################################
-# update "genesis" file on moi server #
+# update genesis file on moi servers #
 ##########################################
 
 - name: Update genesis.json file on moi servers
-  hosts: moi-servers
-  
-  # become: true
+  hosts: all
   gather_facts: true
-  tasks:    
+  tasks:
   - name: Download genesis.json from S3 bucket
-    become_user: "{{ become_user }}"
-    get_url: url="https://{{ s3_bucket_genesis }}.s3.amazonaws.com/{{ s3_file_genesis }}" dest={{ local_temp_path_genesis }}
+    become: yes
+    become_user: root
+    get_url:
+      url: "https://{{ s3_bucket_genesis }}.s3.amazonaws.com/{{ s3_file_genesis }}"
+      dest: "{{ local_temp_path_genesis }}"
     when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
- 
+
   - name: Backup the existing genesis.json file (if exists)
-    become_user: "{{ become_user }}"
+    become: yes
+    become_user: root
     copy:
       src: "{{ target_path_genesis }}"
       dest: "{{ target_path_genesis }}.bak"
@@ -244,18 +256,20 @@
     when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
 
   - name: Replace the genesis.json file
-    become_user: "{{ become_user }}"
+    become: yes
+    become_user: root
     copy:
       src: "{{ local_temp_path_genesis }}"
       dest: "{{ target_path_genesis }}"
       remote_src: true
-      owner: "{{ become_user }}"
-      group: "{{ become_user }}"
+      owner: root
+      group: root
       mode: '0644'
     when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
 
   - name: Cleanup temporary genesis.json file
-    become_user: "{{ become_user }}"
+    become: yes
+    become_user: root
     file:
       path: "{{ local_temp_path_genesis }}"
       state: absent
@@ -266,24 +280,19 @@
 #################################
 
 - name: Login to GHCR on moi servers
-  hosts: moi-servers
+  hosts: all
   become: yes
-  become_user: "{{ become_user }}"
+  become_user: root
   tasks:
-
     - name: Logout from GHCR
-      shell: docker --config /home/{{ app_user }}/.docker logout ghcr.io
+      shell: docker logout ghcr.io
       ignore_errors: yes
-      environment:
-        HOME: "/home/{{ app_user }}"
       when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
 
     - name: Login to GHCR using Docker
       shell: |
-        echo "{{ ghcr_pat }}" | docker --config /home/{{ app_user }}/.docker login ghcr.io -u {{ ghcr_user }} --password-stdin
+        echo "{{ ghcr_pat }}" | docker login ghcr.io -u {{ ghcr_user }} --password-stdin
       no_log: true
-      environment:
-        HOME: "/home/{{ app_user }}"
       when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
 
 ##################################
@@ -291,14 +300,15 @@
 ##################################
 
 - name: Run moipod_start.sh on the moi server
-  hosts: moi-servers
+  hosts: all
   tasks:
   - name: Run moipod_start.sh on moi server
     import_tasks: common/start.yaml
     vars:
       file_name: moipod_start.sh
-      owner: "{{ become_user }}"
-      group: "{{ become_user }}"
+      owner: root
+      group: root
       mode: '0755'
-    become_user: "{{ become_user }}"
+    become: yes
+    become_user: root
     when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
