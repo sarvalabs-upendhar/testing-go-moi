@@ -1,0 +1,128 @@
+syntax: 1
+engine:
+  kind: PISA
+  flags: []
+  version: 0.5.0
+kind: logic
+elements:
+- ptr: 0
+  kind: state
+  data:
+    mode: logic
+    fields:
+    - slot: 0
+      label: value
+      type: bool
+- ptr: 1
+  deps:
+  - 0
+  kind: callable
+  data:
+    name: Init
+    mode: dynamic
+    kind: deploy
+    accepts: []
+    returns: []
+    executes:
+      bin: []
+    catches: []
+- ptr: 2
+  deps:
+  - 6
+  - 0
+  kind: callable
+  data:
+    name: Seed
+    mode: dynamic
+    kind: deploy
+    accepts:
+    - slot: 0
+      label: initial
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - SETFLD $0 &0 $1
+      - LDPTR1 $1 0x6
+      - CALLC $0 $1 $0
+    catches: []
+- ptr: 3
+  deps:
+  - 0
+  kind: callable
+  data:
+    name: Get
+    mode: static
+    kind: invoke
+    accepts: []
+    returns:
+    - slot: 0
+      label: value
+      type: bool
+    executes:
+      asm:
+      - LLOAD $0 &0
+      - YIELD $0 &0
+      - DUMP $0
+    catches: []
+- ptr: 4
+  deps:
+  - 6
+  kind: callable
+  data:
+    name: Set
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: value
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - CARGS $0
+      - OBTAIN $1 &0
+      - SETFLD $0 &0 $1
+      - LDPTR1 $1 0x6
+      - CALLC $0 $1 $0
+    catches: []
+- ptr: 5
+  deps:
+  - 0
+  kind: callable
+  data:
+    name: Toggle
+    mode: dynamic
+    kind: invoke
+    accepts: []
+    returns: []
+    executes:
+      asm:
+      - LLOAD $0 &0
+      - GATHER $1 $0
+      - NOT $1 $1
+      - DISPER $0 $1
+      - STORE $0
+    catches: []
+- ptr: 6
+  deps:
+  - 0
+  kind: callable
+  data:
+    name: set
+    mode: dynamic
+    kind: internal
+    accepts:
+    - slot: 0
+      label: value
+      type: bool
+    returns: []
+    executes:
+      asm:
+      - LLOAD $0 &0
+      - OBTAIN $1 &0
+      - DISPER $0 $1
+      - STORE $0
+    catches: []

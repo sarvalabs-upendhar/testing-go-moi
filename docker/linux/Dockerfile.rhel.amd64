@@ -1,0 +1,58 @@
+# build stage (Golang on RHEL UBI for AMD64)
+FROM --platform=linux/amd64 redhat/ubi9:latest AS build
+
+# Essential packages for build dependencies
+ENV YUM_NO_RECOMMENDS=1
+RUN dnf update -y && dnf install -y \
+    git go-toolset gcc gcc-c++ ca-certificates tzdata openssl \
+    && update-ca-trust \
+    && dnf clean all
+
+# Importing private go-packages
+RUN go env -w GOPRIVATE=github.com/sarvalabs/go-pisa,github.com/sarvalabs/battleground
+
+ARG ACCESS_TOKEN
+ENV CGO_ENABLED=1
+ENV GO111MODULE=auto
+ENV CGO_CFLAGS="-O -D__BLST_PORTABLE__"
+
+# Configure Git for private repositories
+RUN git config --global url."https://sarvalabs:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
+RUN git ls-remote https://sarvalabs:${ACCESS_TOKEN}@github.com/sarvalabs/battleground || echo "Invalid GitHub token"
+
+# Set work directory
+WORKDIR /go/src/github/sarvalabs/moichain
+
+# Copy dependencies and download
+COPY go.mod go.sum ./
+RUN go mod download -x
+
+# Copy the rest of the source code
+COPY . .
+
+# Build the binary
+RUN GOARCH=amd64 go build -trimpath -o /bin/moipod ./cmd/moipod/
+
+# Final runtime stage (RHEL UBI ) 
+FROM --platform=linux/amd64 redhat/ubi9-minimal
+
+VOLUME /data
+
+ARG GIT_COMMIT
+ENV GIT_COMMIT="${GIT_COMMIT}"
+
+# Install required runtime dependencies
+ENV PKGS="git gcc gcc-c++ ca-certificates tzdata openssl libgcc libstdc++"
+
+# Use microdnf for minimal image
+RUN microdnf update -y && \
+    microdnf install -y ${PKGS} && \
+    update-ca-trust && \
+    microdnf clean all
+
+# Copy binary and required files from build stage
+COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=build /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem /etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+COPY --from=build /bin/moipod /bin/moipod
+
+ENTRYPOINT ["/bin/moipod"]

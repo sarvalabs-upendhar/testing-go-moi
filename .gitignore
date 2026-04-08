@@ -1,0 +1,39 @@
+# IDE
+.idea
+
+# Misc Artifacts
+file.key
+.DS_Store
+
+# Test Artifacts
+test/e2e/test_*
+test/e2e/tmp
+bgclient/test_*
+bgclient/tmp
+moiclient/test_*
+moiclient/tmp
+compute/manifests/*_test.go
+
+# Development Artifacts
+/test_*
+/build
+.scripts
+envs
+
+# MCUtil Artifacts
+accounts.json
+genesis.json
+peer-list.json
+artifact.json
+instances.json
+
+# LogicLab Environments
+.logiclab
+.artifacts
+
+
+devnet-ansible/inventory
+babylon-ansible/inventory
+ansible-inventory
+.netrc
+coverage.out

@@ -1,0 +1,304 @@
+---
+# Define variables for the deployment options
+- name: Run Deployment
+  hosts: all
+  gather_facts: false
+  vars:
+    deployment_option: "{{ lookup('env', 'deployment_option') | default('Full_Deployment') }}"  # Default to 'Full_Deployment' if not set
+    clean_db: "{{ lookup('env', 'clean_db') | default('true') }}"  # Default to 'true' if not set
+
+  tasks:
+    - name: Print deployment option
+      debug:
+        msg: "Deployment Option: {{ deployment_option }}"
+
+    - name: Print clean db option
+      debug:
+        msg: "Clean DB Option: {{ clean_db }}"
+
+- name: Set timestamp
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Set timestamp as a fact
+      set_fact:
+        timestamp: "{{ lookup('pipe', 'date +%Y-%m-%d-%H') }}"
+    - name: Echo the timestamp
+      debug:
+        msg: "The timestamp is: {{ timestamp }}"
+
+###########################################################
+# Ensure AWS CLI is installed on all hosts
+###########################################################
+
+- name: Ensure AWS CLI is installed on all hosts
+  hosts: moi-servers
+  gather_facts: true
+  tasks:
+    - name: Include AWS CLI installation tasks
+      import_tasks: common/install_aws_cli.yaml
+      become: yes
+      become_user: root
+      become_method: sudo   
+      vars:
+        ansible_become_pass: "{{ SUDO_PASSWORD }}"     
+      when: deployment_option in ['Full_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
+
+#################################
+## Docker stop on moi servers #
+#################################
+
+- name: Run stop.sh on the moi server
+  hosts: moi-servers
+  tasks:
+    - name: Run stop.sh on moi servers
+      import_tasks: common/stop.yaml
+      vars:
+        file_name: moipod_stop.sh
+        owner: "{{ become_user }}"
+        group: "{{ become_user }}"
+        mode: '0755'
+      become_user: "{{ become_user }}"
+      when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
+
+###########################################################
+# Backup folder on moi backup servers and upload to S3 #
+###########################################################
+
+- name: Backup and upload to S3
+  hosts: moi-backup-servers
+  gather_facts: true
+  tasks:    
+    - name: Ensure backup directory exists
+      become_user: "{{ become_user }}"
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: "{{ become_user }}"
+        group: "{{ become_user }}"
+        mode: '0755'
+      when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
+
+    - name: Backup directories
+      become_user: "{{ become_user }}"
+      loop: "{{ directories_to_backup }}"
+      loop_control:
+        label: "{{ item.name }}"
+      command: >
+        tar czf {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz {{ item.path }}
+      register: backup_result
+      failed_when: backup_result.rc != 0
+      changed_when: backup_result.rc == 0
+      when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
+
+    - name: Upload backups to S3 with timestamp
+      become_user: "{{ become_user }}"
+      shell: |
+            set -euo pipefail
+            aws s3 cp {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
+            s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
+      args:
+        executable: /bin/bash
+      with_items: "{{ directories_to_backup }}"
+      loop_control:
+          label: "{{ item.name }}"
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ AWS_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY: "{{ AWS_SECRET_ACCESS_KEY }}"
+        AWS_DEFAULT_REGION: "{{ AWS_DEFAULT_REGION }}"
+      when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
+
+###########################################################
+# Backup logs on moi backup servers and upload to S3 #
+###########################################################
+
+- name: Backup logs
+  hosts: moi-backup-servers
+  gather_facts: true
+  tasks:    
+    - name: Ensure backup directory exists
+      become_user: "{{ become_user }}"
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: "{{ become_user }}"
+        group: "{{ become_user }}"
+        mode: '0755'
+      when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
+
+    - name: Create temporary directory for backup
+      become_user: "{{ become_user }}"
+      file:
+        path: "/tmp/log_backup_{{ inventory_hostname }}"
+        state: directory
+        mode: '0755'
+
+    - name: Sync logs to temporary directory using rsync
+      become_user: "{{ become_user }}"
+      command: rsync -av --ignore-errors --delete {{ item.path }}/ /tmp/log_backup_{{ inventory_hostname }}/{{ item.name }}/
+      loop: "{{ log_directory_to_backup }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Archive the copied logs
+      become_user: "{{ become_user }}"
+      command: >
+        tar czf {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz -C /tmp/log_backup_{{ inventory_hostname }} {{ item.name }}
+      loop: "{{ log_directory_to_backup }}"
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Upload backups to S3 with timestamp
+      become_user: "{{ become_user }}"
+      shell: |
+            set -euo pipefail
+            aws s3 cp {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
+            s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
+      args:
+        executable: /bin/bash
+      with_items: "{{ log_directory_to_backup }}"
+      loop_control:
+          label: "{{ item.name }}"
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ AWS_ACCESS_KEY_ID }}"
+        AWS_SECRET_ACCESS_KEY: "{{ AWS_SECRET_ACCESS_KEY }}"
+        AWS_DEFAULT_REGION: "{{ AWS_DEFAULT_REGION }}"
+      when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
+
+    - name: Clean up temporary directory
+      become_user: "{{ become_user }}"
+      file:
+        path: "/tmp/log_backup_{{ inventory_hostname }}"
+        state: absent
+
+#################################################
+# update docker compose file on moi servers #
+#################################################
+
+- name: Generate docker-compose.yaml file for moi servers
+  hosts: moi-servers
+  become: true
+  become_user: "{{ become_user }}"
+  tasks:
+    - name: Create docker-compose.yaml from template
+      template:
+        src: "nodes-docker-compose-template.yaml.j2"
+        dest: "/home/{{ app_user }}/stack/moipod/docker-compose.yml"
+      when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
+
+#########################################
+# update config file on moi servers #
+#########################################
+
+- name: Update config.json file on moi servers
+  hosts: moi-servers
+  become: true
+  become_user: "{{ become_user }}"
+  vars:
+    local_template_path: "/tmp/config_template.json.j2"
+
+  tasks:
+  - name: Copy template from jump server to target server
+    copy:
+      src: "{{ local_template_path }}"
+      dest: "/tmp/config_template.json.j2"
+      mode: "0644"
+
+  - name: Generate config.json files using the fetched template
+    template:
+      src: "/tmp/config_template.json.j2"
+      dest: "/home/{{ app_user }}/shared/moipod/test_{{ item }}/config.json"
+      mode: "0644"
+    loop: "{{ range(0, hostvars[inventory_hostname].no_of_pods) | list }}"
+    loop_control:
+      loop_var: item
+    vars:
+      inventory_type: "{{ hostvars[inventory_hostname].inventory_type }}"
+      node_port: "{{ base_port + item }}"
+      prometheus_port: "{{ base_prometheus_port + item }}"
+      jsonrpc_port: "{{ base_jsonrpc_port + item }}"
+    when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
+
+##########################################
+# update "genesis" file on moi server #
+##########################################
+
+- name: Update genesis.json file on moi servers
+  hosts: moi-servers
+  
+  # become: true
+  gather_facts: true
+  tasks:    
+  - name: Download genesis.json from S3 bucket
+    become_user: "{{ become_user }}"
+    get_url: url="https://{{ s3_bucket_genesis }}.s3.amazonaws.com/{{ s3_file_genesis }}" dest={{ local_temp_path_genesis }}
+    when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
+ 
+  - name: Backup the existing genesis.json file (if exists)
+    become_user: "{{ become_user }}"
+    copy:
+      src: "{{ target_path_genesis }}"
+      dest: "{{ target_path_genesis }}.bak"
+      remote_src: true
+    ignore_errors: true
+    when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
+
+  - name: Replace the genesis.json file
+    become_user: "{{ become_user }}"
+    copy:
+      src: "{{ local_temp_path_genesis }}"
+      dest: "{{ target_path_genesis }}"
+      remote_src: true
+      owner: "{{ become_user }}"
+      group: "{{ become_user }}"
+      mode: '0644'
+    when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
+
+  - name: Cleanup temporary genesis.json file
+    become_user: "{{ become_user }}"
+    file:
+      path: "{{ local_temp_path_genesis }}"
+      state: absent
+    when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
+
+#################################
+# Docker login on moi servers #
+#################################
+
+- name: Login to GHCR on moi servers
+  hosts: moi-servers
+  become: yes
+  become_user: "{{ become_user }}"
+  tasks:
+
+    - name: Logout from GHCR
+      shell: docker --config /home/{{ app_user }}/.docker logout ghcr.io
+      ignore_errors: yes
+      environment:
+        HOME: "/home/{{ app_user }}"
+      when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
+
+    - name: Login to GHCR using Docker
+      shell: |
+        echo "{{ ghcr_pat }}" | docker --config /home/{{ app_user }}/.docker login ghcr.io -u {{ ghcr_user }} --password-stdin
+      no_log: true
+      environment:
+        HOME: "/home/{{ app_user }}"
+      when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
+
+##################################
+# Docker start on moi servers #
+##################################
+
+- name: Run moipod_start.sh on the moi server
+  hosts: moi-servers
+  tasks:
+  - name: Run moipod_start.sh on moi server
+    import_tasks: common/start.yaml
+    vars:
+      file_name: moipod_start.sh
+      owner: "{{ become_user }}"
+      group: "{{ become_user }}"
+      mode: '0755'
+    become_user: "{{ become_user }}"
+    when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']

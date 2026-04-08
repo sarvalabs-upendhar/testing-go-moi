@@ -1,0 +1,57 @@
+# Build stage (Golang for ARM64)
+FROM --platform=linux/arm64 golang:1.24.9 AS build
+
+# Essential packages for build dependencies
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC
+RUN apt-get update && apt-get install -y tzdata ca-certificates gcc \
+    && ln -fs /usr/share/zoneinfo/UTC /etc/localtime \
+    && dpkg-reconfigure -f noninteractive tzdata \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Importing private go-packages
+RUN go env -w GOPRIVATE=github.com/sarvalabs/go-pisa,github.com/sarvalabs/battleground
+
+ARG ACCESS_TOKEN
+ENV CGO_ENABLED=1
+ENV GO111MODULE=auto
+ENV CGO_CFLAGS="-O -D__BLST_PORTABLE__"
+
+# Configure Git for private repositories
+RUN git config --global url."https://sarvalabs:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
+RUN git ls-remote https://sarvalabs:${ACCESS_TOKEN}@github.com/sarvalabs/battleground || echo "Invalid GitHub token"
+
+# Set work directory
+WORKDIR /go/src/github/sarvalabs/moichain
+
+# Copy dependencies and download
+COPY go.mod go.sum ./
+RUN go mod download -x
+
+# Copy the rest of the source code
+COPY . .
+
+# Build the binary for ARM64
+RUN GOARCH=arm64 go build -trimpath -o /bin/moipod ./cmd/moipod/
+
+# Final runtime stage (Ubuntu for ARM64)
+FROM --platform=linux/arm64 ubuntu:22.04
+
+VOLUME /data
+
+ARG GIT_COMMIT
+ENV GIT_COMMIT="${GIT_COMMIT}"
+
+RUN apt-get update && apt-get install -y tzdata ca-certificates \
+    && ln -fs /usr/share/zoneinfo/UTC /etc/localtime \
+    && dpkg-reconfigure -f noninteractive tzdata \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary and required files from build stage
+COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /bin/moipod /bin/moipod
+
+ENTRYPOINT ["/bin/moipod"]

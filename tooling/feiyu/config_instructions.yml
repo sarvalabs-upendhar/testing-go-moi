@@ -1,0 +1,5 @@
+config:
+  file:
+    # key: value
+  bin:
+    clean-db: true

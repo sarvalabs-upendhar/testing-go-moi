@@ -1,0 +1,47 @@
+# amd64 arch
+# golang:1.24.9-alpine3.21
+# sha256:4770ea1a103b3dc1a6e0c7c8d7a7a91d08ab0d4302f32256bc7b42d06f892103
+
+FROM golang@sha256:4770ea1a103b3dc1a6e0c7c8d7a7a91d08ab0d4302f32256bc7b42d06f892103 AS build
+
+# essential packages for build-dep
+ENV pkgs "git gcc g++ ca-certificates tzdata"
+RUN apk add --no-cache $pkgs && update-ca-certificates
+
+# importing private go-packages
+RUN go env -w GOPRIVATE=github.com/sarvalabs/go-pisa
+RUN go env -w GOPRIVATE=github.com/sarvalabs/battleground
+
+ARG ACCESS_TOKEN
+ENV CGO_ENABLED=1
+ENV GO111MODULE=auto
+
+# for private go-packages
+RUN git config --global url."https://sarvalabs:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
+
+# go module download
+WORKDIR /go/src/github/sarvalabs/moichain
+COPY go.mod /go/src/github/sarvalabs/moichain
+COPY go.sum /go/src/github/sarvalabs/moichain
+RUN go mod download -x
+COPY . /go/src/github/sarvalabs/moichain
+RUN go build -trimpath -o /bin/logiclab ./cmd/logiclab/
+
+# second-stage
+
+# amd64 arch
+# alpine:3.18.3
+# sha256:c5c5fda71656f28e49ac9c5416b3643eaa6a108a8093151d6d1afc9463be8e33
+
+FROM alpine@sha256:c5c5fda71656f28e49ac9c5416b3643eaa6a108a8093151d6d1afc9463be8e33
+
+VOLUME /data
+ARG GIT_COMMIT
+ENV GIT_COMMIT="${GIT_COMMIT}"
+
+COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+COPY --from=build /bin/logiclab /bin/logiclab
+
+ENTRYPOINT [ "/bin/logiclab" ]

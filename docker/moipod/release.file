@@ -1,0 +1,42 @@
+# golang:1.20.8-alpine3.18
+
+FROM golang:1.24.9-alpine3.21 AS build
+
+# essential packages for build-dep
+ENV pkgs "git gcc g++ ca-certificates tzdata"
+RUN apk add --no-cache $pkgs && update-ca-certificates
+
+# importing private go-packages
+RUN go env -w GOPRIVATE=github.com/sarvalabs/go-pisa
+RUN go env -w GOPRIVATE=github.com/sarvalabs/battleground
+
+ARG ACCESS_TOKEN
+ENV CGO_ENABLED=1
+ENV GO111MODULE=auto
+
+# for private go-packages
+RUN git config --global url."https://sarvalabs:${ACCESS_TOKEN}@github.com".insteadOf "https://github.com"
+
+# go module download
+WORKDIR /go/src/github/sarvalabs/moichain
+COPY go.mod /go/src/github/sarvalabs/moichain
+COPY go.sum /go/src/github/sarvalabs/moichain
+RUN go mod download -x
+COPY . /go/src/github/sarvalabs/moichain
+RUN go build -trimpath -o /bin/moipod ./cmd/moipod/
+
+# second-stage
+# alpine:3.18.3
+
+FROM alpine:latest
+
+VOLUME /data
+ARG GIT_COMMIT
+ENV GIT_COMMIT="${GIT_COMMIT}"
+
+COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+COPY --from=build /bin/moipod /bin/moipod
+
+ENTRYPOINT [ "/bin/moipod" ]

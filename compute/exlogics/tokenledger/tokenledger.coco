@@ -1,0 +1,75 @@
+coco TokenLedger
+
+state logic:
+    Symbol String
+    Supply U256
+    Balances Map[Identifier]U256
+
+endpoint deploy Seed(symbol String, supply U256): 
+    mutate symbol -> TokenLedger.Logic.Symbol
+    mutate supply -> TokenLedger.Logic.Supply
+
+    mutate balances <- TokenLedger.Logic.Balances:
+        balances[Identifier(Sender)] = supply
+
+    emit f"seeded {Identifier(Sender)} with {supply} {symbol}"
+
+endpoint Decimals() -> (decimals U64):
+    yield decimals 18
+
+endpoint BalanceOf(addr Identifier) -> (balance U256):
+    observe balances <- TokenLedger.Logic.Balances:
+        // If balance exists for address, read and return
+        // balance = 0, if no entry for the address
+        if balances[addr]?:
+            balance = balances[addr]
+
+event Transfer:
+    topic sender Identifier
+    topic receiver Identifier
+    field amount U256
+
+endpoint dynamic Transfer(amount U256, receiver Identifier):
+    memory sender = Identifier(Sender)
+
+    mutate balances <- TokenLedger.Logic.Balances:
+        if !balances[sender]?: throw "sender has no balance"
+
+        memory balance = balances[sender]
+        if balance < amount: throw "sender has insufficient balance"
+
+        if !balances[receiver]?:
+            balances[receiver] = 0
+
+        balances[sender] = balance - amount
+        balances[receiver] += amount
+
+    emit Transfer(sender, receiver, amount)
+
+endpoint dynamic Mint(amount U256):
+    mutate supply <- TokenLedger.Logic.Supply:
+        supply += amount
+
+    mutate balances <- TokenLedger.Logic.Balances:
+        memory sender = Identifier(Sender)
+
+        if !balances[sender]?:
+            balances[sender] = 0
+
+        balances[sender] += amount
+
+endpoint dynamic Burn(amount U256):
+    mutate supply <- TokenLedger.Logic.Supply:
+        if supply < amount: throw "invalid burn amount: exceeds supply"
+        supply -= amount
+
+    mutate balances <- TokenLedger.Logic.Balances:
+        memory sender = Identifier(Sender)
+
+        if !balances[sender]?: 
+            throw "invalid burn amount: sender has no balance"
+
+        memory balance = balances[sender] 
+        if balance < amount: throw "invalid burn amount: insufficient balance"
+
+        balances[sender] -= amount

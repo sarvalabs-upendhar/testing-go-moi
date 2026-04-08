@@ -1,0 +1,177 @@
+syntax: 1
+engine:
+  kind: PISA
+  flags: []
+  version: 0.5.0
+kind: logic
+elements:
+- ptr: 0
+  kind: literal
+  data:
+    type: string
+    value: 0x06696e73756666696369656e742062616c616e6365
+- ptr: 1
+  kind: state
+  data:
+    mode: logic
+    fields:
+    - slot: 0
+      label: Name
+      type: string
+    - slot: 1
+      label: Symbol
+      type: string
+    - slot: 2
+      label: Supply
+      type: u256
+    - slot: 3
+      label: Owner
+      type: identifier
+- ptr: 2
+  kind: state
+  data:
+    mode: actor
+    fields:
+    - slot: 0
+      label: Spendable
+      type: u256
+    - slot: 1
+      label: Lockedup
+      type: u256
+- ptr: 3
+  deps:
+  - 1
+  - 2
+  kind: callable
+  data:
+    name: Seed
+    mode: dynamic
+    kind: deploy
+    accepts:
+    - slot: 0
+      label: name
+      type: string
+    - slot: 1
+      label: symbol
+      type: string
+    - slot: 2
+      label: supply
+      type: u256
+    returns: []
+    executes:
+      asm:
+      - LLOAD $0 &0
+      - OBTAIN $1 &0
+      - DISPER $0 $1
+      - STORE $0
+      - LLOAD $0 &1
+      - OBTAIN $1 &1
+      - DISPER $0 $1
+      - STORE $0
+      - LLOAD $0 &2
+      - OBTAIN $1 &2
+      - DISPER $0 $1
+      - STORE $0
+      - LLOAD $0 &3
+      - ORIGIN $2
+      - DISPER $0 $2
+      - STORE $0
+      - ORIGIN $0
+      - ALOAD $2 $0 &0
+      - DISPER $2 $1
+      - STORE $2
+    catches: []
+- ptr: 4
+  deps:
+  - 2
+  kind: callable
+  data:
+    name: Register
+    mode: dynamic
+    kind: enlist
+    accepts: []
+    returns: []
+    executes:
+      asm:
+      - ORIGIN $0
+      - ALOAD $1 $0 &0
+      - PMAKE $2 &7
+      - DISPER $1 $2
+      - STORE $1
+      - ORIGIN $0
+      - ALOAD $1 $0 &1
+      - PMAKE $2 &7
+      - DISPER $1 $2
+      - STORE $1
+    catches: []
+- ptr: 5
+  deps:
+  - 0
+  - 2
+  kind: callable
+  data:
+    name: Lockup
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: amount
+      type: u256
+    returns: []
+    executes:
+      asm:
+      - ORIGIN $0
+      - ALOAD $1 $0 &0
+      - GATHER $2 $1
+      - OBTAIN $3 &0
+      - LT $4 $2 $3
+      - NOT $4 $4
+      - LDPTR1 $5 0xb
+      - JUMPI $5 $4
+      - LDPTR1 $4 0x0
+      - LMAKE $4 $4
+      - THROW $4
+      - DEST
+      - SUB $3 $2 $3
+      - COPY $2 $3
+      - DISPER $1 $2
+      - STORE $1
+      - ORIGIN $0
+      - ALOAD $1 $0 &1
+      - GATHER $2 $1
+      - OBTAIN $3 &0
+      - ADD $3 $2 $3
+      - COPY $2 $3
+      - DISPER $1 $2
+      - STORE $1
+    catches: []
+- ptr: 6
+  deps:
+  - 1
+  - 2
+  kind: callable
+  data:
+    name: Mint
+    mode: dynamic
+    kind: invoke
+    accepts:
+    - slot: 0
+      label: amount
+      type: u256
+    returns: []
+    executes:
+      asm:
+      - LLOAD $0 &2
+      - GATHER $1 $0
+      - OBTAIN $2 &0
+      - ADD $1 $1 $2
+      - DISPER $0 $1
+      - STORE $0
+      - ORIGIN $0
+      - ALOAD $1 $0 &0
+      - GATHER $2 $1
+      - OBTAIN $3 &0
+      - ADD $2 $2 $3
+      - DISPER $1 $2
+      - STORE $1
+    catches: []

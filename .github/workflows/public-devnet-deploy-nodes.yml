@@ -1,0 +1,115 @@
+name: Network Upgrade Public Devnet
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Choose deployment option'
+        required: true
+        type: choice
+        options:
+          - Quick_Deployment
+          - Full_Deployment
+          - Genesis_Update_Only
+          - Config_Update_Only
+
+env:
+  BRANCH_NAME: ${{ github.ref_name }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.ACCESS_TOKEN }}
+          logout: true
+
+      - name: Build & Push moipod container image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          file: ./docker/moipod/internal.amd64
+          tags: ghcr.io/sarvalabs/moipod:latest
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+            ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
+
+  ansible-playbook:
+    runs-on: ubuntu-latest
+    environment: public-devnet
+    needs: [publish]
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set Deployment Option
+        run: echo "DEPLOYMENT_OPTION=${{ github.event.inputs.environment }}" >> $GITHUB_ENV
+
+      # Install Teleport CLI
+      - name: Install Teleport CLI
+        uses: teleport-actions/setup@v1
+        with:
+          version: 16.2.1
+
+      # Authenticate using Teleport Bot (Machine ID)
+      - name: Authenticate via Teleport Bot
+        uses: teleport-actions/auth@v2
+        with:
+          proxy: ${{ vars.TP_PROXY }}
+          token: github-join-token
+          certificate-ttl: 2h
+          anonymous-telemetry: 1
+
+      # Run Ansible Playbook using Teleport-issued identity
+      - name: Run Ansible Playbook via Machine ID
+        run: |
+          # Export AWS credentials 
+          export AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY_ID }}"
+          export AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          export AWS_DEFAULT_REGION="${{ secrets.AWS_DEFAULT_REGION }}"
+
+          # Download config template from S3
+          aws s3 cp s3://pub-devnet-config-template/config_template.json.j2 /tmp/config_template.json.j2
+          
+          # Decode inventory file from GitHub variable
+          echo "${{ vars.PUBLIC_DEVNET_NODE_INVENTORY_FILE }}" | base64 -d > /tmp/node.yml
+          
+          mkdir -p /tmp/ssh-control
+          
+          # Locate the Machine ID SSH config
+          MACHINE_ID_DIR=$(find /home/runner/work/_temp -name "ssh_config" -type f -exec dirname {} \; | head -1)
+          
+          # Create temporary Ansible configuration file
+          cat > /tmp/ansible.cfg << EOF
+          [defaults]
+          inventory=/tmp/node.yml
+          host_key_checking=False
+          remote_tmp=/tmp/.ansible-${USER}/tmp
+          forks=10
+          pipelining=True
+          timeout=30
+          
+          [ssh_connection]
+          scp_if_ssh = True
+          ssh_args = -o ProxyCommand="tsh proxy ssh %h" -o IdentityFile="$MACHINE_ID_DIR/key" -o CertificateFile="$MACHINE_ID_DIR/key-cert.pub" -o ControlMaster=auto -o ControlPath=/tmp/ssh-control/ssh-%h-%p-%r -o ControlPersist=600
+          pipelining=True
+          EOF
+          
+          # Run the Ansible playbook
+          ANSIBLE_CONFIG=/tmp/ansible.cfg ansible-playbook \
+            -i /tmp/node.yml \
+            ansible-devnet/network-upgrade.yaml \
+            -f 10 \
+            --extra-vars "deployment_option=${{ env.DEPLOYMENT_OPTION }} AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY_ID }} AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }} AWS_DEFAULT_REGION=${{ secrets.AWS_DEFAULT_REGION }} ghcr_pat=${{ secrets.ACCESS_TOKEN }} ghcr_user=${{ secrets.GH_USER }}"

@@ -1,0 +1,75 @@
+name: start/stop network
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Select Network"
+        required: true
+        type: choice
+        options:
+          - private-devnet
+          - public-devnet
+      action:
+        description: "Select Action"
+        required: true
+        type: choice
+        options:
+          - start
+          - stop
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  start-stop:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target }}
+
+    steps:
+      # -----------------------------
+      # Set network-specific config
+      # -----------------------------
+      - name: Set network variables
+        run: |
+          if [[ "${{ github.event.inputs.target }}" == "public-devnet" ]]; then
+            echo "TP_VERSION=16.2.1" >> $GITHUB_ENV
+            echo "TP_TOKEN=github-join-token" >> $GITHUB_ENV
+            echo "HOSTS=dev-node-01 dev-node-02 dev-node-03 dev-node-04 dev-node-05 dev-node-06 dev-node-07 dev-node-08 dev-node-09 dev-node-10" >> $GITHUB_ENV
+          else
+            echo "TP_VERSION=16.5.15" >> $GITHUB_ENV
+            echo "TP_TOKEN=github-ci-token" >> $GITHUB_ENV
+            echo "HOSTS=devnet-node-1 devnet-node-2 devnet-node-3 devnet-node-4 devnet-node-5 devnet-node-6 devnet-node-7 devnet-node-8 devnet-node-9 devnet-node-10 devnet-node-11 devnet-node-12 devnet-node-13 devnet-node-14" >> $GITHUB_ENV
+          fi
+
+      # Install Teleport
+      - name: Install Teleport CLI
+        uses: teleport-actions/setup@v1
+        with:
+          version: ${{ env.TP_VERSION }}
+
+      # Authenticate
+      - name: Authenticate via Teleport
+        uses: teleport-actions/auth@v2
+        with:
+          proxy: ${{ vars.TP_PROXY }}
+          token: ${{ env.TP_TOKEN }}
+          certificate-ttl: 2h
+          anonymous-telemetry: 1
+
+      # -----------------------------
+      # Execute start or stop
+      # -----------------------------
+      - name: Execute action on hosts
+        run: |
+          for host in $HOSTS; do
+            echo "Connecting to: $host"
+
+            if [[ "${{ github.event.inputs.action }}" == "start" ]]; then
+              tsh ssh moichain@$host "cd ~ && bash start.sh"
+            else
+              tsh ssh moichain@$host "cd ~ && bash stop.sh"
+            fi
+
+          done
