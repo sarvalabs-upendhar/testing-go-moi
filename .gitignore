@@ -35,3 +35,5 @@ instances.json
 devnet-ansible/inventory
 babylon-ansible/inventory
 ansible-inventory
+.netrc
+coverage.out
