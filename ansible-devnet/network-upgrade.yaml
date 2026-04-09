@@ -316,6 +316,7 @@
     import_tasks: common/start.yaml
     vars:
       file_name: moipod_start.sh
+      service_name: moipod
       owner: "{{ become_user }}"
       group: "{{ become_user }}"
       mode: '0755'
