@@ -2,11 +2,10 @@
   template:
     src: "{{ playbook_dir }}/scripts/{{ file_name }}"
     dest: "/home/ubuntu/{{ file_name }}"
-    owner: "{{ owner }}"
-    group: "{{ group }}"
+    owner: ubuntu
+    group: ubuntu
     mode: "{{ mode }}"
   become: yes
-  become_user: ubuntu
 
 - name: Run stop script on servers
   shell: "./{{ file_name }}"
