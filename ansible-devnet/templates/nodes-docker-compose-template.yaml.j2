@@ -1,4 +1,3 @@
-version: "3.9"
 
 x-common-params: &default-params
   stdin_open: true
@@ -9,12 +8,12 @@ x-common-params: &default-params
     driver: "json-file"
     options:
       max-size: "25m"
-      max-file: 10
+      max-file: "10"
 
 services:
 {% for i in range(0, instance_count) %}
   moipod{{ "%02d" | format(i + 1) }}:
-    image: "ghcr.io/sarvalabs/moipod:{{ image_tag }}"
+    image: "ghcr.io/sarvalabs-upendhar/moipod:{{ image_tag }}"
     hostname: moipod{{ "%02d" | format(i + 1) }}
     container_name: moipod{{ "%02d" | format(i + 1) }}
     <<: *default-params
