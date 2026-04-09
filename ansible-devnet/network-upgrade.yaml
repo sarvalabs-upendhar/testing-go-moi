@@ -128,6 +128,18 @@
         mode: '0755'
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
+    - name: Ensure log directories exist      
+      become_user: "{{ become_user }}"
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ become_user }}"
+        group: "{{ become_user }}"
+        mode: '0755'
+      loop: "{{ log_directory_to_backup }}"
+      loop_control:
+        label: "{{ item.name }}"
+
     - name: Create temporary directory for backup
       become_user: "{{ become_user }}"
       file:
