@@ -33,8 +33,8 @@
       include_tasks: common/stop.yaml
       vars:
         file_name: bootnode_stop.sh
-        owner: root
-        group: root
+        owner: ubuntu
+        group: ubuntu
         mode: '0755'
         become_user: root
 
@@ -50,8 +50,8 @@
     file:
       path: "{{ backup_dir }}"
       state: directory
-      owner: root
-      group: root
+      owner: ubuntu
+      group: ubuntu
       mode: '0755'
       
   - name: Backup all directories into a single tar file
@@ -129,7 +129,7 @@
     include_tasks: common/start.yaml
     vars:
       file_name: bootnode_start.sh
-      owner: root
-      group: root
+      owner: ubuntu
+      group: ubuntu
       mode: '0755'
       become_user: root
