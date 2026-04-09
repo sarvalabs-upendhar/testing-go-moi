@@ -55,6 +55,7 @@
       mode: '0755'
       
   - name: Backup all directories into a single tar file
+    ignore_errors: yes
     command: >
       tar czf {{ backup_dir }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
       {{ directories_to_backup | map(attribute='path') | join(' ') }}
