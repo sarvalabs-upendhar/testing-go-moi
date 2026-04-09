@@ -2,13 +2,13 @@ version: "3.9"
 
 services:
   bootnode:
-    image: "ghcr.io/sarvalabs/moipod:{{ image_tag }}"
+    image: "ghcr.io/sarvalabs-upendhar/moipod:{{ image_tag }}"
     stdin_open: true
     hostname: bootnode
     container_name: bootnode
     restart: "no"
     volumes:
-      - "/home/{{ app_user }}/shared/bootnode:/data:rw"
+      - "/home/ubuntu/shared/bootnode:/data:rw"
     working_dir: /data
     network_mode: "host"
     logging:
