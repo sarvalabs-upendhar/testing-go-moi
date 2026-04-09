@@ -250,12 +250,15 @@
  
   - name: Backup the existing genesis.json file (if exists)
     become_user: "{{ become_user }}"
-    copy:
-      src: "{{ target_path_genesis }}"
-      dest: "{{ target_path_genesis }}.bak"
-      remote_src: true
-    ignore_errors: true
-    when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
+    shell: |
+    aws s3 cp s3://{{ s3_bucket_genesis }}/{{ s3_file_genesis }} {{ local_temp_path_genesis }}
+  args:
+    executable: /bin/bash
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ AWS_ACCESS_KEY_ID }}"
+    AWS_SECRET_ACCESS_KEY: "{{ AWS_SECRET_ACCESS_KEY }}"
+    AWS_DEFAULT_REGION: "{{ AWS_DEFAULT_REGION }}"
+  when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
 
   - name: Replace the genesis.json file
     become_user: "{{ become_user }}"
