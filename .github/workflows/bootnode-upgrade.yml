@@ -36,7 +36,7 @@ jobs:
           context: .
           push: true
           file: ./docker/moipod/internal.amd64
-          tags: ghcr.io/sarvalabs/moipod:latest
+          tags: ghcr.io/sarvalabs-upendhar/moipod:latest
           build-args: |
             GIT_COMMIT=${{ github.sha }}
             ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
