@@ -91,6 +91,9 @@ jobs:
           echo "--- Inventory content ---"
           cat /tmp/node.yml
 
+      - name: Debug Inventory
+        run: cat /tmp/node.yml
+
       - name: Download config template from S3
         run: |
           aws s3 cp s3://moi-bootnode-upendhar/config_template.json.j2 /tmp/config_template.json.j2
