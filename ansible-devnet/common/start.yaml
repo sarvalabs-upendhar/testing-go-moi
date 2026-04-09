@@ -2,9 +2,7 @@
   template:
     src: "{{ playbook_dir }}/scripts/{{ file_name }}"
     dest: "/home/ubuntu/{{ file_name }}"
-    owner: ubuntu
-    group: ubuntu
-    mode: "{{ mode }}"
+    mode: "0755"
   become: yes
 
 - name: Run start script on servers
