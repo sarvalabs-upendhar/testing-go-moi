@@ -88,13 +88,13 @@
     - name: Backup the existing docker-compose.yml file
       become_user: ubuntu
       copy:
-        src: "/home/{{ app_user }}/stack/bootnode/docker-compose.yml"
-        dest: "/home/{{ app_user }}/stack/bootnode/docker-compose.yml.bak"
+        src: "/home/ubuntu/stack/bootnode/docker-compose.yml"
+        dest: "/home/ubuntu/stack/bootnode/docker-compose.yml.bak"
         remote_src: true
     - name: Create docker-compose.yaml from template
       template:
         src: "bootnode-docker-compose-template.yaml.j2"
-        dest: "/home/{{ app_user }}/stack/bootnode/docker-compose.yml"
+        dest: "/home/ubuntu/stack/bootnode/docker-compose.yml"
 
 #################################
 # Docker login on bootnode servers #
@@ -107,17 +107,17 @@
   tasks:
 
     - name: Logout from GHCR
-      shell: docker --config /home/{{ app_user }}/.docker logout ghcr.io
+      shell: docker --config /home/ubuntu/.docker logout ghcr.io
       ignore_errors: yes
       environment:
-        HOME: "/home/{{ app_user }}"
+        HOME: "/home/ubuntu"
 
     - name: Login to GHCR using Docker
       shell: |
-        echo "{{ ghcr_pat }}" | docker --config /home/{{ app_user }}/.docker login ghcr.io -u {{ ghcr_user }} --password-stdin
+        echo "{{ ghcr_pat }}" | docker --config /home/ubuntu/.docker login ghcr.io -u {{ ghcr_user }} --password-stdin
       no_log: true
       environment:
-        HOME: "/home/{{ app_user }}"
+        HOME: "/home/ubuntu"
 
 #####################################
 # Docker start on bootnode servers  #
