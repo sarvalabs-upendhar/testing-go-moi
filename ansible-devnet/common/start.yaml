@@ -1,10 +1,10 @@
 - name: Write start script on Servers
   shell: |
-    cat > /home/ubuntu/{{ file_name }} << 'EOF'
+    cat > /home/ubuntu/{{ file_name }} << 'SCRIPT'
     #!/bin/bash
-    docker compose -f /home/ubuntu/stack/bootnode/docker-compose.yml pull
-    docker compose -f /home/ubuntu/stack/bootnode/docker-compose.yml up -d
-    EOF
+    docker-compose -f /home/ubuntu/stack/bootnode/docker-compose.yml pull
+    docker-compose -f /home/ubuntu/stack/bootnode/docker-compose.yml up -d
+    SCRIPT
     chmod 0755 /home/ubuntu/{{ file_name }}
   become: yes
   become_user: ubuntu
@@ -13,3 +13,4 @@
   shell: "/home/ubuntu/{{ file_name }}"
   become: yes
   become_user: ubuntu
+  ignore_errors: yes

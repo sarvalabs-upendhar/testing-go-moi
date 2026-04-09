@@ -83,6 +83,14 @@
   become: true
   become_user: ubuntu
   tasks:
+    - name: Create stack directory if not exists
+      file:
+        path: /home/ubuntu/stack/bootnode
+        state: directory
+        mode: '0755'
+      become: yes
+      become_user: ubuntu
+
     - name: Backup the existing docker-compose.yml file
       copy:
         src: "/home/ubuntu/stack/bootnode/docker-compose.yml"

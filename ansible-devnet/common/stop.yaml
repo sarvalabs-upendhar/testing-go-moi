@@ -1,10 +1,10 @@
 - name: Write stop script on Servers
   shell: |
-    cat > /home/ubuntu/{{ file_name }} << 'EOF'
+    cat > /home/ubuntu/{{ file_name }} << 'SCRIPT'
     #!/bin/bash
     docker container prune -f
-    docker compose -f /home/ubuntu/stack/bootnode/docker-compose.yml down
-    EOF
+    docker-compose -f /home/ubuntu/stack/bootnode/docker-compose.yml down
+    SCRIPT
     chmod 0755 /home/ubuntu/{{ file_name }}
   become: yes
   become_user: ubuntu
