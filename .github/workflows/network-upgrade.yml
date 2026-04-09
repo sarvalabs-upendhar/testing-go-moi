@@ -85,7 +85,11 @@ jobs:
 
       - name: Load Inventory
         run: |
-          echo "${{ vars.TESTING_NODES_INVENTORY }}" > /tmp/node.yml
+          cat << 'INVENTORY' > /tmp/node.yml
+          ${{ vars.TESTING_NODES_INVENTORY }}
+          INVENTORY
+          echo "--- Inventory content ---"
+          cat /tmp/node.yml
 
       - name: Download config template from S3
         run: |
