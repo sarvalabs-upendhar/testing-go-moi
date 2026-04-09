@@ -2,8 +2,15 @@
   shell: |
     cat > /home/ubuntu/{{ file_name }} << 'SCRIPT'
     #!/bin/bash
+    set -euo pipefail
+
+    echo "Pruning stopped containers..."
     docker container prune -f
-    docker-compose -f /home/ubuntu/stack/bootnode/docker-compose.yml down
+
+    echo "Stopping service..."
+    docker compose -f /home/ubuntu/stack/{{ service_name }}/docker-compose.yml down
+
+    echo "Stop complete."
     SCRIPT
     chmod 0755 /home/ubuntu/{{ file_name }}
   become: yes
@@ -13,4 +20,3 @@
   shell: "/home/ubuntu/{{ file_name }}"
   become: yes
   become_user: ubuntu
-  ignore_errors: yes
