@@ -2,8 +2,17 @@
   shell: |
     cat > /home/ubuntu/{{ file_name }} << 'SCRIPT'
     #!/bin/bash
-    docker-compose -f /home/ubuntu/stack/bootnode/docker-compose.yml pull
-    docker-compose -f /home/ubuntu/stack/bootnode/docker-compose.yml up -d
+    set -euo pipefail
+
+    COMPOSE_FILE="/home/ubuntu/stack/bootnode/docker-compose.yml"
+
+    echo "Pulling latest bootnode image..."
+    docker compose -f "$COMPOSE_FILE" pull
+
+    echo "Restarting bootnode container..."
+    docker compose -f "$COMPOSE_FILE" up -d
+
+    echo "Bootnode upgrade complete."
     SCRIPT
     chmod 0755 /home/ubuntu/{{ file_name }}
   become: yes
@@ -13,4 +22,3 @@
   shell: "/home/ubuntu/{{ file_name }}"
   become: yes
   become_user: ubuntu
-  ignore_errors: yes
