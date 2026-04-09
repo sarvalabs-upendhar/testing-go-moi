@@ -13,3 +13,4 @@
   shell: "/home/ubuntu/{{ file_name }}"
   become: yes
   become_user: ubuntu
+  ignore_errors: yes
