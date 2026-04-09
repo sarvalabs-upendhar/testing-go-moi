@@ -34,7 +34,11 @@
       include_tasks: common/stop.yaml
       vars:
         file_name: bootnode_stop.sh
+        service_name: bootnode
+        owner: ubuntu
+        group: ubuntu
         mode: '0755'
+      become_user: ubuntu
 
 ######################################################
 ## Backup folder on bootnode server and upload to s3 #
