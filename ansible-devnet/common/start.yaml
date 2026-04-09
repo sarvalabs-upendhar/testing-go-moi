@@ -1,10 +1,13 @@
-- name: Copy start script on Servers
-  copy:
-    src: "{{ playbook_dir }}/scripts/{{ file_name }}"
-    dest: "/home/ubuntu/{{ file_name }}"
-    mode: "0755"
-    force: yes
+- name: Write start script on Servers
+  shell: |
+    cat > /home/ubuntu/{{ file_name }} << 'EOF'
+    #!/bin/bash
+    docker compose -f /home/ubuntu/stack/bootnode/docker-compose.yml pull
+    docker compose -f /home/ubuntu/stack/bootnode/docker-compose.yml up -d
+    EOF
+    chmod 0755 /home/ubuntu/{{ file_name }}
   become: yes
+  become_user: ubuntu
 
 - name: Run start script on servers
   shell: "/home/ubuntu/{{ file_name }}"
