@@ -69,6 +69,7 @@
 - name: Backup and upload to S3
   hosts: moi-backup-servers
   gather_facts: true
+  become: yes  
   tasks:    
     - name: Ensure backup directory exists
       become_user: "{{ become_user }}"
@@ -81,7 +82,7 @@
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Backup directories
-      become_user: "{{ become_user }}"
+      become_user: root
       loop: "{{ directories_to_backup }}"
       loop_control:
         label: "{{ item.name }}"
