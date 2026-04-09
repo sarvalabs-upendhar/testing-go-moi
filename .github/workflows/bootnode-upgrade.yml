@@ -27,7 +27,6 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.ACCESS_TOKEN }}
-          logout: true
 
       - name: Build & Push moipod container image
         uses: docker/build-push-action@v7
@@ -64,17 +63,17 @@ jobs:
 
       - name: Write Ansible config
         run: |
-          cat > /tmp/ansible.cfg <<EOF
-          [defaults]
-          host_key_checking = False
-          remote_tmp = /tmp/.ansible-${USER}/tmp
-          pipelining = True
-          forks = 10
-
-          [ssh_connection]
-          scp_if_ssh = True
-          ssh_args = -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ControlMaster=auto -o ControlPersist=600
-          EOF
+          {
+            echo '[defaults]'
+            echo 'host_key_checking = False'
+            echo 'remote_tmp = /tmp/.ansible-${USER}/tmp'
+            echo 'pipelining = True'
+            echo 'forks = 10'
+            echo ''
+            echo '[ssh_connection]'
+            echo 'scp_if_ssh = True'
+            echo 'ssh_args = -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ControlMaster=auto -o ControlPersist=600'
+          } > /tmp/ansible.cfg
 
       - name: Run Ansible Playbook
         run: |
