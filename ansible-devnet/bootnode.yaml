@@ -36,7 +36,7 @@
         owner: ubuntu
         group: ubuntu
         mode: '0755'
-        become_user: root
+        become_user: ubuntu
 
 ######################################################
 ## Backup folder on bootnode server and upload to s3 #
@@ -61,7 +61,7 @@
       {{ directories_to_backup | map(attribute='path') | join(' ') }}
 
   - name: Check if the tar file exists before uploading to S3
-    become_user: root
+    become_user: ubuntu
     stat:
       path: "{{ backup_dir }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz"
     register: tar_file_stat
@@ -83,10 +83,10 @@
 - name: Generate docker-compose.yml file for bootnode
   hosts: all
   become: true
-  become_user: "{{ become_user }}"
+  become_user: ubuntu
   tasks:
     - name: Backup the existing docker-compose.yml file
-      become_user: "{{ become_user }}"
+      become_user: ubuntu
       copy:
         src: "/home/{{ app_user }}/stack/bootnode/docker-compose.yml"
         dest: "/home/{{ app_user }}/stack/bootnode/docker-compose.yml.bak"
@@ -103,7 +103,7 @@
 - name: Login to GHCR on bootnode servers
   hosts: all
   become: yes
-  become_user: "{{ become_user }}"
+  become_user: ubuntu
   tasks:
 
     - name: Logout from GHCR
@@ -134,4 +134,4 @@
       owner: ubuntu
       group: ubuntu
       mode: '0755'
-      become_user: root
+      become_user: ubuntu
