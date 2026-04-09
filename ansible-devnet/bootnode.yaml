@@ -67,6 +67,7 @@
     register: tar_file_stat
 
   - name: Upload the backup tar file to S3
+    ignore_errors: yes
     command: >
       aws s3 cp {{ backup_dir }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
       s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/backup_{{ inventory_hostname }}_{{ timestamp }}.tar.gz
