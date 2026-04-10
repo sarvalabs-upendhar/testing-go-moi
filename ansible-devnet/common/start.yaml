@@ -7,7 +7,7 @@
     COMPOSE_FILE="/home/ubuntu/stack/{{ service_name }}/docker-compose.yml"
 
     echo "Pulling latest image..."
-    docker compose -f "$COMPOSE_FILE" pull
+    docker compose -f "$COMPOSE_FILE" pull || true
 
     echo "Restarting containers..."
     docker compose -f "$COMPOSE_FILE" up -d
@@ -15,10 +15,5 @@
     echo "Start complete."
     SCRIPT
     chmod 0755 /home/ubuntu/{{ file_name }}
-  become: yes
-  become_user: ubuntu
-
-- name: Run start script on servers
-  shell: "/home/ubuntu/{{ file_name }}"
   become: yes
   become_user: ubuntu
