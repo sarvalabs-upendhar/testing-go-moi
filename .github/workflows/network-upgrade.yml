@@ -22,38 +22,44 @@ on:
           - Config_Update_Only
 
       clean_db:
-        description: 'Clean database before deployment'
+        description: "Clean database before deployment"
         required: false
-        default: 'true'
+        default: "true"
         type: choice
         options:
-          - 'true'
-          - 'false'
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+  packages: write
 
 env:
   BRANCH_NAME: ${{ github.ref_name }}
 
 jobs:
   publish_image:
+    name: Build and Push Image
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ secrets.GH_USER }}
           password: ${{ secrets.ACCESS_TOKEN }}
 
       - name: Build & Push moipod container image
         uses: docker/build-push-action@v7
         with:
           context: .
-          push: true
           file: ./docker/moipod/internal.amd64
-          tags: ghcr.io/sarvalabs-upendhar/moipod:latest
+          push: true
+          tags: ghcr.io/${{ secrets.GH_USER }}/moipod:latest
           build-args: |
             GIT_COMMIT=${{ github.sha }}
             ACCESS_TOKEN=${{ secrets.ACCESS_TOKEN }}
@@ -63,12 +69,9 @@ jobs:
     needs: publish_image
     runs-on: ubuntu-latest
 
-    permissions:
-      contents: read
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set Deployment Variables
         run: |
@@ -88,11 +91,10 @@ jobs:
           cat << 'INVENTORY' > /tmp/node.yml
           ${{ vars.TESTING_NODES_INVENTORY }}
           INVENTORY
-          echo "--- Inventory content ---"
-          cat /tmp/node.yml
 
       - name: Debug Inventory
-        run: cat /tmp/node.yml
+        run: |
+          cat /tmp/node.yml
 
       - name: Download config template from S3
         run: |
@@ -104,21 +106,22 @@ jobs:
 
       - name: Write Ansible config
         run: |
-          {
-            echo '[defaults]'
-            echo 'host_key_checking = False'
-            echo 'remote_tmp = /tmp/.ansible-${USER}/tmp'
-            echo 'pipelining = True'
-            echo 'forks = 10'
-            echo ''
-            echo '[ssh_connection]'
-            echo 'scp_if_ssh = True'
-            echo 'ssh_args = -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ControlMaster=auto -o ControlPersist=600'
-          } > /tmp/ansible.cfg
+          cat << EOF > /tmp/ansible.cfg
+          [defaults]
+          host_key_checking = False
+          remote_tmp = /tmp/.ansible-\${USER}/tmp
+          pipelining = True
+          forks = 10
+
+          [ssh_connection]
+          scp_if_ssh = True
+          ssh_args = -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ControlMaster=auto -o ControlPersist=600
+          EOF
 
       - name: Run Ansible Playbook
         run: |
           echo "Starting network upgrade playbook execution..."
+
           ANSIBLE_CONFIG=/tmp/ansible.cfg ansible-playbook \
             -i /tmp/node.yml \
             ansible-devnet/network-upgrade.yaml \
