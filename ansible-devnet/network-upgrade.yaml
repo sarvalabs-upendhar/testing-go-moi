@@ -144,21 +144,21 @@
         label: "{{ item.name }}"
 
     - name: Create temporary directory for backup
-      become_user: "{{ become_user }}"
+      become_user: "{{ ansible_ssh_user }}"
       file:
         path: "/tmp/log_backup_{{ inventory_hostname }}"
         state: directory
         mode: '0755'
 
     - name: Sync logs to temporary directory using rsync
-      become_user: "{{ become_user }}"
+      become_user: "{{ ansible_ssh_user }}"
       command: rsync -av --ignore-errors --delete {{ item.path }}/ /tmp/log_backup_{{ inventory_hostname }}/{{ item.name }}/
       loop: "{{ log_directory_to_backup }}"
       loop_control:
         label: "{{ item.name }}"
 
     - name: Archive the copied logs
-      become_user: "{{ become_user }}"
+      become_user: "{{ ansible_ssh_user }}"
       command: >
         tar czf {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz -C /tmp/log_backup_{{ inventory_hostname }} {{ item.name }}
       loop: "{{ log_directory_to_backup }}"
@@ -166,7 +166,7 @@
         label: "{{ item.name }}"
 
     - name: Upload backups to S3 with timestamp
-      become_user: "{{ become_user }}"
+      become_user: "{{ ansible_ssh_user }}"
       shell: |
             set -euo pipefail
             aws s3 cp {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
@@ -183,7 +183,7 @@
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Clean up temporary directory
-      become_user: "{{ become_user }}"
+      become_user: "{{ ansible_ssh_user }}"
       file:
         path: "/tmp/log_backup_{{ inventory_hostname }}"
         state: absent
@@ -195,7 +195,7 @@
 - name: Generate docker-compose.yaml file for moi servers
   hosts: moi-servers
   become: true
-  become_user: "{{ become_user }}"
+  become_user: "{{ ansible_ssh_user }}"
   tasks:
     - name: Create docker-compose.yaml from template
       template:
@@ -210,7 +210,7 @@
 - name: Update config.json file on moi servers
   hosts: moi-servers
   become: true
-  become_user: "{{ become_user }}"
+  become_user: "{{ ansible_ssh_user }}"
   vars:
     local_template_path: "/tmp/config_template.json.j2"
 
@@ -245,7 +245,7 @@
   gather_facts: true
   tasks:
   - name: Download genesis.json from S3 bucket
-    become_user: "{{ become_user }}"
+    become_user: "{{ ansible_ssh_user }}"
     shell: |
       aws s3 cp s3://{{ s3_bucket_genesis }}/{{ s3_file_genesis }} {{ local_temp_path_genesis }}
     args:
@@ -266,18 +266,18 @@
     when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
 
   - name: Replace the genesis.json file
-    become_user: "{{ become_user }}"
+    become_user: "{{ ansible_ssh_user }}"
     copy:
       src: "{{ local_temp_path_genesis }}"
       dest: "{{ target_path_genesis }}"
       remote_src: true
-      owner: "{{ become_user }}"
-      group: "{{ become_user }}"
+      owner: "{{ ansible_ssh_user }}"
+      group: "{{ ansible_ssh_user }}"
       mode: '0644'
     when: deployment_option in ['Full_Deployment', 'Genesis_Update_Only']
 
   - name: Cleanup temporary genesis.json file
-    become_user: "{{ become_user }}"
+    become_user: "{{ ansible_ssh_user }}"
     file:
       path: "{{ local_temp_path_genesis }}"
       state: absent
@@ -290,7 +290,7 @@
 - name: Login to GHCR on moi servers
   hosts: moi-servers
   become: yes
-  become_user: "{{ become_user }}"
+  become_user: "{{ ansible_ssh_user }}"
   tasks:
 
     - name: Logout from GHCR
