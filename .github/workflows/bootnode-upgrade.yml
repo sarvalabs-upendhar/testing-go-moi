@@ -47,13 +47,24 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          cat << 'EOF' > ~/.ssh/id_rsa
+          ${{ secrets.SSH_PRIVATE_KEY }}
+          EOF
+
           chmod 600 ~/.ssh/id_rsa
+
+          ssh-keygen -l -f ~/.ssh/id_rsa
+
           ssh-keyscan -H ${{ secrets.BOOTNODE_IP }} >> ~/.ssh/known_hosts
 
       - name: Load Inventory
         run: |
-          echo "${{ vars.TESTING_BOOTNODE_INVENTORY }}" > /tmp/bootnode.yml
+          cat << 'INVENTORY' > /tmp/bootnode.yml
+          ${{ vars.TESTING_BOOTNODE_INVENTORY }}
+          INVENTORY
+
+          echo "Inventory:"
+          cat /tmp/bootnode.yml
 
       - name: Write Ansible config
         run: |
