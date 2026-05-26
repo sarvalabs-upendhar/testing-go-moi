@@ -82,8 +82,14 @@ jobs:
       - name: Setup SSH key
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          cat << 'EOF' > ~/.ssh/id_rsa
+          ${{ secrets.SSH_PRIVATE_KEY }}
+          EOF
+
           chmod 600 ~/.ssh/id_rsa
+
+          ssh-keygen -l -f ~/.ssh/id_rsa
+
           ssh-keyscan -H ${{ secrets.NODE1_IP }} >> ~/.ssh/known_hosts
 
       - name: Load Inventory
