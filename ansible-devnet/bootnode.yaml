@@ -136,9 +136,13 @@
   gather_facts: false
   become: yes
   become_user: ubuntu
+  
   tasks:
   - name: Run bootnode_start.sh on bootnode servers
     include_tasks: common/start.yaml
     vars:
       file_name: bootnode_start.sh
+      service_name: bootnode
+      owner: ubuntu
+      group: ubuntu
       mode: '0755'
