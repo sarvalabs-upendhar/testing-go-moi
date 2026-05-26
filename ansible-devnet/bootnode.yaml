@@ -31,6 +31,8 @@
   gather_facts: false
   tasks:
     - name: Run bootnode_stop.sh on bootnode servers
+      become: yes
+      become_user: ubuntu
       include_tasks: common/stop.yaml
       vars:
         file_name: bootnode_stop.sh
@@ -38,7 +40,6 @@
         owner: ubuntu
         group: ubuntu
         mode: '0755'
-      become_user: ubuntu
 
 ######################################################
 ## Backup folder on bootnode server and upload to s3 #
@@ -135,6 +136,8 @@
   gather_facts: false
   tasks:
   - name: Run bootnode_start.sh on bootnode servers
+    become: yes
+    become_user: ubuntu
     include_tasks: common/start.yaml
     vars:
       file_name: bootnode_start.sh
