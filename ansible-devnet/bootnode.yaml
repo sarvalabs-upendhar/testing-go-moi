@@ -29,10 +29,10 @@
 - name: Run bootnode_stop.sh on the bootnode servers
   hosts: all
   gather_facts: false
+  become: yes
+  become_user: ubuntu
   tasks:
     - name: Run bootnode_stop.sh on bootnode servers
-      become: yes
-      become_user: ubuntu
       include_tasks: common/stop.yaml
       vars:
         file_name: bootnode_stop.sh
@@ -134,10 +134,10 @@
 - name: Run bootnode_start.sh on the bootnode servers
   hosts: all
   gather_facts: false
+  become: yes
+  become_user: ubuntu
   tasks:
   - name: Run bootnode_start.sh on bootnode servers
-    become: yes
-    become_user: ubuntu
     include_tasks: common/start.yaml
     vars:
       file_name: bootnode_start.sh
