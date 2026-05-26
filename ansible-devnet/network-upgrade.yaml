@@ -56,10 +56,10 @@
       vars:
         file_name: moipod_stop.sh
         service_name: moipod 
-        owner: "{{ become_user }}"
-        group: "{{ become_user }}"
+        owner: "{{ ansible_ssh_user }}"
+        group: "{{ ansible_ssh_user }}"
         mode: '0755'
-      become_user: "{{ become_user }}"
+      become_user: "{{ ansible_ssh_user }}"
       when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
 
 ###########################################################
@@ -69,15 +69,16 @@
 - name: Backup and upload to S3
   hosts: moi-backup-servers
   gather_facts: true
-  become: yes  
-  tasks:    
+  become: yes
+
+  tasks:
     - name: Ensure backup directory exists
-      become_user: "{{ become_user }}"
+      become_user: "{{ ansible_ssh_user }}"
       file:
         path: "{{ backup_dir }}"
         state: directory
-        owner: "{{ become_user }}"
-        group: "{{ become_user }}"
+        owner: "{{ ansible_ssh_user }}"
+        group: "{{ ansible_ssh_user }}"
         mode: '0755'
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
@@ -94,21 +95,22 @@
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
 
     - name: Upload backups to S3 with timestamp
-      become_user: "{{ become_user }}"
+      become_user: "{{ ansible_ssh_user }}"
       shell: |
-            set -euo pipefail
-            aws s3 cp {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
-            s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
+        set -euo pipefail
+        aws s3 cp {{ backup_dir }}/{{ inventory_hostname }}_{{ item.name }}_{{ timestamp }}.tar.gz \
+        s3://{{ aws_bucket }}/{{ group_names[0] }}-backup/{{ inventory_hostname }}/{{ timestamp }}/{{ item.name }}_{{ timestamp }}.tar.gz
       args:
         executable: /bin/bash
-      with_items: "{{ directories_to_backup }}"
+      loop: "{{ directories_to_backup }}"
       loop_control:
-          label: "{{ item.name }}"
+        label: "{{ item.name }}"
       environment:
         AWS_ACCESS_KEY_ID: "{{ AWS_ACCESS_KEY_ID }}"
         AWS_SECRET_ACCESS_KEY: "{{ AWS_SECRET_ACCESS_KEY }}"
         AWS_DEFAULT_REGION: "{{ AWS_DEFAULT_REGION }}"
       when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
+
 
 ###########################################################
 # Backup logs on moi backup servers and upload to S3 #
@@ -117,24 +119,25 @@
 - name: Backup logs
   hosts: moi-backup-servers
   gather_facts: true
-  tasks:    
-   - name: Ensure backup directory exists
-    become_user: "{{ ansible_ssh_user }}"
-    file:
-      path: "{{ backup_dir }}"
-      state: directory
-      owner: "{{ ansible_ssh_user }}"
-      group: "{{ ansible_ssh_user }}"
-      mode: '0755'
-    when: deployment_option in ['Full_Deployment', 'Config_Update_Only']
+  become: yes
 
-    - name: Ensure log directories exist      
-      become_user: "{{ become_user }}"
+  tasks:
+    - name: Ensure backup directory exists
+      become_user: "{{ ansible_ssh_user }}"
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: "{{ ansible_ssh_user }}"
+        group: "{{ ansible_ssh_user }}"
+        mode: '0755'
+
+    - name: Ensure log directories exist
+      become_user: "{{ ansible_ssh_user }}"
       file:
         path: "{{ item.path }}"
         state: directory
-        owner: "{{ become_user }}"
-        group: "{{ become_user }}"
+        owner: "{{ ansible_ssh_user }}"
+        group: "{{ ansible_ssh_user }}"
         mode: '0755'
       loop: "{{ log_directory_to_backup }}"
       loop_control:
@@ -317,8 +320,8 @@
     vars:
       file_name: moipod_start.sh
       service_name: moipod
-      owner: "{{ become_user }}"
-      group: "{{ become_user }}"
+      owner: "{{ ansible_ssh_user }}"
+      group: "{{ ansible_ssh_user }}"
       mode: '0755'
-    become_user: "{{ become_user }}"
+    become_user: "{{ ansible_ssh_user }}"
     when: deployment_option in ['Full_Deployment', 'Quick_Deployment', 'Config_Update_Only', 'Genesis_Update_Only']
